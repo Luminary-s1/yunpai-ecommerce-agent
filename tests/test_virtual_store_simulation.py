@@ -31,8 +31,8 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert report["report_contract_version"] == "simulation-evidence-v1"
         assert report["passed"] is True
         assert report["summary"] == {
-            "total": 13,
-            "passed": 13,
+            "total": 15,
+            "passed": 15,
             "failed": 0,
             "skipped": 0,
         }
@@ -41,20 +41,14 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             for item in report["module_coverage"]
             if item["status"] == "available"
         ]
-        assert len(available) == 7
+        assert len(available) == 9
         assert all(item["verification"] == "passed" for item in available)
-        planned = {
-            item["module_id"]: item["verification"]
-            for item in report["module_coverage"]
-            if item["status"] == "planned"
-        }
-        assert planned == {
-            "marketing": "planned_not_executed",
-            "finance": "planned_not_executed",
-        }
         assert report["loaded"]["catalog"] == 6
         assert report["loaded"]["inventory"] == 10
         assert report["loaded"]["orders"] == 8
+        assert report["loaded"]["marketing"] == 2
+        assert report["loaded"]["expenses"] == 4
+        assert report["loaded"]["settlement_statements"] == 1
         assert {item["module"] for item in report["scenarios"]} >= {
             "catalog",
             "orders",
@@ -69,6 +63,8 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             "tenant_isolation",
             "connector_contract",
             "customer_service_evaluation",
+            "marketing",
+            "finance",
         }
         assert all(item["input"] for item in report["scenarios"])
         assert all(item["expected"] for item in report["scenarios"])
@@ -94,6 +90,10 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert evidence["D13"]["primary_runtime_counts"]["before"] == evidence[
             "D13"
         ]["primary_runtime_counts"]["after"]
+        assert evidence["D14"]["content_draft"]["publication_allowed"] is False
+        assert evidence["D14"]["agent_tool_output"]["data_quality"]["virtual_only"] is True
+        assert evidence["D15"]["profit_report"]["management_profit"] == "1491.00"
+        assert evidence["D15"]["tasks"][0]["difference_amount"] == "-16.00"
 
         replay = simulation.run(
             tenant_id="tenant-test",
@@ -105,6 +105,9 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             "catalog_idempotent": 6,
             "inventory_idempotent": 10,
             "orders_idempotent": 8,
+            "marketing_idempotent": 2,
+            "expenses_idempotent": 4,
+            "statements_idempotent": 1,
         }
         assert replay["loaded"]["competitive"]["match_idempotent"] == 3
         assert replay["loaded"]["competitive"]["observation_idempotent"] == 2
@@ -123,7 +126,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert summary.status_code == 200
         assert summary.json()["report_contract_version"] == "simulation-evidence-v1"
-        assert len(summary.json()["demands"]) == 13
+        assert len(summary.json()["demands"]) == 15
         demand_d07 = next(
             item for item in summary.json()["demands"] if item["id"] == "D07"
         )
@@ -132,9 +135,12 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
             "catalog": 6,
             "inventory": 10,
             "orders": 8,
+            "marketing": 2,
+            "expenses": 4,
+            "settlement_statements": 1,
             "competitive_candidates": 3,
             "knowledge": 4,
-            "demands": 13,
+            "demands": 15,
         }
 
         missing_confirmation = client.post(
@@ -155,7 +161,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert run.status_code == 200
         assert run.json()["passed"] is True
-        assert run.json()["summary"]["passed"] == 13
+        assert run.json()["summary"]["passed"] == 15
         assert run.json()["scenarios"][0]["input"]["operation"] == (
             "CatalogService.list_items"
         )

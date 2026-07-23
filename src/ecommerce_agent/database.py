@@ -36,7 +36,7 @@ class SessionScopeError(ValueError):
 
 
 class Database:
-    SCHEMA_VERSION = 22
+    SCHEMA_VERSION = 23
 
     def __init__(self, path: Path):
         self.path = path
@@ -140,6 +140,9 @@ class Database:
             if 22 not in applied:
                 self._apply_v22(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (22, ?)", (utc_now(),))
+            if 23 not in applied:
+                self._apply_v23(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (23, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -1969,6 +1972,128 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v23(conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS marketing_campaign_metrics (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                connector_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                campaign_id TEXT NOT NULL,
+                metric_date TEXT NOT NULL,
+                campaign_name TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                objective TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('active','paused','ended')),
+                spend TEXT NOT NULL,
+                attributed_revenue TEXT NOT NULL,
+                attributed_orders INTEGER NOT NULL,
+                impressions INTEGER NOT NULL,
+                clicks INTEGER NOT NULL,
+                source_type TEXT NOT NULL CHECK(source_type IN ('virtual','file_import')),
+                source_id TEXT,
+                source_updated_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, connector_id, store_id, campaign_id, metric_date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_marketing_metrics_tenant_store_date
+                ON marketing_campaign_metrics(tenant_id, store_id, metric_date DESC);
+
+            CREATE TABLE IF NOT EXISTS marketing_content_drafts (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                draft_key TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                content_type TEXT NOT NULL CHECK(content_type IN ('product_copy','campaign_copy','social_post')),
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                sku_ids_json TEXT NOT NULL,
+                declared_prices_json TEXT NOT NULL,
+                fact_check_json TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('draft','review','approved','rejected')),
+                source_type TEXT NOT NULL CHECK(source_type IN ('manual','virtual')),
+                source_id TEXT,
+                version INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, draft_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_marketing_drafts_tenant_store_updated
+                ON marketing_content_drafts(tenant_id, store_id, updated_at DESC);
+
+            CREATE TABLE IF NOT EXISTS operating_expenses (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                connector_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                expense_key TEXT NOT NULL,
+                occurred_on TEXT NOT NULL,
+                category TEXT NOT NULL CHECK(category IN ('product_cost','advertising','platform_fee','logistics','fulfillment','refund','other')),
+                amount TEXT NOT NULL,
+                currency TEXT NOT NULL,
+                source_type TEXT NOT NULL CHECK(source_type IN ('virtual','file_import')),
+                source_id TEXT,
+                source_updated_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, connector_id, store_id, expense_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_operating_expenses_tenant_store_date
+                ON operating_expenses(tenant_id, store_id, occurred_on DESC);
+
+            CREATE TABLE IF NOT EXISTS settlement_statements (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                connector_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                statement_key TEXT NOT NULL,
+                period_start TEXT NOT NULL,
+                period_end TEXT NOT NULL,
+                gross_sales TEXT NOT NULL,
+                refund_amount TEXT NOT NULL,
+                fee_amount TEXT NOT NULL,
+                settlement_amount TEXT NOT NULL,
+                currency TEXT NOT NULL,
+                source_type TEXT NOT NULL CHECK(source_type IN ('virtual','file_import')),
+                source_id TEXT,
+                source_updated_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, connector_id, store_id, statement_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_settlement_statements_tenant_store_period
+                ON settlement_statements(tenant_id, store_id, period_end DESC);
+
+            CREATE TABLE IF NOT EXISTS reconciliation_tasks (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                statement_id TEXT NOT NULL REFERENCES settlement_statements(id) ON DELETE CASCADE,
+                store_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('open','reviewing','resolved','ignored')),
+                expected_settlement TEXT NOT NULL,
+                reported_settlement TEXT NOT NULL,
+                difference_amount TEXT NOT NULL,
+                tolerance_amount TEXT NOT NULL,
+                note TEXT,
+                record_version INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, statement_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_reconciliation_tasks_tenant_status
+                ON reconciliation_tasks(tenant_id, status, updated_at DESC);
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -1978,6 +2103,24 @@ class Database:
     def _validate_schema(conn: sqlite3.Connection) -> None:
         required = {
             "sessions": {"tenant_id", "source_type", "source_reference"},
+            "marketing_campaign_metrics": {
+                "tenant_id", "connector_id", "store_id", "campaign_id", "metric_date",
+                "spend", "attributed_revenue", "source_type", "payload_hash", "version",
+            },
+            "marketing_content_drafts": {
+                "tenant_id", "draft_key", "store_id", "fact_check_json", "status", "version",
+            },
+            "operating_expenses": {
+                "tenant_id", "connector_id", "store_id", "expense_key", "category", "amount",
+                "source_type", "payload_hash", "version",
+            },
+            "settlement_statements": {
+                "tenant_id", "connector_id", "store_id", "statement_key", "settlement_amount",
+                "source_type", "payload_hash", "version",
+            },
+            "reconciliation_tasks": {
+                "tenant_id", "statement_id", "status", "difference_amount", "record_version",
+            },
             "knowledge": {"knowledge_key", "layer", "review_status", "record_version"},
             "competitor_observations": {
                 "tenant_id",

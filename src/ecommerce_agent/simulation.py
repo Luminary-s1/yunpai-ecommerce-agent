@@ -10,14 +10,20 @@ from pydantic import BaseModel, ConfigDict
 
 from .business import (
     CatalogItemUpsert,
+    ContentDraftUpsert,
     CompetitiveEntityMatchCreate,
     CompetitiveMatchTransition,
     CompetitiveMonitorUpsert,
     CompetitiveSignalCreate,
     CompetitorObservationCreate,
+    FinanceReportQuery,
     InventoryBalanceUpsert,
+    MarketingDiagnosisQuery,
+    MarketingPerformanceUpsert,
     MetricQuery,
+    OperatingExpenseUpsert,
     OrderUpsert,
+    SettlementStatementUpsert,
 )
 from .business.registry import business_module_catalog
 from .connectors import ExternalAction
@@ -72,6 +78,9 @@ class VirtualStoreSimulation:
                 "catalog": len(fixture["catalog"]),
                 "inventory": len(fixture["inventory"]),
                 "orders": len(fixture["orders"]),
+                "marketing": len(fixture["marketing"]),
+                "expenses": len(fixture["expenses"]),
+                "settlement_statements": len(fixture["settlement_statements"]),
                 "competitive_candidates": len(
                     fixture["competitive_candidates"]
                 ),
@@ -122,6 +131,16 @@ class VirtualStoreSimulation:
             scenarios,
             demands["D06"],
             lambda: self._verify_competitive_alerts(fixture, tenant_id),
+        )
+        self._scenario(
+            scenarios,
+            demands["D14"],
+            lambda: self._verify_marketing(fixture, tenant_id),
+        )
+        self._scenario(
+            scenarios,
+            demands["D15"],
+            lambda: self._verify_finance(fixture, tenant_id),
         )
         if include_customer_service:
             self._scenario(
@@ -231,6 +250,8 @@ class VirtualStoreSimulation:
             "orders": ["D02", "D08"],
             "inventory": ["D03"],
             "competitive_intelligence": ["D05", "D06"],
+            "marketing": ["D14"],
+            "finance": ["D15"],
             "metrics": ["D04"],
             "customer_service": ["D07", "D09", "D10"],
             "customer_service_evaluation": ["D13"],
@@ -324,6 +345,56 @@ class VirtualStoreSimulation:
             )
             status_counts[f"orders_{result['write_status']}"] += 1
 
+        for index, item in enumerate(fixture["marketing"], start=1):
+            result = self.service.operations.marketing.upsert_performance(
+                tenant_id,
+                MarketingPerformanceUpsert.model_validate(
+                    {
+                        **item,
+                        "connector_id": connector_id,
+                        "store_id": store_id,
+                        "source_type": "virtual",
+                        "source_updated_at": source_time,
+                        "source_id": f"{fixture['fixture_id']}:marketing:{index}",
+                    }
+                ),
+            )
+            status_counts[f"marketing_{result['write_status']}"] += 1
+
+        for index, item in enumerate(fixture["expenses"], start=1):
+            result = self.service.operations.finance.upsert_expense(
+                tenant_id,
+                OperatingExpenseUpsert.model_validate(
+                    {
+                        **item,
+                        "connector_id": connector_id,
+                        "store_id": store_id,
+                        "currency": fixture["store"]["currency"],
+                        "source_type": "virtual",
+                        "source_updated_at": source_time,
+                        "source_id": f"{fixture['fixture_id']}:expense:{index}",
+                    }
+                ),
+            )
+            status_counts[f"expenses_{result['write_status']}"] += 1
+
+        for index, item in enumerate(fixture["settlement_statements"], start=1):
+            result = self.service.operations.finance.upsert_statement(
+                tenant_id,
+                SettlementStatementUpsert.model_validate(
+                    {
+                        **item,
+                        "connector_id": connector_id,
+                        "store_id": store_id,
+                        "currency": fixture["store"]["currency"],
+                        "source_type": "virtual",
+                        "source_updated_at": source_time,
+                        "source_id": f"{fixture['fixture_id']}:statement:{index}",
+                    }
+                ),
+            )
+            status_counts[f"statements_{result['write_status']}"] += 1
+
         competitive = self._load_competitive(
             fixture, tenant_id=tenant_id, actor=actor
         )
@@ -332,6 +403,9 @@ class VirtualStoreSimulation:
             "catalog": len(fixture["catalog"]),
             "inventory": len(fixture["inventory"]),
             "orders": len(fixture["orders"]),
+            "marketing": len(fixture["marketing"]),
+            "expenses": len(fixture["expenses"]),
+            "settlement_statements": len(fixture["settlement_statements"]),
             "competitive": competitive,
             "knowledge": knowledge,
             "write_statuses": dict(sorted(status_counts.items())),
@@ -652,6 +726,121 @@ class VirtualStoreSimulation:
             "alerts": alerts,
         }
 
+    def _verify_marketing(
+        self, fixture: dict[str, Any], tenant_id: str
+    ) -> dict[str, Any]:
+        store_id = fixture["store"]["store_id"]
+        query = MarketingDiagnosisQuery(store_id=store_id, min_roas="2.00")
+        diagnosis = self.service.operations.marketing.diagnose(tenant_id, query)
+        assert diagnosis["data_quality"]["record_count"] == len(fixture["marketing"])
+        assert diagnosis["data_quality"]["virtual_only"] is True
+        assert any(
+            item["code"] == "high_spend_no_orders"
+            for item in diagnosis["findings"]
+        )
+        existing = next(
+            (
+                item
+                for item in self.service.operations.marketing.list_content_drafts(
+                    tenant_id, store_id=store_id
+                )
+                if item["draft_key"] == "virtual-d14-content"
+            ),
+            None,
+        )
+        draft = self.service.operations.marketing.save_content_draft(
+            tenant_id,
+            ContentDraftUpsert(
+                draft_key="virtual-d14-content",
+                store_id=store_id,
+                content_type="campaign_copy",
+                title="Virtual AF5 campaign copy",
+                body="Virtual draft only; final product claims require human review.",
+                sku_ids=["QC-AF5-WHITE"],
+                declared_prices={"QC-AF5-WHITE": "499.00"},
+                source_type="virtual",
+                source_id=f"{fixture['fixture_id']}:draft:D14",
+                expected_record_version=existing["record_version"] if existing else 0,
+            ),
+        )
+        assert draft["fact_check"]["passed"] is True
+        assert draft["publication_allowed"] is False
+        context = ToolExecutionContext(
+            tenant_id=tenant_id,
+            client_id="simulation",
+            session_id="simulation-marketing",
+            trace_id="simulation-marketing",
+            trusted_context={},
+        )
+        spec, arguments = self.service.tools.validate_selection(
+            name="get_marketing_diagnosis",
+            arguments={"store_id": store_id, "min_roas": "2.00"},
+            requested_mode="observe",
+            context=context,
+        )
+        tool_output = self.service.tools.execute(
+            spec=spec, arguments=arguments, context=context
+        ).output
+        assert tool_output["data_quality"]["virtual_only"] is True
+        return {
+            "diagnosis": diagnosis,
+            "content_draft": draft,
+            "agent_tool_output": tool_output,
+            "action_boundary": diagnosis["action_boundary"],
+        }
+
+    def _verify_finance(
+        self, fixture: dict[str, Any], tenant_id: str
+    ) -> dict[str, Any]:
+        store_id = fixture["store"]["store_id"]
+        query = FinanceReportQuery(
+            store_id=store_id,
+            start_date="2026-07-10",
+            end_date="2026-07-22",
+        )
+        profit = self.service.operations.finance.profit_report(tenant_id, query)
+        assert profit["gross_sales"] == "4181.00"
+        assert profit["management_profit"] == "1491.00"
+        assert profit["data_quality"]["management_estimate"] is True
+        assert profit["data_quality"]["financial_statement"] is False
+        reconciliation = self.service.operations.finance.run_reconciliation(
+            tenant_id, query
+        )
+        tasks = self.service.operations.finance.list_reconciliation_tasks(
+            tenant_id, store_id=store_id
+        )
+        assert tasks
+        assert any(item["difference_amount"] == "-16.00" for item in tasks)
+        task = next(item for item in tasks if item["difference_amount"] == "-16.00")
+        assert task["status"] == "open"
+        context = ToolExecutionContext(
+            tenant_id=tenant_id,
+            client_id="simulation",
+            session_id="simulation-finance",
+            trace_id="simulation-finance",
+            trusted_context={},
+        )
+        spec, arguments = self.service.tools.validate_selection(
+            name="get_profit_reconciliation",
+            arguments={
+                "store_id": store_id,
+                "start_date": "2026-07-10",
+                "end_date": "2026-07-22",
+            },
+            requested_mode="observe",
+            context=context,
+        )
+        tool_output = self.service.tools.execute(
+            spec=spec, arguments=arguments, context=context
+        ).output
+        assert tool_output["profit"]["management_profit"] == "1491.00"
+        return {
+            "profit_report": profit,
+            "reconciliation": reconciliation,
+            "tasks": tasks,
+            "agent_tool_output": tool_output,
+        }
+
     def _verify_customer_service(
         self, fixture: dict[str, Any], tenant_id: str, run_id: str
     ) -> dict[str, Any]:
@@ -967,6 +1156,12 @@ class VirtualStoreSimulation:
                 other, store_id=store_id
             ),
             "competitive": self.service.operations.competitive.list_entity_matches(
+                other, store_id=store_id
+            ),
+            "marketing": self.service.operations.marketing.list_performance(
+                other, store_id=store_id
+            ),
+            "finance": self.service.operations.finance.list_expenses(
                 other, store_id=store_id
             ),
         }

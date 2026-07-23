@@ -116,6 +116,19 @@
       "after_sales": [{"case_id": "QC-AS-1008", "case_type": "return_refund", "status": "requested", "requested_amount": "499.00", "approved_amount": "0", "reason_code": "unopened_duplicate", "opened_at": "2026-07-21T09:00:00+00:00", "updated_at": "2026-07-21T09:00:00+00:00"}]
     }
   ],
+  "marketing": [
+    {"campaign_id": "QC-CAMP-AF5", "metric_date": "2026-07-21", "campaign_name": "AF5 转化广告", "channel": "virtual_ads", "objective": "conversion", "status": "active", "spend": "180.00", "attributed_revenue": "720.00", "attributed_orders": 2, "impressions": 12000, "clicks": 264},
+    {"campaign_id": "QC-CAMP-HM3", "metric_date": "2026-07-21", "campaign_name": "HM3 拉新广告", "channel": "virtual_ads", "objective": "conversion", "status": "active", "spend": "95.00", "attributed_revenue": "0.00", "attributed_orders": 0, "impressions": 9000, "clicks": 50}
+  ],
+  "expenses": [
+    {"expense_key": "QC-EXP-PRODUCT-0722", "occurred_on": "2026-07-22", "category": "product_cost", "amount": "1950.00"},
+    {"expense_key": "QC-EXP-ADS-0721", "occurred_on": "2026-07-21", "category": "advertising", "amount": "300.00"},
+    {"expense_key": "QC-EXP-PLATFORM-0722", "occurred_on": "2026-07-22", "category": "platform_fee", "amount": "160.00"},
+    {"expense_key": "QC-EXP-LOGISTICS-0722", "occurred_on": "2026-07-22", "category": "logistics", "amount": "250.00"}
+  ],
+  "settlement_statements": [
+    {"statement_key": "QC-SETTLEMENT-20260710-22", "period_start": "2026-07-10", "period_end": "2026-07-22", "gross_sales": "4181.00", "refund_amount": "30.00", "fee_amount": "160.00", "settlement_amount": "3975.00"}
+  ],
   "competitive_candidates": [
     {
       "candidate_key": "af5-rival-a", "subject_sku": "QC-AF5-WHITE", "competitor_name": "授权样本电器店 A", "competitor_sku": "SAMPLE-AF5-A", "decision": "approved",
@@ -200,8 +213,8 @@
     },
     {
       "id": "D11", "module": "tenant_isolation", "title": "其他租户不可读取模拟店铺事实",
-      "input": {"operation": "cross_tenant_read_probe", "parameters": {"store_id": "qingchuan-flagship-001", "domains": ["catalog", "orders", "inventory", "competitive"]}},
-      "expected": ["其他租户查询四个业务域均返回空集合"]
+      "input": {"operation": "cross_tenant_read_probe", "parameters": {"store_id": "qingchuan-flagship-001", "domains": ["catalog", "orders", "inventory", "competitive", "marketing", "finance"]}},
+      "expected": ["其他租户查询六个业务域均返回空集合"]
     },
     {
       "id": "D12", "module": "connector_contract", "title": "虚拟写动作具备幂等回执和读回验证",
@@ -212,6 +225,16 @@
       "id": "D13", "module": "customer_service_evaluation", "title": "冻结虚拟标注集并在隔离快照回放实际 Agent",
       "input": {"operation": "EvaluationService.run_suite", "suite_key": "virtual-store.customer-service-v1", "run_key": "virtual-store-v1", "case": {"message": "晴川 AF5 空气炸锅保修多久？", "context": {"shop_id": "qingchuan-flagship-001", "sku_id": "QC-AF5-WHITE"}, "require_sources": true}},
       "expected": ["评测集状态为 frozen", "隔离评测门禁通过", "运行前后主会话、消息和人工任务计数不变"]
+    },
+    {
+      "id": "D14", "module": "marketing", "title": "识别无转化投放并保存待人工审核内容草稿",
+      "input": {"operation": "MarketingService.diagnose + save_content_draft", "parameters": {"store_id": "qingchuan-flagship-001", "min_roas": "2.00", "draft_key": "virtual-d14-content"}},
+      "expected": ["检测到 high_spend_no_orders 诊断", "活动数据可追溯为 virtual", "内容草稿只通过有限事实校验且禁止直接发布"]
+    },
+    {
+      "id": "D15", "module": "finance", "title": "生成管理利润估算和可人工处置的结算差异任务",
+      "input": {"operation": "FinanceService.profit_report + run_reconciliation", "parameters": {"store_id": "qingchuan-flagship-001", "period": "2026-07-10 to 2026-07-22", "tolerance_amount": "1.00"}},
+      "expected": ["经营利润明确标记为 management estimate", "费用按类别归集", "结算差异生成 open 任务且不修改账务或资金"]
     }
   ]
 }

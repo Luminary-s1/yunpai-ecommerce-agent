@@ -70,18 +70,18 @@ def business_module_catalog() -> list[BusinessModule]:
         BusinessModule(
             module_id="marketing",
             display_name="营销与投放",
-            status="planned",
+            status="available",
             responsibilities=["广告指标", "投放诊断", "内容和预算建议"],
             boundaries=["V1 不做实时竞价", "预算修改必须审批"],
-            agent_tools=[],
+            agent_tools=["get_marketing_diagnosis"],
         ),
         BusinessModule(
             module_id="finance",
             display_name="利润与对账",
-            status="planned",
+            status="available",
             responsibilities=["费用归集", "经营利润", "对账异常"],
             boundaries=["不替代财务总账", "模型不得修改数值"],
-            agent_tools=[],
+            agent_tools=["get_profit_reconciliation"],
         ),
         BusinessModule(
             module_id="metrics",

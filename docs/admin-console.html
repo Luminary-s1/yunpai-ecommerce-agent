@@ -247,6 +247,8 @@
         <button data-view="commerce">商品库存</button>
         <button data-view="orders">订单售后</button>
         <button data-view="competitive">竞品分析</button>
+        <button data-view="marketing">营销投放</button>
+        <button data-view="finance">利润对账</button>
         <button data-view="knowledge">知识与 SOP</button>
         <button data-view="quality">质检 VOC</button>
         <button data-view="evaluations">客服评测</button>
@@ -256,7 +258,7 @@
         <button data-view="modules">功能模块</button>
         <button data-view="audit">审计记录</button>
       </nav>
-      <div class="sidebar-foot"><div>0.22.6 运营控制台版</div><div><a href="/customer-test" style="color:#b9d9d3">独立顾客测试</a></div><div id="sidebarMode">受控执行模式</div></div>
+      <div class="sidebar-foot"><div>0.23.0 运营控制台版</div><div><a href="/customer-test" style="color:#b9d9d3">独立顾客测试</a></div><div id="sidebarMode">受控执行模式</div></div>
     </aside>
 
     <main class="main">
@@ -378,6 +380,26 @@
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>竞品明细</h3><span class="muted" id="competitiveAsOf"></span></div><div class="table-wrap"><table><thead><tr><th>竞品</th><th>本店价</th><th>竞品价</th><th>差额</th><th>位置</th><th>匹配门禁</th><th>来源</th><th>观察时间</th></tr></thead><tbody id="competitiveRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><div><h3>商品卖点与聚合口碑</h3><span class="muted">不保存评论者、订单标识或原始评论</span></div><span class="muted" id="competitiveSignalCount"></span></div><div class="table-wrap"><table><thead><tr><th>角色</th><th>类型 / 方面</th><th>脱敏摘要</th><th>样本</th><th>匹配状态</th><th>证据来源</th></tr></thead><tbody id="competitiveSignalRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>价格趋势</h3></div><div class="panel-body stack" id="trendRows"></div></article>
+        </section>
+
+        <section class="view" id="view-marketing">
+          <div class="section-head"><div><h2>营销投放</h2><p>活动日指标、可解释诊断与内容草稿事实校验；不执行竞价、预算调整或内容发布</p></div><div class="toolbar"><input class="input" id="marketingStore" value="qingchuan-flagship-001" placeholder="店铺 ID"><button class="button primary" id="refreshMarketing">刷新诊断</button></div></div>
+          <div class="grid kpis" id="marketingKpis"></div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel"><div class="panel-head"><h3>投放诊断</h3><span class="status warn">仅建议</span></div><div class="panel-body stack" id="marketingFindings"></div></article>
+            <article class="panel"><div class="panel-head"><h3>新建内容草稿</h3><span class="status info">禁止直接发布</span></div><form class="panel-body form-grid" id="marketingDraftForm"><div class="field"><label for="marketingDraftKey">草稿 Key</label><input class="input" id="marketingDraftKey" value="campaign-copy-001" required></div><div class="field"><label for="marketingDraftSku">关联 SKU</label><input class="input" id="marketingDraftSku" value="QC-AF5-WHITE" required></div><div class="field wide"><label for="marketingDraftTitle">标题</label><input class="input" id="marketingDraftTitle" value="晴川 AF5 空气炸锅" required></div><div class="field wide"><label for="marketingDraftBody">内容草稿</label><textarea class="input" id="marketingDraftBody" required>低油烹饪的厨房小家电，具体权益请以人工审核后的活动规则为准。</textarea></div><button class="button primary" type="submit">保存并校验</button></form></article>
+          </div>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>活动日指标</h3><span class="muted" id="marketingDataMeta"></span></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>活动</th><th>渠道</th><th>花费</th><th>归因收入</th><th>ROAS</th><th>点击 / 曝光</th><th>来源</th></tr></thead><tbody id="marketingPerformanceRows"></tbody></table></div></article>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>内容草稿与校验</h3><span class="muted">正文主张仍需人工审核</span></div><div class="table-wrap"><table><thead><tr><th>草稿</th><th>类型</th><th>关联 SKU</th><th>校验结果</th><th>版本</th><th>发布</th></tr></thead><tbody id="marketingDraftRows"></tbody></table></div></article>
+        </section>
+
+        <section class="view" id="view-finance">
+          <div class="section-head"><div><h2>利润与对账</h2><p>经营管理估算、来源费用和结算单差异任务；不替代总账、税务或资金指令</p></div><div class="toolbar"><input class="input" id="financeStore" value="qingchuan-flagship-001" placeholder="店铺 ID"><button class="button" id="runFinanceReconciliation">执行对账</button><button class="button primary" id="refreshFinance">刷新</button></div></div>
+          <div class="grid kpis" id="financeKpis"></div>
+          <div class="grid two" style="margin-top:14px"><article class="panel"><div class="panel-head"><h3>费用归集</h3><span class="status warn">管理口径</span></div><div class="panel-body stack" id="financeExpensesByCategory"></div></article><article class="panel"><div class="panel-head"><h3>数据质量与范围</h3></div><div class="panel-body stack" id="financeQuality"></div></article></div>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>已导入费用</h3><span class="muted" id="financeExpenseMeta"></span></div><div class="table-wrap"><table><thead><tr><th>发生日期</th><th>费用键</th><th>类别</th><th>金额</th><th>来源</th><th>版本</th></tr></thead><tbody id="financeExpenseRows"></tbody></table></div></article>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>结算单</h3><span class="muted">用于经营对账，不是资金操作</span></div><div class="table-wrap"><table><thead><tr><th>结算单</th><th>周期</th><th>销售额</th><th>退款</th><th>平台费</th><th>报告结算额</th><th>来源</th></tr></thead><tbody id="financeStatementRows"></tbody></table></div></article>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>对账差异任务</h3><span class="muted" id="financeTaskMeta"></span></div><div class="table-wrap"><table><thead><tr><th>结算单</th><th>预期结算</th><th>报告结算</th><th>差异</th><th>状态</th><th>说明</th><th>人工处置</th></tr></thead><tbody id="financeTaskRows"></tbody></table></div></article>
         </section>
 
         <section class="view" id="view-knowledge">
@@ -733,7 +755,7 @@
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
 
-    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', orders: '订单与售后', competitive: '竞品分析', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
+    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', orders: '订单与售后', competitive: '竞品分析', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
     const sourceLabels = { api:'API 会话', channel:'渠道会话', simulation:'虚拟验收', evaluation:'隔离评测' };
     const $ = (id) => document.getElementById(id);
 
@@ -758,6 +780,7 @@
     }
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
     const formatTime = (value) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-';
+    const money = (value, currency = 'CNY') => `${currency} ${Number(value || 0).toFixed(2)}`;
     const pct = (value) => value === null || value === undefined ? '-' : `${(Number(value) * 100).toFixed(1)}%`;
     const statusClass = (status) => ({ available:'ok', active:'ok', approved:'ok', completed:'ok', succeeded:'ok', passed:'ok', frozen:'ok', compensated:'ok', sent:'ok', bot:'ok', resolved:'ok', assigned:'ok', interface:'info', evaluated:'info', human:'info', acknowledged:'info', running:'info', shadow:'info', leased:'info', not_run:'info', away:'warn', proposed:'warn', candidate:'warn', pending:'warn', waiting:'warn', draft:'warn', paused:'warn', accepted:'warn', working:'warn', waiting_input:'warn', waiting_approval:'warn', uncertain:'warn', compensation_uncertain:'warn', open:'warn', queued:'warn', retry:'warn', skipped:'warn', offline:'bad', inactive:'bad', disabled:'bad', blocked:'bad', error:'bad', dead_letter:'bad', input_required:'bad', review:'info', planned:'warn', failed:'bad', compensation_failed:'bad', retired:'bad', canceled:'bad', cancelled:'bad', rejected:'bad' }[status] || '');
 
@@ -1767,6 +1790,66 @@
       }
     }
 
+    async function loadMarketing() {
+      const storeId = $('marketingStore').value.trim();
+      const query = storeId ? `?store_id=${encodeURIComponent(storeId)}` : '';
+      const [performance, diagnosis, drafts] = await Promise.all([
+        api(`/v1/marketing/performance${query}`),
+        api('/v1/marketing/diagnosis', { method:'POST', body:JSON.stringify({ store_id:storeId || null }) }),
+        api(`/v1/marketing/content-drafts${query}`)
+      ]);
+      state.marketingDrafts = drafts;
+      const totals = diagnosis.totals || {};
+      $('marketingKpis').innerHTML = [
+        ['活动记录', diagnosis.data_quality?.record_count || 0, diagnosis.data_quality?.virtual_only ? '虚拟验收数据' : '已归档来源数据'],
+        ['投放花费', money(totals.spend), `归因收入 ${money(totals.attributed_revenue)}`],
+        ['ROAS', totals.roas || '-', `阈值 ${diagnosis.thresholds?.min_roas || '-'}`],
+        ['点击率', pct(totals.ctr), `${totals.clicks || 0} 点击 / ${totals.impressions || 0} 曝光`]
+      ].map(([label,value,meta]) => `<div class="kpi"><span class="label">${label}</span><span class="value">${escapeHtml(value)}</span><span class="meta">${escapeHtml(meta)}</span></div>`).join('');
+      const findings = diagnosis.findings || [];
+      $('marketingFindings').innerHTML = findings.length ? findings.map((item) => `<div class="notice"><div><strong>${escapeHtml(item.campaign_name || item.code)}</strong><span class="status ${statusClass(item.severity === 'high' ? 'open' : item.severity === 'medium' ? 'waiting' : 'info')}">${escapeHtml(item.severity || 'info')}</span></div><div>${escapeHtml(item.recommendation || '当前样本未触发阈值')}</div>${item.evidence ? `<div class="muted">${escapeHtml(item.evidence.metric_date)} · 花费 ${escapeHtml(item.evidence.spend)} · 归因收入 ${escapeHtml(item.evidence.attributed_revenue)}</div>` : ''}</div>`).join('') : '<div class="empty">暂无可诊断的活动指标</div>';
+      $('marketingDataMeta').textContent = `${performance.length} 条活动日事实 · ${diagnosis.action_boundary || ''}`;
+      $('marketingPerformanceRows').innerHTML = performance.length ? performance.map((item) => `<tr><td>${escapeHtml(item.metric_date)}</td><td><strong>${escapeHtml(item.campaign_name)}</strong><div class="muted">${escapeHtml(item.campaign_id)}</div></td><td>${escapeHtml(item.channel)}</td><td>${money(item.spend)}</td><td>${money(item.attributed_revenue)}</td><td>${escapeHtml(item.roas || '-')}</td><td>${item.clicks} / ${item.impressions}</td><td><span class="status ${item.source_type === 'virtual' ? 'info' : 'ok'}">${escapeHtml(item.source_type)}</span></td></tr>`).join('') : '<tr><td colspan="8"><div class="empty">暂无活动数据。运行虚拟店铺验收后可查看可追溯样本。</div></td></tr>';
+      $('marketingDraftRows').innerHTML = drafts.length ? drafts.map((item) => `<tr><td><strong>${escapeHtml(item.title)}</strong><div class="mono muted">${escapeHtml(item.draft_key)}</div></td><td>${escapeHtml(item.content_type)}</td><td>${item.sku_ids.map(escapeHtml).join(', ')}</td><td><span class="status ${item.fact_check?.passed ? 'ok' : 'warn'}">${escapeHtml(item.fact_check?.status || '-')}</span><div class="muted">缺失 SKU: ${(item.fact_check?.missing_skus || []).length}，价格差异: ${(item.fact_check?.price_mismatches || []).length}</div></td><td>${item.record_version}</td><td><span class="status warn">人工审核后方可发布</span></td></tr>`).join('') : '<tr><td colspan="6"><div class="empty">暂无内容草稿</div></td></tr>';
+    }
+
+    async function loadFinance() {
+      const storeId = $('financeStore').value.trim();
+      const payload = { store_id:storeId || null };
+      const query = storeId ? `?store_id=${encodeURIComponent(storeId)}` : '';
+      const [profit, expenses, statements, tasks] = await Promise.all([
+        api('/v1/finance/profit', { method:'POST', body:JSON.stringify(payload) }),
+        api(`/v1/finance/expenses${query}`),
+        api(`/v1/finance/statements${query}`),
+        api(`/v1/finance/reconciliation/tasks${query}`)
+      ]);
+      const quality = profit.data_quality || {};
+      $('financeKpis').innerHTML = [
+        ['订单销售额', money(profit.gross_sales, profit.currency), `${profit.record_counts?.orders || 0} 笔已支付订单`],
+        ['已审批退款', money(profit.approved_refunds, profit.currency), '仅计入已审批售后'],
+        ['费用总额', money(profit.expense_total, profit.currency), `${profit.record_counts?.expenses || 0} 条费用事实`],
+        ['经营利润估算', money(profit.management_profit, profit.currency), '不是财务报表']
+      ].map(([label,value,meta]) => `<div class="kpi"><span class="label">${label}</span><span class="value">${escapeHtml(value)}</span><span class="meta">${escapeHtml(meta)}</span></div>`).join('');
+      const categories = Object.entries(profit.expenses_by_category || {});
+      $('financeExpensesByCategory').innerHTML = categories.length ? categories.map(([category, amount]) => `<div class="notice"><strong>${escapeHtml(category)}</strong><span>${money(amount, profit.currency)}</span></div>`).join('') : '<div class="empty">暂无已归集费用</div>';
+      $('financeQuality').innerHTML = `<div class="notice"><strong>缺失核心成本类别</strong><div>${quality.missing_cost_categories?.length ? quality.missing_cost_categories.map(escapeHtml).join('、') : '无'}</div></div><div class="notice"><strong>来源范围</strong><div>${quality.virtual_only ? '当前为虚拟验收数据' : (quality.source_types || []).join('、') || '暂无费用来源'}</div></div><div class="notice"><strong>经营口径</strong><div>${escapeHtml(profit.scope_boundary || '')}</div></div>`;
+      $('financeExpenseMeta').textContent = `${expenses.length} 条来源费用`;
+      $('financeExpenseRows').innerHTML = expenses.length ? expenses.map((item) => `<tr><td>${escapeHtml(item.occurred_on)}</td><td class="mono">${escapeHtml(item.expense_key)}</td><td>${escapeHtml(item.category)}</td><td>${money(item.amount, item.currency)}</td><td>${escapeHtml(item.source_type)}</td><td>${item.version}</td></tr>`).join('') : '<tr><td colspan="6"><div class="empty">暂无费用事实</div></td></tr>';
+      $('financeStatementRows').innerHTML = statements.length ? statements.map((item) => `<tr><td class="mono">${escapeHtml(item.statement_key)}</td><td>${escapeHtml(item.period_start)} 至 ${escapeHtml(item.period_end)}</td><td>${money(item.gross_sales, item.currency)}</td><td>${money(item.refund_amount, item.currency)}</td><td>${money(item.fee_amount, item.currency)}</td><td>${money(item.settlement_amount, item.currency)}</td><td>${escapeHtml(item.source_type)}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">暂无结算单</div></td></tr>';
+      $('financeTaskMeta').textContent = `${tasks.length} 个差异任务`;
+      $('financeTaskRows').innerHTML = tasks.length ? tasks.map((item) => `<tr><td class="mono">${escapeHtml(item.statement_key)}</td><td>${money(item.expected_settlement)}</td><td>${money(item.reported_settlement)}</td><td><strong>${money(item.difference_amount)}</strong></td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>${escapeHtml(item.note || '-')}</td><td>${['open','reviewing'].includes(item.status) ? `<button class="button small" data-finance-task="${escapeHtml(item.id)}" data-finance-version="${item.record_version}">人工处置</button>` : '-'}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">暂无超出容差的差异任务</div></td></tr>';
+      document.querySelectorAll('[data-finance-task]').forEach((node) => node.addEventListener('click', async () => {
+        const target = window.prompt('输入目标状态：reviewing、resolved 或 ignored', 'reviewing');
+        if (!target || !['reviewing','resolved','ignored'].includes(target.trim())) return;
+        const note = window.prompt('填写人工处置说明（至少 2 个字符）', '已人工复核');
+        if (!note || note.trim().length < 2) return;
+        try {
+          await api(`/v1/finance/reconciliation/tasks/${encodeURIComponent(node.dataset.financeTask)}/transition`, { method:'POST', body:JSON.stringify({ target_status:target.trim(), expected_record_version:Number(node.dataset.financeVersion), note:note.trim() }) });
+          toast('对账任务已更新'); await loadFinance();
+        } catch (error) { toast(error.message); }
+      }));
+    }
+
     async function loadModules() {
       state.modules = await api('/v1/modules');
       $('moduleGrid').innerHTML = state.modules.map((item) => `<article class="module"><div class="module-title"><h3>${escapeHtml(item.display_name)}</h3><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></div><h4>职责</h4><ul>${item.responsibilities.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul><h4>边界</h4><ul>${item.boundaries.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>${item.agent_tools.length ? `<h4>Agent 工具</h4><div class="mono">${item.agent_tools.map(escapeHtml).join(', ')}</div>` : ''}</article>`).join('');
@@ -1858,6 +1941,8 @@
       if (view === 'commerce') return loadCommerce();
       if (view === 'orders') return loadOrders();
       if (view === 'competitive') return loadCompetitive();
+      if (view === 'marketing') return loadMarketing();
+      if (view === 'finance') return loadFinance();
       if (view === 'knowledge') return loadGovernance();
       if (view === 'quality') return loadQuality();
       if (view === 'evaluations') return loadEvaluations();
@@ -1871,6 +1956,31 @@
     document.querySelectorAll('.nav button').forEach((node) => node.addEventListener('click', () => switchView(node.dataset.view)));
     document.querySelectorAll('[data-go]').forEach((node) => node.addEventListener('click', () => switchView(node.dataset.go)));
     $('refreshButton').addEventListener('click', () => loadView(state.currentView).then(() => toast('数据已刷新')).catch((error) => toast(error.message)));
+    $('refreshMarketing').addEventListener('click', () => loadMarketing().catch((error) => toast(error.message)));
+    $('marketingStore').addEventListener('change', () => loadMarketing().catch((error) => toast(error.message)));
+    $('marketingDraftForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const draftKey = $('marketingDraftKey').value.trim();
+      const current = (state.marketingDrafts || []).find((item) => item.draft_key === draftKey);
+      const storeId = $('marketingStore').value.trim();
+      const skuId = $('marketingDraftSku').value.trim();
+      try {
+        const result = await api('/v1/marketing/content-drafts', { method:'POST', body:JSON.stringify({ draft_key:draftKey, store_id:storeId, content_type:'campaign_copy', title:$('marketingDraftTitle').value.trim(), body:$('marketingDraftBody').value.trim(), sku_ids:[skuId], declared_prices:{}, source_type:'manual', expected_record_version:current?.record_version || 0 }) });
+        toast(result.fact_check?.passed ? '草稿已保存，基础事实校验通过' : '草稿已保存，请处理事实校验项');
+        await loadMarketing();
+      } catch (error) { toast(error.message); }
+    });
+    $('refreshFinance').addEventListener('click', () => loadFinance().catch((error) => toast(error.message)));
+    $('financeStore').addEventListener('change', () => loadFinance().catch((error) => toast(error.message)));
+    $('runFinanceReconciliation').addEventListener('click', async () => {
+      const button = $('runFinanceReconciliation'); button.disabled = true;
+      try {
+        const result = await api('/v1/finance/reconciliation/run', { method:'POST', body:JSON.stringify({ store_id:$('financeStore').value.trim() || null }) });
+        toast(`对账完成：新建 ${result.tasks_created}，更新 ${result.tasks_updated}，容差内 ${result.within_tolerance}`);
+        await loadFinance();
+      } catch (error) { toast(error.message); }
+      finally { button.disabled = false; }
+    });
     $('runVirtualSimulation').addEventListener('click', () => runVirtualSimulation());
     ['simulationModuleFilter','simulationStatusFilter'].forEach((id) => $(id).addEventListener('change', renderSimulation));
     $('searchConversations').addEventListener('click', () => loadConversations().catch((error) => toast(error.message)));

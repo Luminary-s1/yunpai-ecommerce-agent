@@ -261,6 +261,26 @@ GET  /v1/integrations/taobao/agent-jobs/{job_id}
 POST /v1/integrations/taobao/agent-jobs/run
 ```
 
+### 营销与利润模块
+
+```text
+POST /v1/marketing/performance
+GET  /v1/marketing/performance
+POST /v1/marketing/diagnosis
+POST /v1/marketing/content-drafts
+GET  /v1/marketing/content-drafts
+POST /v1/finance/expenses
+GET  /v1/finance/expenses
+POST /v1/finance/statements
+GET  /v1/finance/statements
+POST /v1/finance/profit
+POST /v1/finance/reconciliation/run
+GET  /v1/finance/reconciliation/tasks
+POST /v1/finance/reconciliation/tasks/{task_id}/transition
+```
+
+营销只记录来源指标、诊断和不可直接发布的内容草稿；利润仅作为经营管理估算，对账只生成或人工流转差异任务。上述接口不执行竞价、预算调整、内容发布、总账、税务、结算或资金动作。
+
 同步资源为 `catalog`、`orders`、`inventory` 或 `competitor_price`。返回值明确包含 `virtual=true`、数据时间、接收数量和实际落库数量；重复回放的落库数量为零。
 
 真实淘宝实现默认关闭自动回复。它采用店铺 OAuth、奇门机器人消息入站和 TOP 异步回写，不依赖千牛页面自动化；本地协议与模拟测试已通过，真实联调仍需客服机器人类目、AppKey、奇门场景、平台专属凭证和测试店铺。提交平台审批前请使用[淘宝客服机器人 API 接入申请材料](docs/taobao-api-access-application.md)，获批后的操作见[淘宝客服接管联调手册](docs/taobao-customer-service-runbook.md)。

@@ -10,7 +10,9 @@ from ..database import Database, utc_now
 from ..tools import ToolExecutionContext, ToolRegistry, ToolResult, ToolSpec
 from .catalog import CatalogItemUpsert, CatalogService
 from .competitive import CompetitiveIntelligenceService, CompetitorObservationCreate
+from .finance import FinanceReportQuery, FinanceService
 from .inventory import InventoryBalanceUpsert, InventoryService
+from .marketing import MarketingDiagnosisQuery, MarketingService
 from .metrics import MetricQuery, MetricsService
 from .orders import OrderService, OrderUpsert
 from .registry import business_module_catalog
@@ -53,6 +55,8 @@ class OperationsService:
         self.orders = OrderService(db)
         self.inventory = InventoryService(db)
         self.competitive = CompetitiveIntelligenceService(db)
+        self.marketing = MarketingService(db)
+        self.finance = FinanceService(db)
         self.metrics = MetricsService(db, self.inventory)
         self.connectors = ConnectorRegistry()
         self.connectors.register(VirtualTaobaoConnector())
@@ -270,6 +274,28 @@ class OperationsService:
                     metadata={"domain": "competitive_intelligence", "risk_level": "L0"},
                 )
             )
+        if registry.get("get_marketing_diagnosis") is None:
+            registry.register(
+                ToolSpec(
+                    name="get_marketing_diagnosis",
+                    description="Read archived campaign metrics and return diagnoses without bids, budget changes, or publication.",
+                    kind="read",
+                    input_model=MarketingDiagnosisQuery,
+                    handler=self._marketing_diagnosis_tool,
+                    metadata={"domain": "marketing", "risk_level": "L0"},
+                )
+            )
+        if registry.get("get_profit_reconciliation") is None:
+            registry.register(
+                ToolSpec(
+                    name="get_profit_reconciliation",
+                    description="Read management profit and reconciliation tasks without changing accounting or funds.",
+                    kind="read",
+                    input_model=FinanceReportQuery,
+                    handler=self._profit_reconciliation_tool,
+                    metadata={"domain": "finance", "risk_level": "L0"},
+                )
+            )
 
     def _inventory_risk_tool(
         self, arguments: BaseModel, context: ToolExecutionContext
@@ -364,3 +390,23 @@ class OperationsService:
             },
         }
         return ToolResult(status="success", output=output)
+
+    def _marketing_diagnosis_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = MarketingDiagnosisQuery.model_validate(arguments.model_dump())
+        return ToolResult(status="success", output=self.marketing.diagnose(context.tenant_id, value))
+
+    def _profit_reconciliation_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = FinanceReportQuery.model_validate(arguments.model_dump())
+        return ToolResult(
+            status="success",
+            output={
+                "profit": self.finance.profit_report(context.tenant_id, value),
+                "reconciliation_tasks": self.finance.list_reconciliation_tasks(
+                    context.tenant_id, store_id=value.store_id
+                ),
+            },
+        )
