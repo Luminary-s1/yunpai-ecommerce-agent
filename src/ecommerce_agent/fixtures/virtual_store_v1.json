@@ -1,0 +1,217 @@
+{
+  "fixture_id": "qingchuan-home-appliance-v1",
+  "fixture_version": "1.0.0",
+  "virtual": true,
+  "store": {
+    "store_id": "qingchuan-flagship-001",
+    "name": "晴川生活电器旗舰店",
+    "platform": "virtual_taobao",
+    "currency": "CNY",
+    "timezone": "Asia/Shanghai"
+  },
+  "connector_id": "virtual_store_simulator",
+  "source_updated_at": "2026-07-22T02:00:00+00:00",
+  "catalog": [
+    {
+      "item_id": "QC-SPU-AF5",
+      "sku_id": "QC-AF5-WHITE",
+      "title": "晴川空气炸锅 5L 云白款",
+      "status": "active",
+      "sale_price": "499.00",
+      "attributes": {"brand": "晴川", "category": "空气炸锅", "model": "AF5", "capacity_l": 5, "color": "云白", "warranty_months": 12}
+    },
+    {
+      "item_id": "QC-SPU-AF5",
+      "sku_id": "QC-AF5-GREEN",
+      "title": "晴川空气炸锅 5L 松绿色",
+      "status": "active",
+      "sale_price": "529.00",
+      "attributes": {"brand": "晴川", "category": "空气炸锅", "model": "AF5", "capacity_l": 5, "color": "松绿", "warranty_months": 12}
+    },
+    {
+      "item_id": "QC-SPU-VC1",
+      "sku_id": "QC-VC-A1",
+      "title": "晴川无线吸尘器 A1",
+      "status": "active",
+      "sale_price": "899.00",
+      "attributes": {"brand": "晴川", "category": "无线吸尘器", "model": "VC-A1", "runtime_min": 45, "warranty_months": 24}
+    },
+    {
+      "item_id": "QC-SPU-HM3",
+      "sku_id": "QC-HM-3L",
+      "title": "晴川静音加湿器 3L",
+      "status": "active",
+      "sale_price": "239.00",
+      "attributes": {"brand": "晴川", "category": "加湿器", "model": "HM-3L", "capacity_l": 3, "warranty_months": 12}
+    },
+    {
+      "item_id": "QC-SPU-KT17",
+      "sku_id": "QC-KT-17",
+      "title": "晴川恒温电热水壶 1.7L",
+      "status": "active",
+      "sale_price": "159.00",
+      "attributes": {"brand": "晴川", "category": "电热水壶", "model": "KT-17", "capacity_l": 1.7, "warranty_months": 12}
+    },
+    {
+      "item_id": "QC-SPU-FN1",
+      "sku_id": "QC-FN-D1",
+      "title": "晴川循环净化风扇 D1",
+      "status": "active",
+      "sale_price": "699.00",
+      "attributes": {"brand": "晴川", "category": "循环风扇", "model": "FN-D1", "filter": "H13", "warranty_months": 24}
+    }
+  ],
+  "inventory": [
+    {"warehouse_id": "QC-WH-HZ", "sku_id": "QC-AF5-WHITE", "on_hand": "12", "reserved": "8", "inbound": "20", "average_daily_sales": "5.0"},
+    {"warehouse_id": "QC-WH-WH", "sku_id": "QC-AF5-WHITE", "on_hand": "18", "reserved": "3", "inbound": "0", "average_daily_sales": "2.0"},
+    {"warehouse_id": "QC-WH-HZ", "sku_id": "QC-AF5-GREEN", "on_hand": "64", "reserved": "6", "inbound": "0", "average_daily_sales": "2.5"},
+    {"warehouse_id": "QC-WH-HZ", "sku_id": "QC-VC-A1", "on_hand": "0", "reserved": "0", "inbound": "8", "average_daily_sales": "1.8"},
+    {"warehouse_id": "QC-WH-WH", "sku_id": "QC-VC-A1", "on_hand": "7", "reserved": "4", "inbound": "0", "average_daily_sales": "1.2"},
+    {"warehouse_id": "QC-WH-HZ", "sku_id": "QC-HM-3L", "on_hand": "320", "reserved": "8", "inbound": "0", "average_daily_sales": "0"},
+    {"warehouse_id": "QC-WH-WH", "sku_id": "QC-HM-3L", "on_hand": "120", "reserved": "2", "inbound": "0", "average_daily_sales": "0"},
+    {"warehouse_id": "QC-WH-HZ", "sku_id": "QC-KT-17", "on_hand": "85", "reserved": "12", "inbound": "40", "average_daily_sales": "6.0"},
+    {"warehouse_id": "QC-WH-HZ", "sku_id": "QC-FN-D1", "on_hand": "9", "reserved": "2", "inbound": "25", "average_daily_sales": "1.1"},
+    {"warehouse_id": "QC-WH-WH", "sku_id": "QC-FN-D1", "on_hand": "22", "reserved": "1", "inbound": "0", "average_daily_sales": "0.8"}
+  ],
+  "orders": [
+    {
+      "order_id": "QC-ORDER-1001", "order_status": "shipped", "payment_status": "paid", "total_amount": "499.00", "placed_at": "2026-07-20T02:15:00+00:00", "buyer_ref_hash": "00112233445566778899aabbccddeeff",
+      "lines": [{"line_id": "QC-LINE-1001", "sku_id": "QC-AF5-WHITE", "title": "晴川空气炸锅 5L 云白款", "quantity": 1, "unit_price": "499.00"}],
+      "logistics": {"carrier": "圆通", "tracking_no_masked": "YT****3101", "status": "in_transit", "last_event": "已到达南京转运中心", "last_event_at": "2026-07-22T00:30:00+00:00"}, "after_sales": []
+    },
+    {
+      "order_id": "QC-ORDER-1002", "order_status": "delivered", "payment_status": "paid", "total_amount": "899.00", "placed_at": "2026-07-17T06:40:00+00:00", "buyer_ref_hash": "10112233445566778899aabbccddeeff",
+      "lines": [{"line_id": "QC-LINE-1002", "sku_id": "QC-VC-A1", "title": "晴川无线吸尘器 A1", "quantity": 1, "unit_price": "899.00"}],
+      "logistics": {"carrier": "顺丰", "tracking_no_masked": "SF****3102", "status": "delivered", "last_event": "本人签收", "last_event_at": "2026-07-20T08:10:00+00:00"},
+      "after_sales": [{"case_id": "QC-AS-1002", "case_type": "exchange", "status": "reviewing", "requested_amount": "0", "approved_amount": "0", "reason_code": "battery_runtime", "opened_at": "2026-07-21T03:20:00+00:00", "updated_at": "2026-07-22T01:10:00+00:00"}]
+    },
+    {
+      "order_id": "QC-ORDER-1003", "order_status": "delivered", "payment_status": "partially_refunded", "total_amount": "529.00", "placed_at": "2026-07-15T10:05:00+00:00", "buyer_ref_hash": "20112233445566778899aabbccddeeff",
+      "lines": [{"line_id": "QC-LINE-1003", "sku_id": "QC-AF5-GREEN", "title": "晴川空气炸锅 5L 松绿色", "quantity": 1, "unit_price": "529.00"}],
+      "logistics": {"carrier": "中通", "tracking_no_masked": "ZT****3103", "status": "delivered", "last_event": "驿站签收", "last_event_at": "2026-07-18T07:45:00+00:00"},
+      "after_sales": [{"case_id": "QC-AS-1003", "case_type": "refund", "status": "approved", "requested_amount": "30.00", "approved_amount": "30.00", "reason_code": "price_protection", "opened_at": "2026-07-20T04:00:00+00:00", "updated_at": "2026-07-21T05:30:00+00:00"}]
+    },
+    {
+      "order_id": "QC-ORDER-1004", "order_status": "paid", "payment_status": "paid", "total_amount": "318.00", "placed_at": "2026-07-21T12:20:00+00:00", "buyer_ref_hash": "30112233445566778899aabbccddeeff",
+      "lines": [{"line_id": "QC-LINE-1004A", "sku_id": "QC-KT-17", "title": "晴川恒温电热水壶 1.7L", "quantity": 2, "unit_price": "159.00"}], "logistics": null, "after_sales": []
+    },
+    {
+      "order_id": "QC-ORDER-1005", "order_status": "shipped", "payment_status": "paid", "total_amount": "239.00", "placed_at": "2026-07-19T13:10:00+00:00", "buyer_ref_hash": "40112233445566778899aabbccddeeff",
+      "lines": [{"line_id": "QC-LINE-1005", "sku_id": "QC-HM-3L", "title": "晴川静音加湿器 3L", "quantity": 1, "unit_price": "239.00"}],
+      "logistics": {"carrier": "极兔", "tracking_no_masked": "JT****3105", "status": "exception", "last_event": "派送地址待核实", "last_event_at": "2026-07-22T01:35:00+00:00"}, "after_sales": []
+    },
+    {
+      "order_id": "QC-ORDER-1006", "order_status": "delivered", "payment_status": "paid", "total_amount": "699.00", "placed_at": "2026-07-12T01:30:00+00:00", "buyer_ref_hash": "50112233445566778899aabbccddeeff",
+      "lines": [{"line_id": "QC-LINE-1006", "sku_id": "QC-FN-D1", "title": "晴川循环净化风扇 D1", "quantity": 1, "unit_price": "699.00"}],
+      "logistics": {"carrier": "京东物流", "tracking_no_masked": "JD****3106", "status": "delivered", "last_event": "门卫签收", "last_event_at": "2026-07-14T06:20:00+00:00"}, "after_sales": []
+    },
+    {
+      "order_id": "QC-ORDER-1007", "order_status": "canceled", "payment_status": "unpaid", "total_amount": "159.00", "placed_at": "2026-07-21T15:05:00+00:00", "buyer_ref_hash": "60112233445566778899aabbccddeeff",
+      "lines": [{"line_id": "QC-LINE-1007", "sku_id": "QC-KT-17", "title": "晴川恒温电热水壶 1.7L", "quantity": 1, "unit_price": "159.00"}], "logistics": null, "after_sales": []
+    },
+    {
+      "order_id": "QC-ORDER-1008", "order_status": "delivered", "payment_status": "paid", "total_amount": "998.00", "placed_at": "2026-07-10T11:45:00+00:00", "buyer_ref_hash": "70112233445566778899aabbccddeeff",
+      "lines": [{"line_id": "QC-LINE-1008", "sku_id": "QC-AF5-WHITE", "title": "晴川空气炸锅 5L 云白款", "quantity": 2, "unit_price": "499.00"}],
+      "logistics": {"carrier": "顺丰", "tracking_no_masked": "SF****3108", "status": "delivered", "last_event": "本人签收", "last_event_at": "2026-07-12T03:15:00+00:00"},
+      "after_sales": [{"case_id": "QC-AS-1008", "case_type": "return_refund", "status": "requested", "requested_amount": "499.00", "approved_amount": "0", "reason_code": "unopened_duplicate", "opened_at": "2026-07-21T09:00:00+00:00", "updated_at": "2026-07-21T09:00:00+00:00"}]
+    }
+  ],
+  "competitive_candidates": [
+    {
+      "candidate_key": "af5-rival-a", "subject_sku": "QC-AF5-WHITE", "competitor_name": "授权样本电器店 A", "competitor_sku": "SAMPLE-AF5-A", "decision": "approved",
+      "subject_identity": {"title": "晴川空气炸锅 5L 云白款", "brand": "晴川", "model": "AF5", "category": "空气炸锅", "gtin": "06912345670001", "attributes": {"capacity": "5L", "color": "云白"}},
+      "competitor_identity": {"title": "晴川空气炸锅 AF5 5L 云白款", "brand": "晴川", "model": "AF5", "category": "空气炸锅", "gtin": "06912345670001", "attributes": {"capacity": "5L", "color": "云白"}},
+      "comparison_keys": ["capacity", "color"], "subject_price": "499.00", "competitor_price": "439.00",
+      "signals": [
+        {"entity_role": "competitor", "signal_type": "product_claim", "aspect": "promotion", "summary": "虚拟样本显示该竞品提供限时赠烤架活动。"},
+        {"entity_role": "competitor", "signal_type": "review_summary", "aspect": "cleaning", "summary": "虚拟聚合样本中，易清洗评价占多数，少量反馈首次使用有气味。", "sample_size": 120, "positive_count": 88, "negative_count": 12}
+      ]
+    },
+    {
+      "candidate_key": "vc1-rival-b", "subject_sku": "QC-VC-A1", "competitor_name": "授权样本家电店 B", "competitor_sku": "SAMPLE-VC1-B", "decision": "approved",
+      "subject_identity": {"title": "晴川无线吸尘器 A1", "brand": "晴川", "model": "VC-A1", "category": "无线吸尘器", "gtin": "06912345670002", "attributes": {"runtime": "45分钟"}},
+      "competitor_identity": {"title": "晴川无线吸尘器 VC-A1", "brand": "晴川", "model": "VC-A1", "category": "无线吸尘器", "gtin": "06912345670002", "attributes": {"runtime": "45分钟"}},
+      "comparison_keys": ["runtime"], "subject_price": "899.00", "competitor_price": "949.00",
+      "signals": [{"entity_role": "competitor", "signal_type": "review_summary", "aspect": "battery", "summary": "虚拟聚合样本中，续航满意度较高，强档续航反馈分化。", "sample_size": 80, "positive_count": 55, "negative_count": 15}]
+    },
+    {
+      "candidate_key": "hm3-wrong-capacity", "subject_sku": "QC-HM-3L", "competitor_name": "授权样本生活店 C", "competitor_sku": "SAMPLE-HM5-C", "decision": "rejected",
+      "subject_identity": {"title": "晴川静音加湿器 3L", "brand": "晴川", "model": "HM-3L", "category": "加湿器", "attributes": {"capacity": "3L"}},
+      "competitor_identity": {"title": "晴川加湿器 5L", "brand": "晴川", "model": "HM-5L", "category": "加湿器", "attributes": {"capacity": "5L"}},
+      "comparison_keys": ["capacity"], "subject_price": "239.00", "competitor_price": "219.00", "signals": []
+    }
+  ],
+  "knowledge": [
+    {"category": "商品保修", "intent": "product", "question": "晴川空气炸锅保修多久？", "answer": "晴川 AF5 空气炸锅整机保修 12 个月，保修以订单和产品序列信息核验结果为准。", "keywords": "空气炸锅 AF5 保修 质保", "risk_level": "low", "layer": "product", "sku_id": "QC-AF5-WHITE"},
+    {"category": "物流规则", "intent": "logistics", "question": "订单物流异常怎么办？", "answer": "先核对订单物流最新节点；若连续 24 小时无更新或显示地址异常，转人工联系承运商核查，不承诺具体送达时间。", "keywords": "物流 异常 地址 核查", "risk_level": "medium", "layer": "store"},
+    {"category": "价保规则", "intent": "refund", "question": "商品降价可以申请价保吗？", "answer": "签收后 7 日内可提交价保申请，是否符合条件以活动类型、实付金额和订单状态核验结果为准，客服不得在核验前承诺退款。", "keywords": "价保 降价 退款 7日", "risk_level": "high", "layer": "store"},
+    {"category": "售后规则", "intent": "refund", "question": "未拆封商品如何退货？", "answer": "未拆封商品可先提交退货申请，由人工核验订单、商品状态和运费责任后给出处理方案，不直接承诺退款完成。", "keywords": "未拆封 退货 售后", "risk_level": "high", "layer": "store"}
+  ],
+  "demands": [
+    {
+      "id": "D01", "module": "catalog", "title": "查询在售商品与版本",
+      "input": {"operation": "CatalogService.list_items", "parameters": {"store_id": "qingchuan-flagship-001"}},
+      "expected": ["返回 6 个在售 SKU", "全部商品来源版本不低于 1", "SKU 集合与虚拟数据包一致"]
+    },
+    {
+      "id": "D02", "module": "orders", "title": "核验订单、物流和售后聚合事实",
+      "input": {"operation": "OrderService.list_orders", "parameters": {"store_id": "qingchuan-flagship-001"}},
+      "expected": ["返回 8 笔订单及其订单行", "3 笔订单包含售后单", "QC-ORDER-1005 物流状态为 exception"]
+    },
+    {
+      "id": "D03", "module": "inventory", "title": "识别断货、缺货和滞销风险",
+      "input": {"operation": "InventoryService.risks", "parameters": {"store_id": "qingchuan-flagship-001"}},
+      "expected": ["同时识别 stockout、stockout_risk、slow_moving", "每条风险均带可追溯 evidence"]
+    },
+    {
+      "id": "D04", "module": "metrics", "title": "计算订单、收入和售后率",
+      "input": {"operation": "MetricsService.query", "parameters": {"store_id": "qingchuan-flagship-001", "metrics": ["active_sku_count", "order_count", "gross_revenue", "after_sale_order_rate", "inventory_risk_count", "competitor_lower_price_count"]}},
+      "expected": ["在售 SKU 为 6", "有效订单为 7", "成交收入为 4181.00", "售后订单率为 0.4286", "竞品低价数为 1"]
+    },
+    {
+      "id": "D05", "module": "competitive_intelligence", "title": "仅使用已批准同款证据形成分析",
+      "input": {"operation": "ToolRegistry.execute", "tool": "get_competitive_intelligence", "mode": "observe", "arguments": {"subject_sku": "QC-AF5-WHITE", "store_id": "qingchuan-flagship-001"}},
+      "expected": ["同款匹配 2 条批准、1 条拒绝", "仅 1 个获批竞品进入分析", "所有返回观察均可用于行动"]
+    },
+    {
+      "id": "D06", "module": "competitive_monitoring", "title": "发现竞品低价并生成持久告警",
+      "input": {"operation": "CompetitiveIntelligenceService.evaluate_all + list_alerts", "parameters": {"store_id": "qingchuan-flagship-001", "status": "open"}},
+      "expected": ["至少生成 1 条 competitor_undercut 告警", "告警只引用已批准同款匹配", "告警已持久化并可再次查询"]
+    },
+    {
+      "id": "D07", "module": "customer_service", "title": "检索店铺知识并在模型不可用时安全转人工",
+      "input": {"operation": "AgentService.chat", "message": "晴川 AF5 空气炸锅保修多久？", "context": {"shop_id": "qingchuan-flagship-001", "sku_id": "QC-AF5-WHITE"}},
+      "expected": ["回答带知识来源与上下文快照", "可用时回答包含 12 个月", "模型不可用时以 model_unavailable 安全转人工"]
+    },
+    {
+      "id": "D08", "module": "order_agent", "title": "订单工具严格绑定可信店铺和订单范围",
+      "input": {"operation": "ToolRegistry.execute", "tool": "get_order_facts", "mode": "observe", "trusted_context": {"authorized": true, "order_id": "QC-ORDER-1005", "shop_id": "qingchuan-flagship-001"}, "allowed_arguments": {"order_id": "QC-ORDER-1005", "store_id": "qingchuan-flagship-001"}, "blocked_probe": {"order_id": "QC-ORDER-1002", "store_id": "qingchuan-flagship-001"}},
+      "expected": ["可信订单返回完整订单事实", "物流异常状态可见", "越权订单探测被 order_scope_mismatch 拒绝"]
+    },
+    {
+      "id": "D09", "module": "handoff_dispatch", "title": "高风险诉求进入人工队列并自动派单",
+      "input": {"operation": "AgentService.chat + HandoffDispatchService.run_once", "message": "物流地址异常，我要转人工处理", "context": {"shop_id": "qingchuan-flagship-001"}},
+      "expected": ["客服回复创建人工任务", "任务自动分配给在线管理员", "派单作业状态为 assigned"]
+    },
+    {
+      "id": "D10", "module": "admin_console", "title": "后台总览可观察会话、知识和人工任务",
+      "input": {"operation": "AdminService.overview", "parameters": {"tenant_scope": "current"}},
+      "expected": ["可见至少 4 条有效知识", "可见至少 1 个会话和 2 条消息", "最近活动非空"]
+    },
+    {
+      "id": "D11", "module": "tenant_isolation", "title": "其他租户不可读取模拟店铺事实",
+      "input": {"operation": "cross_tenant_read_probe", "parameters": {"store_id": "qingchuan-flagship-001", "domains": ["catalog", "orders", "inventory", "competitive"]}},
+      "expected": ["其他租户查询四个业务域均返回空集合"]
+    },
+    {
+      "id": "D12", "module": "connector_contract", "title": "虚拟写动作具备幂等回执和读回验证",
+      "input": {"operation": "VirtualTaobaoConnector.execute + verify", "action": {"action": "update_safety_stock_buffer", "idempotency_key": "qingchuan-home-appliance-v1:safety-stock", "payload": {"sku_id": "QC-AF5-WHITE", "buffer": 20}, "dry_run": false}},
+      "expected": ["重复执行返回相同 external_request_id", "读回验证 verified=true", "回执明确标记 virtual=true"]
+    },
+    {
+      "id": "D13", "module": "customer_service_evaluation", "title": "冻结虚拟标注集并在隔离快照回放实际 Agent",
+      "input": {"operation": "EvaluationService.run_suite", "suite_key": "virtual-store.customer-service-v1", "run_key": "virtual-store-v1", "case": {"message": "晴川 AF5 空气炸锅保修多久？", "context": {"shop_id": "qingchuan-flagship-001", "sku_id": "QC-AF5-WHITE"}, "require_sources": true}},
+      "expected": ["评测集状态为 frozen", "隔离评测门禁通过", "运行前后主会话、消息和人工任务计数不变"]
+    }
+  ]
+}

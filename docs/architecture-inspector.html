@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+  <title>云湃电商一体机架构审阅</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7f8;
+      --surface: #ffffff;
+      --surface-2: #eef2f3;
+      --ink: #182126;
+      --muted: #5d6b72;
+      --line: #d7dee1;
+      --blue: #1769aa;
+      --green: #197447;
+      --orange: #a64b00;
+      --red: #a52f2f;
+      --violet: #6651a5;
+      --radius: 6px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.5 Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+    button, input { font: inherit; letter-spacing: 0; }
+    .app { min-height: 100vh; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 62px;
+      padding: 10px 24px;
+      background: #172026;
+      color: #fff;
+      border-bottom: 3px solid #36a269;
+    }
+    .brand strong { display: block; font-size: 17px; font-weight: 650; }
+    .brand span { color: #bfcbd1; font-size: 12px; }
+    .runtime { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 3px 9px;
+      border: 1px solid #53636c;
+      border-radius: 4px;
+      color: #dce5e9;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .status::before { content: ""; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #59c487; }
+    .shell { max-width: 1500px; margin: 0 auto; padding: 18px 24px 36px; }
+    .summary {
+      display: grid;
+      grid-template-columns: minmax(240px, 1.2fr) repeat(3, minmax(140px, .55fr));
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .summary > div { min-height: 84px; padding: 14px 16px; border-right: 1px solid var(--line); }
+    .summary > div:last-child { border-right: 0; }
+    .summary h1 { margin: 0 0 5px; font-size: 20px; line-height: 1.25; }
+    .summary p { margin: 0; color: var(--muted); }
+    .metric b { display: block; margin-bottom: 5px; font-size: 21px; }
+    .metric span { color: var(--muted); font-size: 12px; }
+    .tabs {
+      display: flex;
+      overflow-x: auto;
+      margin-top: 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .tab {
+      min-width: 118px;
+      height: 42px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--blue); font-weight: 650; }
+    .panel { display: none; padding-top: 16px; }
+    .panel.active { display: block; }
+    .band { margin-bottom: 16px; border: 1px solid var(--line); background: var(--surface); }
+    .band-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 42px;
+      padding: 8px 13px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+    .band-title h2 { margin: 0; font-size: 14px; }
+    .band-title span { color: var(--muted); font-size: 12px; }
+    .module-table { width: 100%; border-collapse: collapse; }
+    .module-table th, .module-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .module-table tr:last-child td { border-bottom: 0; }
+    .module-table th { color: var(--muted); font-size: 12px; font-weight: 600; }
+    .module-name { min-width: 150px; font-weight: 650; }
+    .badge { display: inline-block; min-width: 56px; padding: 2px 7px; border: 1px solid currentColor; border-radius: 4px; font-size: 11px; text-align: center; }
+    .available { color: var(--green); }
+    .interface { color: var(--orange); }
+    .planned { color: var(--muted); }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(130px, 1fr));
+      gap: 24px;
+      overflow-x: auto;
+      padding: 18px;
+    }
+    .node {
+      position: relative;
+      min-width: 130px;
+      min-height: 116px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--blue);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -20px;
+      top: 42px;
+      color: var(--muted);
+      font-size: 20px;
+    }
+    .node.green { border-top-color: var(--green); }
+    .node.orange { border-top-color: var(--orange); }
+    .node.violet { border-top-color: var(--violet); }
+    .node.red { border-top-color: var(--red); }
+    .node h3 { margin: 0 0 7px; font-size: 13px; }
+    .node p { margin: 0; color: var(--muted); font-size: 12px; }
+    .node code { display: block; margin-top: 8px; color: var(--blue); font-size: 11px; overflow-wrap: anywhere; }
+    .rule-list { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .rule { padding: 14px; border-right: 1px solid var(--line); }
+    .rule:last-child { border-right: 0; }
+    .rule b { display: block; margin-bottom: 5px; }
+    .rule p { margin: 0; color: var(--muted); }
+    .source-list { margin: 0; padding: 0; list-style: none; }
+    .source-list li { display: grid; grid-template-columns: 240px 1fr 100px; gap: 14px; padding: 10px 13px; border-bottom: 1px solid var(--line); }
+    .source-list li:last-child { border-bottom: 0; }
+    code { font-family: "Cascadia Code", Consolas, monospace; letter-spacing: 0; }
+    .source-list code { color: var(--blue); overflow-wrap: anywhere; }
+    .source-list span { color: var(--muted); }
+    .callout { padding: 12px 14px; border-left: 4px solid var(--orange); background: #fff7ef; color: #5b371e; }
+    @media (max-width: 900px) {
+      .topbar { align-items: flex-start; padding: 10px 14px; }
+      .runtime { display: none; }
+      .shell { padding: 12px; }
+      .summary { grid-template-columns: 1fr 1fr; }
+      .summary > div:first-child { grid-column: 1 / -1; }
+      .summary > div { border-bottom: 1px solid var(--line); }
+      .module-table { min-width: 800px; }
+      .band { overflow-x: auto; }
+      .rule-list { grid-template-columns: 1fr; }
+      .rule { border-right: 0; border-bottom: 1px solid var(--line); }
+      .source-list li { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body data-page="yunpai-architecture-inspector">
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <strong>云湃电商一体机</strong>
+        <span>源码架构审阅 · 业务模块与 Agent 执行边界</span>
+      </div>
+      <div class="runtime">
+        <span class="status">模块化单体</span>
+        <span class="status">SQLite schema 18</span>
+        <span class="status">Virtual Taobao</span>
+        <span class="status">LangGraph ReAct</span>
+      </div>
+    </header>
+
+    <div class="shell">
+      <section class="summary" aria-label="architecture summary">
+        <div>
+          <h1>经营功能先模块化，LLM 负责理解与组合</h1>
+          <p>连接器提供事实，业务域计算结论，Agent 选择工具；权限、幂等和成功判定始终由代码控制。</p>
+        </div>
+        <div class="metric"><b>9</b><span>业务模块边界</span></div>
+        <div class="metric"><b>7</b><span>已运行经营模块</span></div>
+        <div class="metric"><b>6</b><span>Agent 经营只读工具</span></div>
+      </section>
+
+      <nav class="tabs" aria-label="architecture views">
+        <button class="tab" data-tab="modules" aria-selected="true">业务模块</button>
+        <button class="tab" data-tab="agent" aria-selected="false">Agent 编排</button>
+        <button class="tab" data-tab="data" aria-selected="false">数据链路</button>
+        <button class="tab" data-tab="source" aria-selected="false">源码索引</button>
+      </nav>
+
+      <section id="modules" class="panel active" data-panel="modules">
+        <div class="band" id="business-module-map">
+          <div class="band-title"><h2>业务域状态</h2><span>available 表示已有 API、持久化和测试</span></div>
+          <table class="module-table">
+            <thead><tr><th>模块</th><th>状态</th><th>当前职责</th><th>明确边界</th><th>Agent 工具</th></tr></thead>
+            <tbody>
+              <tr><td class="module-name">仓储管理</td><td><span class="badge available">available</span></td><td>库存余额、覆盖天数、缺货/滞销、补货建议</td><td>不替代 WMS；采购和调拨仅生成建议</td><td><code>get_inventory_risk</code></td></tr>
+              <tr><td class="module-name">竞品分析</td><td><span class="badge available">available</span></td><td>可解释同款匹配、人工裁决、价格/卖点/聚合口碑证据、持久告警</td><td>不抓取未授权数据；未批准匹配不进入 Agent；不保存评论者或原始评论</td><td><code>get_competitive_intelligence</code><br><code>get_competitor_price_analysis</code></td></tr>
+              <tr><td class="module-name">客服与售后协同</td><td><span class="badge available">available</span></td><td>RAG、ReAct、人工接管和审计</td><td>不确定结果不宣称业务已完成</td><td><code>dynamic catalog</code></td></tr>
+              <tr><td class="module-name">客服 Agent 评测</td><td><span class="badge available">available</span></td><td>版本化标注集、隔离多轮运行、回归指标和发布门禁</td><td>客户数据必须去标识化；运行不写生产会话；仍需双人审批</td><td>管理面能力</td></tr>
+              <tr><td class="module-name">商品管理</td><td><span class="badge available">available</span></td><td>SPU/SKU、渠道映射、商品事实</td><td>不直接发布渠道商品</td><td><code>get_product_facts</code></td></tr>
+              <tr><td class="module-name">订单与售后</td><td><span class="badge available">available</span></td><td>订单、退款、物流统一事实</td><td>不替代 ERP/OMS；不自动退款</td><td><code>get_order_facts</code></td></tr>
+              <tr><td class="module-name">营销与投放</td><td><span class="badge planned">planned</span></td><td>广告指标、投放和内容建议</td><td>不做实时竞价；预算变更必须审批</td><td>待规划</td></tr>
+              <tr><td class="module-name">利润与对账</td><td><span class="badge planned">planned</span></td><td>费用归集、经营利润、差异识别</td><td>不替代财务总账</td><td>待规划</td></tr>
+              <tr><td class="module-name">经营指标</td><td><span class="badge planned">planned</span></td><td>指标定义、水位、异常和证据</td><td>模型不得直接拼 SQL</td><td>待规划</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">淘宝当前使用明确标记为 virtual 的本地接口。它能完成连接测试、数据拉取、Webhook 验签、动作幂等和回执验证，但不会访问淘宝网络或伪装成真实授权。</div>
+      </section>
+
+      <section id="agent" class="panel" data-panel="agent">
+        <div class="band">
+          <div class="band-title"><h2>LLM 驱动的有界 ReAct</h2><span>业务意图和工具顺序不写入固定拓扑</span></div>
+          <div class="flow">
+            <div class="node"><h3>Intake</h3><p>清洗输入与可信上下文</p><code>graph.py:43</code></div>
+            <div class="node green"><h3>Retrieve</h3><p>获取批准知识和业务证据</p><code>graph.py:85</code></div>
+            <div class="node violet"><h3>LLM Deliberate</h3><p>判断意图、模式、工具和参数</p><code>graph.py:99</code></div>
+            <div class="node orange"><h3>Decision Gate</h3><p>验证结构、步数和可完成性</p><code>graph.py:159</code></div>
+            <div class="node red"><h3>Tool Gate</h3><p>权限、类型、上下文和策略门</p><code>graph.py:212</code></div>
+            <div class="node green"><h3>Execute + Verify</h3><p>调用固化能力并验证后置条件</p><code>graph.py:250</code></div>
+            <div class="node"><h3>Persist / Handoff</h3><p>审计、落库或转人工</p><code>graph.py:417</code></div>
+          </div>
+        </div>
+        <div class="band">
+          <div class="band-title"><h2>职责划分</h2><span>自由理解不等于自由放权</span></div>
+          <div class="rule-list">
+            <div class="rule"><b>LLM 决定</b><p>用户目标、业务意图、下一步模式、工具选择、参数草案和组合顺序。</p></div>
+            <div class="rule"><b>业务模块决定</b><p>库存风险公式、竞品价差、来源标识、指标口径和确定性领域规则。</p></div>
+            <div class="rule"><b>安全内核决定</b><p>租户范围、权限、幂等、审批、执行状态、后置验证和人工介入。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="data" class="panel" data-panel="data">
+        <div class="band">
+          <div class="band-title"><h2>虚拟接口到 Agent 的数据链路</h2><span>同一接口可在取得授权后替换为真实适配器</span></div>
+          <div class="flow">
+            <div class="node violet"><h3>Virtual Taobao</h3><p>确定性样本、虚拟回执、无外部网络</p><code>virtual_taobao.py</code></div>
+            <div class="node orange"><h3>Connector SDK</h3><p>能力、拉取、Webhook、执行和验证契约</p><code>connectors/base.py</code></div>
+            <div class="node"><h3>Sync Run</h3><p>游标、数量、数据时间和失败状态</p><code>connector_sync_runs</code></div>
+            <div class="node green"><h3>Domain Facts</h3><p>经营事实、客服上下文快照、竞品监控告警、知识、SOP、质检、版本化评测集、发布门禁与持久 outbox</p><code>schema v18</code></div>
+            <div class="node green"><h3>Domain Logic</h3><p>版本防旧覆盖、风险、价差与受控指标</p><code>business/</code></div>
+            <div class="node violet"><h3>Tool Catalog</h3><p>向 LLM 暴露类型化只读工具</p><code>business/service.py</code></div>
+            <div class="node red"><h3>Policy / Audit</h3><p>租户隔离、来源约束和事件审计</p><code>tools.py · database.py</code></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="source" class="panel" data-panel="source">
+        <div class="band">
+          <div class="band-title"><h2>源码索引</h2><span>从接口向内追踪</span></div>
+          <ul class="source-list">
+            <li><code>operations_api.py</code><span>模块、连接器、商品、订单、仓储、竞品与指标 API</span><span class="available">implemented</span></li>
+            <li><code>connectors/base.py</code><span>统一 Connector Protocol 与类型化契约</span><span class="available">implemented</span></li>
+            <li><code>connectors/virtual_taobao.py</code><span>本地虚拟拉取、回调、动作和回执</span><span class="available">implemented</span></li>
+            <li><code>business/registry.py</code><span>全域业务模块职责、状态和边界</span><span class="available">implemented</span></li>
+            <li><code>business/inventory.py</code><span>库存事实、风险和补货建议</span><span class="available">implemented</span></li>
+            <li><code>business/competitive.py</code><span>竞品观察、来源约束和价格分析</span><span class="available">implemented</span></li>
+            <li><code>business/catalog.py</code><span>商品事实、来源版本和旧数据防覆盖</span><span class="available">implemented</span></li>
+            <li><code>business/orders.py</code><span>订单、物流、售后与不可变历史</span><span class="available">implemented</span></li>
+            <li><code>business/metrics.py</code><span>代码化指标定义和受控 QuerySpec</span><span class="available">implemented</span></li>
+            <li><code>business/service.py</code><span>同步归一和 Agent 工具注册</span><span class="available">implemented</span></li>
+            <li><code>evaluation.py</code><span>版本化客服评测集、多轮断言、回归指标、崩溃恢复与发布门禁</span><span class="available">implemented</span></li>
+            <li><code>evaluation_api.py</code><span>评测集、用例、运行和总览管理 API</span><span class="available">implemented</span></li>
+            <li><code>database.py</code><span>schema v18 经营事实、不可变上下文快照、竞品证据、知识/SOP、质检、评测集与运行、发布策略、租约 outbox</span><span class="available">implemented</span></li>
+            <li><code>disaster_recovery.py</code><span>双库快照、认证加密、清单校验、恢复回滚、换钥与保留策略</span><span class="available">implemented</span></li>
+            <li><code>graph.py</code><span>LLM 决策、有界 ReAct、安全门和人工接管</span><span class="available">implemented</span></li>
+            <li><code>taobao.py</code><span>真实淘宝草案；当前无授权，不作为运行依赖</span><span class="interface">blocked</span></li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    const panels = Array.from(document.querySelectorAll('.panel'));
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((item) => item.setAttribute('aria-selected', String(item === tab)));
+        panels.forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === tab.dataset.tab));
+      });
+    });
+  </script>
+</body>
+</html>

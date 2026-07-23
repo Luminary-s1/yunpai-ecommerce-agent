@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yunpai-ecommerce-agent"
+version = "0.22.6"
+description = "Lightweight modular ecommerce operations agent with LangGraph, typed tools, RAG, and virtual connectors"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "cryptography>=45,<50",
+  "fastapi>=0.115,<1.0",
+  "httpx>=0.28,<1.0",
+  "langgraph>=1.2,<2.0",
+  "langgraph-checkpoint-sqlite>=3.1,<4.0",
+  "pydantic>=2.10,<3.0",
+  "uvicorn[standard]>=0.34,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "coverage>=7.15,<8.0",
+  "httpx2>=2.7,<3.0",
+  "pytest>=8.3,<9.0",
+]
+
+[project.scripts]
+yunpai-agent = "ecommerce_agent.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ecommerce_agent = ["fixtures/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

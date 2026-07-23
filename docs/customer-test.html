@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>云湃电商 - 顾客对话测试</title>
+  <style>
+    :root {
+      --canvas: #f2f5f6;
+      --paper: #ffffff;
+      --ink: #17242a;
+      --muted: #64747b;
+      --line: #d7e0e3;
+      --nav: #17313a;
+      --nav-soft: #244a56;
+      --teal: #087b72;
+      --teal-soft: #e7f4f1;
+      --amber: #a75c00;
+      --amber-soft: #fff3dc;
+      --red: #b12635;
+      --red-soft: #fdecef;
+      --blue: #1b5f8f;
+      --blue-soft: #e8f2f9;
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; color: var(--ink); background: var(--canvas); }
+    button, textarea { font: inherit; letter-spacing: 0; }
+    button { cursor: pointer; }
+    .page { min-height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+    .topbar { min-height: 62px; padding: 11px clamp(14px, 3vw, 32px); background: var(--nav); color: #fff; display: flex; gap: 16px; align-items: center; justify-content: space-between; }
+    .title { min-width: 0; }
+    .title strong { display: block; font-size: 18px; }
+    .title span { display: block; margin-top: 3px; font-size: 12px; color: #b5c9ce; }
+    .topbar-actions { display: flex; align-items: center; gap: 9px; }
+    .status { display: inline-flex; align-items: center; min-height: 25px; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; background: #294a55; color: #d9f2ed; white-space: nowrap; }
+    .button { min-height: 34px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); font-weight: 700; }
+    .button:hover { border-color: #97abb2; background: #f8fbfb; }
+    .button.primary { border-color: var(--teal); background: var(--teal); color: #fff; }
+    .button.primary:hover { background: #06675f; }
+    .button:disabled { opacity: .55; cursor: wait; }
+    .layout { width: min(1360px, 100%); min-height: 0; margin: 0 auto; padding: 20px clamp(14px, 3vw, 32px); display: grid; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); gap: 18px; }
+    .sidebar, .workspace { min-width: 0; }
+    .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+    .panel-head { padding: 16px; border-bottom: 1px solid var(--line); }
+    .panel-head h1, .panel-head h2 { margin: 0; font-size: 16px; }
+    .panel-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .case-list { padding: 8px; display: grid; gap: 7px; }
+    .case { width: 100%; padding: 10px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; }
+    .case:hover, .case.selected { border-color: #a8d4ce; background: var(--teal-soft); }
+    .case strong, .case span { display: block; }
+    .case strong { font-size: 14px; }
+    .case span { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .case-foot { padding: 12px 16px 16px; color: var(--muted); border-top: 1px solid var(--line); font-size: 12px; line-height: 1.55; }
+    .workspace { display: grid; grid-template-rows: auto minmax(320px, 1fr) auto auto; overflow: hidden; }
+    .session-row { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fbfcfc; }
+    .session-row .label { min-width: 0; }
+    .session-row .label strong, .session-row .label span { display: block; }
+    .session-row .label strong { font-size: 14px; }
+    .session-row .label span { margin-top: 3px; color: var(--muted); font: 12px ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+    .messages { min-height: 320px; max-height: calc(100vh - 315px); overflow: auto; padding: 18px; display: grid; align-content: start; gap: 14px; background: #f9fbfb; }
+    .empty { align-self: center; justify-self: center; max-width: 460px; color: var(--muted); font-size: 14px; line-height: 1.65; text-align: center; }
+    .message { max-width: min(760px, 88%); padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; line-height: 1.65; overflow-wrap: anywhere; }
+    .message.customer { justify-self: end; border-color: #9dc3df; background: var(--blue-soft); }
+    .message.agent { justify-self: start; border-color: #abd8d2; }
+    .message.error { justify-self: start; border-color: #e7abb4; background: var(--red-soft); }
+    .message-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; font-size: 12px; color: var(--muted); }
+    .message-head strong { color: var(--ink); }
+    .reply-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag { padding: 2px 6px; border-radius: 3px; font-size: 12px; font-weight: 700; background: #edf1f2; color: #43545a; }
+    .tag.ok { color: #06675f; background: var(--teal-soft); }
+    .tag.warn { color: var(--amber); background: var(--amber-soft); }
+    .tag.danger { color: var(--red); background: var(--red-soft); }
+    .source-list { margin: 10px 0 0; padding: 10px; border-left: 3px solid #8bc7c0; background: #f3f8f8; color: #405158; font-size: 12px; }
+    .source-list strong { color: var(--ink); }
+    .composer { padding: 14px 16px; border-top: 1px solid var(--line); display: grid; gap: 9px; }
+    .context { color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    textarea { width: 100%; min-height: 82px; resize: vertical; padding: 10px 11px; border: 1px solid #b8c8cd; border-radius: 4px; color: var(--ink); background: #fff; outline: none; }
+    textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(8,123,114,.12); }
+    .composer-actions { display: flex; justify-content: flex-end; gap: 9px; }
+    .evidence { margin: 0 16px 16px; padding: 0 0 14px; border-top: 1px solid var(--line); }
+    .evidence summary { padding-top: 12px; color: var(--muted); font-size: 13px; cursor: pointer; }
+    pre { max-height: 260px; margin: 10px 0 0; padding: 12px; overflow: auto; border-radius: 4px; background: #172a31; color: #dce8ea; font: 12px/1.55 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .notice { margin: 12px 16px 0; padding: 9px 10px; border-left: 3px solid var(--amber); background: var(--amber-soft); color: #714300; font-size: 13px; line-height: 1.5; }
+    .notice.hidden { display: none; }
+    @media (max-width: 820px) {
+      .layout { grid-template-columns: 1fr; }
+      .case-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .case-foot { display: none; }
+      .messages { max-height: 46vh; }
+    }
+    @media (max-width: 520px) {
+      .topbar { align-items: flex-start; }
+      .topbar-actions .status { display: none; }
+      .case-list { grid-template-columns: 1fr; }
+      .session-row { align-items: flex-start; flex-direction: column; }
+      .message { max-width: 95%; }
+      .composer-actions .button { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="title"><strong>顾客对话测试</strong><span>本机隔离环境 · 复用智能客服真实调用链路</span></div>
+      <div class="topbar-actions">
+        <span class="status">仅限本机 · 模拟数据范围</span>
+        <a class="button" href="/admin">返回后台</a>
+      </div>
+    </header>
+    <main class="layout">
+      <aside class="sidebar panel">
+        <div class="panel-head">
+          <h1>测试案例</h1>
+          <p>点击案例会填入真实请求内容，并保留案例指定的非敏感上下文。</p>
+        </div>
+        <div class="case-list" id="caseList"><div class="empty">正在加载案例...</div></div>
+        <div class="case-foot">退款、改址等业务动作不会在此入口执行；系统会按正式安全策略转人工或拒绝越权请求。</div>
+      </aside>
+      <section class="workspace panel" aria-label="顾客测试对话">
+        <div class="session-row">
+          <div class="label"><strong>当前顾客会话</strong><span id="sessionId"></span></div>
+          <button class="button" type="button" id="newSession">新建会话</button>
+        </div>
+        <div class="messages" id="messages">
+          <div class="empty" id="emptyState">选择左侧案例，或直接输入顾客问题。每次发送会显示智能客服实际返回的回答、风险判断、来源与原始接口输出。</div>
+        </div>
+        <div class="notice hidden" id="errorNotice" role="alert"></div>
+        <form class="composer" id="chatForm">
+          <div class="context" id="contextHint">当前上下文：无</div>
+          <textarea id="messageInput" maxlength="4000" placeholder="以顾客身份输入问题，例如：这款商品多久发货？" required></textarea>
+          <div class="composer-actions">
+            <button class="button" type="button" id="clearContext">清除上下文</button>
+            <button class="button primary" id="sendButton" type="submit">发送对话</button>
+          </div>
+        </form>
+        <details class="evidence" id="outputDetails">
+          <summary>本次接口原始输出</summary>
+          <pre id="outputJson">尚未调用接口。</pre>
+        </details>
+      </section>
+    </main>
+  </div>
+  <script>
+    const state = { sessionId: '', context: {}, selectedCase: null, busy: false };
+    const $ = (id) => document.getElementById(id);
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[char]);
+
+    function createSessionId() {
+      const token = window.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      return `customer-test:${token}`;
+    }
+
+    function updateSession() {
+      $('sessionId').textContent = state.sessionId;
+    }
+
+    function updateContext() {
+      const entries = Object.entries(state.context);
+      $('contextHint').textContent = entries.length
+        ? `当前案例上下文：${entries.map(([key, value]) => `${key}=${value}`).join(' · ')}`
+        : '当前上下文：无';
+    }
+
+    function showError(message) {
+      $('errorNotice').textContent = message;
+      $('errorNotice').classList.remove('hidden');
+    }
+
+    function clearError() {
+      $('errorNotice').textContent = '';
+      $('errorNotice').classList.add('hidden');
+    }
+
+    function appendMessage(kind, title, content, meta = null) {
+      $('emptyState')?.remove();
+      const node = document.createElement('article');
+      node.className = `message ${kind}`;
+      const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      let html = `<div class="message-head"><strong>${escapeHtml(title)}</strong><span>${time}</span></div><div>${escapeHtml(content)}</div>`;
+      if (meta) {
+        const handoffClass = meta.requires_human ? 'warn' : 'ok';
+        html += `<div class="reply-meta"><span class="tag ${handoffClass}">${meta.requires_human ? '已转人工' : escapeHtml(meta.intent)}</span><span class="tag">风险 ${escapeHtml(meta.risk_level)}</span><span class="tag">${escapeHtml(meta.reason)}</span></div>`;
+        if (meta.sources?.length) {
+          html += `<div class="source-list"><strong>命中来源</strong><br>${meta.sources.map((source) => `${escapeHtml(source.category)} · ${escapeHtml(source.source)} · v${escapeHtml(source.version)}`).join('<br>')}</div>`;
+        }
+      }
+      node.innerHTML = html;
+      $('messages').append(node);
+      $('messages').scrollTop = $('messages').scrollHeight;
+    }
+
+    function setBusy(busy) {
+      state.busy = busy;
+      $('sendButton').disabled = busy;
+      $('sendButton').textContent = busy ? '正在请求...' : '发送对话';
+      $('messageInput').disabled = busy;
+    }
+
+    async function sendMessage(message = $('messageInput').value.trim()) {
+      if (!message || state.busy) return;
+      clearError();
+      appendMessage('customer', '顾客', message);
+      $('messageInput').value = '';
+      setBusy(true);
+      const requestPayload = { session_id: state.sessionId, message, context: state.context };
+      try {
+        const response = await fetch('/v1/test/customer-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestPayload)
+        });
+        const payload = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+        $('outputJson').textContent = JSON.stringify(payload, null, 2);
+        if (!response.ok) throw new Error(payload.detail || `请求失败 (${response.status})`);
+        appendMessage('agent', '智能客服', payload.answer, payload);
+      } catch (error) {
+        const messageText = error instanceof Error ? error.message : '接口调用失败';
+        appendMessage('error', '接口错误', messageText);
+        showError(messageText);
+      } finally {
+        setBusy(false);
+        $('messageInput').focus();
+      }
+    }
+
+    function selectCase(testCase, node) {
+      state.context = testCase.context || {};
+      state.selectedCase = testCase.id;
+      document.querySelectorAll('.case').forEach((item) => item.classList.remove('selected'));
+      node.classList.add('selected');
+      $('messageInput').value = testCase.message;
+      updateContext();
+      $('messageInput').focus();
+    }
+
+    async function loadCases() {
+      try {
+        const response = await fetch('/v1/test/customer-chat/cases');
+        const cases = await response.json();
+        if (!response.ok) throw new Error(cases.detail || `加载失败 (${response.status})`);
+        $('caseList').innerHTML = '';
+        cases.forEach((testCase) => {
+          const node = document.createElement('button');
+          node.className = 'case';
+          node.type = 'button';
+          node.innerHTML = `<strong>${escapeHtml(testCase.title)}</strong><span>${escapeHtml(testCase.message)}</span><span>预期：${escapeHtml(testCase.expected)}</span>`;
+          node.addEventListener('click', () => selectCase(testCase, node));
+          $('caseList').append(node);
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '无法加载测试案例';
+        $('caseList').innerHTML = `<div class="notice">${escapeHtml(message)}</div>`;
+        showError(message);
+      }
+    }
+
+    $('chatForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      sendMessage();
+    });
+    $('newSession').addEventListener('click', () => {
+      state.sessionId = createSessionId();
+      state.context = {};
+      state.selectedCase = null;
+      $('messages').innerHTML = '<div class="empty" id="emptyState">已创建新会话。选择案例，或直接输入顾客问题。</div>';
+      $('outputJson').textContent = '尚未调用接口。';
+      $('messageInput').value = '';
+      document.querySelectorAll('.case').forEach((item) => item.classList.remove('selected'));
+      clearError();
+      updateSession();
+      updateContext();
+      $('messageInput').focus();
+    });
+    $('clearContext').addEventListener('click', () => {
+      state.context = {};
+      state.selectedCase = null;
+      document.querySelectorAll('.case').forEach((item) => item.classList.remove('selected'));
+      updateContext();
+      $('messageInput').focus();
+    });
+
+    state.sessionId = createSessionId();
+    updateSession();
+    updateContext();
+    loadCases();
+  </script>
+</body>
+</html>
