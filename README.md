@@ -77,6 +77,37 @@ yunpai-agent serve --host 127.0.0.1 --port 8080
 
 必须确认 `python --version` 为 3.11 或更高，且 `Get-Command yunpai-agent` 指向当前虚拟环境。安装了多个 Python 的 Windows 主机如果尚未激活虚拟环境，应使用 `py -3.12 -m ecommerce_agent.cli <command>`，避免误调用旧解释器残留的同名脚本。
 
+macOS / Linux（bash/zsh）：
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python --version
+python -m pip install -e ".[dev]"
+
+export ADMIN_API_KEY="请替换为长随机密钥"
+export ADMIN_AUTH_REQUIRED="true"
+export BOOTSTRAP_ADMIN_ID="local-admin"
+export AUTH_REQUIRED="true"
+export BOOTSTRAP_TENANT_ID="local-appliance"
+export BOOTSTRAP_CLIENT_ID="local-adapter"
+export BOOTSTRAP_CLIENT_KEY="请替换为另一条长随机密钥"
+export SUBJECT_HASH_KEY="请替换为稳定的随机 HMAC 密钥"
+export MODEL_PROVIDER="glm"
+export MODEL_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
+export MODEL_NAME="glm-4.7-flash"
+export MODEL_API_KEY="请使用具备标准 API 资源的密钥"
+export MODEL_ENABLED="true"
+
+yunpai-agent init
+yunpai-agent eval
+yunpai-agent simulate-store
+yunpai-agent model-probe
+yunpai-agent serve --host 127.0.0.1 --port 8080
+```
+
+必须确认 `python --version` 为 3.11 或更高，且 `which yunpai-agent` 指向当前虚拟环境（`<项目根>/.venv/bin/yunpai-agent`）。系统自带的 `/usr/bin/python3` 通常低于 3.11，请改用 Homebrew 等安装的 `python3.11`/`python3.12` 创建虚拟环境；未激活虚拟环境时可用 `./.venv/bin/python -m ecommerce_agent.cli <command>` 显式调用。
+
 `MODEL_ENABLED=false` 时不会发出模型网络请求；除完全匹配且经过人工批准的进化答案外，需规划的请求会安全建单转人工。轻量档默认使用 `glm-4.7-flash`、关闭 thinking、检索 3 条知识、限制为 240 个输出 token，并通过 SSE 接收供应商输出；账户限流立即降级，只有平台过载或 5xx 才短重试一次。`MODEL_MOCK_MODE=true` 仅供自动化测试和离线演示。
 
 GLM Coding Plan 可作为显式的本机测试模型，通过标准 Chat Completions 接口接入；配置 `/api/coding/` 时需设置 `MODEL_ALLOW_CODING_PLAN=true`，并使用非流式调用。正式环境默认仍使用标准 GLM API。详见 [GLM 接入说明](docs/glm-integration.md)。
