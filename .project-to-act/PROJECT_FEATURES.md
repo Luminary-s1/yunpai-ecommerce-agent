@@ -60,12 +60,13 @@
 | F-305 商品与渠道 SKU 事实模块 | P0 | 已完成 | F-302 | SPU/SKU、Listing 映射具备来源时间、载荷哈希、防旧覆盖、幂等、冲突、数据质量、并发和租户隔离，可供 Agent 只读查询 | `business/catalog.py`、`POST/GET /v1/catalog/items`、`get_product_facts`、E-20260721-010 |
 | F-306 订单、物流与售后事实模块 | P0 | 已完成 | F-302、F-305 | 订单行、脱敏物流、售后单和不可变历史支持虚拟归一、版本、去重、事务回滚和租户隔离；V1 不执行退款赔付 | `business/orders.py`、`POST/GET /v1/orders`、`get_order_facts`、E-20260721-010 |
 | F-307 指标语义与经营诊断 | P0 | 已完成 | F-303、F-305、F-306 | 六项指标公式代码化；模型只选择严格 QuerySpec；结果带定义版本、水位、质量和证据，额外 SQL 字段被拒绝 | `business/metrics.py`、`POST /v1/metrics/query`、`get_business_metric`、E-20260721-010 |
-| F-308 营销与内容模块 | P1 | 已完成 | F-305、F-307、审批 | 版本化广告日指标、ROAS/CTR/无转化花费诊断、内容草稿有限事实检查和 Agent 只读工具均已落地；不自建实时竞价，预算与发布仍必须审批 | `src/ecommerce_agent/business/marketing.py`、`operations_api.py`、D14、`tests/test_marketing_finance_api.py`、E-20260723-005 |
-| F-309 利润与对账模块 | P1 | 已完成 | F-306、F-307、成本口径 | 来源版本化费用与结算单、管理利润估算、差异任务与人工流转、Agent 只读工具均已落地；不替代财务总账、税务或资金指令 | `src/ecommerce_agent/business/finance.py`、`operations_api.py`、D15、`tests/test_marketing_finance_api.py`、E-20260723-005 |
+| F-308 营销与内容模块 | P1 | 已完成 | F-305、F-307、审批 | 版本化广告日指标、ROAS/CTR/无转化花费诊断、内容草稿有限事实检查和 Agent 只读工具均已落地；不自建实时竞价，预算与发布仍必须审批 | `src/ecommerce_agent/business/marketing.py`、`operations_api.py`、D14、`tests/test_marketing_finance_api.py`、`tests/test_marketing_finance_pressure.py`、E-20260723-005、E-20260724-001 |
+| F-309 利润与对账模块 | P1 | 已完成 | F-306、F-307、成本口径 | 来源版本化费用与结算单、管理利润估算、差异任务与人工流转、Agent 只读工具均已落地；不替代财务总账、税务或资金指令 | `src/ecommerce_agent/business/finance.py`、`operations_api.py`、D15、`tests/test_marketing_finance_api.py`、`tests/test_marketing_finance_pressure.py`、E-20260723-005、E-20260724-001 |
 | F-310 本地经营与客服管理后台 | P0 | 已完成 | F-005、F-109、F-301、F-304 至 F-307 | `/admin` 聚合经营总览、客服会话/证据回放、人工任务、商品库存、订单物流售后、受控指标、竞品、版本化客户评测、场景验收、发布、模块状态和审计；管理数据 API 强制租户鉴权 | 0.22.6 在既有数据范围隔离和真实输入输出基础上，约束总览、表格、会话和移动端控件尺寸；桌面/390px 无页面级横向溢出，console error/warning 为 0，见 E-20260723-004 |
 
 ## 功能变更历史
 
+- 2026-07-24：F-308/F-309 完成单机并发压测：16 线程、818 次操作、三类来源事件各 1 次应用加 127 次幂等重放、64 次对账仅创建 1 条任务、240 次并发读和 64 次跨租户读均一致；内容始终不可发布，利润仍标记为管理估算。见 E-20260724-001 与 `docs/PERFORMANCE_REPORT_0.23.0.md`；不代表容量、长稳或生产放行。
 - 2026-07-23：F-310 完成 0.22.6 视觉优化。经营总览采用独立内容列，长列表改为内部滚动，客服会话和测试结果有固定阅读边界；移动端导航、筛选、KPI 和会话区保持可操作。见 E-20260723-004。
 - 2026-07-23：完成 F-123 的 0.22.4 后台直测调整。原智能客服“对话测试”删除客户端 ID、主体与密钥输入，直接调用默认关闭、仅回环的本机测试路径；预置晴川店铺商品上下文，返回实际回答、风险、接管、会话/追踪和来源，并自动切到 simulation 范围。正式 `/v1/chat` 客户鉴权未取消。223 项全量测试和浏览器实测通过，见 E-20260723-002。
 - 2026-07-23：F-123 完成 0.22.5 真实模型本机验证。显式启用 Coding Plan 后，原页面通过标准 Chat Completions 非流式请求调用 `glm-4.7`；空容器模型输出在 `AgentDecision` 边界归一化，其他结构错误仍拒绝。页面保修与发货问题返回真实答案，审计确认模型决策和模型生成均执行，见 E-20260723-003。
