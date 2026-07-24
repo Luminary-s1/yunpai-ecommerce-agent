@@ -186,6 +186,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="architecture inspector is not built")
         return FileResponse(architecture_page, media_type="text/html; charset=utf-8")
 
+    pressure_report_page = (
+        Path(__file__).resolve().parents[2] / "docs" / "marketing-finance-pressure-report.html"
+    )
+    pressure_report_data = (
+        Path(__file__).resolve().parents[2]
+        / "docs"
+        / "marketing-finance-pressure-evidence.json"
+    )
+
+    @app.get("/reports/marketing-finance-pressure", include_in_schema=False)
+    def marketing_finance_pressure_report() -> FileResponse:
+        if not pressure_report_page.is_file():
+            raise HTTPException(status_code=404, detail="marketing-finance pressure report is not built")
+        return FileResponse(pressure_report_page, media_type="text/html; charset=utf-8")
+
+    @app.get("/reports/marketing-finance-pressure.json", include_in_schema=False)
+    def marketing_finance_pressure_evidence() -> FileResponse:
+        if not pressure_report_data.is_file():
+            raise HTTPException(status_code=404, detail="marketing-finance pressure evidence is not built")
+        return FileResponse(pressure_report_data, media_type="application/json; charset=utf-8")
+
     admin_console_page = Path(__file__).resolve().parents[2] / "docs" / "admin-console.html"
 
     @app.get("/admin", include_in_schema=False)

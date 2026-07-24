@@ -2,6 +2,19 @@
 
 Date: 2026-07-24
 
+## Full Input And Output Evidence
+
+- Browser report: `/reports/marketing-finance-pressure`
+- Raw JSON: `/reports/marketing-finance-pressure.json`
+- Repository evidence: `docs/marketing-finance-pressure-evidence.json`
+
+The evidence file is generated only when the pressure test receives an explicit
+`MARKETING_FINANCE_PRESSURE_REPORT_PATH`. It contains the actual input payloads,
+first applied and idempotent write outputs, all 64 content-draft outputs, all
+64 reconciliation outputs, source-version rejection errors, task-transition
+outputs, query outputs, and an isolated-tenant response. It contains virtual
+test data only.
+
 ## Scope
 
 This run exercised the local marketing and finance services against an isolated
@@ -16,13 +29,14 @@ ledger, tax service, settlement system, or customer data source.
 ## Reproducible Command
 
 ```text
-py -3.12 -m pytest -s tests/test_marketing_finance_pressure.py -q
+$env:MARKETING_FINANCE_PRESSURE_REPORT_PATH = 'docs\\marketing-finance-pressure-evidence.json'
+py -3.12 -m pytest tests\\test_marketing_finance_pressure.py -q
 ```
 
 ## Result
 
 ```text
-1 passed in 10.82s
+1 passed in 9.16s
 
 MARKETING_FINANCE_PRESSURE_REPORT={
   "completed_operations": 818,
@@ -43,6 +57,9 @@ MARKETING_FINANCE_PRESSURE_REPORT={
   }
 }
 ```
+
+The HTML report reads this generated JSON and presents the complete structured
+evidence in collapsible input/output blocks, with a direct download link.
 
 ## Assertions
 

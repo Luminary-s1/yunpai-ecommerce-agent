@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>营销与利润模块压测报告</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #5c6975;
+      --surface: #ffffff;
+      --canvas: #f3f6f6;
+      --line: #d5dfdf;
+      --teal: #0b7772;
+      --teal-dark: #0a514e;
+      --green: #16734b;
+      --red: #ae3e3e;
+      --amber: #8a5a05;
+      --code: #102221;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; background: var(--canvas); color: var(--ink); font-family: "Microsoft YaHei", "Segoe UI", sans-serif; }
+    .topbar { background: var(--teal-dark); color: #f5ffff; }
+    .topbar-inner { width: min(1440px, calc(100% - 32px)); min-height: 112px; margin: 0 auto; padding: 20px 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 26px; line-height: 1.25; font-weight: 700; letter-spacing: 0; }
+    h2 { font-size: 18px; line-height: 1.35; font-weight: 700; letter-spacing: 0; }
+    h3 { font-size: 14px; line-height: 1.35; font-weight: 700; letter-spacing: 0; }
+    .subtitle { margin-top: 8px; color: #c7e4e1; font-size: 14px; line-height: 1.45; }
+    .download { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border: 1px solid #a5d6d1; color: #f5ffff; text-decoration: none; font-size: 14px; white-space: nowrap; }
+    .download:hover { background: #176663; }
+    main { width: min(1440px, calc(100% - 32px)); margin: 20px auto 40px; display: grid; gap: 16px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+    .metric, .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+    .metric { min-height: 108px; padding: 16px; }
+    .metric-label { color: var(--muted); font-size: 13px; line-height: 1.35; }
+    .metric-value { margin-top: 8px; font-size: 24px; line-height: 1; color: var(--teal-dark); font-weight: 700; }
+    .metric-note { margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .panel { padding: 18px; overflow: hidden; }
+    .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .panel-note { color: var(--muted); font-size: 12px; line-height: 1.4; text-align: right; }
+    .status-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 9px; border-radius: 4px; font-size: 12px; line-height: 1.2; border: 1px solid transparent; }
+    .badge.ok { background: #e8f6ed; border-color: #a8dfbb; color: var(--green); }
+    .badge.warn { background: #fff5df; border-color: #ecd18f; color: var(--amber); }
+    .badge.error { background: #ffeded; border-color: #efb7b7; color: var(--red); }
+    .pair-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .triple-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .data-block { min-width: 0; border: 1px solid var(--line); border-radius: 5px; background: #fbfcfc; }
+    .data-block > h3 { padding: 11px 12px; border-bottom: 1px solid var(--line); background: #f1f5f5; }
+    pre { margin: 0; max-height: 440px; overflow: auto; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--code); color: #d9f3ef; font: 12px/1.5 Consolas, "Cascadia Mono", monospace; tab-size: 2; }
+    details { border: 1px solid var(--line); border-radius: 5px; background: #fbfcfc; }
+    details + details { margin-top: 10px; }
+    summary { padding: 11px 12px; cursor: pointer; color: var(--ink); font-size: 14px; line-height: 1.35; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; background: #f1f5f5; }
+    tr:last-child td { border-bottom: 0; }
+    .error-box { padding: 12px; border-left: 3px solid var(--red); background: #fff3f3; color: #6a2323; font: 12px/1.5 Consolas, "Cascadia Mono", monospace; overflow-wrap: anywhere; }
+    .empty, .load-error { padding: 20px; border: 1px dashed var(--line); color: var(--muted); background: var(--surface); }
+    .load-error { color: #7b2a2a; border-color: #e3aeae; background: #fff5f5; }
+    @media (max-width: 980px) {
+      .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .triple-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .topbar-inner, main { width: min(100% - 24px, 1440px); }
+      .topbar-inner { min-height: 0; align-items: flex-start; flex-direction: column; }
+      h1 { font-size: 22px; }
+      .summary-grid, .pair-grid { grid-template-columns: 1fr; }
+      .metric { min-height: 86px; }
+      .panel { padding: 14px; }
+      .panel-head { align-items: flex-start; flex-direction: column; }
+      .panel-note { text-align: left; }
+      pre { max-height: 360px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <h1>营销与利润模块压测报告</h1>
+        <p class="subtitle" id="subtitle">正在加载真实测试证据...</p>
+      </div>
+      <a class="download" href="/reports/marketing-finance-pressure.json" download>下载原始 JSON</a>
+    </div>
+  </header>
+  <main id="report"><div class="empty">正在读取压测输入与输出...</div></main>
+  <script>
+    const endpoint = '/reports/marketing-finance-pressure.json';
+    const reportNode = document.getElementById('report');
+    const subtitleNode = document.getElementById('subtitle');
+
+    const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
+    const pretty = (value) => escapeHtml(JSON.stringify(value, null, 2));
+    const dataBlock = (title, value) => `<article class="data-block"><h3>${escapeHtml(title)}</h3><pre>${pretty(value)}</pre></article>`;
+    const details = (title, value, open = false) => `<details${open ? ' open' : ''}><summary>${escapeHtml(title)}</summary><pre>${pretty(value)}</pre></details>`;
+    const metric = (label, value, note) => `<article class="metric"><div class="metric-label">${escapeHtml(label)}</div><div class="metric-value">${escapeHtml(value)}</div><div class="metric-note">${escapeHtml(note)}</div></article>`;
+
+    function render(report) {
+      const durations = report.durations_seconds || {};
+      const writeSamples = report.write_samples || {};
+      const boundary = report.boundaries || {};
+      const reconciliation = report.reconciliation_task || {};
+      const runOutputs = reconciliation.run_outputs || [];
+      const contentOutputs = report.content_draft_outputs || [];
+      const readSamples = report.read_samples || {};
+      const inputEntries = Object.entries(report.inputs || {}).map(([name, value]) => details(`输入: ${name}`, value, name === 'marketing_metric')).join('');
+      const writeEntries = Object.entries(writeSamples).map(([name, value]) => details(`写入输出: ${name} (${value.operation_count} 次)`, value, true)).join('');
+      const negativeCases = (report.negative_cases || []).map((item) => `
+        <details><summary>${escapeHtml(item.operation)} -> ${escapeHtml(item.error)}</summary>
+          <div class="pair-grid">${dataBlock('实际输入', item.input)}<div class="data-block"><h3>实际错误</h3><div class="error-box">${escapeHtml(item.error)}</div></div></div>
+        </details>`).join('');
+      const statusRows = Object.entries(report.write_statuses || {}).map(([name, counts]) => `<span class="badge ok">${escapeHtml(name)}: ${escapeHtml(JSON.stringify(counts))}</span>`).join('');
+
+      subtitleNode.textContent = `${report.contract || 'pressure report'} | ${report.workers || 0} 线程 | 虚拟数据 | 单进程 SQLite`;
+      reportNode.innerHTML = `
+        <section class="summary-grid">
+          ${metric('完成操作', report.completed_operations || 0, '并发压测实际返回')}
+          ${metric('并发写入', report.concurrent_writes || 0, `${durations.writes || 0} 秒`)}
+          ${metric('并发对账', report.reconciliation_runs || 0, `${durations.reconciliation || 0} 秒`)}
+          ${metric('并发读取', report.concurrent_reads || 0, `${durations.reads || 0} 秒`)}
+          ${metric('隔离读取', report.tenant_isolation_reads || 0, '另一租户无业务数据')}
+        </section>
+        <section class="panel"><div class="panel-head"><h2>并发结果</h2><div class="panel-note">所有数据来自一次隔离临时库压测运行</div></div><div class="status-row">${statusRows}<span class="badge warn">内容可发布: ${escapeHtml(String(boundary.content_publication_allowed))}</span><span class="badge warn">财务报表: ${escapeHtml(String(boundary.financial_statement))}</span><span class="badge ok">租户隔离: ${escapeHtml(boundary.tenant_isolation || '')}</span></div></section>
+        <section class="panel"><div class="panel-head"><h2>真实测试输入</h2><div class="panel-note">提交给领域服务的原始 JSON 负载</div></div>${inputEntries}</section>
+        <section class="panel"><div class="panel-head"><h2>版本化写入真实输出</h2><div class="panel-note">含首次写入、幂等重放及全部状态序列</div></div>${writeEntries}</section>
+        <section class="panel"><div class="panel-head"><h2>内容草稿真实输出</h2><div class="panel-note">${contentOutputs.length} 条并发草稿；全部保留不可发布标记</div></div>${details('展开全部内容草稿输出', contentOutputs, false)}</section>
+        <section class="panel"><div class="panel-head"><h2>拒绝路径真实输入与输出</h2><div class="panel-note">同版本冲突、旧版本与内容乐观锁</div></div>${negativeCases}</section>
+        <section class="panel"><div class="panel-head"><h2>对账与人工流转真实输出</h2><div class="panel-note">${runOutputs.length} 次对账执行，差额 ${escapeHtml(reconciliation.difference_amount || '')}</div></div><div class="triple-grid">${dataBlock('流转前任务', reconciliation.task_before_transition)}${dataBlock('流转竞争结果', reconciliation.transition_outcomes)}${dataBlock('流转后任务', reconciliation.task_after_transition)}</div>${details('展开全部对账运行输出', runOutputs, false)}</section>
+        <section class="panel"><div class="panel-head"><h2>并发查询真实输出</h2><div class="panel-note">每类查询保留一份实际响应，完整计数见顶部</div></div>${details('诊断输出', readSamples.diagnosis, true)}${details('利润输出', readSamples.profit, false)}${details('对账任务查询输出', readSamples.tasks, false)}${details('内容草稿查询输出', readSamples.drafts, false)}</section>
+        <section class="panel"><div class="panel-head"><h2>跨租户真实输出</h2><div class="panel-note">另一租户发起的实际读取响应</div></div>${details('隔离租户响应样本', report.tenant_isolation_sample, true)}</section>
+        <section class="panel"><div class="panel-head"><h2>测试边界</h2><div class="panel-note">此报告不代表生产容量结论</div></div><div class="table-wrap"><table><thead><tr><th>项目</th><th>结论</th></tr></thead><tbody><tr><td>数据来源</td><td>显式 virtual 测试数据，不访问广告、财务或结算平台。</td></tr><tr><td>执行模型</td><td>单进程、16 线程、隔离 SQLite 临时数据目录。</td></tr><tr><td>未覆盖</td><td>多进程数据库并发、目标硬件容量、24/72 小时长稳、安全评估和生产放行。</td></tr></tbody></table></div></section>`;
+    }
+
+    fetch(endpoint, { cache: 'no-store' })
+      .then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+      .then(render)
+      .catch((error) => { subtitleNode.textContent = '报告证据不可用'; reportNode.innerHTML = `<div class="load-error">无法加载真实压测证据: ${escapeHtml(error.message)}</div>`; });
+  </script>
+</body>
+</html>

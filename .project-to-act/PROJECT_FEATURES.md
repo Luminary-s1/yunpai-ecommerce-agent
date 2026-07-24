@@ -60,8 +60,8 @@
 | F-305 商品与渠道 SKU 事实模块 | P0 | 已完成 | F-302 | SPU/SKU、Listing 映射具备来源时间、载荷哈希、防旧覆盖、幂等、冲突、数据质量、并发和租户隔离，可供 Agent 只读查询 | `business/catalog.py`、`POST/GET /v1/catalog/items`、`get_product_facts`、E-20260721-010 |
 | F-306 订单、物流与售后事实模块 | P0 | 已完成 | F-302、F-305 | 订单行、脱敏物流、售后单和不可变历史支持虚拟归一、版本、去重、事务回滚和租户隔离；V1 不执行退款赔付 | `business/orders.py`、`POST/GET /v1/orders`、`get_order_facts`、E-20260721-010 |
 | F-307 指标语义与经营诊断 | P0 | 已完成 | F-303、F-305、F-306 | 六项指标公式代码化；模型只选择严格 QuerySpec；结果带定义版本、水位、质量和证据，额外 SQL 字段被拒绝 | `business/metrics.py`、`POST /v1/metrics/query`、`get_business_metric`、E-20260721-010 |
-| F-308 营销与内容模块 | P1 | 已完成 | F-305、F-307、审批 | 版本化广告日指标、ROAS/CTR/无转化花费诊断、内容草稿有限事实检查和 Agent 只读工具均已落地；不自建实时竞价，预算与发布仍必须审批 | `src/ecommerce_agent/business/marketing.py`、`operations_api.py`、D14、`tests/test_marketing_finance_api.py`、`tests/test_marketing_finance_pressure.py`、E-20260723-005、E-20260724-001 |
-| F-309 利润与对账模块 | P1 | 已完成 | F-306、F-307、成本口径 | 来源版本化费用与结算单、管理利润估算、差异任务与人工流转、Agent 只读工具均已落地；不替代财务总账、税务或资金指令 | `src/ecommerce_agent/business/finance.py`、`operations_api.py`、D15、`tests/test_marketing_finance_api.py`、`tests/test_marketing_finance_pressure.py`、E-20260723-005、E-20260724-001 |
+| F-308 营销与内容模块 | P1 | 已完成 | F-305、F-307、审批 | 版本化广告日指标、ROAS/CTR/无转化花费诊断、内容草稿有限事实检查和 Agent 只读工具均已落地；不自建实时竞价，预算与发布仍必须审批 | `src/ecommerce_agent/business/marketing.py`、`operations_api.py`、D14、`tests/test_marketing_finance_api.py`、`tests/test_marketing_finance_pressure.py`、`docs/marketing-finance-pressure-evidence.json`、E-20260723-005、E-20260724-001、E-20260724-002 |
+| F-309 利润与对账模块 | P1 | 已完成 | F-306、F-307、成本口径 | 来源版本化费用与结算单、管理利润估算、差异任务与人工流转、Agent 只读工具均已落地；不替代财务总账、税务或资金指令 | `src/ecommerce_agent/business/finance.py`、`operations_api.py`、D15、`tests/test_marketing_finance_api.py`、`tests/test_marketing_finance_pressure.py`、`docs/marketing-finance-pressure-evidence.json`、E-20260723-005、E-20260724-001、E-20260724-002 |
 | F-310 本地经营与客服管理后台 | P0 | 已完成 | F-005、F-109、F-301、F-304 至 F-307 | `/admin` 聚合经营总览、客服会话/证据回放、人工任务、商品库存、订单物流售后、受控指标、竞品、版本化客户评测、场景验收、发布、模块状态和审计；管理数据 API 强制租户鉴权 | 0.22.6 在既有数据范围隔离和真实输入输出基础上，约束总览、表格、会话和移动端控件尺寸；桌面/390px 无页面级横向溢出，console error/warning 为 0，见 E-20260723-004 |
 
 ## 功能变更历史

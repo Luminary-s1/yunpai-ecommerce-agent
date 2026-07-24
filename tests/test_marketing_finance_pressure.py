@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from time import perf_counter
 from typing import Any, Callable
 
@@ -112,6 +114,18 @@ def _submit_all(
     return [(name, future.result()) for name, future in futures]
 
 
+def _write_samples(
+    results: list[tuple[str, dict[str, Any]]], name: str
+) -> dict[str, Any]:
+    matching = [item for result_name, item in results if result_name == name]
+    return {
+        "operation_count": len(matching),
+        "statuses": [str(item["write_status"]) for item in matching],
+        "applied": next(item for item in matching if item["write_status"] == "applied"),
+        "idempotent": next(item for item in matching if item["write_status"] == "idempotent"),
+    }
+
+
 def test_marketing_finance_pressure_replay_concurrency_and_isolation(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     marketing = service.operations.marketing
@@ -152,13 +166,13 @@ def test_marketing_finance_pressure_replay_concurrency_and_isolation(tmp_path) -
             write_results = _submit_all(executor, write_jobs)
         write_seconds = perf_counter() - started
 
-        write_statuses = {
-            name: Counter(
-                str(item["write_status"])
-                for result_name, item in write_results
-                if result_name == name
-            )
+        versioned_write_samples = {
+            name: _write_samples(write_results, name)
             for name in ("marketing", "expense", "statement")
+        }
+        write_statuses = {
+            name: Counter(str(status) for status in sample["statuses"])
+            for name, sample in versioned_write_samples.items()
         }
         assert write_statuses["marketing"] == Counter(applied=1, idempotent=REPLAY_COUNT - 1)
         assert write_statuses["expense"] == Counter(applied=1, idempotent=REPLAY_COUNT - 1)
@@ -170,25 +184,35 @@ def test_marketing_finance_pressure_replay_concurrency_and_isolation(tmp_path) -
         assert all(item["publication_allowed"] is False for item in content_drafts)
         assert all(item["fact_check"]["passed"] is False for item in content_drafts)
 
-        with pytest.raises(SourceVersionError, match="source_version_conflict"):
+        marketing_conflict_input = marketing_value.model_copy(
+            update={"spend": Decimal("51.00")}
+        )
+        with pytest.raises(SourceVersionError, match="source_version_conflict") as exc_info:
             marketing.upsert_performance(
                 TENANT_ID,
-                marketing_value.model_copy(update={"spend": Decimal("51.00")}),
+                marketing_conflict_input,
             )
-        with pytest.raises(SourceVersionError, match="stale_source_version"):
+        marketing_conflict = str(exc_info.value)
+        stale_expense_input = expense_value.model_copy(
+            update={"source_updated_at": SOURCE_TIME - timedelta(seconds=1)}
+        )
+        with pytest.raises(SourceVersionError, match="stale_source_version") as exc_info:
             finance.upsert_expense(
-                TENANT_ID,
-                expense_value.model_copy(
-                    update={"source_updated_at": SOURCE_TIME - timedelta(seconds=1)}
-                ),
+                TENANT_ID, stale_expense_input
             )
-        with pytest.raises(SourceVersionError, match="source_version_conflict"):
+        stale_expense = str(exc_info.value)
+        statement_conflict_input = statement_value.model_copy(
+            update={"settlement_amount": Decimal("26.00")}
+        )
+        with pytest.raises(SourceVersionError, match="source_version_conflict") as exc_info:
             finance.upsert_statement(
-                TENANT_ID,
-                statement_value.model_copy(update={"settlement_amount": Decimal("26.00")}),
+                TENANT_ID, statement_conflict_input
             )
-        with pytest.raises(ValueError, match="content_draft_version_conflict"):
+        statement_conflict = str(exc_info.value)
+        content_conflict_input = _content_draft(0)
+        with pytest.raises(ValueError, match="content_draft_version_conflict") as exc_info:
             marketing.save_content_draft(TENANT_ID, _content_draft(0))
+        content_conflict = str(exc_info.value)
 
         started = perf_counter()
         with ThreadPoolExecutor(max_workers=WORKERS) as executor:
@@ -238,9 +262,9 @@ def test_marketing_finance_pressure_replay_concurrency_and_isolation(tmp_path) -
             else:
                 assert len(value) == CONTENT_DRAFT_COUNT
 
-        def transition_once(_: int) -> str:
+        def transition_once(_: int) -> dict[str, Any]:
             try:
-                finance.transition_reconciliation_task(
+                result = finance.transition_reconciliation_task(
                     TENANT_ID,
                     task["id"],
                     ReconciliationTaskTransition(
@@ -251,29 +275,41 @@ def test_marketing_finance_pressure_replay_concurrency_and_isolation(tmp_path) -
                     actor="pressure-tester",
                 )
             except ValueError as exc:
-                return str(exc)
-            return "applied"
+                return {"outcome": str(exc), "error": str(exc)}
+            return {"outcome": "applied", "output": result}
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             transition_outcomes = list(executor.map(transition_once, range(2)))
-        assert Counter(transition_outcomes) == Counter(
+        assert Counter(item["outcome"] for item in transition_outcomes) == Counter(
             applied=1, reconciliation_task_version_conflict=1
         )
+        task_after_transition = finance.list_reconciliation_tasks(TENANT_ID, store_id=STORE_ID)[0]
 
-        def isolation_read(_: int) -> tuple[int, int, int, int, int]:
+        def isolation_read(_: int) -> dict[str, Any]:
             diagnosis = marketing.diagnose(OTHER_TENANT_ID, diagnosis_query)
             profit = finance.profit_report(OTHER_TENANT_ID, report_query)
-            return (
-                diagnosis["data_quality"]["record_count"],
-                profit["record_counts"]["expenses"],
-                len(finance.list_reconciliation_tasks(OTHER_TENANT_ID, store_id=STORE_ID)),
-                len(marketing.list_content_drafts(OTHER_TENANT_ID, store_id=STORE_ID)),
-                len(finance.list_statements(OTHER_TENANT_ID, store_id=STORE_ID)),
-            )
+            return {
+                "diagnosis": diagnosis,
+                "profit": profit,
+                "tasks": finance.list_reconciliation_tasks(OTHER_TENANT_ID, store_id=STORE_ID),
+                "drafts": marketing.list_content_drafts(OTHER_TENANT_ID, store_id=STORE_ID),
+                "statements": finance.list_statements(OTHER_TENANT_ID, store_id=STORE_ID),
+            }
 
         with ThreadPoolExecutor(max_workers=WORKERS) as executor:
             isolation_results = list(executor.map(isolation_read, range(ISOLATION_READ_COUNT)))
-        assert set(isolation_results) == {(0, 0, 0, 0, 0)}
+        assert all(
+            item["diagnosis"]["data_quality"]["record_count"] == 0
+            and item["profit"]["record_counts"]["expenses"] == 0
+            and not item["tasks"]
+            and not item["drafts"]
+            and not item["statements"]
+            for item in isolation_results
+        )
+
+        read_samples: dict[str, Any] = {}
+        for name, value in read_results:
+            read_samples.setdefault(name, value)
 
         completed_operations = (
             len(write_results)
@@ -291,6 +327,38 @@ def test_marketing_finance_pressure_replay_concurrency_and_isolation(tmp_path) -
             "concurrent_reads": len(read_results),
             "tenant_isolation_reads": len(isolation_results),
             "write_statuses": {name: dict(statuses) for name, statuses in write_statuses.items()},
+            "inputs": {
+                "marketing_metric": marketing_value.model_dump(mode="json"),
+                "operating_expense": expense_value.model_dump(mode="json"),
+                "settlement_statement": statement_value.model_dump(mode="json"),
+                "content_draft_template": _content_draft(0).model_dump(mode="json"),
+                "marketing_diagnosis_query": diagnosis_query.model_dump(mode="json"),
+                "finance_report_query": report_query.model_dump(mode="json"),
+            },
+            "write_samples": versioned_write_samples,
+            "content_draft_outputs": content_drafts,
+            "negative_cases": [
+                {
+                    "operation": "upsert_performance",
+                    "input": marketing_conflict_input.model_dump(mode="json"),
+                    "error": marketing_conflict,
+                },
+                {
+                    "operation": "upsert_expense",
+                    "input": stale_expense_input.model_dump(mode="json"),
+                    "error": stale_expense,
+                },
+                {
+                    "operation": "upsert_statement",
+                    "input": statement_conflict_input.model_dump(mode="json"),
+                    "error": statement_conflict,
+                },
+                {
+                    "operation": "save_content_draft",
+                    "input": content_conflict_input.model_dump(mode="json"),
+                    "error": content_conflict,
+                },
+            ],
             "durations_seconds": {
                 "writes": round(write_seconds, 3),
                 "reconciliation": round(reconciliation_seconds, 3),
@@ -299,14 +367,27 @@ def test_marketing_finance_pressure_replay_concurrency_and_isolation(tmp_path) -
             "reconciliation_task": {
                 "count": len(tasks),
                 "difference_amount": task["difference_amount"],
-                "transition_outcomes": dict(Counter(transition_outcomes)),
+                "task_before_transition": task,
+                "run_outputs": reconciliation_results,
+                "transition_outcomes": transition_outcomes,
+                "task_after_transition": task_after_transition,
             },
+            "read_samples": read_samples,
+            "tenant_isolation_sample": isolation_results[0],
             "boundaries": {
                 "content_publication_allowed": False,
                 "financial_statement": False,
                 "tenant_isolation": "verified",
             },
         }
+        report_path = os.environ.get("MARKETING_FINANCE_PRESSURE_REPORT_PATH")
+        if report_path:
+            output_path = Path(report_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(pressure_report, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
         print("MARKETING_FINANCE_PRESSURE_REPORT=" + json.dumps(pressure_report, sort_keys=True))
     finally:
         service.close()
