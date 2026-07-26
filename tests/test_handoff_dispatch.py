@@ -186,6 +186,63 @@ def test_shift_validation_overlap_cancel_and_utc_normalization(tmp_path) -> None
         service.close()
 
 
+def test_recurring_shift_api_creates_weekly_windows_atomically(tmp_path) -> None:
+    app = create_app(make_settings(tmp_path))
+    with TestClient(app) as client:
+        start = datetime.now(UTC) + timedelta(days=1)
+        payload = {
+            "starts_at": start.isoformat(),
+            "ends_at": (start + timedelta(hours=8)).isoformat(),
+            "repeat_every_weeks": 1,
+            "occurrences": 3,
+        }
+
+        created = client.post(
+            "/v1/handoffs/operators/admin-test/shifts/recurring",
+            headers=ADMIN_HEADERS,
+            json=payload,
+        )
+
+        assert created.status_code == 201
+        shifts = created.json()
+        assert len(shifts) == 3
+        starts = [datetime.fromisoformat(item["starts_at"]) for item in shifts]
+        assert starts[1] - starts[0] == timedelta(weeks=1)
+        assert starts[2] - starts[1] == timedelta(weeks=1)
+        invalid = client.post(
+            "/v1/handoffs/operators/admin-test/shifts/recurring",
+            headers=ADMIN_HEADERS,
+            json={**payload, "occurrences": 1},
+        )
+        assert invalid.status_code == 422
+
+        conflict = client.post(
+            "/v1/handoffs/operators/admin-test/shifts/recurring",
+            headers=ADMIN_HEADERS,
+            json={
+                **payload,
+                "starts_at": (start - timedelta(weeks=1)).isoformat(),
+                "ends_at": (
+                    start - timedelta(weeks=1) + timedelta(hours=8)
+                ).isoformat(),
+            },
+        )
+        assert conflict.status_code == 409
+
+        listed = client.get(
+            "/v1/handoffs/operators/admin-test/shifts",
+            headers=ADMIN_HEADERS,
+        )
+        assert listed.status_code == 200
+        assert len(listed.json()) == 3
+        audit = client.get(
+            "/v1/admin/audit?event_type=handoff.operator_recurring_shifts_created",
+            headers=ADMIN_HEADERS,
+        )
+        assert audit.status_code == 200
+        assert audit.json()[0]["detail"]["occurrences"] == 3
+
+
 def test_presence_session_heartbeat_is_sequenced_idempotent_and_config_independent(
     tmp_path,
 ) -> None:

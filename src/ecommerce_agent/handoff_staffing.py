@@ -16,6 +16,7 @@ from .schemas import (
     HandoffOperatorHeartbeat,
     HandoffPresenceSessionStart,
     HandoffPresenceSessionView,
+    HandoffRecurringShiftCreate,
     HandoffShiftCancelRequest,
     HandoffShiftCreate,
     HandoffShiftView,
@@ -543,6 +544,86 @@ class HandoffStaffingService:
         )
         self._wake_dispatch(tenant_id, operator_id)
         return self.get_shift(tenant_id=tenant_id, shift_id=shift_id)
+
+    def create_recurring_shifts(
+        self,
+        *,
+        tenant_id: str,
+        operator_id: str,
+        value: HandoffRecurringShiftCreate,
+        actor: str,
+    ) -> list[HandoffShiftView]:
+        interval = timedelta(weeks=value.repeat_every_weeks)
+        windows = [
+            (
+                (value.starts_at + interval * index).astimezone(UTC).isoformat(),
+                (value.ends_at + interval * index).astimezone(UTC).isoformat(),
+            )
+            for index in range(value.occurrences)
+        ]
+        shift_ids = [f"shift-{uuid.uuid4().hex}" for _ in windows]
+        now = utc_now()
+        with self.db._write_lock, self.db.connect() as conn:
+            profile = conn.execute(
+                """
+                SELECT id FROM handoff_operator_profiles
+                WHERE tenant_id=? AND admin_id=?
+                """,
+                (tenant_id, operator_id),
+            ).fetchone()
+            if profile is None:
+                raise StaffingError("operator profile not found")
+            for starts_at, ends_at in windows:
+                overlap = conn.execute(
+                    """
+                    SELECT 1 FROM handoff_operator_shifts
+                    WHERE tenant_id=? AND operator_profile_id=? AND status='scheduled'
+                      AND starts_at < ? AND ends_at > ?
+                    LIMIT 1
+                    """,
+                    (tenant_id, profile["id"], ends_at, starts_at),
+                ).fetchone()
+                if overlap is not None:
+                    raise StaffingError("operator shift overlaps an existing shift")
+            conn.executemany(
+                """
+                INSERT INTO handoff_operator_shifts(
+                    id, tenant_id, operator_profile_id, starts_at, ends_at,
+                    status, record_version, created_by, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, 'scheduled', 1, ?, ?, ?)
+                """,
+                [
+                    (
+                        shift_id,
+                        tenant_id,
+                        profile["id"],
+                        starts_at,
+                        ends_at,
+                        actor,
+                        now,
+                        now,
+                    )
+                    for shift_id, (starts_at, ends_at) in zip(shift_ids, windows)
+                ],
+            )
+        self.db.audit(
+            "handoff.operator_recurring_shifts_created",
+            actor,
+            operator_id,
+            {
+                "shift_ids": shift_ids,
+                "repeat_every_weeks": value.repeat_every_weeks,
+                "occurrences": value.occurrences,
+                "first_starts_at": windows[0][0],
+                "last_ends_at": windows[-1][1],
+            },
+            tenant_id,
+        )
+        self._wake_dispatch(tenant_id, operator_id)
+        return [
+            self.get_shift(tenant_id=tenant_id, shift_id=shift_id)
+            for shift_id in shift_ids
+        ]
 
     def cancel_shift(
         self,

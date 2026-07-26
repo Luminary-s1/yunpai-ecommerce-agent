@@ -50,6 +50,7 @@ from .schemas import (
     HandoffPresenceSessionView,
     HandoffQueueUpsert,
     HandoffQueueView,
+    HandoffRecurringShiftCreate,
     HandoffReassignRequest,
     HandoffShiftCancelRequest,
     HandoffShiftCreate,
@@ -700,6 +701,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> HandoffShiftView:
         try:
             return service.handoff_staffing.create_shift(
+                tenant_id=admin.tenant_id,
+                operator_id=operator_id,
+                value=payload,
+                actor=admin.admin_id,
+            )
+        except StaffingError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post(
+        "/v1/handoffs/operators/{operator_id}/shifts/recurring",
+        response_model=list[HandoffShiftView],
+        status_code=201,
+    )
+    def create_handoff_operator_recurring_shifts(
+        operator_id: str,
+        payload: HandoffRecurringShiftCreate,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> list[HandoffShiftView]:
+        try:
+            return service.handoff_staffing.create_recurring_shifts(
                 tenant_id=admin.tenant_id,
                 operator_id=operator_id,
                 value=payload,
