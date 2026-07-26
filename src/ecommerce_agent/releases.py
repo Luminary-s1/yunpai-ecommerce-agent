@@ -5,6 +5,7 @@ import json
 import secrets
 import uuid
 from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -41,6 +42,14 @@ class ReleasePolicyCreateRequest(BaseModel):
     runtime_min_samples: int = Field(default=100, ge=1, le=1_000_000)
     max_runtime_failure_rate: float = Field(default=0.02, ge=0, le=1)
     max_runtime_severe_errors: int = Field(default=0, ge=0, le=100)
+    night_window_start_utc: str | None = Field(
+        default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$"
+    )
+    night_window_end_utc: str | None = Field(
+        default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$"
+    )
+    night_mode: ReleaseMode | None = None
+    sop_allowlist: list[str] | None = Field(default=None, max_length=64)
 
     @field_validator("intent_allowlist")
     @classmethod
@@ -52,12 +61,42 @@ class ReleasePolicyCreateRequest(BaseModel):
             raise ValueError("intent allowlist contains duplicates")
         return cleaned
 
+    @field_validator("sop_allowlist")
+    @classmethod
+    def validate_sop_allowlist(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        cleaned = [value.strip() for value in values]
+        if any(not value or len(value) > 128 for value in cleaned):
+            raise ValueError("sop allowlist values must be 1 to 128 characters")
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("sop allowlist contains duplicates")
+        return cleaned
+
     @model_validator(mode="after")
     def validate_automation_policy(self) -> "ReleasePolicyCreateRequest":
         if self.mode in {"collaborative", "automatic"} and not self.require_sources:
             raise ValueError("collaborative and automatic releases must require sources")
         if self.mode == "automatic" and self.allow_model_fallback:
             raise ValueError("automatic releases cannot allow model fallback")
+        night_fields = (
+            self.night_window_start_utc,
+            self.night_window_end_utc,
+            self.night_mode,
+        )
+        if any(field is not None for field in night_fields) and not all(
+            field is not None for field in night_fields
+        ):
+            raise ValueError(
+                "night watch requires window start, window end and night mode together"
+            )
+        if self.night_window_start_utc is not None:
+            if self.night_window_start_utc == self.night_window_end_utc:
+                raise ValueError("night watch window cannot be empty")
+            if self.night_mode in {"collaborative", "automatic"} and not self.require_sources:
+                raise ValueError("night watch automation must require sources")
+            if self.night_mode == "automatic" and self.allow_model_fallback:
+                raise ValueError("night watch automation cannot allow model fallback")
         return self
 
 
@@ -164,13 +203,16 @@ class ReleaseService:
                     require_sources, allow_model_fallback, min_replay_cases,
                     max_replay_failure_rate, max_replay_severe_errors,
                     runtime_min_samples, max_runtime_failure_rate,
-                    max_runtime_severe_errors, rollout_salt, status,
+                    max_runtime_severe_errors, rollout_salt,
+                    night_window_start_utc, night_window_end_utc, night_mode,
+                    sop_allowlist_json, status,
                     latest_replay_run_id, evaluation_passed, evaluation_json,
                     pause_reason, record_version, created_by, approved_by,
                     created_at, updated_at, evaluated_at, approved_at,
                     activated_at, paused_at, retired_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
                     'draft', NULL, NULL, NULL, NULL, 1, ?, NULL, ?, ?, NULL, NULL,
                     NULL, NULL, NULL
                 )
@@ -196,6 +238,14 @@ class ReleaseService:
                     request.max_runtime_failure_rate,
                     request.max_runtime_severe_errors,
                     secrets.token_hex(16),
+                    request.night_window_start_utc,
+                    request.night_window_end_utc,
+                    request.night_mode,
+                    (
+                        json.dumps(request.sop_allowlist, ensure_ascii=False)
+                        if request.sop_allowlist is not None
+                        else None
+                    ),
                     actor,
                     now,
                     now,
@@ -569,6 +619,8 @@ class ReleaseService:
         platform: str,
         store_id: str,
         conversation_id: str,
+        *,
+        now: datetime | None = None,
     ) -> dict[str, Any]:
         with self.db.connect() as conn:
             row = conn.execute(
@@ -589,6 +641,11 @@ class ReleaseService:
                 "reason": "no_active_release",
             }
         policy = self._policy_view(row)
+        # Night watch swaps the effective mode inside the configured window;
+        # every downstream consumer sees only the effective mode.
+        policy["configured_mode"] = policy["mode"]
+        policy["mode"] = self._effective_mode(policy, now or datetime.now(UTC))
+        policy["night_watch_active"] = policy["mode"] != policy["configured_mode"]
         digest = hashlib.sha256(
             f"{policy['rollout_salt']}:{tenant_id}:{platform}:{store_id}:{conversation_id}".encode(
                 "utf-8"
@@ -843,7 +900,22 @@ class ReleaseService:
             violations.append("model_fallback_disallowed")
             if policy["mode"] in {"collaborative", "automatic"}:
                 severe.append("model_fallback_disallowed")
+        allowlist = policy.get("sop_allowlist")
+        if allowlist is not None and actual.get("sop_id"):
+            if not self._sop_is_allowlisted(str(actual["sop_id"]), allowlist):
+                violations.append("sop_not_allowlisted")
+                if policy["mode"] in {"collaborative", "automatic"}:
+                    severe.append("sop_not_allowlisted")
         return violations, severe
+
+    def _sop_is_allowlisted(self, sop_id: str, allowlist: list[str]) -> bool:
+        if sop_id in allowlist:
+            return True
+        with self.db.connect() as conn:
+            row = conn.execute(
+                "SELECT sop_key FROM sop_definitions WHERE id=?", (sop_id,)
+            ).fetchone()
+        return row is not None and str(row["sop_key"]) in allowlist
 
     def _maybe_auto_pause(self, tenant_id: str, release_id: str) -> bool:
         summary = self.runtime_summary(tenant_id, release_id)
@@ -945,6 +1017,7 @@ class ReleaseService:
             return getattr(response, name, default)
 
         sources = value("sources", []) or []
+        sop_id = value("sop_id", None)
         return {
             "answer": str(value("answer", "")),
             "intent": str(value("intent", "unknown")).lower(),
@@ -952,6 +1025,7 @@ class ReleaseService:
             "requires_human": bool(value("requires_human", True)),
             "sources": list(sources),
             "model_fallback": bool(value("model_fallback", True)),
+            "sop_id": str(sop_id) if sop_id else None,
         }
 
     @staticmethod
@@ -964,7 +1038,24 @@ class ReleaseService:
             None if item["evaluation_passed"] is None else bool(item["evaluation_passed"])
         )
         item["evaluation"] = json.loads(item.pop("evaluation_json") or "null")
+        item["sop_allowlist"] = json.loads(item.pop("sop_allowlist_json", None) or "null")
         return item
+
+    @staticmethod
+    def _effective_mode(policy: Mapping[str, Any], moment: datetime) -> str:
+        start = policy.get("night_window_start_utc")
+        end = policy.get("night_window_end_utc")
+        night_mode = policy.get("night_mode")
+        if not start or not end or not night_mode:
+            return str(policy["mode"])
+        current = moment.astimezone(UTC).strftime("%H:%M")
+        # A wrapped window (e.g. 22:00-07:00) covers the overnight span.
+        in_window = (
+            (start <= current < end)
+            if start < end
+            else (current >= start or current < end)
+        )
+        return str(night_mode) if in_window else str(policy["mode"])
 
     @staticmethod
     def _observation_view(row: Mapping[str, Any]) -> dict[str, Any]:

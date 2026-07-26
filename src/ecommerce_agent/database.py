@@ -36,7 +36,7 @@ class SessionScopeError(ValueError):
 
 
 class Database:
-    SCHEMA_VERSION = 24
+    SCHEMA_VERSION = 25
 
     def __init__(self, path: Path):
         self.path = path
@@ -146,6 +146,9 @@ class Database:
             if 24 not in applied:
                 self._apply_v24(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (24, ?)", (utc_now(),))
+            if 25 not in applied:
+                self._apply_v25(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (25, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2127,6 +2130,20 @@ class Database:
             """
         )
 
+    @classmethod
+    def _apply_v25(cls, conn: sqlite3.Connection) -> None:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='release_policies'"
+        ).fetchone()
+        if exists is None:
+            # A drifted database without the table is rejected by
+            # _validate_schema right after the migration pass.
+            return
+        cls._ensure_column(conn, "release_policies", "night_window_start_utc", "TEXT")
+        cls._ensure_column(conn, "release_policies", "night_window_end_utc", "TEXT")
+        cls._ensure_column(conn, "release_policies", "night_mode", "TEXT")
+        cls._ensure_column(conn, "release_policies", "sop_allowlist_json", "TEXT")
+
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
@@ -2159,6 +2176,11 @@ class Database:
             "staged_rollouts": {
                 "tenant_id", "subject_type", "subject_key", "candidate_id",
                 "traffic_percentage", "rollout_salt", "status", "record_version",
+            },
+            "release_policies": {
+                "tenant_id", "release_key", "mode", "traffic_percentage",
+                "rollout_salt", "night_window_start_utc", "night_window_end_utc",
+                "night_mode", "sop_allowlist_json",
             },
             "competitor_observations": {
                 "tenant_id",

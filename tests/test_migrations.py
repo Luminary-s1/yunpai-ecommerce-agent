@@ -515,18 +515,35 @@ def test_v17_database_upgrades_to_current_without_losing_release_policy(tmp_path
                 (version, "2026-07-22T00:00:00+00:00"),
             )
 
-    release = ReleaseService(db).create(
-        "tenant-v17",
-        ReleasePolicyCreateRequest(
-            release_key="customer-service",
-            name="历史客服发布策略",
-            platform="taobao",
-            store_id="store-v17",
-            mode="shadow",
-            intent_allowlist=["faq"],
-        ),
-        "legacy-admin",
-    )
+    # Written with the v17-era column set: a legacy row must survive every
+    # later migration without being reshaped by today's service code.
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO release_policies(
+                id, tenant_id, release_key, version, name, platform, store_id,
+                mode, traffic_percentage, intent_allowlist_json, max_risk_level,
+                require_sources, allow_model_fallback, min_replay_cases,
+                max_replay_failure_rate, max_replay_severe_errors,
+                runtime_min_samples, max_runtime_failure_rate,
+                max_runtime_severe_errors, rollout_salt, status,
+                latest_replay_run_id, evaluation_passed, evaluation_json,
+                pause_reason, record_version, created_by, approved_by,
+                created_at, updated_at, evaluated_at, approved_at,
+                activated_at, paused_at, retired_at
+            ) VALUES (?, 'tenant-v17', 'customer-service', 1, '历史客服发布策略',
+                      'taobao', 'store-v17', 'shadow', 0, '["faq"]', 'low', 1, 0,
+                      20, 0.02, 0, 100, 0.02, 0, 'legacy-salt', 'draft', NULL,
+                      NULL, NULL, NULL, 1, 'legacy-admin', NULL, ?, ?, NULL, NULL,
+                      NULL, NULL, NULL)
+            """,
+            (
+                "release-legacy-v17",
+                "2026-07-22T00:00:00+00:00",
+                "2026-07-22T00:00:00+00:00",
+            ),
+        )
+    release = {"id": "release-legacy-v17"}
 
     db.initialize()
 
@@ -994,4 +1011,29 @@ def test_v23_database_gains_staged_rollouts_for_gray_release(tmp_path) -> None:
     assert {
         "tenant_id", "subject_type", "subject_key", "candidate_id",
         "traffic_percentage", "rollout_salt", "status", "record_version",
+    } <= columns
+
+
+def test_v24_release_policies_gain_night_watch_and_sop_allowlist(tmp_path) -> None:
+    db = Database(tmp_path / "v24-night.sqlite3")
+    db.path.parent.mkdir(parents=True, exist_ok=True)
+    with db.connect() as conn:
+        conn.execute(
+            "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        for version in range(1, 25):
+            getattr(Database, f"_apply_v{version}")(conn)
+            conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (version, "2026-07-27T00:00:00+00:00"),
+            )
+
+    db.initialize()
+
+    assert db.schema_version() == Database.SCHEMA_VERSION
+    with db.connect() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(release_policies)")}
+    assert {
+        "night_window_start_utc", "night_window_end_utc", "night_mode",
+        "sop_allowlist_json",
     } <= columns
