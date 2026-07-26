@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from ecommerce_agent.database import Database
 from ecommerce_agent.service import AgentService
 from ecommerce_agent.releases import ReleasePolicyCreateRequest
 
@@ -68,7 +69,7 @@ def test_backup_cli_create_verify_rekey_and_restore(tmp_path) -> None:
     assert json.loads(created.stdout)["key_id"] == "cli-v1"
     verified = _run_cli(["backup-verify", str(archive)], env)
     assert verified.returncode == 0, verified.stderr
-    assert json.loads(verified.stdout)["schema_version"] == 22
+    assert json.loads(verified.stdout)["schema_version"] == Database.SCHEMA_VERSION
 
     env["BACKUP_NEW_KEY_ID"] = "cli-v2"
     env["BACKUP_NEW_ENCRYPTION_KEY"] = "Hx4dHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA="

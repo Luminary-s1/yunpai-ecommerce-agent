@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 import ecommerce_agent.disaster_recovery as disaster_recovery_module
+from ecommerce_agent.database import Database
 from ecommerce_agent.disaster_recovery import (
     FORMAT_VERSION,
     MAGIC,
@@ -78,7 +79,7 @@ def test_online_encrypted_backup_verify_restore_and_runtime_lock(tmp_path) -> No
             master_key=KEY_V1,
         )
         assert verified["ok"] is True
-        assert verified["schema_version"] == 22
+        assert verified["schema_version"] == Database.SCHEMA_VERSION
         assert verified["capture"]["session_count"] == 1
         assert verified["capture"]["checkpoint_thread_count"] == 1
 
@@ -125,7 +126,10 @@ def test_online_encrypted_backup_verify_restore_and_runtime_lock(tmp_path) -> No
 
     restored_service = AgentService(replace(make_settings(restored_dir), data_dir=restored_dir))
     try:
-        assert restored_service.health()["database"]["schema_version"] == 22
+        assert (
+            restored_service.health()["database"]["schema_version"]
+            == Database.SCHEMA_VERSION
+        )
         with restored_service.db.connect() as connection:
             assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
     finally:
@@ -620,7 +624,7 @@ def test_header_and_manifest_validation_rejects_each_trust_boundary() -> None:
         "archive_id": archive_id,
         "created_at": created_at,
         "application_version": "0.11.0",
-        "schema_version": 22,
+        "schema_version": Database.SCHEMA_VERSION,
         "capture": {},
         "files": [
             {

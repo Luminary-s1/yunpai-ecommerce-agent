@@ -13,7 +13,7 @@ def test_legacy_v1_database_upgrades_without_rebuild(tmp_path) -> None:
         Database._apply_v1(conn)
     db.initialize()
 
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     with db.connect() as conn:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         message_columns = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
@@ -133,7 +133,7 @@ def test_v7_database_upgrades_to_v8_without_losing_competitor_data(tmp_path) -> 
 
     db.initialize()
 
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     with db.connect() as conn:
         columns = {
             row[1] for row in conn.execute("PRAGMA table_info(competitor_observations)")
@@ -312,7 +312,7 @@ def test_v12_active_sop_run_gains_resumable_step_ledger(tmp_path) -> None:
             FROM sop_step_runs WHERE run_id='run-v12' ORDER BY step_index
             """
         ).fetchall()
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     assert dict(run) == {
         "current_step_index": 0,
         "record_version": 1,
@@ -351,7 +351,7 @@ def test_v13_database_gains_competitive_monitoring_tables(tmp_path) -> None:
 
     db.initialize()
 
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     with db.connect() as conn:
         monitor_columns = {
             row[1] for row in conn.execute("PRAGMA table_info(competitive_monitors)")
@@ -421,7 +421,7 @@ def test_v15_database_gains_durable_channel_agent_tables_without_replaying_histo
 
     db.initialize()
 
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     with db.connect() as conn:
         tables = {
             row[0]
@@ -479,7 +479,7 @@ def test_v16_database_gains_competitive_entity_evidence_without_reclassifying_hi
 
     db.initialize()
 
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     with db.connect() as conn:
         tables = {
             row[0]
@@ -530,7 +530,7 @@ def test_v17_database_upgrades_to_current_without_losing_release_policy(tmp_path
 
     db.initialize()
 
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     with db.connect() as conn:
         tables = {
             row[0]
@@ -643,7 +643,7 @@ def test_v18_handoff_tasks_gain_queue_sla_and_event_history_without_state_loss(
             FROM handoff_task_events WHERE handoff_id='handoff-v18'
             """
         ).fetchone()
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     assert task["status"] == "working"
     assert task["assigned_to"] == "operator-v18"
     assert task["priority"] == "normal"
@@ -725,7 +725,7 @@ def test_v19_admins_gain_staffing_profiles_and_tenant_safe_memberships(
                 WHERE queue_id='queue-v19'
                 """
             )
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     assert dict(profile) == {
         "admin_id": "admin-v19",
         "display_name": "Legacy operator",
@@ -860,7 +860,7 @@ def test_v20_database_gains_schedules_heartbeats_and_durable_dispatch(tmp_path) 
             "SELECT MAX(version) FROM schema_migrations"
         ).fetchone()[0]
 
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     assert dict(profile) == {
         "dispatch_mode": "automatic",
         "schedule_mode": "unrestricted",
@@ -878,7 +878,7 @@ def test_v20_database_gains_schedules_heartbeats_and_durable_dispatch(tmp_path) 
         "attempt_count": 0,
     }
     assert {"handoff_operator_shifts", "handoff_dispatch_alerts"} <= tables
-    assert migration_version == 22
+    assert migration_version == Database.SCHEMA_VERSION
 
 
 def test_v21_session_sources_are_classified_during_upgrade(tmp_path) -> None:
@@ -936,7 +936,7 @@ def test_v21_session_sources_are_classified_during_upgrade(tmp_path) -> None:
             """
         ).fetchall()
 
-    assert db.schema_version() == 22
+    assert db.schema_version() == Database.SCHEMA_VERSION
     assert [dict(row) for row in rows] == [
         {"id": "session-api", "source_type": "api", "source_reference": None},
         {"id": "session-channel", "source_type": "channel", "source_reference": None},
