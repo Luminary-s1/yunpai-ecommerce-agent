@@ -34,12 +34,17 @@ class DurableOutbox:
         max_attempts: int,
         retry_base_seconds: int,
         retry_max_seconds: int,
+        platform: str | None = None,
     ):
         self.db = db
         self.lease_seconds = max(5, lease_seconds)
         self.max_attempts = max(1, max_attempts)
         self.retry_base_seconds = max(0, retry_base_seconds)
         self.retry_max_seconds = max(self.retry_base_seconds, retry_max_seconds)
+        # A platform-scoped outbox only claims items whose outbound event
+        # belongs to that platform, so channel workers never steal each
+        # other's deliveries.
+        self.platform = platform
 
     def enqueue(
         self,
@@ -231,6 +236,11 @@ class DurableOutbox:
                 "AND (lease_until IS NULL OR lease_until<=?)"
             )
             params: list[Any] = [current, current]
+            if self.platform is not None:
+                query += (
+                    " AND event_id IN (SELECT id FROM channel_events WHERE platform=?)"
+                )
+                params.append(self.platform)
             if outbox_id is not None:
                 query += " AND id=?"
                 params.append(outbox_id)

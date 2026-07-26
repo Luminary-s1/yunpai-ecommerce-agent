@@ -7,18 +7,20 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Callable
 
 from .auth import Principal
+from .channel_sdk import (
+    FAILURE_DELIVERY_STATES,
+    ChannelAdapter,
+    ChannelAdapterError,
+    ChannelAdapterRegistry,
+    OwnershipCommand,
+    ReplyDraftCommand,
+    SendCommand,
+)
 from .config import Settings
 from .database import Database, utc_now
 from .handoff import HandoffService
 from .releases import ReleaseService
 from .schemas import ChatResponse
-from .taobao import (
-    ChannelReplyRequest,
-    OwnershipRequest,
-    ReplyDraftCreateRequest,
-    TaobaoError,
-    TaobaoIntegrationService,
-)
 
 
 class ChannelAgentError(RuntimeError):
@@ -30,20 +32,27 @@ class ChannelAgentBlocked(ChannelAgentError):
 
 
 class ChannelAgentRuntime:
+    """Processes durable channel Agent jobs against any registered adapter.
+
+    The runtime never talks to a platform integration directly: each job is
+    routed to the adapter declared for its platform, using only the channel
+    SDK contracts.
+    """
+
     def __init__(
         self,
         db: Database,
         settings: Settings,
         releases: ReleaseService,
         handoffs: HandoffService,
-        taobao: TaobaoIntegrationService,
+        adapters: ChannelAdapterRegistry,
         chat: Callable[..., ChatResponse],
     ) -> None:
         self.db = db
         self.settings = settings
         self.releases = releases
         self.handoffs = handoffs
-        self.taobao = taobao
+        self.adapters = adapters
         self.chat = chat
         self._worker_thread: threading.Thread | None = None
         self._worker_stop = threading.Event()
@@ -179,8 +188,10 @@ class ChannelAgentRuntime:
         tenant_id = str(current["tenant_id"])
         event_id = str(current["event_id"])
         conversation_id = str(current["conversation_id"])
+        platform = str(current["platform"])
+        adapter = self.adapters.get(platform)
 
-        if not self.settings.taobao_auto_reply_enabled:
+        if not adapter.automation_enabled():
             return self._finish(
                 str(job["id"]),
                 worker_id,
@@ -246,9 +257,9 @@ class ChannelAgentRuntime:
         invocation_key = f"channel-event:{event_id}"
         answer = self.chat(
             principal,
-            f"taobao:{conversation_id}",
+            f"{platform}:{conversation_id}",
             str(current["content_redacted"]),
-            {"platform": str(current["platform"]), "shop_id": str(current["shop_id"])},
+            {"platform": platform, "shop_id": str(current["shop_id"])},
             idempotency_key=invocation_key,
             execution_mode="shadow" if release_mode == "shadow" else "live",
             source_type="channel",
@@ -303,6 +314,7 @@ class ChannelAgentRuntime:
             )
         if action in {"handoff", "draft"}:
             conversation = self._ensure_human_ownership(
+                adapter,
                 conversation_id,
                 tenant_id,
                 "agent-handoff" if action == "handoff" else "agent-assist",
@@ -325,10 +337,10 @@ class ChannelAgentRuntime:
                 handoff_id = handoff.id
             draft_id: str | None = None
             if action == "draft" and not answer.requires_human:
-                draft = self.taobao.create_reply_draft(
-                    conversation_id,
-                    tenant_id,
-                    ReplyDraftCreateRequest(
+                draft = adapter.create_reply_draft(
+                    ReplyDraftCommand(
+                        tenant_id=tenant_id,
+                        conversation_id=conversation_id,
                         expected_conversation_version=int(conversation["version"]),
                         ai_suggestion=answer.answer,
                         evidence_ids=[source.id for source in answer.sources][:20],
@@ -337,8 +349,8 @@ class ChannelAgentRuntime:
                         risk_level=answer.risk_level,
                         idempotency_key=f"agent:{event_id}",
                         source_event_id=event_id,
-                    ),
-                    "channel-agent",
+                        actor="channel-agent",
+                    )
                 )
                 draft_id = str(draft["id"])
             return self._finish(
@@ -358,32 +370,37 @@ class ChannelAgentRuntime:
                     f"release policy became {latest_policy['status']} before send"
                 )
         try:
-            delivery = self.taobao.send_reply(
-                conversation_id,
-                tenant_id,
-                ChannelReplyRequest(
+            receipt = adapter.send_reply(
+                SendCommand(
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
                     text=answer.answer,
                     idempotency_key=f"auto:{event_id}",
                     source_event_id=event_id,
-                ),
-                "agent",
-                allow_bot=True,
+                    actor="agent",
+                    allow_bot=True,
+                )
             )
         except Exception as exc:
+            failure_kind = (
+                exc.kind
+                if isinstance(exc, ChannelAdapterError)
+                else type(exc).__name__.lower()
+            )
             if release_id and observation:
                 self.releases.mark_delivery_failure(
-                    tenant_id, release_id, event_id, type(exc).__name__.lower()
+                    tenant_id, release_id, event_id, failure_kind
                 )
             self.db.audit(
-                "taobao.auto_reply.failed",
+                f"{platform}.auto_reply.failed",
                 "agent",
                 event_id,
                 {"error_type": type(exc).__name__, "error": str(exc)[:300]},
                 tenant_id,
             )
             raise
-        delivery_state = str(delivery.get("delivery_state") or "")
-        if release_id and delivery_state in {"rejected", "uncertain", "dead_letter"}:
+        delivery_state = receipt.delivery_state
+        if release_id and delivery_state in FAILURE_DELIVERY_STATES:
             self.releases.mark_delivery_failure(
                 tenant_id, release_id, event_id, delivery_state
             )
@@ -392,11 +409,11 @@ class ChannelAgentRuntime:
             worker_id,
             status="completed",
             action="send",
-            outbox_id=(str(delivery["id"]) if delivery.get("id") else None),
-            error_kind=(delivery_state if delivery_state in {"rejected", "uncertain", "dead_letter"} else None),
+            outbox_id=receipt.outbox_id,
+            error_kind=(delivery_state if delivery_state in FAILURE_DELIVERY_STATES else None),
             last_error=(
                 f"delivery requires review: {delivery_state}"
-                if delivery_state in {"rejected", "uncertain", "dead_letter"}
+                if delivery_state in FAILURE_DELIVERY_STATES
                 else None
             ),
         )
@@ -412,7 +429,11 @@ class ChannelAgentRuntime:
         return str(row["session_id"])
 
     def _ensure_human_ownership(
-        self, conversation_id: str, tenant_id: str, assigned_to: str
+        self,
+        adapter: ChannelAdapter,
+        conversation_id: str,
+        tenant_id: str,
+        assigned_to: str,
     ) -> dict[str, Any]:
         with self.db.connect() as conn:
             row = conn.execute(
@@ -426,17 +447,17 @@ class ChannelAgentRuntime:
         if row["owner_mode"] == "human":
             return dict(row)
         try:
-            return self.taobao.change_ownership(
-                conversation_id,
-                tenant_id,
-                OwnershipRequest(
+            return adapter.change_ownership(
+                OwnershipCommand(
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
                     owner_mode="human",
                     expected_version=int(row["version"]),
                     assigned_to=assigned_to,
-                ),
-                "channel-agent",
+                    actor="channel-agent",
+                )
             )
-        except TaobaoError:
+        except ChannelAdapterError:
             with self.db.connect() as conn:
                 latest = conn.execute(
                     "SELECT * FROM channel_conversations WHERE id=? AND tenant_id=?",

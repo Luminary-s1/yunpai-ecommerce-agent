@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import difflib
 import hashlib
 import hmac
 import json
@@ -17,6 +16,16 @@ import httpx
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pydantic import BaseModel, ConfigDict, Field
 
+from .channel_sdk import drafts as channel_drafts
+from .channel_sdk import ownership as channel_ownership
+from .channel_sdk.contracts import (
+    ChannelAdapterError,
+    OwnershipCommand,
+    ReplyDraftCommand,
+    hash_subject,
+    mask_nick,
+)
+from .channel_sdk.inbound import ChannelInboundRecorder
 from .config import Settings
 from .database import Database, utc_now
 from .outbox import DurableOutbox, OutboxError, OutboxReconcileRequest
@@ -24,7 +33,9 @@ from .text_utils import redact_sensitive
 
 
 class TaobaoError(ValueError):
-    pass
+    def __init__(self, message: str, *, kind: str | None = None):
+        super().__init__(message)
+        self.kind = kind
 
 
 class TaobaoRemoteError(RuntimeError):
@@ -247,12 +258,14 @@ class TaobaoIntegrationService:
         self.db = db
         self.settings = settings
         self.top = top_client or TaobaoTopClient(settings)
+        self.recorder = ChannelInboundRecorder(db)
         self.outbox = DurableOutbox(
             db,
             lease_seconds=settings.outbox_lease_seconds,
             max_attempts=settings.outbox_max_attempts,
             retry_base_seconds=settings.outbox_retry_base_seconds,
             retry_max_seconds=settings.outbox_retry_max_seconds,
+            platform=self.PLATFORM,
         )
         self._worker_thread: threading.Thread | None = None
         self._worker_stop = threading.Event()
@@ -457,7 +470,9 @@ class TaobaoIntegrationService:
             header = event["header"]
             body = event["body"]
         except (KeyError, TypeError, ValueError) as exc:
-            raise TaobaoError("Qimen event is not valid JSON or misses header/body") from exc
+            raise TaobaoError(
+                "Qimen event is not valid JSON or misses header/body", kind="schema"
+            ) from exc
         content = body.get("content") or ""
         if isinstance(content, str):
             try:
@@ -468,7 +483,7 @@ class TaobaoIntegrationService:
         else:
             text = str(content.get("text") or "") if isinstance(content, dict) else str(content)
         if not text.strip():
-            raise TaobaoError("Qimen chat message does not contain text")
+            raise TaobaoError("Qimen chat message does not contain text", kind="schema")
 
         buyer_id = str(params.get("buyerId") or self._party_value(body.get("sender"), "id") or "")
         buyer_nick = str(params.get("buyerNick") or self._party_value(body.get("sender"), "nick") or "")
@@ -477,13 +492,13 @@ class TaobaoIntegrationService:
         shop_id = seller_id or seller_nick or self.settings.taobao_qimen_customer_id
         external_event_id = str(body.get("msgId") or body.get("bizUniqueId") or header.get("requestId") or "")
         if not buyer_id or not shop_id or not external_event_id:
-            raise TaobaoError("Qimen event misses buyer, shop, or message identifier")
+            raise TaobaoError(
+                "Qimen event misses buyer, shop, or message identifier", kind="schema"
+            )
         external_conversation_id = str(body.get("bizUniqueId") or f"{shop_id}:{buyer_id}")
-        buyer_hash = hmac.new(
-            (self.settings.subject_hash_key or self.settings.taobao_app_secret).encode("utf-8"),
-            buyer_id.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        buyer_hash = hash_subject(
+            self.settings.subject_hash_key or self.settings.taobao_app_secret, buyer_id
+        )
         routing = {
             "header": header,
             "sender": body.get("sender"),
@@ -492,164 +507,68 @@ class TaobaoIntegrationService:
         }
         routing_ciphertext = self.cipher.encrypt(routing)
         safe_text, _ = redact_sensitive(text)
-        payload_hash = hashlib.sha256(params["event"].encode("utf-8")).hexdigest()
-        tenant_id = self.settings.bootstrap_tenant_id
-        now = utc_now()
-        with self.db._write_lock, self.db.connect() as conn:
-            conversation = conn.execute(
-                """
-                SELECT * FROM channel_conversations
-                WHERE tenant_id=? AND platform=? AND shop_id=? AND external_conversation_id=?
-                """,
-                (tenant_id, self.PLATFORM, shop_id, external_conversation_id),
-            ).fetchone()
-            if conversation is None:
-                conversation_id = f"conversation-{uuid.uuid4().hex}"
-                owner_mode = "bot" if self.settings.taobao_auto_reply_enabled else "human"
-                conn.execute(
-                    """
-                    INSERT INTO channel_conversations(
-                        id, tenant_id, platform, shop_id, external_conversation_id,
-                        buyer_hash, buyer_nick_masked, owner_mode, assigned_to, version,
-                        last_event_id, last_message_at, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?, ?)
-                    """,
-                    (
-                        conversation_id,
-                        tenant_id,
-                        self.PLATFORM,
-                        shop_id,
-                        external_conversation_id,
-                        buyer_hash,
-                        self._mask_nick(buyer_nick),
-                        owner_mode,
-                        external_event_id,
-                        now,
-                        now,
-                        now,
-                    ),
-                )
-            else:
-                conversation_id = str(conversation["id"])
-                owner_mode = str(conversation["owner_mode"])
-                conn.execute(
-                    """
-                    UPDATE channel_conversations
-                    SET last_event_id=?, last_message_at=?, updated_at=? WHERE id=?
-                    """,
-                    (external_event_id, now, now, conversation_id),
-                )
-            event_id = f"event-{uuid.uuid4().hex}"
-            cursor = conn.execute(
-                """
-                INSERT OR IGNORE INTO channel_events(
-                    id, tenant_id, platform, shop_id, conversation_id, external_event_id,
-                    direction, message_type, content_redacted, payload_hash, routing_ciphertext,
-                    request_id, action_mode, status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'inbound', ?, ?, ?, ?, ?, ?, 'received', ?, ?)
-                """,
-                (
-                    event_id,
-                    tenant_id,
-                    self.PLATFORM,
-                    shop_id,
-                    conversation_id,
-                    external_event_id,
-                    str(body.get("contentType") or "1"),
-                    safe_text,
-                    payload_hash,
-                    routing_ciphertext,
-                    str(header.get("requestId") or ""),
-                    str(header.get("actionMode") or ""),
-                    now,
-                    now,
-                ),
-            )
-            is_new = cursor.rowcount == 1
-            if not is_new:
-                stored_event = conn.execute(
-                    """
-                    SELECT id FROM channel_events
-                    WHERE tenant_id=? AND platform=? AND shop_id=?
-                      AND external_event_id=? AND direction='inbound'
-                    """,
-                    (tenant_id, self.PLATFORM, shop_id, external_event_id),
-                ).fetchone()
-                if stored_event is not None:
-                    event_id = str(stored_event["id"])
-            job_id: str | None = None
-            if is_new:
-                stable = uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"yunpai:{tenant_id}:{self.PLATFORM}:{event_id}",
-                ).hex
-                job_id = f"channel-job-{stable}"
-                conn.execute(
-                    """
-                    INSERT INTO channel_agent_jobs(
-                        id, tenant_id, platform, shop_id, conversation_id, event_id,
-                        status, stage, release_id, release_mode, assignment_bucket,
-                        action, agent_invocation_id, assistant_message_id,
-                        context_snapshot_id, release_observation_id, reply_draft_id,
-                        outbox_id, attempt_count, max_attempts, next_attempt_at,
-                        lease_owner, lease_until, last_error, error_kind, record_version,
-                        created_at, updated_at, started_at, completed_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'queued', 'queued', NULL, NULL, NULL,
-                              NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, ?, ?, NULL,
-                              NULL, NULL, NULL, 1, ?, ?, NULL, NULL)
-                    """,
-                    (
-                        job_id,
-                        tenant_id,
-                        self.PLATFORM,
-                        shop_id,
-                        conversation_id,
-                        event_id,
-                        self.settings.channel_agent_max_attempts,
-                        now,
-                        now,
-                        now,
-                    ),
-                )
-        if is_new:
+        record = self.recorder.record(
+            tenant_id=self.settings.bootstrap_tenant_id,
+            platform=self.PLATFORM,
+            shop_id=shop_id,
+            external_conversation_id=external_conversation_id,
+            external_event_id=external_event_id,
+            message_type=str(body.get("contentType") or "1"),
+            content_redacted=safe_text,
+            payload_hash=hashlib.sha256(params["event"].encode("utf-8")).hexdigest(),
+            buyer_hash=buyer_hash,
+            buyer_nick_masked=mask_nick(buyer_nick),
+            routing_ciphertext=routing_ciphertext,
+            request_id=str(header.get("requestId") or ""),
+            action_mode=str(header.get("actionMode") or ""),
+            default_owner_mode=(
+                "bot" if self.settings.taobao_auto_reply_enabled else "human"
+            ),
+            job_max_attempts=self.settings.channel_agent_max_attempts,
+        )
+        if record.is_new:
             self.db.audit(
                 "taobao.message.received",
                 "qimen",
-                event_id,
-                {"conversation_id": conversation_id, "shop_id": shop_id},
-                tenant_id,
+                record.event_id,
+                {"conversation_id": record.conversation_id, "shop_id": shop_id},
+                self.settings.bootstrap_tenant_id,
             )
         return InboundMessage(
-            conversation_id,
-            event_id,
-            is_new,
+            record.conversation_id,
+            record.event_id,
+            record.is_new,
             text,
             buyer_id,
-            owner_mode,
-            job_id,
+            record.owner_mode,
+            record.job_id,
         )
 
     def _validate_qimen_request(self, params: Mapping[str, str]) -> None:
         if not self.settings.taobao_enabled:
-            raise TaobaoError("Taobao integration is disabled")
+            raise TaobaoError("Taobao integration is disabled", kind="capability_unavailable")
         if not self.settings.taobao_app_secret:
-            raise TaobaoError("TAOBAO_APP_SECRET is not configured")
+            raise TaobaoError("TAOBAO_APP_SECRET is not configured", kind="capability_unavailable")
         if params.get("app_key") != self.settings.taobao_app_key:
-            raise TaobaoError("Qimen app_key does not match this appliance")
+            raise TaobaoError("Qimen app_key does not match this appliance", kind="authentication")
         if params.get("customerId") != self.settings.taobao_qimen_customer_id:
-            raise TaobaoError("Qimen customerId does not match this appliance")
+            raise TaobaoError(
+                "Qimen customerId does not match this appliance", kind="authentication"
+            )
         if not verify_signature(params, self.settings.taobao_app_secret):
-            raise TaobaoError("Qimen signature verification failed")
+            raise TaobaoError("Qimen signature verification failed", kind="signature")
         raw_timestamp = params.get("timestamp") or ""
         try:
             parsed = datetime.strptime(raw_timestamp, "%Y-%m-%d %H:%M:%S").replace(
                 tzinfo=timezone(timedelta(hours=8))
             )
         except ValueError as exc:
-            raise TaobaoError("Qimen timestamp has an invalid format") from exc
+            raise TaobaoError("Qimen timestamp has an invalid format", kind="schema") from exc
         skew = abs((datetime.now(UTC) - parsed.astimezone(UTC)).total_seconds())
         if skew > self.settings.taobao_callback_max_skew_seconds:
-            raise TaobaoError("Qimen timestamp is outside the replay-protection window")
+            raise TaobaoError(
+                "Qimen timestamp is outside the replay-protection window", kind="replay"
+            )
 
     def list_conversations(self, tenant_id: str, owner_mode: str | None = None) -> list[dict[str, Any]]:
         where = " AND owner_mode=?" if owner_mode else ""
@@ -676,7 +595,7 @@ class TaobaoIntegrationService:
                 (conversation_id, tenant_id, self.PLATFORM),
             ).fetchone()
             if conversation is None:
-                raise TaobaoError("Taobao conversation not found")
+                raise TaobaoError("Taobao conversation not found", kind="not_found")
             events = conn.execute(
                 """
                 SELECT id, external_event_id, direction, message_type, content_redacted,
@@ -719,49 +638,21 @@ class TaobaoIntegrationService:
         request: OwnershipRequest,
         operator: str,
     ) -> dict[str, Any]:
-        assigned_to = request.assigned_to or (operator if request.owner_mode == "human" else None)
-        with self.db._write_lock, self.db.connect() as conn:
-            current = conn.execute(
-                "SELECT * FROM channel_conversations WHERE id=? AND tenant_id=? AND platform=?",
-                (conversation_id, tenant_id, self.PLATFORM),
-            ).fetchone()
-            if current is None:
-                raise TaobaoError("Taobao conversation not found")
-            if current["owner_mode"] == request.owner_mode:
-                raise TaobaoError("Taobao conversation is already in the requested owner mode")
-            cursor = conn.execute(
-                """
-                UPDATE channel_conversations
-                SET owner_mode=?, assigned_to=?, version=version+1, updated_at=?
-                WHERE id=? AND tenant_id=? AND version=?
-                """,
-                (
-                    request.owner_mode,
-                    assigned_to,
-                    utc_now(),
-                    conversation_id,
-                    tenant_id,
-                    request.expected_version,
+        try:
+            return channel_ownership.change_ownership(
+                self.db,
+                platform=self.PLATFORM,
+                command=OwnershipCommand(
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    owner_mode=request.owner_mode,
+                    expected_version=request.expected_version,
+                    assigned_to=request.assigned_to,
+                    actor=operator,
                 ),
             )
-            if cursor.rowcount != 1:
-                raise TaobaoError("Taobao conversation version conflict")
-            updated = conn.execute(
-                """
-                SELECT id, shop_id, buyer_nick_masked, owner_mode, assigned_to, version,
-                       last_message_at, created_at, updated_at
-                FROM channel_conversations WHERE id=?
-                """,
-                (conversation_id,),
-            ).fetchone()
-        self.db.audit(
-            "taobao.conversation.ownership_changed",
-            operator,
-            conversation_id,
-            {"from": current["owner_mode"], "to": request.owner_mode},
-            tenant_id,
-        )
-        return dict(updated)
+        except ChannelAdapterError as exc:
+            raise TaobaoError(str(exc), kind=exc.kind) from exc
 
     def create_reply_draft(
         self,
@@ -770,77 +661,34 @@ class TaobaoIntegrationService:
         request: ReplyDraftCreateRequest,
         operator: str,
     ) -> dict[str, Any]:
-        with self.db.connect() as conn:
-            conversation = conn.execute(
-                "SELECT * FROM channel_conversations WHERE id=? AND tenant_id=? AND platform=?",
-                (conversation_id, tenant_id, self.PLATFORM),
-            ).fetchone()
-            existing = conn.execute(
-                "SELECT * FROM channel_reply_drafts WHERE tenant_id=? AND idempotency_key=?",
-                (tenant_id, request.idempotency_key),
-            ).fetchone()
-            if request.source_event_id:
-                inbound = conn.execute(
-                    """
-                    SELECT id FROM channel_events
-                    WHERE id=? AND tenant_id=? AND conversation_id=? AND direction='inbound'
-                    """,
-                    (request.source_event_id, tenant_id, conversation_id),
-                ).fetchone()
-            else:
-                inbound = conn.execute(
-                    "SELECT id FROM channel_events WHERE conversation_id=? AND direction='inbound' "
-                    "ORDER BY created_at DESC LIMIT 1",
-                    (conversation_id,),
-                ).fetchone()
-        if existing is not None:
-            if existing["conversation_id"] != conversation_id:
-                raise TaobaoError("reply draft idempotency key belongs to another conversation")
-            return self._draft_view(existing)
-        if conversation is None or inbound is None:
-            raise TaobaoError("Taobao conversation or inbound event not found")
-        if conversation["version"] != request.expected_conversation_version:
-            raise TaobaoError("Taobao conversation version conflict")
-        if conversation["owner_mode"] != "human":
-            raise TaobaoError("reply draft requires the conversation to be owned by a human")
-        suggestion, _ = redact_sensitive(request.ai_suggestion)
-        final_text, _ = redact_sensitive(request.final_text or request.ai_suggestion)
-        draft_id = f"draft-{uuid.uuid4().hex}"
-        now = utc_now()
-        sop_reference = (
-            {"id": request.sop_id, "version": request.sop_version}
-            if request.sop_id and request.sop_version
-            else None
-        )
-        with self.db._write_lock, self.db.connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO channel_reply_drafts(
-                    id, tenant_id, conversation_id, source_event_id,
-                    ai_suggestion_redacted, final_text_redacted, diff_json,
-                    evidence_json, sop_reference_json, confidence, risk_level,
-                    status, idempotency_key, outbox_id, last_error, record_version,
-                    created_by, sent_by, created_at, updated_at, sent_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, NULL, NULL,
-                          1, ?, NULL, ?, ?, NULL)
-                """,
-                (
-                    draft_id, tenant_id, conversation_id, inbound["id"], suggestion,
-                    final_text, json.dumps(self._reply_diff(suggestion, final_text), ensure_ascii=False),
-                    json.dumps(request.evidence_ids, ensure_ascii=False),
-                    json.dumps(sop_reference, ensure_ascii=False) if sop_reference else None,
-                    request.confidence, request.risk_level, request.idempotency_key,
-                    operator, now, now,
+        try:
+            view, created = channel_drafts.create_reply_draft(
+                self.db,
+                platform=self.PLATFORM,
+                command=ReplyDraftCommand(
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    expected_conversation_version=request.expected_conversation_version,
+                    ai_suggestion=request.ai_suggestion,
+                    final_text=request.final_text,
+                    evidence_ids=request.evidence_ids,
+                    sop_id=request.sop_id,
+                    sop_version=request.sop_version,
+                    confidence=request.confidence,
+                    risk_level=request.risk_level,
+                    idempotency_key=request.idempotency_key,
+                    source_event_id=request.source_event_id,
+                    actor=operator,
                 ),
             )
-            saved = conn.execute(
-                "SELECT * FROM channel_reply_drafts WHERE id=?", (draft_id,)
-            ).fetchone()
-        self.db.audit(
-            "taobao.reply_draft.created", operator, draft_id,
-            {"conversation_id": conversation_id, "risk_level": request.risk_level}, tenant_id,
-        )
-        return self._draft_view(saved)
+        except ChannelAdapterError as exc:
+            raise TaobaoError(str(exc), kind=exc.kind) from exc
+        if created:
+            self.db.audit(
+                "taobao.reply_draft.created", operator, str(view["id"]),
+                {"conversation_id": conversation_id, "risk_level": request.risk_level}, tenant_id,
+            )
+        return view
 
     def update_reply_draft(
         self,
@@ -857,7 +705,7 @@ class TaobaoIntegrationService:
                 (draft_id, conversation_id, tenant_id),
             ).fetchone()
             if current is None:
-                raise TaobaoError("reply draft not found")
+                raise TaobaoError("reply draft not found", kind="not_found")
             diff = self._reply_diff(current["ai_suggestion_redacted"], final_text)
             cursor = conn.execute(
                 """
@@ -872,7 +720,7 @@ class TaobaoIntegrationService:
                 ),
             )
             if cursor.rowcount != 1:
-                raise TaobaoError("reply draft transition or version conflict")
+                raise TaobaoError("reply draft transition or version conflict", kind="conflict")
             saved = conn.execute(
                 "SELECT * FROM channel_reply_drafts WHERE id=?", (draft_id,)
             ).fetchone()
@@ -893,7 +741,8 @@ class TaobaoIntegrationService:
         capability = self.capabilities(tenant_id)["capabilities"]["chatrobot_outbound"]
         if not capability["available"]:
             raise TaobaoError(
-                f"Taobao outbound is unavailable: {capability['missing_when_unavailable']}"
+                f"Taobao outbound is unavailable: {capability['missing_when_unavailable']}",
+                kind="capability_unavailable",
             )
         with self.db._write_lock, self.db.connect() as conn:
             draft = conn.execute(
@@ -901,7 +750,7 @@ class TaobaoIntegrationService:
                 (draft_id, conversation_id, tenant_id),
             ).fetchone()
             if draft is None:
-                raise TaobaoError("reply draft not found")
+                raise TaobaoError("reply draft not found", kind="not_found")
             cursor = conn.execute(
                 """
                 UPDATE channel_reply_drafts SET status='sending',
@@ -911,7 +760,7 @@ class TaobaoIntegrationService:
                 (utc_now(), draft_id, request.expected_record_version),
             )
             if cursor.rowcount != 1:
-                raise TaobaoError("reply draft transition or version conflict")
+                raise TaobaoError("reply draft transition or version conflict", kind="conflict")
         try:
             outbox = self.send_reply(
                 conversation_id,
@@ -1013,11 +862,16 @@ class TaobaoIntegrationService:
                     (conversation_id,),
                 ).fetchone()
         if conversation is None or inbound is None:
-            raise TaobaoError("Taobao conversation or inbound routing context not found")
+            raise TaobaoError(
+                "Taobao conversation or inbound routing context not found", kind="not_found"
+            )
         self._assert_send_ownership(str(conversation["owner_mode"]), allow_bot)
         capability = self.capabilities(tenant_id)["capabilities"]["chatrobot_outbound"]
         if not capability["available"]:
-            raise TaobaoError(f"Taobao outbound is unavailable: {capability['missing_when_unavailable']}")
+            raise TaobaoError(
+                f"Taobao outbound is unavailable: {capability['missing_when_unavailable']}",
+                kind="capability_unavailable",
+            )
         routing = self.cipher.decrypt(str(inbound["routing_ciphertext"] or ""))
         action = self._build_reply_action(routing, request.text)
         safe_text, _ = redact_sensitive(request.text)
@@ -1067,7 +921,7 @@ class TaobaoIntegrationService:
         if not claimed:
             current = self.outbox.get(outbox_id)
             if current is None:
-                raise TaobaoError("outbox item not found")
+                raise TaobaoError("outbox item not found", kind="not_found")
             return self._outbox_view(current)
         return self._dispatch_claimed(claimed[0], worker_id, raise_on_failure=raise_on_failure)
 
@@ -1266,21 +1120,23 @@ class TaobaoIntegrationService:
             str(row["tenant_id"]),
         )
 
-    @staticmethod
-    def _assert_send_ownership(owner_mode: str, allow_bot: bool) -> None:
-        if allow_bot and owner_mode != "bot":
-            raise TaobaoError("automatic reply requires the conversation to be owned by the bot")
-        if not allow_bot and owner_mode != "human":
-            raise TaobaoError("manual reply requires the conversation to be owned by a human")
+    def _assert_send_ownership(self, owner_mode: str, allow_bot: bool) -> None:
+        try:
+            channel_ownership.assert_send_ownership(owner_mode, allow_bot, self.PLATFORM)
+        except ChannelAdapterError as exc:
+            raise TaobaoError(str(exc), kind=exc.kind) from exc
 
     def _existing_outbox_result(
         self, row: dict[str, Any], conversation_id: str
     ) -> dict[str, Any]:
         if row["conversation_id"] != conversation_id:
-            raise TaobaoError("outbox idempotency key belongs to another conversation")
+            raise TaobaoError(
+                "outbox idempotency key belongs to another conversation", kind="conflict"
+            )
         if row["status"] == "failed":
             raise TaobaoError(
-                "previous send did not complete; reconcile delivery state before retrying"
+                "previous send did not complete; reconcile delivery state before retrying",
+                kind="conflict",
             )
         return self._outbox_view(row)
 
@@ -1401,9 +1257,7 @@ class TaobaoIntegrationService:
 
     @staticmethod
     def _mask_nick(nick: str) -> str | None:
-        if not nick:
-            return None
-        return nick[0] + "***" + (nick[-1] if len(nick) > 1 else "")
+        return mask_nick(nick)
 
     @staticmethod
     def _outbox_view(row: dict[str, Any]) -> dict[str, Any]:
@@ -1411,24 +1265,11 @@ class TaobaoIntegrationService:
 
     @staticmethod
     def _reply_diff(before: str, after: str) -> list[dict[str, str]]:
-        changes = []
-        for operation, i1, i2, j1, j2 in difflib.SequenceMatcher(
-            None, before, after
-        ).get_opcodes():
-            if operation == "equal":
-                continue
-            changes.append(
-                {"operation": operation, "before": before[i1:i2], "after": after[j1:j2]}
-            )
-        return changes
+        return channel_drafts.reply_diff(before, after)
 
     @staticmethod
     def _draft_view(row: Mapping[str, Any]) -> dict[str, Any]:
-        view = dict(row)
-        view["diff"] = json.loads(view.pop("diff_json") or "[]")
-        view["evidence_ids"] = json.loads(view.pop("evidence_json") or "[]")
-        view["sop_reference"] = json.loads(view.pop("sop_reference_json") or "null")
-        return view
+        return channel_drafts.draft_view(row)
 
     @staticmethod
     def _assert_business_success(result: Mapping[str, Any], method: str) -> None:

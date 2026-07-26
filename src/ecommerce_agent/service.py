@@ -22,6 +22,9 @@ from .auth import AuthenticationService, Principal
 from .admin import AdminConsoleService
 from .business import OperationsService
 from .channel_agent import ChannelAgentRuntime
+from .channel_sdk import ChannelAdapterRegistry
+from .channel_sdk.mockchat import MockChatChannelAdapter
+from .channel_sdk.taobao_adapter import TaobaoChannelAdapter
 from .config import Settings
 from .context_builder import ContextBuilder
 from .database import Database, SessionScopeError, utc_now
@@ -125,6 +128,14 @@ class AgentService:
             self.evaluation_recovery = self.evaluations.recover_interrupted_runs()
             self.maintenance = MaintenanceService(self.db, self.settings)
             self.taobao = TaobaoIntegrationService(self.db, self.settings)
+            self.channel_adapters = ChannelAdapterRegistry()
+            self.channel_adapters.register(
+                TaobaoChannelAdapter(self.taobao, self.settings)
+            )
+            self.mockchat: MockChatChannelAdapter | None = None
+            if self.settings.mockchat_enabled:
+                self.mockchat = MockChatChannelAdapter(self.db, self.settings)
+                self.channel_adapters.register(self.mockchat)
 
             self._checkpoint_connection = sqlite3.connect(
                 self.settings.checkpoint_db_path,
@@ -147,7 +158,7 @@ class AgentService:
                 self.settings,
                 self.releases,
                 self.handoffs,
-                self.taobao,
+                self.channel_adapters,
                 self.chat,
             )
             self.taobao.set_delivery_observer(self.channel_agents.observe_delivery)
