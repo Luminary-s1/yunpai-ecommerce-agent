@@ -520,6 +520,10 @@
 
         <section class="view" id="view-channels">
           <div class="section-head"><div><h2>渠道接待工作台</h2><p>持久 Agent 运行、暂停接管、人工改写与可靠发送</p></div><div class="toolbar"><select class="input" id="channelMode"><option value="">全部模式</option><option value="bot">AI</option><option value="human">人工</option><option value="paused">已暂停</option></select><button class="button" id="runAgentJobs">执行 Agent 队列</button><button class="button" id="runOutbox">执行待发队列</button></div></div>
+          <div class="grid two" style="margin-bottom:14px">
+            <article class="panel"><div class="panel-head"><h3>渠道适配器能力</h3></div><div class="table-wrap"><table><thead><tr><th>渠道</th><th>契约 / 能力版本</th><th>类型</th><th>核心契约</th><th>限流声明</th></tr></thead><tbody id="adapterRows"></tbody></table></div></article>
+            <article class="panel"><div class="panel-head"><h3>知识 / SOP 灰度状态</h3></div><div class="table-wrap"><table><thead><tr><th>类型</th><th>对象</th><th>流量</th><th>状态</th><th>更新时间</th></tr></thead><tbody id="rolloutRows"></tbody></table></div></article>
+          </div>
           <div class="grid kpis" id="agentJobKpis"></div>
           <article class="panel" style="margin:14px 0"><div class="panel-head"><h3>渠道 Agent 运行账本</h3></div><div class="table-wrap"><table><thead><tr><th>创建时间</th><th>事件 / 模式</th><th>状态 / 阶段</th><th>尝试</th><th>Agent 结果</th><th>下游</th><th>错误</th></tr></thead><tbody id="agentJobRows"></tbody></table></div></article>
           <div class="grid kpis" id="outboxKpis"></div>
@@ -547,6 +551,10 @@
                 <div class="field"><label for="releaseReplayRate">最大回放失败率</label><input class="input" id="releaseReplayRate" type="number" min="0" max="1" step="0.001" value="0.02"></div>
                 <div class="field"><label for="releaseRuntimeSamples">运行期最少样本</label><input class="input" id="releaseRuntimeSamples" type="number" min="1" value="100"></div>
                 <div class="field"><label for="releaseRuntimeRate">最大运行失败率</label><input class="input" id="releaseRuntimeRate" type="number" min="0" max="1" step="0.001" value="0.02"></div>
+                <div class="field"><label for="releaseNightMode">夜间值守模式（可选）</label><select class="input" id="releaseNightMode"><option value="">不启用</option><option value="shadow">影子</option><option value="assist">仅提示</option><option value="collaborative">人机协同</option><option value="automatic">白名单自动</option></select></div>
+                <div class="field"><label for="releaseNightStart">夜间窗开始 UTC</label><input class="input" id="releaseNightStart" type="time" step="60"></div>
+                <div class="field"><label for="releaseNightEnd">夜间窗结束 UTC</label><input class="input" id="releaseNightEnd" type="time" step="60"></div>
+                <div class="field wide"><label for="releaseSopAllowlist">SOP 白名单（逗号分隔，可选）</label><input class="input" id="releaseSopAllowlist" placeholder="留空表示不限制 SOP"></div>
                 <div class="wide"><button class="button primary" type="submit">创建策略草稿</button></div>
               </form>
             </article>
@@ -1613,13 +1621,31 @@
 
     async function loadChannelConversations() {
       const mode = $('channelMode').value;
-      const [items, summary, outbox, jobSummary, agentJobs] = await Promise.all([
+      const [items, summary, outbox, jobSummary, agentJobs, adapters, knowledgeRollouts, sopRollouts] = await Promise.all([
         api(`/v1/integrations/taobao/conversations${mode ? `?owner_mode=${mode}` : ''}`),
         api('/v1/integrations/taobao/outbox/summary'),
         api('/v1/integrations/taobao/outbox?limit=100'),
         api('/v1/integrations/taobao/agent-jobs/summary'),
-        api('/v1/integrations/taobao/agent-jobs?limit=100')
+        api('/v1/integrations/taobao/agent-jobs?limit=100'),
+        api('/v1/channels/adapters'),
+        api('/v1/admin/knowledge-rollouts?limit=50'),
+        api('/v1/admin/sop-rollouts?limit=50')
       ]);
+      $('adapterRows').innerHTML = adapters.length ? adapters.map((item) => {
+        const features = [
+          item.features.signature_verification ? '验签' : null,
+          item.features.replay_protection ? '防重放' : null,
+          item.features.inbound_dedup ? '入站去重' : null,
+          item.features.outbound_idempotency ? '发送幂等' : null,
+          item.features.delivery_receipts ? '回执' : null
+        ].filter(Boolean).join(' · ');
+        return `<tr><td><strong>${escapeHtml(item.platform)}</strong><div class="muted">${escapeHtml(item.display_name)}</div></td><td class="mono">${escapeHtml(item.contract_version)} / ${escapeHtml(item.capability_version)}</td><td><span class="status ${item.virtual ? 'info' : 'ok'}">${item.virtual ? '模拟' : '真实'}</span></td><td class="muted">${features}</td><td class="muted">入 ${item.rate_limits.inbound_per_minute}/分 · 出 ${item.rate_limits.outbound_per_minute}/分 · ${item.rate_limits.enforced_by === 'adapter' ? '适配器执行' : '网关执行'}</td></tr>`;
+      }).join('') : '<tr><td colspan="5"><div class="empty">暂无注册渠道适配器</div></td></tr>';
+      const rollouts = [
+        ...knowledgeRollouts.map((item) => ({ ...item, kind: '知识' })),
+        ...sopRollouts.map((item) => ({ ...item, kind: 'SOP' }))
+      ].sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)));
+      $('rolloutRows').innerHTML = rollouts.length ? rollouts.map((item) => `<tr><td>${item.kind}</td><td class="mono">${escapeHtml(item.subject_key)}<div class="muted">候选 ${escapeHtml(item.candidate_id)}</div></td><td>${item.traffic_percentage}%</td><td><span class="status ${item.status === 'active' ? 'ok' : item.status === 'rolled_back' ? 'bad' : 'info'}">${escapeHtml(item.status)}</span></td><td>${formatTime(item.updated_at)}</td></tr>`).join('') : '<tr><td colspan="5"><div class="empty">暂无灰度发布</div></td></tr>';
       const jobCounts = jobSummary.counts || {};
       const pendingJobs = Number(jobCounts.queued || 0) + Number(jobCounts.running || 0) + Number(jobCounts.retry || 0);
       $('agentJobKpis').innerHTML = [
@@ -1905,7 +1931,13 @@
         const runtimeInfo = runtime[item.id]
           ? `<div class="muted">运行 ${runtime[item.id].samples} 次 · 失败率 ${pct(runtime[item.id].failure_rate)} · 严重 ${runtime[item.id].severe_errors}</div>`
           : '';
-        return `<tr><td><strong>${escapeHtml(item.release_key)} v${item.version}</strong><div class="mono muted">${escapeHtml(item.id)}</div></td><td>${escapeHtml(item.platform)} · ${escapeHtml(item.store_id)}<div class="muted">${escapeHtml(item.intent_allowlist.join(', '))}</div></td><td>${escapeHtml(item.mode)} · ${item.traffic_percentage}%<div class="muted">最高风险 ${escapeHtml(item.max_risk_level)}</div></td><td>${evaluation}${runtimeInfo}</td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span><div class="muted">锁 ${item.record_version}</div></td><td>${actions.map(([action,label]) => `<button class="button small ${action === 'retire' ? 'danger' : ''}" data-release-action="${action}" data-release-id="${item.id}" data-release-version="${item.record_version}">${label}</button>`).join(' ') || '-'}</td></tr>`;
+        const nightInfo = item.night_mode
+          ? `<div class="muted">夜间 ${escapeHtml(item.night_mode)} · ${escapeHtml(item.night_window_start_utc)}-${escapeHtml(item.night_window_end_utc)} UTC</div>`
+          : '';
+        const sopInfo = item.sop_allowlist
+          ? `<div class="muted">SOP 白名单 ${item.sop_allowlist.length} 项</div>`
+          : '';
+        return `<tr><td><strong>${escapeHtml(item.release_key)} v${item.version}</strong><div class="mono muted">${escapeHtml(item.id)}</div></td><td>${escapeHtml(item.platform)} · ${escapeHtml(item.store_id)}<div class="muted">${escapeHtml(item.intent_allowlist.join(', '))}</div></td><td>${escapeHtml(item.mode)} · ${item.traffic_percentage}%<div class="muted">最高风险 ${escapeHtml(item.max_risk_level)}</div>${nightInfo}${sopInfo}</td><td>${evaluation}${runtimeInfo}</td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span><div class="muted">锁 ${item.record_version}</div></td><td>${actions.map(([action,label]) => `<button class="button small ${action === 'retire' ? 'danger' : ''}" data-release-action="${action}" data-release-id="${item.id}" data-release-version="${item.record_version}">${label}</button>`).join(' ') || '-'}</td></tr>`;
       }).join('') : '<tr><td colspan="6"><div class="empty">暂无发布策略</div></td></tr>';
 
       document.querySelectorAll('[data-release-action]').forEach((node) => node.addEventListener('click', async () => {
@@ -2351,6 +2383,13 @@
         min_replay_cases:Number($('releaseMinCases').value), max_replay_failure_rate:Number($('releaseReplayRate').value), max_replay_severe_errors:0,
         runtime_min_samples:Number($('releaseRuntimeSamples').value), max_runtime_failure_rate:Number($('releaseRuntimeRate').value), max_runtime_severe_errors:0
       };
+      if ($('releaseNightMode').value) {
+        payload.night_mode = $('releaseNightMode').value;
+        payload.night_window_start_utc = $('releaseNightStart').value;
+        payload.night_window_end_utc = $('releaseNightEnd').value;
+      }
+      const sopAllowlist = $('releaseSopAllowlist').value.split(',').map((item) => item.trim()).filter(Boolean);
+      if (sopAllowlist.length) payload.sop_allowlist = sopAllowlist;
       try {
         await api('/v1/admin/releases', { method:'POST', body:JSON.stringify(payload) });
         toast('发布策略草稿已创建'); await loadReleases();

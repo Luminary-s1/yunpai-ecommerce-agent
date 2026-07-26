@@ -269,3 +269,66 @@ def test_local_admin_bypass_is_loopback_only_and_keeps_client_authentication(tmp
         response = client.get("/v1/admin/overview")
         assert response.status_code == 403
         assert "loopback" in response.json()["detail"]
+
+
+def test_workbench_surfaces_adapters_rollouts_and_night_watch(tmp_path) -> None:
+    settings = replace(
+        make_settings(tmp_path),
+        mockchat_enabled=True,
+        mockchat_secret="mockchat-secret-1",
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        page = client.get("/admin")
+        assert page.status_code == 200
+        html = page.text
+        for marker in (
+            'id="adapterRows"',
+            'id="rolloutRows"',
+            'id="releaseNightMode"',
+            'id="releaseNightStart"',
+            'id="releaseNightEnd"',
+            'id="releaseSopAllowlist"',
+            "/v1/channels/adapters",
+            "/v1/admin/knowledge-rollouts",
+            "/v1/admin/sop-rollouts",
+        ):
+            assert marker in html
+
+        adapters = client.get("/v1/channels/adapters", headers=ADMIN_HEADERS)
+        assert adapters.status_code == 200
+        platforms = {item["platform"] for item in adapters.json()}
+        assert {"mockchat", "taobao"} <= platforms
+
+        created = client.post(
+            "/v1/admin/releases",
+            headers=ADMIN_HEADERS,
+            json={
+                "release_key": "workbench.night",
+                "name": "工作台夜间策略",
+                "platform": "mockchat",
+                "store_id": "mock-shop-1",
+                "mode": "assist",
+                "traffic_percentage": 100,
+                "intent_allowlist": ["product"],
+                "min_replay_cases": 1,
+                "max_replay_failure_rate": 0,
+                "max_replay_severe_errors": 0,
+                "runtime_min_samples": 1,
+                "max_runtime_failure_rate": 0,
+                "max_runtime_severe_errors": 0,
+                "night_mode": "automatic",
+                "night_window_start_utc": "22:00",
+                "night_window_end_utc": "07:00",
+                "sop_allowlist": ["allowed.flow"],
+            },
+        )
+        assert created.status_code in {200, 201}
+        policy = created.json()
+        assert policy["night_mode"] == "automatic"
+        assert policy["sop_allowlist"] == ["allowed.flow"]
+
+        for path in ("/v1/admin/knowledge-rollouts", "/v1/admin/sop-rollouts"):
+            listing = client.get(path, headers=ADMIN_HEADERS)
+            assert listing.status_code == 200
+            assert listing.json() == []
