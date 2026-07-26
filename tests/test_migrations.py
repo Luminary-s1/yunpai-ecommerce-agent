@@ -947,3 +947,51 @@ def test_v21_session_sources_are_classified_during_upgrade(tmp_path) -> None:
             "source_reference": "legacy-virtual",
         },
     ]
+
+
+def test_v23_database_gains_staged_rollouts_for_gray_release(tmp_path) -> None:
+    db = Database(tmp_path / "v23-rollouts.sqlite3")
+    db.path.parent.mkdir(parents=True, exist_ok=True)
+    with db.connect() as conn:
+        conn.execute(
+            "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        for version in range(1, 24):
+            getattr(Database, f"_apply_v{version}")(conn)
+            conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (version, "2026-07-26T00:00:00+00:00"),
+            )
+
+    db.initialize()
+
+    assert db.schema_version() == Database.SCHEMA_VERSION
+    with db.connect() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(staged_rollouts)")}
+        conn.execute(
+            """
+            INSERT INTO staged_rollouts(
+                id, tenant_id, subject_type, subject_key, candidate_id, baseline_id,
+                traffic_percentage, rollout_salt, status, note, record_version,
+                created_by, completed_by, created_at, updated_at, completed_at
+            ) VALUES ('rollout-a', 'tenant-a', 'knowledge', 'key-a', 'candidate-a',
+                      NULL, 30, 'salt-a', 'active', NULL, 1, 'admin-a', NULL,
+                      '2026-07-27T00:00:00+00:00', '2026-07-27T00:00:00+00:00', NULL)
+            """
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO staged_rollouts(
+                    id, tenant_id, subject_type, subject_key, candidate_id, baseline_id,
+                    traffic_percentage, rollout_salt, status, note, record_version,
+                    created_by, completed_by, created_at, updated_at, completed_at
+                ) VALUES ('rollout-b', 'tenant-a', 'knowledge', 'key-a', 'candidate-b',
+                          NULL, 60, 'salt-b', 'active', NULL, 1, 'admin-a', NULL,
+                          '2026-07-27T00:00:00+00:00', '2026-07-27T00:00:00+00:00', NULL)
+                """
+            )
+    assert {
+        "tenant_id", "subject_type", "subject_key", "candidate_id",
+        "traffic_percentage", "rollout_salt", "status", "record_version",
+    } <= columns

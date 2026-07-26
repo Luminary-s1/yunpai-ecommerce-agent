@@ -108,6 +108,7 @@ def build_graph(
             tenant_id=state["tenant_id"],
             store_id=state["context"].get("store_id") or state["context"].get("shop_id"),
             sku_id=state["context"].get("sku_id"),
+            rollout_unit=state["session_id"],
         )
         return {
             "retrieved": documents,
@@ -303,6 +304,7 @@ def build_graph(
             tenant_id=state["tenant_id"],
             store_id=state["context"].get("store_id") or state["context"].get("shop_id"),
             sku_id=state["context"].get("sku_id"),
+            rollout_unit=state["session_id"],
         )
         return {
             "retrieved": documents,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import uuid
 from typing import Any, Literal
 
@@ -42,6 +43,28 @@ class KnowledgeReviseRequest(BaseModel):
 
 
 class KnowledgeTransitionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_record_version: int = Field(ge=1)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class KnowledgeRolloutBeginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_record_version: int = Field(ge=1)
+    traffic_percentage: int = Field(ge=1, le=100)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class KnowledgeRolloutUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_record_version: int = Field(ge=1)
+    traffic_percentage: int = Field(ge=1, le=100)
+
+
+class KnowledgeRolloutTransitionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     expected_record_version: int = Field(ge=1)
@@ -238,6 +261,246 @@ class KnowledgeManagementService:
                 raise KnowledgeLifecycleError("knowledge version conflict")
         self.db.audit("knowledge.rolled_back", actor, item_id, {"note": request.note}, tenant_id)
         return self._require(tenant_id, item_id)
+
+    def begin_rollout(
+        self,
+        tenant_id: str,
+        item_id: str,
+        request: KnowledgeRolloutBeginRequest,
+        actor: str,
+    ) -> dict[str, Any]:
+        candidate = self._require(tenant_id, item_id)
+        if candidate["status"] != "candidate" or candidate["review_status"] != "evaluated":
+            raise KnowledgeLifecycleError(
+                "knowledge rollout requires an evaluated candidate version"
+            )
+        if candidate["record_version"] != request.expected_record_version:
+            raise KnowledgeLifecycleError("knowledge version conflict")
+        now = utc_now()
+        rollout_id = f"rollout-{uuid.uuid4().hex}"
+        with self.db._write_lock, self.db.connect() as conn:
+            baseline = conn.execute(
+                "SELECT id FROM knowledge WHERE tenant_id=? AND knowledge_key=? AND status='active'",
+                (tenant_id, candidate["knowledge_key"]),
+            ).fetchone()
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO staged_rollouts(
+                        id, tenant_id, subject_type, subject_key, candidate_id,
+                        baseline_id, traffic_percentage, rollout_salt, status, note,
+                        record_version, created_by, completed_by, created_at,
+                        updated_at, completed_at
+                    ) VALUES (?, ?, 'knowledge', ?, ?, ?, ?, ?, 'active', ?, 1, ?,
+                              NULL, ?, ?, NULL)
+                    """,
+                    (
+                        rollout_id,
+                        tenant_id,
+                        candidate["knowledge_key"],
+                        item_id,
+                        baseline["id"] if baseline else None,
+                        request.traffic_percentage,
+                        uuid.uuid4().hex,
+                        request.note,
+                        actor,
+                        now,
+                        now,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise KnowledgeLifecycleError(
+                    "knowledge key already has an active rollout"
+                ) from exc
+        self.db.audit(
+            "knowledge.rollout_started",
+            actor,
+            rollout_id,
+            {
+                "knowledge_key": candidate["knowledge_key"],
+                "candidate_id": item_id,
+                "traffic_percentage": request.traffic_percentage,
+            },
+            tenant_id,
+        )
+        return self.get_rollout(tenant_id, rollout_id)
+
+    def update_rollout(
+        self,
+        tenant_id: str,
+        rollout_id: str,
+        request: KnowledgeRolloutUpdateRequest,
+        actor: str,
+    ) -> dict[str, Any]:
+        with self.db._write_lock, self.db.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE staged_rollouts
+                SET traffic_percentage=?, record_version=record_version+1, updated_at=?
+                WHERE id=? AND tenant_id=? AND subject_type='knowledge'
+                  AND status='active' AND record_version=?
+                """,
+                (
+                    request.traffic_percentage,
+                    utc_now(),
+                    rollout_id,
+                    tenant_id,
+                    request.expected_record_version,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KnowledgeLifecycleError(
+                    "knowledge rollout transition or version conflict"
+                )
+        self.db.audit(
+            "knowledge.rollout_adjusted",
+            actor,
+            rollout_id,
+            {"traffic_percentage": request.traffic_percentage},
+            tenant_id,
+        )
+        return self.get_rollout(tenant_id, rollout_id)
+
+    def complete_rollout(
+        self,
+        tenant_id: str,
+        rollout_id: str,
+        request: KnowledgeRolloutTransitionRequest,
+        actor: str,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.db._write_lock, self.db.connect() as conn:
+            rollout = conn.execute(
+                """
+                SELECT * FROM staged_rollouts
+                WHERE id=? AND tenant_id=? AND subject_type='knowledge'
+                """,
+                (rollout_id, tenant_id),
+            ).fetchone()
+            if rollout is None:
+                raise KnowledgeLifecycleError("knowledge rollout not found")
+            if (
+                rollout["status"] != "active"
+                or rollout["record_version"] != request.expected_record_version
+            ):
+                raise KnowledgeLifecycleError(
+                    "knowledge rollout transition or version conflict"
+                )
+            candidate = conn.execute(
+                "SELECT * FROM knowledge WHERE id=? AND tenant_id=? AND status='candidate'",
+                (rollout["candidate_id"], tenant_id),
+            ).fetchone()
+            if candidate is None:
+                raise KnowledgeLifecycleError(
+                    "rollout candidate is no longer a candidate version"
+                )
+            conn.execute(
+                """
+                UPDATE knowledge
+                SET status='retired', effective_to=?, record_version=record_version+1,
+                    updated_at=?
+                WHERE tenant_id=? AND knowledge_key=? AND status='active' AND id<>?
+                """,
+                (now, now, tenant_id, rollout["subject_key"], rollout["candidate_id"]),
+            )
+            conn.execute(
+                """
+                UPDATE knowledge
+                SET status='active', review_status='approved', approved_by=?,
+                    effective_from=?, effective_to=NULL,
+                    record_version=record_version+1, updated_at=?
+                WHERE id=? AND tenant_id=?
+                """,
+                (actor, now, now, rollout["candidate_id"], tenant_id),
+            )
+            conn.execute(
+                """
+                UPDATE staged_rollouts
+                SET status='completed', completed_by=?, completed_at=?,
+                    record_version=record_version+1, updated_at=?
+                WHERE id=? AND tenant_id=?
+                """,
+                (actor, now, now, rollout_id, tenant_id),
+            )
+        self.db.audit(
+            "knowledge.rollout_completed",
+            actor,
+            rollout_id,
+            {"candidate_id": rollout["candidate_id"], "note": request.note},
+            tenant_id,
+        )
+        return self.get_rollout(tenant_id, rollout_id)
+
+    def rollback_rollout(
+        self,
+        tenant_id: str,
+        rollout_id: str,
+        request: KnowledgeRolloutTransitionRequest,
+        actor: str,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.db._write_lock, self.db.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE staged_rollouts
+                SET status='rolled_back', completed_by=?, completed_at=?, note=?,
+                    record_version=record_version+1, updated_at=?
+                WHERE id=? AND tenant_id=? AND subject_type='knowledge'
+                  AND status='active' AND record_version=?
+                """,
+                (
+                    actor,
+                    now,
+                    request.note,
+                    now,
+                    rollout_id,
+                    tenant_id,
+                    request.expected_record_version,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KnowledgeLifecycleError(
+                    "knowledge rollout transition or version conflict"
+                )
+        self.db.audit(
+            "knowledge.rollout_rolled_back",
+            actor,
+            rollout_id,
+            {"note": request.note},
+            tenant_id,
+        )
+        return self.get_rollout(tenant_id, rollout_id)
+
+    def list_rollouts(
+        self, tenant_id: str, *, status: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        conditions = ["tenant_id=?", "subject_type='knowledge'"]
+        params: list[Any] = [tenant_id]
+        if status:
+            conditions.append("status=?")
+            params.append(status)
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM staged_rollouts WHERE {' AND '.join(conditions)}
+                ORDER BY updated_at DESC LIMIT ?
+                """,
+                (*params, max(1, min(500, limit))),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_rollout(self, tenant_id: str, rollout_id: str) -> dict[str, Any]:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM staged_rollouts
+                WHERE id=? AND tenant_id=? AND subject_type='knowledge'
+                """,
+                (rollout_id, tenant_id),
+            ).fetchone()
+        if row is None:
+            raise KnowledgeLifecycleError("knowledge rollout not found")
+        return dict(row)
 
     def _transition(
         self,
