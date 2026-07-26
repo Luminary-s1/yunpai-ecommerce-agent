@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Callable
 
 from ..database import Database, utc_now
-from .contracts import ChannelAdapterError, InboundEnvelope
+from .contracts import ChannelAdapterError, InboundEnvelope, MessageKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +173,7 @@ class ChannelInboundRecorder:
         event_id: str,
         is_duplicate: bool,
         agent_job_id: str | None,
+        kind_resolver: Callable[[str], MessageKind] | None = None,
     ) -> InboundEnvelope:
         with self.db.connect() as conn:
             row = conn.execute(
@@ -189,6 +191,7 @@ class ChannelInboundRecorder:
             ).fetchone()
         if row is None:
             raise ChannelAdapterError("inbound channel event not found", kind="not_found")
+        message_type = str(row["message_type"])
         return InboundEnvelope(
             platform=str(row["platform"]),
             tenant_id=tenant_id,
@@ -199,7 +202,8 @@ class ChannelInboundRecorder:
             owner_mode=str(row["owner_mode"]),
             event_id=str(row["event_id"]),
             external_event_id=str(row["external_event_id"]),
-            message_type=str(row["message_type"]),
+            message_type=message_type,
+            message_kind=kind_resolver(message_type) if kind_resolver else "text",
             content_redacted=str(row["content_redacted"]),
             payload_hash=str(row["payload_hash"]),
             received_at=str(row["received_at"]),

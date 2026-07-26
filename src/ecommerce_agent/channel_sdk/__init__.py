@@ -5,6 +5,7 @@ persistence (F-101)."""
 
 from .adapter import ChannelAdapter
 from .contracts import (
+    AGENT_READABLE_KINDS,
     CHANNEL_SDK_CONTRACT_VERSION,
     FAILURE_DELIVERY_STATES,
     ChannelAdapterError,
@@ -12,6 +13,7 @@ from .contracts import (
     ChannelErrorKind,
     ChannelFeatureDeclaration,
     InboundEnvelope,
+    MessageKind,
     OwnershipCommand,
     RateLimitDeclaration,
     ReplyDraftCommand,
@@ -24,6 +26,7 @@ from .inbound import ChannelInboundRecorder, InboundRecord
 from .registry import ChannelAdapterRegistry
 
 __all__ = [
+    "AGENT_READABLE_KINDS",
     "CHANNEL_SDK_CONTRACT_VERSION",
     "FAILURE_DELIVERY_STATES",
     "ChannelAdapter",
@@ -35,6 +38,7 @@ __all__ = [
     "ChannelInboundRecorder",
     "InboundEnvelope",
     "InboundRecord",
+    "MessageKind",
     "OwnershipCommand",
     "RateLimitDeclaration",
     "ReplyDraftCommand",

@@ -13,6 +13,21 @@ IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9_.:-]+$"
 
 OwnerMode = Literal["bot", "human", "paused"]
 
+MessageKind = Literal[
+    "text",
+    "image",
+    "audio",
+    "video",
+    "goods_card",
+    "order_card",
+    "system",
+    "unknown",
+]
+
+# Kinds the Agent may deliberate on; every other kind must reach a human
+# instead of being silently dropped or hallucinated about.
+AGENT_READABLE_KINDS: frozenset[str] = frozenset({"text"})
+
 ChannelErrorKind = Literal[
     "authentication",
     "signature",
@@ -95,6 +110,7 @@ class InboundEnvelope(BaseModel):
     event_id: str
     external_event_id: str
     message_type: str
+    message_kind: MessageKind = "text"
     content_redacted: str
     payload_hash: str
     received_at: str

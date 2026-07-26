@@ -473,17 +473,24 @@ class TaobaoIntegrationService:
             raise TaobaoError(
                 "Qimen event is not valid JSON or misses header/body", kind="schema"
             ) from exc
-        content = body.get("content") or ""
-        if isinstance(content, str):
-            try:
-                decoded_content = json.loads(content)
-                text = str(decoded_content.get("text") or content)
-            except (ValueError, AttributeError):
-                text = content
+        raw_message_type = str(body.get("contentType") or "1")
+        if raw_message_type == "1":
+            content = body.get("content") or ""
+            if isinstance(content, str):
+                try:
+                    decoded_content = json.loads(content)
+                    text = str(decoded_content.get("text") or content)
+                except (ValueError, AttributeError):
+                    text = content
+            else:
+                text = str(content.get("text") or "") if isinstance(content, dict) else str(content)
+            if not text.strip():
+                raise TaobaoError("Qimen chat message does not contain text", kind="schema")
         else:
-            text = str(content.get("text") or "") if isinstance(content, dict) else str(content)
-        if not text.strip():
-            raise TaobaoError("Qimen chat message does not contain text", kind="schema")
+            # Non-text payloads (images, cards, …) are recorded instead of
+            # dropped, but only as a redaction-safe marker: the media payload
+            # itself is never trusted as conversation text.
+            text = f"[非文本消息:contentType={raw_message_type}]"
 
         buyer_id = str(params.get("buyerId") or self._party_value(body.get("sender"), "id") or "")
         buyer_nick = str(params.get("buyerNick") or self._party_value(body.get("sender"), "nick") or "")
@@ -513,7 +520,7 @@ class TaobaoIntegrationService:
             shop_id=shop_id,
             external_conversation_id=external_conversation_id,
             external_event_id=external_event_id,
-            message_type=str(body.get("contentType") or "1"),
+            message_type=raw_message_type,
             content_redacted=safe_text,
             payload_hash=hashlib.sha256(params["event"].encode("utf-8")).hexdigest(),
             buyer_hash=buyer_hash,
