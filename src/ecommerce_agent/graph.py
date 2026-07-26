@@ -197,22 +197,36 @@ def build_graph(
                 state["tenant_id"],
             )
             if isinstance(exc, ModelUnavailableError):
-                # A rate limit or transport hiccup is not a reason to occupy a human
-                # agent; invite the customer to retry and keep the handoff queue for
-                # cases the agent has actually judged to need a person.
-                return {
-                    "model_fallback": True,
-                    "model_retry_advised": True,
-                    "trace": [*state["trace"], "deliberate:model_temporarily_unavailable"],
-                }
-            decision = AgentDecision(
-                intent=state.get("intent", "general"),
-                mode="handoff",
-                reason="model_unavailable",
-                confidence=0,
-            )
-            trace_step = "deliberate:fallback"
-            fallback = True
+                if state.get("tool_result", {}).get("postcondition_met") is True:
+                    decision = AgentDecision(
+                        intent=state.get("intent", "general"),
+                        mode="finish",
+                        reason="verified_tool_result_available",
+                        confidence=1,
+                    )
+                    trace_step = "deliberate:verified_result_fallback"
+                    fallback = True
+                else:
+                    # A rate limit or transport hiccup is not a reason to occupy a human
+                    # agent; invite the customer to retry and keep the handoff queue for
+                    # cases the agent has actually judged to need a person.
+                    return {
+                        "model_fallback": True,
+                        "model_retry_advised": True,
+                        "trace": [
+                            *state["trace"],
+                            "deliberate:model_temporarily_unavailable",
+                        ],
+                    }
+            else:
+                decision = AgentDecision(
+                    intent=state.get("intent", "general"),
+                    mode="handoff",
+                    reason="model_unavailable",
+                    confidence=0,
+                )
+                trace_step = "deliberate:fallback"
+                fallback = True
         return {
             "decision": decision.model_dump(),
             "model_fallback": fallback,

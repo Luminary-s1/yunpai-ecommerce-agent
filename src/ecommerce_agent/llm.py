@@ -248,12 +248,14 @@ class ModelGateway:
             headers["Authorization"] = f"Bearer {self.settings.model_api_key}"
         return headers
 
-    @staticmethod
-    def _is_transient(error: Exception | None) -> bool:
+    def _is_transient(self, error: Exception | None) -> bool:
         """Rate limits, upstream 5xx and transport failures can succeed on a retry."""
         if isinstance(error, httpx.HTTPStatusError):
             status = error.response.status_code
-            return status == 429 or status >= 500
+            return status >= 500 or (
+                status == 429
+                and self._provider_code(error.response) in RATE_LIMIT_PROVIDER_CODES
+            )
         return isinstance(error, httpx.TransportError)
 
     def _is_retryable(self, response: httpx.Response) -> bool:
