@@ -7,6 +7,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from . import product_advisor
 from .database import Database, utc_now
 from .text_utils import redact_sensitive
 
@@ -244,6 +245,31 @@ class ContextBuilder:
                     },
                 )
             )
+        advisor = product_advisor.advise(
+            self.db,
+            tenant_id=tenant_id,
+            store_id=safe_context.get("store_id") or safe_context.get("shop_id"),
+            question=question,
+        )
+        safe_advisor = _safe_value(advisor)
+        for candidate in advisor["candidates"]:
+            evidence.append(
+                self._evidence(
+                    "catalog_item",
+                    str(candidate["evidence_id"]),
+                    authority="versioned_catalog_fact",
+                    freshness="active",
+                    source_version=candidate["version"],
+                    observed_at=str(candidate["source_updated_at"]),
+                    summary={
+                        "sku_id": candidate["sku_id"],
+                        "title": candidate["title"],
+                        "sale_price": candidate["sale_price"],
+                        "currency": candidate["currency"],
+                        "score": candidate["score"],
+                    },
+                )
+            )
         evidence.append(
             self._evidence(
                 "tool_catalog",
@@ -300,6 +326,7 @@ class ContextBuilder:
             },
             "sop_evidence": safe_sops,
             "knowledge_evidence": safe_documents,
+            "product_advisor": safe_advisor,
             "available_tools": safe_tools,
             "output_constraints": {
                 "language": "zh-CN",
