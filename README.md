@@ -2,6 +2,27 @@
 
 一个面向本地一体机的轻量电商经营 Agent。业务按商品、订单、仓储、竞品、营销、财务、指标和客服拆分模块；LLM 在 LangGraph 中负责理解目标、选择工具并根据 Observation 继续规划，固化代码负责事实、权限、指标、幂等、后置验证、RAG、自进化、审计和人工接管。默认以 `MODEL_ENABLED=false` 安全启动。
 
+## 系统结构
+
+```mermaid
+flowchart LR
+    clients["客户端 / 管理后台 / 淘宝渠道"] --> api["FastAPI API 与认证"]
+    api --> service["AgentService 编排层"]
+    service --> graph["LangGraph Agent"]
+    graph --> context["上下文构建 / RAG / SOP"]
+    graph --> model["LLM 结构化决策"]
+    graph --> tools["动态工具目录与执行器"]
+    tools --> modules["商品 / 订单 / 仓储 / 竞品 / 营销 / 财务 / 指标"]
+    tools --> connectors["Connector SDK / 虚拟淘宝"]
+    graph --> handoff["后置验证 / 人工接管"]
+    service --> workers["渠道 / Outbox / 监控 / 派单 Worker"]
+    context --> appdb[("SQLite 业务库")]
+    modules --> appdb
+    handoff --> appdb
+    workers --> appdb
+    graph --> checkpoints[("LangGraph Checkpoint")]
+```
+
 ## 核心能力
 
 - LLM 驱动链路：认证、会话绑定、输入脱敏、RAG 上下文、结构化决策、通用路由、动态工具目录、有界 ReAct、后置验证和持久化。
