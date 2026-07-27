@@ -205,6 +205,10 @@ def build_operations_router(
             default=None,
             pattern=r"^(created|paid|fulfilling|shipped|delivered|closed|canceled)$",
         ),
+        scope: str = Query(
+            default="operational",
+            pattern=r"^(operational|simulation|evaluation|all)$",
+        ),
         limit: int = Query(default=100, ge=1, le=500),
         admin: AdminPrincipal = Depends(require_admin),
     ) -> list[dict[str, Any]]:
@@ -214,6 +218,7 @@ def build_operations_router(
             order_id=order_id,
             order_status=order_status,  # type: ignore[arg-type]
             limit=limit,
+            service_scope=scope,
         )
 
     @router.get("/orders/{order_id}/history")

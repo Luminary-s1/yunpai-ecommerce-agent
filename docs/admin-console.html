@@ -348,7 +348,7 @@
         </section>
 
         <section class="view" id="view-orders">
-          <div class="section-head"><div><h2>订单、物流与售后</h2><p>统一订单聚合、脱敏物流与售后事实</p></div><div class="toolbar"><button class="button" id="syncOrders">同步虚拟订单</button><input class="input" id="orderInput" placeholder="筛选订单号"><button class="button primary" id="filterOrders">查询</button></div></div>
+          <div class="section-head"><div><h2>订单、物流与售后</h2><p>统一订单聚合、脱敏物流与售后事实；客服状态仅表示人工任务流转，不创建退款或售后申请</p></div><div class="toolbar"><button class="button" id="syncOrders">同步虚拟订单</button><select class="input" id="orderServiceScope" aria-label="客服任务数据范围"><option value="operational" selected>运营客服任务</option><option value="simulation">虚拟验收任务</option><option value="evaluation">隔离评测任务</option><option value="all">全部客服任务</option></select><input class="input" id="orderInput" placeholder="筛选订单号"><button class="button primary" id="filterOrders">查询</button></div></div>
           <div class="grid kpis" id="orderKpis"></div>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>订单事实</h3><span class="muted" id="ordersAsOf"></span></div><div class="table-wrap"><table><thead><tr><th>订单</th><th>金额</th><th>订单状态</th><th>支付状态</th><th>物流</th><th>售后</th><th>版本</th></tr></thead><tbody id="orderRows"></tbody></table></div></article>
         </section>
@@ -782,7 +782,7 @@
     const formatTime = (value) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-';
     const money = (value, currency = 'CNY') => `${currency} ${Number(value || 0).toFixed(2)}`;
     const pct = (value) => value === null || value === undefined ? '-' : `${(Number(value) * 100).toFixed(1)}%`;
-    const statusClass = (status) => ({ available:'ok', active:'ok', approved:'ok', completed:'ok', succeeded:'ok', passed:'ok', frozen:'ok', compensated:'ok', sent:'ok', bot:'ok', resolved:'ok', assigned:'ok', interface:'info', evaluated:'info', human:'info', acknowledged:'info', running:'info', shadow:'info', leased:'info', not_run:'info', away:'warn', proposed:'warn', candidate:'warn', pending:'warn', waiting:'warn', draft:'warn', paused:'warn', accepted:'warn', working:'warn', waiting_input:'warn', waiting_approval:'warn', uncertain:'warn', compensation_uncertain:'warn', open:'warn', queued:'warn', retry:'warn', skipped:'warn', offline:'bad', inactive:'bad', disabled:'bad', blocked:'bad', error:'bad', dead_letter:'bad', input_required:'bad', review:'info', planned:'warn', failed:'bad', compensation_failed:'bad', retired:'bad', canceled:'bad', cancelled:'bad', rejected:'bad' }[status] || '');
+    const statusClass = (status) => ({ available:'ok', active:'ok', approved:'ok', completed:'ok', succeeded:'ok', passed:'ok', frozen:'ok', compensated:'ok', sent:'ok', bot:'ok', resolved:'ok', assigned:'ok', interface:'info', evaluated:'info', human:'info', acknowledged:'info', running:'info', processing:'info', shadow:'info', leased:'info', not_run:'info', away:'warn', proposed:'warn', candidate:'warn', pending:'warn', waiting:'warn', draft:'warn', paused:'warn', accepted:'warn', working:'warn', waiting_input:'warn', waiting_approval:'warn', uncertain:'warn', compensation_uncertain:'warn', open:'warn', queued:'warn', retry:'warn', skipped:'warn', offline:'bad', inactive:'bad', disabled:'bad', blocked:'bad', error:'bad', dead_letter:'bad', input_required:'bad', review:'info', planned:'warn', failed:'bad', compensation_failed:'bad', retired:'bad', canceled:'bad', cancelled:'bad', rejected:'bad' }[status] || '');
 
     function toast(message) {
       const node = $('toast');
@@ -1415,21 +1415,31 @@
 
     async function loadOrders() {
       const orderId = $('orderInput').value.trim();
-      const suffix = orderId ? `?order_id=${encodeURIComponent(orderId)}` : '';
+      const query = new URLSearchParams({ scope:$('orderServiceScope').value });
+      if (orderId) query.set('order_id', orderId);
       const [orders, countMetric, revenueMetric, afterSaleMetric] = await Promise.all([
-        api(`/v1/orders${suffix}`),
+        api(`/v1/orders?${query.toString()}`),
         api('/v1/metrics/query', { method:'POST', body:JSON.stringify({metric:'order_count'}) }),
         api('/v1/metrics/query', { method:'POST', body:JSON.stringify({metric:'gross_revenue'}) }),
         api('/v1/metrics/query', { method:'POST', body:JSON.stringify({metric:'after_sale_order_rate'}) })
       ]);
       const openCases = orders.reduce((sum, item) => sum + item.after_sales.filter((caseItem) => !['completed','canceled','rejected'].includes(caseItem.status)).length, 0);
+      const processingOrders = orders.filter((item) => item.customer_service?.status === 'processing').length;
       $('orderKpis').innerHTML = [
         ['有效订单', countMetric.value, '不含已取消'],
         ['订单金额', revenueMetric.value, 'CNY · 已支付未取消'],
         ['售后订单率', `${(Number(afterSaleMetric.value) * 100).toFixed(1)}%`, `${afterSaleMetric.evidence_count} 条订单证据`],
-        ['处理中售后', openCases, `${orders.length} 条当前订单`]
+        ['处理中售后', openCases, `${processingOrders} 笔客服处理中 · ${orders.length} 条当前订单`]
       ].map(([label,value,meta]) => `<div class="kpi"><span class="label">${label}</span><span class="value">${value}</span><span class="meta">${meta}</span></div>`).join('');
-      $('orderRows').innerHTML = orders.length ? orders.map((item) => { const logistics = item.logistics; const cases = item.after_sales; return `<tr><td><strong class="mono">${escapeHtml(item.order_id)}</strong><div class="muted">${formatTime(item.placed_at)}</div></td><td>${escapeHtml(item.total_amount)} ${escapeHtml(item.currency)}</td><td><span class="status ${statusClass(item.order_status)}">${escapeHtml(item.order_status)}</span></td><td>${escapeHtml(item.payment_status)}</td><td>${logistics ? `<strong>${escapeHtml(logistics.carrier)}</strong><div>${escapeHtml(logistics.tracking_no_masked)} · ${escapeHtml(logistics.status)}</div><div class="muted">${escapeHtml(logistics.last_event)}</div>` : '-'}</td><td>${cases.length ? cases.map((caseItem) => `<span class="status ${statusClass(caseItem.status)}">${escapeHtml(caseItem.case_type)} · ${escapeHtml(caseItem.status)}</span>`).join(' ') : '-'}</td><td>v${item.version}<div class="muted">${formatTime(item.source_updated_at)}</div></td></tr>`; }).join('') : '<tr><td colspan="7"><div class="empty">暂无订单事实</div></td></tr>';
+      $('orderRows').innerHTML = orders.length ? orders.map((item) => {
+        const logistics = item.logistics;
+        const cases = item.after_sales;
+        const customerService = item.customer_service;
+        const customerServiceStatus = customerService
+          ? `<div style="margin-top:6px"><span class="status ${statusClass(customerService.status)}">${escapeHtml(customerService.label)}</span><div class="muted">人工任务 ${escapeHtml(customerService.task_status)} · ${formatTime(customerService.updated_at)}</div></div>`
+          : '';
+        return `<tr><td><strong class="mono">${escapeHtml(item.order_id)}</strong><div class="muted">${formatTime(item.placed_at)}</div></td><td>${escapeHtml(item.total_amount)} ${escapeHtml(item.currency)}</td><td><span class="status ${statusClass(item.order_status)}">${escapeHtml(item.order_status)}</span>${customerServiceStatus}</td><td>${escapeHtml(item.payment_status)}</td><td>${logistics ? `<strong>${escapeHtml(logistics.carrier)}</strong><div>${escapeHtml(logistics.tracking_no_masked)} · ${escapeHtml(logistics.status)}</div><div class="muted">${escapeHtml(logistics.last_event)}</div>` : '-'}</td><td>${cases.length ? cases.map((caseItem) => `<span class="status ${statusClass(caseItem.status)}">${escapeHtml(caseItem.case_type)} · ${escapeHtml(caseItem.status)}</span>`).join(' ') : '-'}</td><td>v${item.version}<div class="muted">${formatTime(item.source_updated_at)}</div></td></tr>`;
+      }).join('') : '<tr><td colspan="7"><div class="empty">暂无订单事实</div></td></tr>';
       $('ordersAsOf').textContent = countMetric.data_as_of ? `数据截至 ${formatTime(countMetric.data_as_of)}` : '';
     }
 
@@ -2141,6 +2151,7 @@
     });
     $('filterCommerce').addEventListener('click', () => loadCommerce().catch((error) => toast(error.message)));
     $('filterOrders').addEventListener('click', () => loadOrders().catch((error) => toast(error.message)));
+    $('orderServiceScope').addEventListener('change', () => loadOrders().catch((error) => toast(error.message)));
     $('analyzeSku').addEventListener('click', () => analyzeSku().catch((error) => toast(error.message)));
     $('refreshCompetitiveMatches').addEventListener('click', () => loadCompetitive().catch((error) => toast(error.message)));
     $('competitiveMatchStatus').addEventListener('change', () => loadCompetitive().catch((error) => toast(error.message)));
@@ -2491,6 +2502,7 @@
         const result = await localTestApi('/v1/test/customer-chat', { method:'POST', body:JSON.stringify({ session_id:state.customerTestSessionId, message, context:{ shop_id:'qingchuan-flagship-001', sku_id:'QC-AF5-WHITE' } }) });
         renderCustomerTestResult(result);
         $('serviceScope').value = 'simulation';
+        $('orderServiceScope').value = 'simulation';
         await Promise.all([loadConversations(), loadHandoffs()]);
       } catch (error) { toast(error.message); } finally { $('sendChat').disabled = false; }
     });

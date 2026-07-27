@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ..database import Database, utc_now
+from ..database import Database, session_scope_condition, utc_now
 from .source_versioning import canonical_source_time, decide_write, payload_digest
 
 
@@ -20,6 +20,14 @@ LogisticsStatus = Literal["pending", "collected", "in_transit", "delivered", "ex
 AfterSaleStatus = Literal[
     "requested", "reviewing", "approved", "rejected", "returning", "completed", "canceled"
 ]
+
+CUSTOMER_SERVICE_STATUS = {
+    "proposed": ("waiting", "等待客服"),
+    "accepted": ("assigned", "客服已接单"),
+    "working": ("processing", "客服处理中"),
+    "input_required": ("waiting_input", "等待客户补充"),
+    "review": ("processing", "客服处理中"),
+}
 
 
 class OrderLineInput(BaseModel):
@@ -243,6 +251,7 @@ class OrderService:
         order_id: str | None = None,
         order_status: OrderStatus | None = None,
         limit: int = 100,
+        service_scope: str | None = None,
     ) -> list[dict[str, Any]]:
         conditions = ["tenant_id=?"]
         params: list[Any] = [tenant_id]
@@ -265,7 +274,73 @@ class OrderService:
                 """,
                 tuple(params),
             ).fetchall()
-        return [self._row_by_internal_id(tenant_id, str(row["id"])) for row in rows]
+        views = [self._row_by_internal_id(tenant_id, str(row["id"])) for row in rows]
+        if service_scope is None:
+            return views
+        service_by_order = self._customer_service_by_order(
+            tenant_id,
+            {(item["store_id"], item["order_id"]) for item in views},
+            service_scope,
+        )
+        for item in views:
+            item["customer_service"] = service_by_order.get(
+                (item["store_id"], item["order_id"])
+            )
+        return views
+
+    def _customer_service_by_order(
+        self,
+        tenant_id: str,
+        order_keys: set[tuple[str, str]],
+        scope: str,
+    ) -> dict[tuple[str, str], dict[str, Any]]:
+        scope_condition = session_scope_condition(scope)
+        if not order_keys:
+            return {}
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT h.status, h.payload_json, h.started_at, h.updated_at,
+                       s.source_type, q.queue_key
+                FROM handoff_tasks h
+                JOIN sessions s ON s.id=h.session_id
+                JOIN handoff_queues q ON q.id=h.queue_id
+                WHERE h.tenant_id=?
+                  AND h.status IN ('proposed','accepted','working','input_required','review')
+                  AND {scope_condition}
+                ORDER BY h.updated_at DESC, h.id DESC
+                """,
+                (tenant_id,),
+            ).fetchall()
+        result: dict[tuple[str, str], dict[str, Any]] = {}
+        for row in rows:
+            try:
+                payload = json.loads(str(row["payload_json"]))
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(payload, dict):
+                continue
+            context = payload.get("business_context")
+            if not isinstance(context, dict):
+                continue
+            order_id = context.get("order_id")
+            store_id = context.get("store_id")
+            if not isinstance(order_id, str) or not isinstance(store_id, str):
+                continue
+            key = (store_id, order_id)
+            if key not in order_keys or key in result:
+                continue
+            status, label = CUSTOMER_SERVICE_STATUS[str(row["status"])]
+            result[key] = {
+                "status": status,
+                "label": label,
+                "task_status": row["status"],
+                "queue_key": row["queue_key"],
+                "source_type": row["source_type"],
+                "started_at": row["started_at"],
+                "updated_at": row["updated_at"],
+            }
+        return result
 
     def history(
         self, tenant_id: str, order_id: str, *, store_id: str | None = None

@@ -610,6 +610,19 @@ def build_graph(
                 "trace": [*state["trace"], "shadow_handoff_observed"],
             }
         safe_question, _ = redact_sensitive(state["normalized_input"])
+        tool_arguments = state.get("tool_arguments") or {}
+        trusted_context = state.get("context") or {}
+        order_id = tool_arguments.get("order_id") or trusted_context.get("order_id")
+        store_id = (
+            tool_arguments.get("store_id")
+            or trusted_context.get("store_id")
+            or trusted_context.get("shop_id")
+        )
+        business_context = {}
+        if isinstance(order_id, (str, int)) and not isinstance(order_id, bool):
+            business_context["order_id"] = normalize_text(str(order_id))[:128]
+        if isinstance(store_id, (str, int)) and not isinstance(store_id, bool):
+            business_context["store_id"] = normalize_text(str(store_id))[:128]
         task = handoffs.create(
             tenant_id=state["tenant_id"],
             session_id=state["session_id"],
@@ -625,6 +638,7 @@ def build_graph(
                 "context_snapshot_id": state.get("context_snapshot_id"),
                 "context_readiness": state.get("context_readiness"),
                 "context_conflicts": state.get("context_conflicts", []),
+                "business_context": business_context,
             },
         )
         return {
