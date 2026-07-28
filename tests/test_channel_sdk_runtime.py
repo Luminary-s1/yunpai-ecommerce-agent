@@ -7,6 +7,7 @@ registry and complete against mockchat delivery, receipts and ownership.
 
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
@@ -20,14 +21,16 @@ from ecommerce_agent.channel_sdk import (
     ChannelAdapterRegistry,
     ChannelCapabilityDeclaration,
     ChannelFeatureDeclaration,
+    ChannelInboundRecorder,
     RateLimitDeclaration,
     SendCommand,
 )
 from ecommerce_agent.channel_sdk.mockchat import MockChatChannelAdapter
+from ecommerce_agent.database import Database
 from ecommerce_agent.service import AgentService
 
 from conftest import make_settings
-from test_channel_sdk_contract import MockChatHarness
+from test_channel_sdk_contract import MockChatHarness, TaobaoHarness
 
 ADMIN_HEADERS = {
     "X-Admin-Id": "admin-test",
@@ -145,6 +148,124 @@ def test_runtime_handoff_moves_mockchat_conversation_to_human(tmp_path) -> None:
         assert not harness.adapter.transport.delivered
     finally:
         harness.close()
+
+
+@pytest.mark.parametrize("harness_factory", [TaobaoHarness, MockChatHarness])
+def test_runtime_routes_non_text_messages_to_human(tmp_path, harness_factory) -> None:
+    harness = harness_factory(tmp_path)
+    try:
+        envelope = harness.adapter.receive_inbound(
+            harness.non_text_payload("media-runtime-1")
+        )
+        assert envelope.message_kind != "text"
+        assert envelope.owner_mode == "bot"
+        assert envelope.agent_job_id
+        result = harness.service.channel_agents.run_job_once(envelope.agent_job_id)
+        assert result["status"] == "blocked"
+        assert result["action"] == "handoff"
+        assert result["error_kind"] == "unsupported_message_kind"
+        with harness.service.db.connect() as conn:
+            conversation = conn.execute(
+                "SELECT owner_mode, assigned_to FROM channel_conversations WHERE id=?",
+                (envelope.conversation_id,),
+            ).fetchone()
+            invocations = conn.execute(
+                "SELECT COUNT(*) FROM agent_invocations"
+            ).fetchone()[0]
+            outbox = conn.execute("SELECT COUNT(*) FROM channel_outbox").fetchone()[0]
+            event = conn.execute(
+                "SELECT COUNT(*) FROM channel_events WHERE id=?",
+                (envelope.event_id,),
+            ).fetchone()[0]
+        assert dict(conversation) == {
+            "owner_mode": "human",
+            "assigned_to": "agent-unsupported-media",
+        }
+        assert invocations == 0
+        assert outbox == 0
+        assert event == 1
+    finally:
+        harness.close()
+
+
+def test_channel_agent_context_stays_whitelisted_before_checkpoint(tmp_path) -> None:
+    harness = _mock_service(tmp_path)
+    try:
+        hostile = harness.inbound_payload(
+            "context-hostile-1",
+            text="尺码怎么选",
+            extra_fields={
+                "order_id": "order-secret-1",
+                "authorized": "true",
+                "order_status": "已发货",
+            },
+        )
+        envelope = harness.adapter.receive_inbound(hostile)
+        assert envelope.agent_context() == {
+            "platform": "mockchat",
+            "shop_id": "mock-shop-1",
+        }
+        result = harness.service.channel_agents.run_job_once(envelope.agent_job_id)
+        assert result["status"] == "completed"
+        with harness.service.db.connect() as conn:
+            rows = conn.execute("SELECT bundle_json FROM context_snapshots").fetchall()
+        assert rows
+        for row in rows:
+            bundle = json.loads(row["bundle_json"])
+            state = bundle["trusted_session_state"]
+            assert state["business_context_authorized"] is False
+            assert state["platform"] == "mockchat"
+            assert state["store_id"] == "mock-shop-1"
+            assert bundle["current_subject"] == {}
+            assert "order-secret-1" not in row["bundle_json"]
+    finally:
+        harness.close()
+
+
+def test_inbound_recorder_isolates_tenants(tmp_path) -> None:
+    db = Database(tmp_path / "recorder-isolation.sqlite3")
+    db.initialize()
+    recorder = ChannelInboundRecorder(db)
+    records = {}
+    for tenant in ("tenant-a", "tenant-b"):
+        records[tenant] = recorder.record(
+            tenant_id=tenant,
+            platform="mockchat",
+            shop_id="shop-shared",
+            external_conversation_id="conversation-shared",
+            external_event_id="event-shared",
+            message_type="text",
+            content_redacted="同样的消息",
+            payload_hash="hash-1",
+            buyer_hash="buyer-hash-shared",
+            buyer_nick_masked="买***家",
+            routing_ciphertext=None,
+            request_id=None,
+            action_mode=None,
+            default_owner_mode="bot",
+            job_max_attempts=3,
+        )
+    assert records["tenant-a"].is_new is True
+    assert records["tenant-b"].is_new is True
+    assert records["tenant-a"].conversation_id != records["tenant-b"].conversation_id
+    assert records["tenant-a"].event_id != records["tenant-b"].event_id
+    assert records["tenant-a"].job_id != records["tenant-b"].job_id
+    envelope = recorder.load_envelope(
+        tenant_id="tenant-a",
+        event_id=records["tenant-a"].event_id,
+        is_duplicate=False,
+        agent_job_id=records["tenant-a"].job_id,
+    )
+    assert envelope.tenant_id == "tenant-a"
+    assert envelope.conversation_id == records["tenant-a"].conversation_id
+    with pytest.raises(ChannelAdapterError) as cross_tenant:
+        recorder.load_envelope(
+            tenant_id="tenant-b",
+            event_id=records["tenant-a"].event_id,
+            is_duplicate=False,
+            agent_job_id=None,
+        )
+    assert cross_tenant.value.kind == "not_found"
 
 
 def test_registry_enforces_contract_version_uniqueness_and_lookup(tmp_path) -> None:

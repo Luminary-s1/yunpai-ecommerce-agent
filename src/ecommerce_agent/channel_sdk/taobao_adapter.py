@@ -18,6 +18,7 @@ from .contracts import (
     ChannelErrorKind,
     ChannelFeatureDeclaration,
     InboundEnvelope,
+    MessageKind,
     OwnershipCommand,
     RateLimitDeclaration,
     ReplyDraftCommand,
@@ -25,6 +26,10 @@ from .contracts import (
     SendReceipt,
 )
 from .inbound import ChannelInboundRecorder
+
+# Only contentType 1 is a confirmed Qimen text message; every other code is
+# recorded but classified unknown until the real-channel integration maps it.
+_QIMEN_MESSAGE_KINDS: dict[str, MessageKind] = {"1": "text"}
 
 
 class TaobaoChannelAdapter:
@@ -65,6 +70,9 @@ class TaobaoChannelAdapter:
     def automation_enabled(self) -> bool:
         return self._settings.taobao_auto_reply_enabled
 
+    def message_kind(self, message_type: str) -> MessageKind:
+        return _QIMEN_MESSAGE_KINDS.get(str(message_type), "unknown")
+
     def receive_inbound(self, payload: Mapping[str, str]) -> InboundEnvelope:
         try:
             inbound = self._service.receive_qimen(payload)
@@ -75,6 +83,7 @@ class TaobaoChannelAdapter:
             event_id=inbound.event_id,
             is_duplicate=not inbound.is_new,
             agent_job_id=inbound.job_id,
+            kind_resolver=self.message_kind,
         )
 
     def send_reply(self, command: SendCommand) -> SendReceipt:

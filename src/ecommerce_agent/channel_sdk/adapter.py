@@ -5,6 +5,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 from .contracts import (
     ChannelCapabilityDeclaration,
     InboundEnvelope,
+    MessageKind,
     OwnershipCommand,
     ReplyDraftCommand,
     SendCommand,
@@ -27,6 +28,8 @@ class ChannelAdapter(Protocol):
     def declaration(self) -> ChannelCapabilityDeclaration: ...
 
     def automation_enabled(self) -> bool: ...
+
+    def message_kind(self, message_type: str) -> MessageKind: ...
 
     def receive_inbound(self, payload: Mapping[str, str]) -> InboundEnvelope: ...
 

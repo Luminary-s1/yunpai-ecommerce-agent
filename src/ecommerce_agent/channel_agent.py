@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from .auth import Principal
 from .channel_sdk import (
+    AGENT_READABLE_KINDS,
     FAILURE_DELIVERY_STATES,
     ChannelAdapter,
     ChannelAdapterError,
@@ -173,7 +174,8 @@ class ChannelAgentRuntime:
         with self.db.connect() as conn:
             row = conn.execute(
                 """
-                SELECT j.*, e.content_redacted, e.direction, e.status AS event_status,
+                SELECT j.*, e.content_redacted, e.direction, e.message_type,
+                       e.status AS event_status,
                        c.owner_mode, c.version AS conversation_version, c.buyer_hash
                 FROM channel_agent_jobs j
                 JOIN channel_events e ON e.id=j.event_id
@@ -203,6 +205,22 @@ class ChannelAgentRuntime:
         if current["owner_mode"] != "bot":
             raise ChannelAgentBlocked(
                 f"conversation owner changed to {current['owner_mode']} before Agent execution"
+            )
+
+        message_kind = adapter.message_kind(str(current["message_type"]))
+        if message_kind not in AGENT_READABLE_KINDS:
+            # The Agent never deliberates on media it cannot read: the
+            # conversation moves to a human and the job records why.
+            self._ensure_human_ownership(
+                adapter, conversation_id, tenant_id, "agent-unsupported-media"
+            )
+            return self._finish(
+                str(job["id"]),
+                worker_id,
+                status="blocked",
+                action="handoff",
+                error_kind="unsupported_message_kind",
+                last_error=f"message kind {message_kind} requires a human reply",
             )
 
         assignment = self.releases.assignment(

@@ -100,6 +100,8 @@ class TaobaoHarness:
                 (credential, now, now),
             )
 
+    non_text_kind = "unknown"
+
     def inbound_payload(
         self,
         message_id: str,
@@ -107,9 +109,16 @@ class TaobaoHarness:
         *,
         conversation: str = "conversation-contract-1",
         buyer_id: str = "buyer-contract-1",
+        shop: str = "seller-contract-1",
+        content_type: int = 1,
         stale: bool = False,
         tamper: bool = False,
     ) -> dict[str, str]:
+        content = (
+            json.dumps({"text": text}, ensure_ascii=False)
+            if content_type == 1
+            else json.dumps({"url": "https://img.example/full-resolution.png"})
+        )
         event = {
             "header": {
                 "actionMode": 1,
@@ -121,8 +130,8 @@ class TaobaoHarness:
             "body": {
                 "bizUniqueId": conversation,
                 "channelType": "bc",
-                "content": json.dumps({"text": text}, ensure_ascii=False),
-                "contentType": 1,
+                "content": content,
+                "contentType": content_type,
                 "messageType": 1,
                 "msgId": message_id,
                 "sender": {"domain": "cntaobao", "nick": "买家甲", "role": "buyer"},
@@ -144,13 +153,16 @@ class TaobaoHarness:
             "event": json.dumps(event, ensure_ascii=False, separators=(",", ":")),
             "buyerId": buyer_id,
             "buyerNick": "买家甲",
-            "sellerId": "seller-contract-1",
+            "sellerId": shop,
             "sellerNick": "测试店铺",
         }
         params["sign"] = sign_parameters(params, "app-secret-1", "md5")
         if tamper:
             params["sign"] = "0" * 32
         return params
+
+    def non_text_payload(self, message_id: str, **kwargs) -> dict[str, str]:
+        return self.inbound_payload(message_id, content_type=2, **kwargs)
 
     def program_outcome(self, outcome: Outcome) -> None:
         self.top.behavior = outcome
@@ -191,6 +203,8 @@ class MockChatHarness:
         self.service = AgentService(self.settings)
         self.adapter = self.service.channel_adapters.get(self.platform)
 
+    non_text_kind = "image"
+
     def inbound_payload(
         self,
         message_id: str,
@@ -198,25 +212,33 @@ class MockChatHarness:
         *,
         conversation: str = "mock-conversation-1",
         buyer_id: str = "buyer-mock-1",
+        shop: str = "mock-shop-1",
+        message_type: str = "text",
+        extra_fields: dict[str, str] | None = None,
         stale: bool = False,
         tamper: bool = False,
     ) -> dict[str, str]:
         sent_at = int(time.time()) - (7200 if stale else 0)
         payload = {
             "channel": "mockchat",
-            "shop_id": "mock-shop-1",
+            "shop_id": shop,
             "conversation_id": conversation,
             "message_id": message_id,
             "sent_at": str(sent_at),
             "buyer_id": buyer_id,
             "buyer_nick": "买家乙",
-            "message_type": "text",
-            "text": text,
+            "message_type": message_type,
         }
+        if message_type == "text":
+            payload["text"] = text
+        payload.update(extra_fields or {})
         payload["signature"] = sign_mockchat(payload, "mockchat-secret-1")
         if tamper:
             payload["signature"] = "f" * 64
         return payload
+
+    def non_text_payload(self, message_id: str, **kwargs) -> dict[str, str]:
+        return self.inbound_payload(message_id, message_type="image", **kwargs)
 
     def program_outcome(self, outcome: Outcome) -> None:
         self.adapter.transport.set_behavior(outcome)
@@ -324,6 +346,7 @@ def test_inbound_envelope_carries_trusted_context_and_redacts_content(harness) -
     assert envelope.event_id.startswith("event-")
     assert envelope.external_event_id == "envelope-1"
     assert envelope.message_type
+    assert envelope.message_kind == "text"
     assert envelope.received_at
     assert envelope.is_duplicate is False
     assert envelope.agent_job_id
@@ -510,6 +533,49 @@ def test_unknown_conversation_and_version_conflicts_are_classified(harness) -> N
             )
         )
     assert same_mode.value.kind == "conflict"
+
+
+def test_non_text_inbound_is_recorded_with_normalized_kind(harness) -> None:
+    payload = harness.non_text_payload("media-1")
+    envelope = harness.adapter.receive_inbound(payload)
+    assert envelope.is_duplicate is False
+    assert envelope.message_kind == harness.non_text_kind
+    assert envelope.message_kind != "text"
+    assert envelope.agent_job_id
+    assert envelope.content_redacted.startswith("[")
+    assert "img.example" not in envelope.content_redacted
+    redelivered = harness.adapter.receive_inbound(payload)
+    assert redelivered.is_duplicate is True
+    assert redelivered.event_id == envelope.event_id
+    assert redelivered.message_kind == envelope.message_kind
+    assert _event_count(harness) == 1
+
+
+def test_conversations_never_merge_across_shops(harness) -> None:
+    first = harness.adapter.receive_inbound(
+        harness.inbound_payload("shop-msg-1", conversation="shared-conversation")
+    )
+    shop_b = "second-shop-b"
+    second = harness.adapter.receive_inbound(
+        harness.inbound_payload(
+            "shop-msg-1", conversation="shared-conversation", shop=shop_b
+        )
+    )
+    assert second.is_duplicate is False
+    assert second.conversation_id != first.conversation_id
+    assert second.event_id != first.event_id
+    assert second.shop_id != first.shop_id
+    with harness.service.db.connect() as conn:
+        conversations = conn.execute(
+            """
+            SELECT COUNT(*) FROM channel_conversations
+            WHERE platform=? AND external_conversation_id='shared-conversation'
+            """,
+            (harness.platform,),
+        ).fetchone()[0]
+        jobs = conn.execute("SELECT COUNT(*) FROM channel_agent_jobs").fetchone()[0]
+    assert conversations == 2
+    assert jobs == 2
 
 
 def test_reply_drafts_require_human_owner_and_replay_idempotently(harness) -> None:

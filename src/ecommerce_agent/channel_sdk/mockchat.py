@@ -19,6 +19,7 @@ from .contracts import (
     ChannelCapabilityDeclaration,
     ChannelFeatureDeclaration,
     InboundEnvelope,
+    MessageKind,
     OwnershipCommand,
     RateLimitDeclaration,
     ReplyDraftCommand,
@@ -38,8 +39,16 @@ _REQUIRED_FIELDS = (
     "message_id",
     "sent_at",
     "buyer_id",
-    "text",
 )
+
+_MOCKCHAT_MESSAGE_KINDS: dict[str, MessageKind] = {
+    "text": "text",
+    "image": "image",
+    "audio": "audio",
+    "video": "video",
+    "goods_card": "goods_card",
+    "order_card": "order_card",
+}
 
 
 class MockChatRejected(RuntimeError):
@@ -121,7 +130,7 @@ class MockChatChannelAdapter:
             contract_version=CHANNEL_SDK_CONTRACT_VERSION,
             capability_version="2026.07-virtual",
             virtual=True,
-            message_types=["text"],
+            message_types=sorted(_MOCKCHAT_MESSAGE_KINDS),
             rate_limits=RateLimitDeclaration(
                 inbound_per_minute=self.settings.mockchat_messages_per_minute,
                 outbound_per_minute=self.settings.mockchat_messages_per_minute,
@@ -141,6 +150,9 @@ class MockChatChannelAdapter:
 
     def automation_enabled(self) -> bool:
         return self.settings.mockchat_auto_reply_enabled
+
+    def message_kind(self, message_type: str) -> MessageKind:
+        return _MOCKCHAT_MESSAGE_KINDS.get(str(message_type), "unknown")
 
     def receive_inbound(self, payload: Mapping[str, str]) -> InboundEnvelope:
         self._require_enabled()
@@ -178,11 +190,25 @@ class MockChatChannelAdapter:
             )
         tenant_id = self.settings.bootstrap_tenant_id
         self._check_rate(f"inbound:{tenant_id}")
+        message_type = str(payload.get("message_type") or "text")
+        kind = self.message_kind(message_type)
+        text = str(payload.get("text") or "")
+        if kind == "text":
+            if not text.strip():
+                raise ChannelAdapterError(
+                    "mockchat text message misses text",
+                    kind="schema",
+                    platform=self.platform,
+                )
+            safe_text, _ = redact_sensitive(text)
+        else:
+            # Media payloads are recorded as a marker only; their body is
+            # never trusted as conversation text.
+            safe_text = f"[{message_type}]"
         buyer_id = str(payload["buyer_id"])
         buyer_hash = hash_subject(
             self.settings.subject_hash_key or self.settings.mockchat_secret, buyer_id
         )
-        safe_text, _ = redact_sensitive(str(payload["text"]))
         # A virtual channel never persists raw counterpart identifiers; replies
         # are routed by the same stable hash the envelope exposes.
         routing = json.dumps(
@@ -196,7 +222,7 @@ class MockChatChannelAdapter:
             shop_id=str(payload["shop_id"]),
             external_conversation_id=str(payload["conversation_id"]),
             external_event_id=str(payload["message_id"]),
-            message_type=str(payload.get("message_type") or "text"),
+            message_type=message_type,
             content_redacted=safe_text,
             payload_hash=hashlib.sha256(
                 json.dumps(dict(payload), ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -224,6 +250,7 @@ class MockChatChannelAdapter:
             event_id=record.event_id,
             is_duplicate=not record.is_new,
             agent_job_id=record.job_id,
+            kind_resolver=self.message_kind,
         )
 
     def send_reply(self, command: SendCommand) -> SendReceipt:
