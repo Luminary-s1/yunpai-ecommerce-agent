@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from ecommerce_agent.api import create_app
+from ecommerce_agent.business import OperatingExpenseUpsert
 
 from conftest import make_settings
 
@@ -95,3 +98,41 @@ def test_marketing_and_finance_api_return_operational_outputs(tmp_path) -> None:
         )
         assert transition.status_code == 200
         assert transition.json()["status"] == "reviewing"
+
+
+def test_profit_report_includes_expenses_beyond_list_page(tmp_path) -> None:
+    app = create_app(make_settings(tmp_path))
+    with TestClient(app) as client:
+        finance = app.state.agent.operations.finance
+        source_updated_at = datetime(2026, 7, 28, tzinfo=UTC)
+        for index in range(501):
+            finance.upsert_expense(
+                "tenant-test",
+                OperatingExpenseUpsert(
+                    connector_id="expense-import",
+                    store_id=STORE_ID,
+                    expense_key=f"expense-{index:03d}",
+                    occurred_on="2026-07-28",
+                    category="other",
+                    amount="1.00",
+                    currency="CNY",
+                    source_type="file_import",
+                    source_updated_at=source_updated_at,
+                ),
+            )
+
+        expenses = client.get(
+            f"/v1/finance/expenses?store_id={STORE_ID}", headers=ADMIN_HEADERS
+        )
+        assert expenses.status_code == 200
+        assert len(expenses.json()) == 500
+
+        profit = client.post(
+            "/v1/finance/profit",
+            headers=ADMIN_HEADERS,
+            json={"store_id": STORE_ID},
+        )
+        assert profit.status_code == 200
+        assert profit.json()["record_counts"]["expenses"] == 501
+        assert profit.json()["expense_total"] == "501.00"
+        assert profit.json()["management_profit"] == "-501.00"
