@@ -2,6 +2,27 @@
 
 一个面向本地一体机的轻量电商经营 Agent。业务按商品、订单、仓储、竞品、营销、财务、指标和客服拆分模块；LLM 在 LangGraph 中负责理解目标、选择工具并根据 Observation 继续规划，固化代码负责事实、权限、指标、幂等、后置验证、RAG、自进化、审计和人工接管。默认以 `MODEL_ENABLED=false` 安全启动。
 
+## 系统结构
+
+```mermaid
+flowchart LR
+    clients["客户端 / 管理后台 / 淘宝渠道"] --> api["FastAPI API 与认证"]
+    api --> service["AgentService 编排层"]
+    service --> graph["LangGraph Agent"]
+    graph --> context["上下文构建 / RAG / SOP"]
+    graph --> model["LLM 结构化决策"]
+    graph --> tools["动态工具目录与执行器"]
+    tools --> modules["商品 / 订单 / 仓储 / 竞品 / 营销 / 财务 / 指标"]
+    tools --> connectors["Connector SDK / 虚拟淘宝"]
+    graph --> handoff["后置验证 / 人工接管"]
+    service --> workers["渠道 / Outbox / 监控 / 派单 Worker"]
+    context --> appdb[("SQLite 业务库")]
+    modules --> appdb
+    handoff --> appdb
+    workers --> appdb
+    graph --> checkpoints[("LangGraph Checkpoint")]
+```
+
 ## 核心能力
 
 - LLM 驱动链路：认证、会话绑定、输入脱敏、RAG 上下文、结构化决策、通用路由、动态工具目录、有界 ReAct、后置验证和持久化。
@@ -76,6 +97,37 @@ yunpai-agent serve --host 127.0.0.1 --port 8080
 ```
 
 必须确认 `python --version` 为 3.11 或更高，且 `Get-Command yunpai-agent` 指向当前虚拟环境。安装了多个 Python 的 Windows 主机如果尚未激活虚拟环境，应使用 `py -3.12 -m ecommerce_agent.cli <command>`，避免误调用旧解释器残留的同名脚本。
+
+macOS / Linux（bash/zsh）：
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python --version
+python -m pip install -e ".[dev]"
+
+export ADMIN_API_KEY="请替换为长随机密钥"
+export ADMIN_AUTH_REQUIRED="true"
+export BOOTSTRAP_ADMIN_ID="local-admin"
+export AUTH_REQUIRED="true"
+export BOOTSTRAP_TENANT_ID="local-appliance"
+export BOOTSTRAP_CLIENT_ID="local-adapter"
+export BOOTSTRAP_CLIENT_KEY="请替换为另一条长随机密钥"
+export SUBJECT_HASH_KEY="请替换为稳定的随机 HMAC 密钥"
+export MODEL_PROVIDER="glm"
+export MODEL_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
+export MODEL_NAME="glm-4.7-flash"
+export MODEL_API_KEY="请使用具备标准 API 资源的密钥"
+export MODEL_ENABLED="true"
+
+yunpai-agent init
+yunpai-agent eval
+yunpai-agent simulate-store
+yunpai-agent model-probe
+yunpai-agent serve --host 127.0.0.1 --port 8080
+```
+
+必须确认 `python --version` 为 3.11 或更高，且 `which yunpai-agent` 指向当前虚拟环境（`<项目根>/.venv/bin/yunpai-agent`）。系统自带的 `/usr/bin/python3` 通常低于 3.11，请改用 Homebrew 等安装的 `python3.11`/`python3.12` 创建虚拟环境；未激活虚拟环境时可用 `./.venv/bin/python -m ecommerce_agent.cli <command>` 显式调用。
 
 `MODEL_ENABLED=false` 时不会发出模型网络请求；除完全匹配且经过人工批准的进化答案外，需规划的请求会安全建单转人工。轻量档默认使用 `glm-4.7-flash`、关闭 thinking、检索 3 条知识、限制为 240 个输出 token，并通过 SSE 接收供应商输出；账户限流立即降级，只有平台过载或 5xx 才短重试一次。`MODEL_MOCK_MODE=true` 仅供自动化测试和离线演示。
 
