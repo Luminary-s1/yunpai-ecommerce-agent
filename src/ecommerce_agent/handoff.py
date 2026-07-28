@@ -355,6 +355,7 @@ class HandoffService:
     ) -> HandoffView:
         if priority is not None and priority not in PRIORITY_RANK:
             raise HandoffError("invalid handoff priority")
+        payload = dict(payload)
         self.ensure_default_queues(tenant_id)
         with self.db._write_lock, self.db.connect() as conn:
             existing = conn.execute(
@@ -380,6 +381,12 @@ class HandoffService:
                 if str(existing["tenant_id"]) != tenant_id:
                     raise HandoffError("handoff idempotency scope conflict")
                 return self._view(dict(existing))
+            payload["business_context"] = self._resolve_order_context(
+                conn,
+                tenant_id=tenant_id,
+                session_id=session_id,
+                payload=payload,
+            )
             queue = self._select_queue(conn, tenant_id, reason, payload, queue_key)
             chosen_priority = priority or str(queue["default_priority"])
             risk_level = str(payload.get("risk_level", "")).lower()
@@ -1239,6 +1246,77 @@ class HandoffService:
             """,
             (tenant_id, queue_id),
         ).fetchone()
+
+    @staticmethod
+    def _resolve_order_context(
+        conn: Any,
+        *,
+        tenant_id: str,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, str]:
+        provided = payload.get("business_context")
+        provided = provided if isinstance(provided, dict) else {}
+        order_hint = str(provided.get("order_id") or "").strip()
+        store_hint = str(provided.get("store_id") or "").strip()
+        question = str(payload.get("question") or "")
+        prior_messages = conn.execute(
+            """
+            SELECT content FROM messages
+            WHERE session_id=? AND role='user'
+            ORDER BY created_at DESC LIMIT 12
+            """,
+            (session_id,),
+        ).fetchall()
+        reference_text = "\n".join(
+            [question, *(str(row["content"]) for row in prior_messages)]
+        )
+        candidate_ids = [order_hint] if order_hint else [
+            token
+            for token in dict.fromkeys(
+                match.group(0).strip("._:-")
+                for match in re.finditer(
+                    r"[A-Za-z0-9][A-Za-z0-9_.:-]{3,127}",
+                    reference_text,
+                )
+            )
+            if token
+        ][:32]
+        if not candidate_ids:
+            return {}
+        conditions = ["tenant_id=?"]
+        params: list[Any] = [tenant_id]
+        if store_hint:
+            conditions.append("store_id=?")
+            params.append(store_hint)
+        conditions.append(
+            f"external_order_id IN ({','.join('?' for _ in candidate_ids)})"
+        )
+        params.extend(candidate_ids)
+        rows = conn.execute(
+            f"""
+            SELECT store_id, external_order_id
+            FROM commerce_orders
+            WHERE {' AND '.join(conditions)}
+            """,
+            tuple(params),
+        ).fetchall()
+        mentioned = [
+            row
+            for row in rows
+            if re.search(
+                rf"(?<![A-Za-z0-9]){re.escape(str(row['external_order_id']))}"
+                r"(?![A-Za-z0-9])",
+                reference_text,
+                re.IGNORECASE,
+            )
+        ]
+        if len(mentioned) != 1:
+            return {}
+        return {
+            "order_id": str(mentioned[0]["external_order_id"]),
+            "store_id": str(mentioned[0]["store_id"]),
+        }
 
     def _select_queue(
         self,
