@@ -22,6 +22,9 @@ from .sops import (
     SopCreateRequest,
     SopError,
     SopReviseRequest,
+    SopRolloutBeginRequest,
+    SopRolloutTransitionRequest,
+    SopRolloutUpdateRequest,
     SopStepResolutionRequest,
     SopTransitionRequest,
 )
@@ -248,6 +251,48 @@ def build_governance_router(
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
         return _sop_action(service.sops.rollback, admin, version_id, payload)
+
+    @router.get("/sop-rollouts")
+    def list_sop_rollouts(
+        status: str | None = Query(
+            default=None, pattern=r"^(active|completed|rolled_back)$"
+        ),
+        limit: int = Query(default=100, ge=1, le=500),
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> list[dict[str, Any]]:
+        return service.sops.list_rollouts(admin.tenant_id, status=status, limit=limit)
+
+    @router.post("/sop-versions/{version_id}/rollouts", status_code=201)
+    def begin_sop_rollout(
+        version_id: str,
+        payload: SopRolloutBeginRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return _sop_action(service.sops.begin_rollout, admin, version_id, payload)
+
+    @router.post("/sop-rollouts/{rollout_id}/traffic")
+    def update_sop_rollout(
+        rollout_id: str,
+        payload: SopRolloutUpdateRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return _sop_action(service.sops.update_rollout, admin, rollout_id, payload)
+
+    @router.post("/sop-rollouts/{rollout_id}/complete")
+    def complete_sop_rollout(
+        rollout_id: str,
+        payload: SopRolloutTransitionRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return _sop_action(service.sops.complete_rollout, admin, rollout_id, payload)
+
+    @router.post("/sop-rollouts/{rollout_id}/rollback")
+    def rollback_sop_rollout(
+        rollout_id: str,
+        payload: SopRolloutTransitionRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return _sop_action(service.sops.rollback_rollout, admin, rollout_id, payload)
 
     @router.get("/sop-runs")
     def list_sop_runs(

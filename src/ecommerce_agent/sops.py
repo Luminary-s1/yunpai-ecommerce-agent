@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import uuid
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .database import Database, utc_now
+from .rollouts import in_rollout
 from .text_utils import checksum, redact_sensitive
 from .tools import ToolExecutionContext, ToolRegistry, ToolResult
 
@@ -138,6 +140,28 @@ class SopStepResolutionRequest(BaseModel):
     expected_record_version: int = Field(ge=1)
     resolution: Literal["approve", "confirm_succeeded", "confirm_failed", "retry"]
     note: str = Field(min_length=2, max_length=1000)
+
+
+class SopRolloutBeginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_record_version: int = Field(ge=1)
+    traffic_percentage: int = Field(ge=1, le=100)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class SopRolloutUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_record_version: int = Field(ge=1)
+    traffic_percentage: int = Field(ge=1, le=100)
+
+
+class SopRolloutTransitionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_record_version: int = Field(ge=1)
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class SopCompensationRequest(BaseModel):
@@ -477,6 +501,264 @@ class SopService:
         self.db.audit("sop.rolled_back", actor, version_id, {"note": request.note}, tenant_id)
         return self.detail(tenant_id, definition["id"]) or {}
 
+    def _rollout_candidate_for(
+        self, tenant_id: str, definition_id: str, session_id: str
+    ) -> dict[str, Any] | None:
+        with self.db.connect() as conn:
+            rollout = conn.execute(
+                """
+                SELECT candidate_id, traffic_percentage, rollout_salt
+                FROM staged_rollouts
+                WHERE tenant_id=? AND subject_type='sop' AND subject_key=?
+                  AND status='active'
+                """,
+                (tenant_id, definition_id),
+            ).fetchone()
+            if rollout is None or not in_rollout(
+                str(rollout["rollout_salt"]),
+                session_id,
+                int(rollout["traffic_percentage"]),
+            ):
+                return None
+            candidate = conn.execute(
+                """
+                SELECT id, version, dsl_json FROM sop_versions
+                WHERE id=? AND definition_id=? AND status='approved'
+                """,
+                (rollout["candidate_id"], definition_id),
+            ).fetchone()
+        return dict(candidate) if candidate is not None else None
+
+    def begin_rollout(
+        self,
+        tenant_id: str,
+        version_id: str,
+        request: SopRolloutBeginRequest,
+        actor: str,
+    ) -> dict[str, Any]:
+        version, definition = self._require_version(tenant_id, version_id)
+        if version["status"] != "approved":
+            raise SopError("SOP rollout requires an approved candidate version")
+        if definition["record_version"] != request.expected_record_version:
+            raise SopError("SOP version conflict")
+        now = utc_now()
+        rollout_id = f"rollout-{uuid.uuid4().hex}"
+        with self.db._write_lock, self.db.connect() as conn:
+            baseline = conn.execute(
+                "SELECT id FROM sop_versions WHERE definition_id=? AND status='active'",
+                (definition["id"],),
+            ).fetchone()
+            if baseline is None:
+                raise SopError("SOP rollout requires an active baseline version")
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO staged_rollouts(
+                        id, tenant_id, subject_type, subject_key, candidate_id,
+                        baseline_id, traffic_percentage, rollout_salt, status, note,
+                        record_version, created_by, completed_by, created_at,
+                        updated_at, completed_at
+                    ) VALUES (?, ?, 'sop', ?, ?, ?, ?, ?, 'active', ?, 1, ?, NULL,
+                              ?, ?, NULL)
+                    """,
+                    (
+                        rollout_id,
+                        tenant_id,
+                        definition["id"],
+                        version_id,
+                        baseline["id"],
+                        request.traffic_percentage,
+                        uuid.uuid4().hex,
+                        request.note,
+                        actor,
+                        now,
+                        now,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise SopError("SOP definition already has an active rollout") from exc
+        self.db.audit(
+            "sop.rollout_started",
+            actor,
+            rollout_id,
+            {
+                "definition_id": definition["id"],
+                "candidate_version_id": version_id,
+                "traffic_percentage": request.traffic_percentage,
+            },
+            tenant_id,
+        )
+        return self.get_rollout(tenant_id, rollout_id)
+
+    def update_rollout(
+        self,
+        tenant_id: str,
+        rollout_id: str,
+        request: SopRolloutUpdateRequest,
+        actor: str,
+    ) -> dict[str, Any]:
+        with self.db._write_lock, self.db.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE staged_rollouts
+                SET traffic_percentage=?, record_version=record_version+1, updated_at=?
+                WHERE id=? AND tenant_id=? AND subject_type='sop'
+                  AND status='active' AND record_version=?
+                """,
+                (
+                    request.traffic_percentage,
+                    utc_now(),
+                    rollout_id,
+                    tenant_id,
+                    request.expected_record_version,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise SopError("SOP rollout transition or version conflict")
+        self.db.audit(
+            "sop.rollout_adjusted",
+            actor,
+            rollout_id,
+            {"traffic_percentage": request.traffic_percentage},
+            tenant_id,
+        )
+        return self.get_rollout(tenant_id, rollout_id)
+
+    def complete_rollout(
+        self,
+        tenant_id: str,
+        rollout_id: str,
+        request: SopRolloutTransitionRequest,
+        actor: str,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.db._write_lock, self.db.connect() as conn:
+            rollout = conn.execute(
+                """
+                SELECT * FROM staged_rollouts
+                WHERE id=? AND tenant_id=? AND subject_type='sop'
+                """,
+                (rollout_id, tenant_id),
+            ).fetchone()
+            if rollout is None:
+                raise SopError("SOP rollout not found")
+            if (
+                rollout["status"] != "active"
+                or rollout["record_version"] != request.expected_record_version
+            ):
+                raise SopError("SOP rollout transition or version conflict")
+            candidate = conn.execute(
+                """
+                SELECT v.id, v.version, d.id AS definition_id,
+                       d.record_version AS definition_record_version
+                FROM sop_versions v JOIN sop_definitions d ON d.id=v.definition_id
+                WHERE v.id=? AND d.id=? AND d.tenant_id=? AND v.status='approved'
+                """,
+                (rollout["candidate_id"], rollout["subject_key"], tenant_id),
+            ).fetchone()
+            if candidate is None:
+                raise SopError("rollout candidate is no longer an approved version")
+            conn.execute(
+                "UPDATE sop_versions SET status='retired', retired_at=? "
+                "WHERE definition_id=? AND status='active'",
+                (now, rollout["subject_key"]),
+            )
+            conn.execute(
+                "UPDATE sop_versions SET status='active', activated_at=?, retired_at=NULL "
+                "WHERE id=? AND status='approved'",
+                (now, rollout["candidate_id"]),
+            )
+            conn.execute(
+                """
+                UPDATE sop_definitions SET current_active_version=?,
+                    record_version=record_version+1, updated_at=?
+                WHERE id=? AND tenant_id=?
+                """,
+                (candidate["version"], now, rollout["subject_key"], tenant_id),
+            )
+            conn.execute(
+                """
+                UPDATE staged_rollouts
+                SET status='completed', completed_by=?, completed_at=?,
+                    record_version=record_version+1, updated_at=?
+                WHERE id=? AND tenant_id=?
+                """,
+                (actor, now, now, rollout_id, tenant_id),
+            )
+        self.db.audit(
+            "sop.rollout_completed",
+            actor,
+            rollout_id,
+            {"candidate_version_id": rollout["candidate_id"], "note": request.note},
+            tenant_id,
+        )
+        return self.get_rollout(tenant_id, rollout_id)
+
+    def rollback_rollout(
+        self,
+        tenant_id: str,
+        rollout_id: str,
+        request: SopRolloutTransitionRequest,
+        actor: str,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.db._write_lock, self.db.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE staged_rollouts
+                SET status='rolled_back', completed_by=?, completed_at=?, note=?,
+                    record_version=record_version+1, updated_at=?
+                WHERE id=? AND tenant_id=? AND subject_type='sop'
+                  AND status='active' AND record_version=?
+                """,
+                (
+                    actor,
+                    now,
+                    request.note,
+                    now,
+                    rollout_id,
+                    tenant_id,
+                    request.expected_record_version,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise SopError("SOP rollout transition or version conflict")
+        self.db.audit(
+            "sop.rollout_rolled_back", actor, rollout_id, {"note": request.note}, tenant_id
+        )
+        return self.get_rollout(tenant_id, rollout_id)
+
+    def list_rollouts(
+        self, tenant_id: str, *, status: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        conditions = ["tenant_id=?", "subject_type='sop'"]
+        params: list[Any] = [tenant_id]
+        if status:
+            conditions.append("status=?")
+            params.append(status)
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM staged_rollouts WHERE {' AND '.join(conditions)}
+                ORDER BY updated_at DESC LIMIT ?
+                """,
+                (*params, max(1, min(500, limit))),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_rollout(self, tenant_id: str, rollout_id: str) -> dict[str, Any]:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM staged_rollouts
+                WHERE id=? AND tenant_id=? AND subject_type='sop'
+                """,
+                (rollout_id, tenant_id),
+            ).fetchone()
+        if row is None:
+            raise SopError("SOP rollout not found")
+        return dict(row)
+
     def catalog_for_context(self, tenant_id: str) -> list[dict[str, Any]]:
         with self.db.connect() as conn:
             rows = conn.execute(
@@ -542,6 +824,12 @@ class SopService:
         if active is None:
             return None
         result = dict(active)
+        if result["run_id"] is None:
+            canary = self._rollout_candidate_for(tenant_id, str(result["id"]), session_id)
+            if canary is not None:
+                result["version_id"] = str(canary["id"])
+                result["version"] = int(canary["version"])
+                result["dsl_json"] = canary["dsl_json"]
         dsl = SopDsl.model_validate(json.loads(result.pop("dsl_json")))
         result["dsl"] = dsl.model_dump(mode="json", exclude_none=True)
         if result["run_id"] is None and create_run:

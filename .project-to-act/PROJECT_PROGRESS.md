@@ -43,6 +43,7 @@
 
 ## 进度历史
 
+- 2026-07-27：在 `feature/f105-sop-gray` 分支（叠于 F-104）完成 0.27.0 SOP 渠道灰度（F-105）。已批准候选版本按会话分桶灰度、run 固定版本在回滚后不受影响、原子完成与一步回滚、管理 API 与回归通过。F-105 转为已完成；真实业务写工具/读回补偿仍归 F-111。
 - 2026-07-27：在 `feature/f104-knowledge-gray-release` 分支（叠于 F-103，含 PR #4 schema 断言修复的 cherry-pick）完成 0.26.0 知识灰度发布（F-104）。schema v24 通用 `staged_rollouts`；已评测候选按会话稳定分桶灰度、调量、原子完成与一步回滚；评测/进化路径固定基线；chat 会话分桶与检索一致；管理 API 与迁移测试通过。F-104 转为已完成；灰度指标观测联动仍属 F-113。
 - 2026-07-27：在 `feature/f103-channel-context-envelope` 分支（基于 F-101 分支）完成 0.25.0 统一渠道会话与多消息类型信封（F-103）。信封新增归一化 `message_kind`；淘宝奇门非文本 contentType 与 mockchat 图片/卡片类载荷改为"记录 + 脱敏占位符"，不再 400 拒收也不信任媒体正文；运行时对不可读类型跳过 Agent 直接确权转人工（`unsupported_message_kind`），零 invocation/零外发；敌意载荷附带的 order 字段经契约、白名单与 context snapshot 三层验证不可达 checkpoint；跨店铺同名会话与跨租户同键落库均不合并且跨租户读取被拒。61 项渠道回归、channel_sdk 分支覆盖 90–100%、全量 261 通过；真实渠道多消息类型联调仍归 F-102/F-205。
 - 2026-07-26：在 `feature/f101-channel-adapter-sdk` 分支完成 0.24.0 通用渠道适配器 SDK（F-101）。`channel_sdk` 包定义信封/发送/回执/错误分类/能力声明契约并抽取共享入站落库、草稿、归属实现；淘宝重构为 `TaobaoChannelAdapter`（行为与既有 API 兼容），新增默认关闭、协议不同的虚拟 mockchat 第二渠道；`ChannelAgentRuntime` 与 `TaobaoIntegrationService` 解耦并按 platform 经注册表路由；outbox claim 增加平台隔离；新增 `GET /v1/channels/adapters`。14 项契约用例 × 2 适配器、10 项跨渠道运行时测试与全量回归通过；另发现 14 项与本功能无关的既有失败（schema v23 后 migrations/backup 测试期望未同步），已拆分独立修复任务。真实渠道联调仍阻塞于 F-102/F-205 的平台凭证。
