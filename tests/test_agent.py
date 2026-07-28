@@ -1,5 +1,6 @@
 from ecommerce_agent.service import AgentService
 from ecommerce_agent.evals import PRECHECK_CASES, RETRIEVAL_CASES, SAFETY_CASES
+from ecommerce_agent.llm import ModelUnavailableError
 
 from conftest import make_settings, principal_for
 
@@ -86,5 +87,40 @@ def test_actual_agent_20_case_semantic_gate(tmp_path) -> None:
                 assert response.risk_level == "high", message
                 assert response.requires_human is True, message
         assert case_index == 20
+    finally:
+        service.close()
+
+
+def test_transient_model_outage_invites_retry_without_creating_handoff(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+
+    def unavailable(_messages):
+        raise ModelUnavailableError("model request failed with HTTP 429 (provider code 1302)")
+
+    try:
+        service.model.generate_json = unavailable
+        response = service.chat(principal_for(service), "session-busy", "尺码怎么选")
+        assert response.reason == "model_temporarily_unavailable"
+        assert response.requires_human is False
+        assert response.handoff_id is None
+        assert response.handoff_status is None
+        assert response.model_fallback is True
+        assert "再发送一次" in response.answer
+    finally:
+        service.close()
+
+
+def test_transient_model_outage_during_generation_invites_retry(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+
+    def unavailable(_messages):
+        raise ModelUnavailableError("model request failed: ConnectTimeout")
+
+    try:
+        service.model.generate = unavailable
+        response = service.chat(principal_for(service), "session-busy-generate", "尺码怎么选")
+        assert response.reason == "model_temporarily_unavailable"
+        assert response.requires_human is False
+        assert response.handoff_id is None
     finally:
         service.close()

@@ -12,7 +12,7 @@ from .context_builder import ContextBuilder
 from .database import Database, utc_now
 from .decision import AgentDecision
 from .handoff import HandoffService
-from .llm import ModelError, ModelGateway
+from .llm import ModelError, ModelGateway, ModelUnavailableError
 from .policy import (
     is_business_action_request,
     precheck_request,
@@ -71,6 +71,7 @@ def build_graph(
             "trace": ["intake"],
             "review_route": "pass",
             "model_fallback": False,
+            "model_retry_advised": False,
             "handoff_id": None,
             "handoff_status": None,
             "decision": {},
@@ -188,14 +189,6 @@ def build_graph(
             trace_step = f"deliberate:model:{decision.mode}"
             fallback = False
         except (ModelError, ValidationError) as exc:
-            decision = AgentDecision(
-                intent=state.get("intent", "general"),
-                mode="handoff",
-                reason="model_unavailable",
-                confidence=0,
-            )
-            trace_step = "deliberate:fallback"
-            fallback = True
             db.audit(
                 "model.decision_failure",
                 "system",
@@ -203,6 +196,37 @@ def build_graph(
                 {"error_type": type(exc).__name__, "error": str(exc)[:300]},
                 state["tenant_id"],
             )
+            if isinstance(exc, ModelUnavailableError):
+                if state.get("tool_result", {}).get("postcondition_met") is True:
+                    decision = AgentDecision(
+                        intent=state.get("intent", "general"),
+                        mode="finish",
+                        reason="verified_tool_result_available",
+                        confidence=1,
+                    )
+                    trace_step = "deliberate:verified_result_fallback"
+                    fallback = True
+                else:
+                    # A rate limit or transport hiccup is not a reason to occupy a human
+                    # agent; invite the customer to retry and keep the handoff queue for
+                    # cases the agent has actually judged to need a person.
+                    return {
+                        "model_fallback": True,
+                        "model_retry_advised": True,
+                        "trace": [
+                            *state["trace"],
+                            "deliberate:model_temporarily_unavailable",
+                        ],
+                    }
+            else:
+                decision = AgentDecision(
+                    intent=state.get("intent", "general"),
+                    mode="handoff",
+                    reason="model_unavailable",
+                    confidence=0,
+                )
+                trace_step = "deliberate:fallback"
+                fallback = True
         return {
             "decision": decision.model_dump(),
             "model_fallback": fallback,
@@ -536,10 +560,16 @@ def build_graph(
             draft = model.generate(messages)
             fallback = False
             trace_step = "generate:model"
+            retry_advised = False
         except ModelError as exc:
+            retry_advised = False
             if verified_result:
                 draft = "操作已完成，业务系统已经确认处理结果。"
                 trace_step = "generate:verified_result_fallback"
+            elif isinstance(exc, ModelUnavailableError):
+                draft = ""
+                trace_step = "generate:model_temporarily_unavailable"
+                retry_advised = True
             else:
                 draft = "当前模型暂时不可用，我会为您转人工客服，避免给出不准确的信息。"
                 trace_step = "generate:fallback"
@@ -548,12 +578,13 @@ def build_graph(
                 "model.failure",
                 "system",
                 state["trace_id"],
-                {"error": str(exc)[:300]},
+                {"error_type": type(exc).__name__, "error": str(exc)[:300]},
                 state["tenant_id"],
             )
         return {
             "draft": draft,
             "model_fallback": fallback,
+            "model_retry_advised": retry_advised,
             "trace": [*state["trace"], trace_step],
         }
 
@@ -562,6 +593,11 @@ def build_graph(
         evidence += " " + json.dumps(state["context_bundle"], ensure_ascii=False)
         passed, reason = review_output(state["draft"], evidence)
         verified_result = state.get("tool_result", {}).get("postcondition_met") is True
+        if state.get("model_retry_advised") and not verified_result:
+            return {
+                "review_route": "retry_later",
+                "trace": [*state["trace"], "verify:model_temporarily_unavailable"],
+            }
         if (state["model_fallback"] and not verified_result) or not passed:
             return {
                 "answer": state["draft"] if state["model_fallback"] else "为避免给出未经核实的承诺，我会将这个问题转给人工客服。",
@@ -574,6 +610,19 @@ def build_graph(
             "answer": state["draft"],
             "review_route": "pass",
             "trace": [*state["trace"], "verify:passed", "postcondition:answer"],
+        }
+
+    def retry_later(state: AgentState) -> dict[str, Any]:
+        return {
+            "answer": (
+                "抱歉，智能客服的模型服务刚刚出现短暂波动，这条消息没能处理完。"
+                "请稍等一下再发送一次，我会继续为您跟进；如果希望直接由人工同事接手，回复“转人工”即可。"
+            ),
+            "requires_human": False,
+            "risk_level": "low",
+            "route_reason": "model_temporarily_unavailable",
+            "model_fallback": True,
+            "trace": [*state["trace"], "retry_later", "postcondition:retry_later"],
         }
 
     def clarify(state: AgentState) -> dict[str, Any]:
@@ -770,6 +819,7 @@ def build_graph(
     builder.add_node("generate", generate)
     builder.add_node("verify", verify)
     builder.add_node("clarify", clarify)
+    builder.add_node("retry_later", retry_later)
     builder.add_node("handoff", handoff)
     builder.add_node("refuse", refuse)
     builder.add_node("persist", persist)
@@ -787,7 +837,11 @@ def build_graph(
         lambda state: state["route"],
         {"deliberate": "deliberate", "handoff": "handoff"},
     )
-    builder.add_edge("deliberate", "decision_gate")
+    builder.add_conditional_edges(
+        "deliberate",
+        lambda state: "retry_later" if state.get("model_retry_advised") else "decision_gate",
+        {"decision_gate": "decision_gate", "retry_later": "retry_later"},
+    )
     builder.add_conditional_edges(
         "decision_gate",
         lambda state: state["route"],
@@ -827,9 +881,10 @@ def build_graph(
     builder.add_conditional_edges(
         "verify",
         lambda state: state["review_route"],
-        {"pass": "persist", "handoff": "handoff"},
+        {"pass": "persist", "handoff": "handoff", "retry_later": "retry_later"},
     )
     builder.add_edge("clarify", "persist")
+    builder.add_edge("retry_later", "persist")
     builder.add_edge("handoff", "persist")
     builder.add_edge("refuse", "persist")
     builder.add_edge("persist", END)

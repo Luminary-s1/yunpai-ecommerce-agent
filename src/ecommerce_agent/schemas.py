@@ -46,6 +46,7 @@ class AgentState(TypedDict, total=False):
     trace: list[str]
     review_route: str
     model_fallback: bool
+    model_retry_advised: bool
     handoff_id: str | None
     handoff_status: str | None
     decision: dict[str, Any]

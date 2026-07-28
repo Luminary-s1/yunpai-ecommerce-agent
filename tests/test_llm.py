@@ -6,9 +6,18 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from ecommerce_agent.llm import ModelError, ModelGateway
+from ecommerce_agent.llm import ModelError, ModelGateway, ModelUnavailableError
 
 from conftest import make_settings
+
+
+class StreamingBody(httpx.SyncByteStream):
+    def __init__(self, content: bytes):
+        self.content = content
+
+    def __iter__(self):
+        yield self.content
+
 
 def test_glm_gateway_uses_lightweight_standard_payload(tmp_path) -> None:
     captured: dict = {}
@@ -225,5 +234,94 @@ def test_read_timeout_is_not_retried(tmp_path) -> None:
         with pytest.raises(ModelError, match="ReadTimeout"):
             gateway.probe()
         assert attempts == 1
+    finally:
+        gateway.close()
+
+
+def test_streaming_rate_limit_is_surfaced_as_unavailable_error(tmp_path) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            429,
+            headers={"content-type": "application/json"},
+            stream=StreamingBody(
+                b'{"error":{"code":"1302","message":"concurrency limit reached"}}'
+            ),
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+        model_streaming=True,
+        model_retry_attempts=0,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(ModelUnavailableError) as captured:
+            gateway.generate_json([{"role": "user", "content": "decide"}])
+        message = str(captured.value)
+        assert "HTTP 429" in message
+        assert "1302" in message
+        assert "concurrency limit reached" not in message
+    finally:
+        gateway.close()
+
+
+def test_streaming_account_error_is_not_marked_temporarily_unavailable(tmp_path) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            429,
+            headers={"content-type": "application/json"},
+            stream=StreamingBody(b'{"error":{"code":"1113","message":"account overdue"}}'),
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+        model_streaming=True,
+        model_retry_attempts=0,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(ModelError) as captured:
+            gateway.generate([{"role": "user", "content": "在吗"}])
+        assert type(captured.value) is ModelError
+        assert "HTTP 429" in str(captured.value)
+        assert "1113" in str(captured.value)
+        assert "account overdue" not in str(captured.value)
+    finally:
+        gateway.close()
+
+
+def test_streaming_upstream_error_body_is_read_before_retry(tmp_path) -> None:
+    attempts = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(
+                503,
+                headers={"content-type": "application/json"},
+                stream=StreamingBody(b'{"error":{"code":"1113"}}'),
+            )
+        body = 'data: {"choices":[{"delta":{"content":"已恢复"}}]}\n\ndata: [DONE]\n\n'
+        return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+        model_streaming=True,
+        model_retry_attempts=1,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        assert gateway.generate([{"role": "user", "content": "在吗"}]) == "已恢复"
+        assert attempts == 2
     finally:
         gateway.close()

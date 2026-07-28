@@ -11,8 +11,19 @@ from .policy import is_business_action_request
 from .decision import extract_json_object
 
 
+RATE_LIMIT_PROVIDER_CODES = frozenset({"1302", "1305", "1312"})
+
+
 class ModelError(RuntimeError):
     pass
+
+
+class ModelUnavailableError(ModelError):
+    """Upstream model service was temporarily unreachable or rate limited.
+
+    Distinguished from other model errors so the agent can invite the customer to
+    retry instead of consuming a human handoff for an infrastructure hiccup.
+    """
 
 
 class ModelGateway:
@@ -157,13 +168,14 @@ class ModelGateway:
                     time.sleep(min(0.2 * (attempt + 1), 0.5))
                     continue
                 break
+        error_class = ModelUnavailableError if self._is_transient(last_error) else ModelError
         if isinstance(last_error, httpx.HTTPStatusError):
             status = last_error.response.status_code
             code = self._provider_code(last_error.response)
-            raise ModelError(
+            raise error_class(
                 f"model request failed with HTTP {status} (provider code {code})"
             ) from last_error
-        raise ModelError(f"model request failed: {type(last_error).__name__}") from last_error
+        raise error_class(f"model request failed: {type(last_error).__name__}") from last_error
 
     def _stream_request(self, payload: dict[str, Any]) -> str:
         attempts = self.settings.model_retry_attempts + 1
@@ -176,6 +188,11 @@ class ModelGateway:
                     headers=self._headers(),
                     json=payload,
                 ) as response:
+                    if response.status_code >= 400:
+                        # Error responses arrive as a regular JSON body instead of SSE.
+                        # The stream must be consumed before the body can be inspected
+                        # here or attached to the raised HTTPStatusError.
+                        response.read()
                     if self._is_retryable(response) and attempt + 1 < attempts:
                         time.sleep(min(0.2 * (attempt + 1), 0.5))
                         continue
@@ -190,7 +207,14 @@ class ModelGateway:
                         event = json.loads(raw_event)
                         if "error" in event:
                             code = str(event.get("error", {}).get("code", "unknown"))
-                            raise ModelError(f"model stream failed (provider code {code})")
+                            stream_error_class = (
+                                ModelUnavailableError
+                                if code in RATE_LIMIT_PROVIDER_CODES
+                                else ModelError
+                            )
+                            raise stream_error_class(
+                                f"model stream failed (provider code {code})"
+                            )
                         delta = event.get("choices", [{}])[0].get("delta", {})
                         content = delta.get("content")
                         if isinstance(content, str) and content:
@@ -209,19 +233,30 @@ class ModelGateway:
                     time.sleep(min(0.2 * (attempt + 1), 0.5))
                     continue
                 break
+        error_class = ModelUnavailableError if self._is_transient(last_error) else ModelError
         if isinstance(last_error, httpx.HTTPStatusError):
             status = last_error.response.status_code
             code = self._provider_code(last_error.response)
-            raise ModelError(
+            raise error_class(
                 f"model request failed with HTTP {status} (provider code {code})"
             ) from last_error
-        raise ModelError(f"model request failed: {type(last_error).__name__}") from last_error
+        raise error_class(f"model request failed: {type(last_error).__name__}") from last_error
 
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.settings.model_api_key:
             headers["Authorization"] = f"Bearer {self.settings.model_api_key}"
         return headers
+
+    def _is_transient(self, error: Exception | None) -> bool:
+        """Rate limits, upstream 5xx and transport failures can succeed on a retry."""
+        if isinstance(error, httpx.HTTPStatusError):
+            status = error.response.status_code
+            return status >= 500 or (
+                status == 429
+                and self._provider_code(error.response) in RATE_LIMIT_PROVIDER_CODES
+            )
+        return isinstance(error, httpx.TransportError)
 
     def _is_retryable(self, response: httpx.Response) -> bool:
         if response.status_code in {500, 502, 503, 504}:
@@ -234,8 +269,10 @@ class ModelGateway:
     @staticmethod
     def _provider_code(response: httpx.Response) -> str:
         try:
+            if not response.is_closed:
+                response.read()
             return str(response.json().get("error", {}).get("code", "unknown"))
-        except (AttributeError, ValueError):
+        except (AttributeError, ValueError, httpx.StreamError, httpx.HTTPError):
             return "unknown"
 
     def close(self) -> None:

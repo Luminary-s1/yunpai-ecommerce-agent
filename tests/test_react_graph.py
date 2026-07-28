@@ -5,6 +5,7 @@ from dataclasses import replace
 
 from pydantic import BaseModel, ConfigDict
 
+from ecommerce_agent.llm import ModelUnavailableError
 from ecommerce_agent.service import AgentService
 from ecommerce_agent.sops import SopCreateRequest, SopDsl, SopTransitionRequest
 from ecommerce_agent.tools import ToolRegistry, ToolResult, ToolSpec
@@ -156,6 +157,53 @@ def test_llm_drives_registered_tool_then_finishes_after_verified_observation(tmp
         assert snapshots[1]["parent_snapshot_id"] == snapshots[0]["id"]
         assert snapshots[2]["parent_snapshot_id"] == snapshots[1]["id"]
         assert '"authority":"verified_tool"' in snapshots[2]["evidence_json"]
+    finally:
+        service.close()
+
+
+def test_transient_model_outage_after_verified_action_reports_completion(tmp_path) -> None:
+    calls: list[str] = []
+    settings = replace(make_settings(tmp_path), bootstrap_client_can_supply_order_context=True)
+    service = AgentService(settings, tool_registry=cancel_registry(calls))
+    activate_test_action_sop(service)
+    decision_calls = 0
+
+    def decide(_messages: list[dict[str, str]]) -> dict:
+        nonlocal decision_calls
+        decision_calls += 1
+        if decision_calls == 1:
+            return {
+                "intent": "test_action",
+                "mode": "act",
+                "tool_name": "cancel_order",
+                "arguments": {"order_id": "order-1001"},
+                "expected_outcome": "order status is canceled",
+                "reason": "customer requested cancellation",
+                "confidence": 0.95,
+            }
+        raise ModelUnavailableError("model request failed with HTTP 429 (provider code 1302)")
+
+    def unavailable(_messages: list[dict[str, str]]) -> str:
+        raise ModelUnavailableError("model request failed with HTTP 429 (provider code 1302)")
+
+    service.model.generate_json = decide  # type: ignore[method-assign]
+    service.model.generate = unavailable  # type: ignore[method-assign]
+    try:
+        response = service.chat(
+            principal_for(service),
+            "react-outage-after-write",
+            "请取消订单 order-1001",
+            {"order_status": "paid"},
+        )
+        assert response.reason == "verified_tool_result_complete"
+        assert response.answer == "操作已完成，业务系统已经确认处理结果。"
+        assert response.risk_level == "high"
+        assert response.requires_human is False
+        assert response.handoff_id is None
+        assert calls == ["order-1001"]
+        assert decision_calls == 2
+        runs = service.sops.list_runs("tenant-test", status="completed")
+        assert any(item["intent"] == "test_action" for item in runs)
     finally:
         service.close()
 
