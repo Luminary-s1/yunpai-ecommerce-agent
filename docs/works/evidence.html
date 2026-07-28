@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fork main 合并验证证据</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #657381;
+      --line: #d9e2e8;
+      --brand: #087f73;
+      --brand-soft: #e8f7f4;
+      --ok: #16794a;
+      --warm: #fff8e7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 40px;
+      background: #edf2f5;
+      color: var(--ink);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI",
+            "PingFang SC", "Hiragino Sans GB", sans-serif;
+    }
+    body:has(.card:target) header { display: none; }
+    body:has(.card:target) .card:not(:target) { display: none; }
+    body:has(.card:target) main { display: block; }
+    body:has(.card:target) .card:target { margin: 0 auto; }
+    header {
+      width: 1080px;
+      margin: 0 auto 24px;
+      padding: 28px 32px;
+      border-radius: 20px;
+      color: white;
+      background: linear-gradient(135deg, #122b35, #087f73);
+      box-shadow: 0 16px 38px rgba(20, 48, 58, .16);
+    }
+    header h1 { margin: 0 0 8px; font-size: 30px; }
+    header p { margin: 0; opacity: .86; }
+    main { display: grid; gap: 28px; justify-content: center; }
+    .card {
+      width: 1080px;
+      min-height: 560px;
+      padding: 32px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: white;
+      box-shadow: 0 14px 34px rgba(27, 47, 58, .12);
+      overflow: hidden;
+    }
+    .card::after {
+      content: "FULL REGRESSION · 302 passed in 359.42s · exit 0";
+      display: block;
+      margin-top: 18px;
+      padding: 11px 14px;
+      border-radius: 9px;
+      color: #315668;
+      background: #eaf3f7;
+      font: 700 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .025em;
+    }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--brand);
+      box-shadow: 0 0 0 6px var(--brand-soft);
+    }
+    h2 { margin: 16px 0 8px; font-size: 28px; line-height: 1.25; }
+    .meta { margin: 0 0 22px; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 22px;
+    }
+    .panel {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fbfcfd;
+    }
+    .panel h3 { margin: 0 0 12px; font-size: 16px; }
+    .panel p { margin: 0 0 10px; }
+    .panel p:last-child { margin-bottom: 0; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      color: var(--ok);
+      background: #eaf8f0;
+      font-weight: 800;
+    }
+    .result {
+      margin-top: 18px;
+      padding: 18px 20px;
+      border-left: 5px solid var(--ok);
+      border-radius: 10px;
+      background: #f0faf4;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #edf2f5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    ul { margin: 8px 0 0; padding-left: 22px; }
+    li + li { margin-top: 7px; }
+    .visual {
+      margin-top: 20px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #f7fafb;
+    }
+    .visual img {
+      display: block;
+      width: 100%;
+      max-height: 520px;
+      object-fit: contain;
+      border-radius: 9px;
+    }
+    .warning {
+      margin-top: 18px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      background: var(--warm);
+      color: #765817;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>fork main · 本次合并验证证据</h1>
+    <p>2026-07-28 · 11 项工作 · 定向集成矩阵 100 passed · F-107/F-109 未合并</p>
+  </header>
+  <main>
+    <section class="card" id="work-01">
+      <div class="eyebrow"><span class="dot"></span>FIX · PR #3 · merge 2f30bac</div>
+      <h2>LLM 流式错误处理</h2>
+      <p class="meta">读取完整错误体、识别临时故障、保留已经验证成功的工具动作。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>复验行为</h3>
+          <ul>
+            <li>流式 HTTP 错误体可读取供应商 code。</li>
+            <li>限流/5xx/传输故障进入 <code>retry_later</code>。</li>
+            <li>无已验证结果时不自动占用人工队列。</li>
+            <li>后置验证成功的动作结果不会丢失。</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>证据入口</h3>
+          <p><code>tests/test_llm.py</code></p>
+          <p><code>tests/test_react_graph.py</code></p>
+          <p><code>tests/test_agent.py</code></p>
+          <p><span class="status">✓ 集成回归通过</span></p>
+        </div>
+      </div>
+      <div class="result">pytest focused integration → 100 passed in 102.20s</div>
+    </section>
+
+    <section class="card" id="work-02">
+      <div class="eyebrow"><span class="dot"></span>FEATURE · F-101 · PR #5 · merge 20338bf</div>
+      <h2>通用渠道适配器 SDK</h2>
+      <p class="meta">淘宝与 mockchat 通过同一套标准契约，运行时和 outbox 按平台隔离。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>契约覆盖</h3>
+          <ul>
+            <li>能力版本、验签、防重放、去重与回放。</li>
+            <li>标准信封、发送命令与 confirmed/rejected/uncertain 回执。</li>
+            <li>注册表路由、限流声明和平台隔离。</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>实际查询入口</h3>
+          <p><code>GET /v1/channels/adapters</code></p>
+          <p>启用：<code>MOCKCHAT_ENABLED=true</code></p>
+          <p>密钥：<code>MOCKCHAT_SECRET</code></p>
+          <p><span class="status">✓ 双适配器回归通过</span></p>
+        </div>
+      </div>
+      <div class="result">test_channel_sdk_contract.py + test_channel_sdk_runtime.py → PASS</div>
+      <div class="warning">mockchat 标记为 virtual，只作为本地第二协议验证，不冒充真实渠道联调。</div>
+    </section>
+
+    <section class="card" id="work-03">
+      <div class="eyebrow"><span class="dot"></span>DOCS · PR #1 · merge a7336de</div>
+      <h2>macOS/Linux 快速启动</h2>
+      <p class="meta">补齐 Python 3.11+ 环境、依赖安装、GLM 配置与本机 Coding Plan 启动器。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>最短操作路径</h3>
+          <p><code>python3.11 -m venv .venv</code></p>
+          <p><code>source .venv/bin/activate</code></p>
+          <p><code>python -m pip install -e '.[dev]'</code></p>
+          <p><code>bash scripts/start-glm-coding-test.sh</code></p>
+        </div>
+        <div class="panel">
+          <h3>保护条件</h3>
+          <ul>
+            <li>缺少 MODEL_API_KEY 时启动前退出。</li>
+            <li>只监听 127.0.0.1:8104。</li>
+            <li>必须使用项目虚拟环境解释器。</li>
+          </ul>
+          <p><span class="status">✓ 文档与脚本已合并</span></p>
+        </div>
+      </div>
+      <div class="result">bash -n scripts/start-glm-coding-test.sh → exit 0</div>
+    </section>
+
+    <section class="card" id="work-04">
+      <div class="eyebrow"><span class="dot"></span>FEATURE · PR #4 · merge c381409</div>
+      <h2>坐席周期批量排班</h2>
+      <p class="meta">1–4 周间隔、2–26 次批量生成；冲突时整批回滚并留下审计。</p>
+      <div class="visual">
+        <img src="../screenshots/recurring-operator-shifts.jpg" alt="周期批量排班后台实测">
+      </div>
+      <div class="result">test_handoff_dispatch.py + test_admin_console.py → PASS</div>
+    </section>
+
+    <section class="card" id="work-05">
+      <div class="eyebrow"><span class="dot"></span>FEATURE · PR #6 · merge 26d9bed</div>
+      <h2>订单人工客服状态可见</h2>
+      <p class="meta">在订单售后工作台独立展示人工任务状态，不把客服流转伪装成售后申请。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>专项复验输出</h3>
+          <p><code>customer_service.status = processing</code></p>
+          <p><code>customer_service.label = 客服处理中</code></p>
+          <p><code>task_status = working</code></p>
+        </div>
+        <div class="panel">
+          <h3>事实保持不变</h3>
+          <p><code>order_status = shipped</code></p>
+          <p><code>payment_status = paid</code></p>
+          <p><code>after_sales = []</code></p>
+          <p><span class="status">✓ 未创建售后记录</span></p>
+        </div>
+      </div>
+      <div class="result">tests/test_order_handoff_visibility.py → PASS</div>
+    </section>
+
+    <section class="card" id="work-06">
+      <div class="eyebrow"><span class="dot"></span>FIX · merge 34650db · renamed branch</div>
+      <h2>利润报告完整计入 501+ 条费用</h2>
+      <p class="meta">列表分页上限继续是 500；利润聚合使用完整数据集。</p>
+      <div class="visual">
+        <img src="../bugfix-evidence/finance-expense-truncation-after.jpg" alt="利润费用 501 条修复后后台实测">
+      </div>
+      <div class="result">501 records × CNY 1.00 → expense_total CNY 501.00 · management_profit CNY -501.00</div>
+    </section>
+
+    <section class="card" id="work-07">
+      <div class="eyebrow"><span class="dot"></span>FEATURE · F-103 · merge 9a226f5</div>
+      <h2>统一渠道会话与可信上下文信封</h2>
+      <p class="meta">多消息类型统一记录；非文本不进模型，白名单上下文阻断敌意载荷。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>支持的 message_kind</h3>
+          <p>text · image · audio · video</p>
+          <p>goods_card · order_card · system · unknown</p>
+        </div>
+        <div class="panel">
+          <h3>安全处置</h3>
+          <ul>
+            <li>仅 text 可供 Agent 阅读。</li>
+            <li>其他类型记录脱敏占位符并转人工。</li>
+            <li>上下文只接受 platform 与 shop_id。</li>
+          </ul>
+          <p><span class="status">✓ 双适配器验证通过</span></p>
+        </div>
+      </div>
+      <div class="result">channel contract/runtime isolation matrix → PASS</div>
+    </section>
+
+    <section class="card" id="work-08">
+      <div class="eyebrow"><span class="dot"></span>FEATURE · F-104 · merge 4c41894</div>
+      <h2>知识灰度发布</h2>
+      <p class="meta">同会话稳定分桶；baseline/candidate 二选一；支持调量、完成与一步回滚。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>复验生命周期</h3>
+          <p>begin 50% → in bucket 命中 candidate</p>
+          <p>out bucket / 无 rollout unit → baseline</p>
+          <p>ramp 100% → 全量 candidate</p>
+        </div>
+        <div class="panel">
+          <h3>状态与保护</h3>
+          <ul>
+            <li>complete 原子激活候选并退役基线。</li>
+            <li>rollback 恢复基线，候选可再次灰度。</li>
+            <li>同 key 只允许一个活动灰度。</li>
+          </ul>
+          <p><span class="status">✓ 生命周期通过</span></p>
+        </div>
+      </div>
+      <div class="result">tests/test_knowledge_rollout.py → PASS</div>
+    </section>
+
+    <section class="card" id="work-09">
+      <div class="eyebrow"><span class="dot"></span>FEATURE · F-105 · merge a8981f9</div>
+      <h2>SOP 渠道灰度发布</h2>
+      <p class="meta">已批准候选按会话分桶；SOP run 固定版本，回滚后不在执行中换版。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>实际行为</h3>
+          <p>10% → 稳定会话桶选择 v1/v2</p>
+          <p>100% → 新会话解析到 v2</p>
+          <p>complete → v2 active / v1 retired</p>
+        </div>
+        <div class="panel">
+          <h3>保护条件</h3>
+          <ul>
+            <li>未批准候选不能灰度。</li>
+            <li>同一定义不能并行两个灰度。</li>
+            <li>乐观锁版本冲突返回 409。</li>
+          </ul>
+          <p><span class="status">✓ run 固定验证通过</span></p>
+        </div>
+      </div>
+      <div class="result">tests/test_sop_rollout.py → PASS</div>
+    </section>
+
+    <section class="card" id="work-10">
+      <div class="eyebrow"><span class="dot"></span>FEATURE · F-106 · merge 1a3dfa3</div>
+      <h2>商品/SKU 顾问</h2>
+      <p class="meta">自然语言实体识别、排序推荐、逐属性对比与版本化 catalog 证据。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>专项场景</h3>
+          <p>问题：两款蓝牙耳机有什么区别？</p>
+          <p>命中：两款耳机；排除：保温杯。</p>
+          <p>差异：续航、降噪；同时返回价格。</p>
+        </div>
+        <div class="panel">
+          <h3>证据约束</h3>
+          <p><code>catalog:{row}:v{version}</code></p>
+          <ul>
+            <li>重复调用证据 ID 稳定。</li>
+            <li>进入 context bundle 与 evidence。</li>
+            <li>店铺/租户隔离。</li>
+          </ul>
+          <p><span class="status">✓ 顾问回归通过</span></p>
+        </div>
+      </div>
+      <div class="result">tests/test_product_advisor.py → PASS</div>
+    </section>
+
+    <section class="card" id="work-11">
+      <div class="eyebrow"><span class="dot"></span>FEATURE · F-106 · merge 8a8f9b7</div>
+      <h2>商品自然语言模糊检索</h2>
+      <p class="meta">顾客说商品名/品类/颜色/容量即可检索，不再要求提供内部 SKU 编号。</p>
+      <div class="grid">
+        <div class="panel">
+          <h3>顾客输入</h3>
+          <p>“你们家的空气炸锅多少钱？”</p>
+          <p>“黑色的还有吗？”</p>
+          <p>Graph 先调用 <code>search_products</code>。</p>
+        </div>
+        <div class="panel">
+          <h3>受控输出</h3>
+          <ul>
+            <li>候选 SKU、售价、状态与属性。</li>
+            <li>只在可信 store_id 范围查询。</li>
+            <li>精确查询再交给 get_product_facts。</li>
+          </ul>
+          <p><span class="status">✓ 工具与策略回归通过</span></p>
+        </div>
+      </div>
+      <div class="result">catalog + policy + ReAct regression → PASS</div>
+    </section>
+  </main>
+</body>
+</html>
