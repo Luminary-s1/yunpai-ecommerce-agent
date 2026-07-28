@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..connectors import ConnectorRegistry, PullRequest, VirtualTaobaoConnector
 from ..database import Database, utc_now
 from ..tools import ToolExecutionContext, ToolRegistry, ToolResult, ToolSpec
-from .catalog import CatalogItemUpsert, CatalogService
+from .catalog import CatalogItemUpsert, CatalogService, CatalogStatus
 from .competitive import CompetitiveIntelligenceService, CompetitorObservationCreate
 from .finance import FinanceReportQuery, FinanceService
 from .inventory import InventoryBalanceUpsert, InventoryService
@@ -39,6 +39,15 @@ class ProductFactsToolInput(BaseModel):
 
     sku_id: str = Field(min_length=1, max_length=128)
     store_id: str | None = Field(default=None, max_length=128)
+
+
+class ProductSearchToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    keyword: str = Field(min_length=1, max_length=200)
+    store_id: str | None = Field(default=None, max_length=128)
+    status: CatalogStatus | None = None
+    limit: int = Field(default=5, ge=1, le=20)
 
 
 class OrderFactsToolInput(BaseModel):
@@ -206,11 +215,30 @@ class OperationsService:
         }
 
     def register_agent_tools(self, registry: ToolRegistry) -> None:
+        if registry.get("search_products") is None:
+            registry.register(
+                ToolSpec(
+                    name="search_products",
+                    description=(
+                        "按顾客的自然语言描述（商品名称、品类、型号、颜色、容量等）检索本店在售商品，"
+                        "返回候选 SKU、售价、状态和属性。顾客不知道 SKU 编号时必须先用这个工具解析，"
+                        "不要向顾客索要 SKU"
+                    ),
+                    kind="read",
+                    input_model=ProductSearchToolInput,
+                    handler=self._product_search_tool,
+                    policy=self._catalog_store_scope_policy,
+                    metadata={"domain": "catalog", "risk_level": "L0"},
+                )
+            )
         if registry.get("get_product_facts") is None:
             registry.register(
                 ToolSpec(
                     name="get_product_facts",
-                    description="查询当前租户指定 SKU 的商品主数据、售价、状态和来源版本",
+                    description=(
+                        "查询当前租户指定 SKU 的商品主数据、售价、状态和来源版本；"
+                        "只接受已知的精确 SKU，顾客只描述商品时先用 search_products 解析"
+                    ),
                     kind="read",
                     input_model=ProductFactsToolInput,
                     handler=self._product_facts_tool,
@@ -318,6 +346,50 @@ class OperationsService:
             context.tenant_id, store_id=value.store_id, sku_id=value.sku_id
         )
         return ToolResult(status="success", output={"items": items})
+
+    @staticmethod
+    def _trusted_store_id(context: ToolExecutionContext) -> str | None:
+        trusted = context.trusted_context
+        return str(trusted.get("store_id") or trusted.get("shop_id") or "") or None
+
+    @classmethod
+    def _catalog_store_scope_policy(
+        cls, arguments: BaseModel, context: ToolExecutionContext
+    ) -> str | None:
+        payload = arguments.model_dump()
+        trusted_store = cls._trusted_store_id(context)
+        requested_store = payload.get("store_id")
+        if trusted_store and requested_store and str(requested_store) != trusted_store:
+            return "store_scope_mismatch"
+        return None
+
+    def _product_search_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = ProductSearchToolInput.model_validate(arguments.model_dump())
+        # The customer is talking to one shop; keep the lookup inside it unless the
+        # caller has no trusted shop at all.
+        store_id = value.store_id or self._trusted_store_id(context)
+        items = self.catalog.search_items(
+            context.tenant_id,
+            keyword=value.keyword,
+            store_id=store_id,
+            status=value.status,
+            limit=value.limit,
+        )
+        resolution = (
+            "no_match" if not items else "resolved" if len(items) == 1 else "ambiguous"
+        )
+        return ToolResult(
+            status="success",
+            output={
+                "keyword": value.keyword,
+                "store_id": store_id,
+                "resolution": resolution,
+                "match_count": len(items),
+                "items": items,
+            },
+        )
 
     @staticmethod
     def _order_scope_policy(arguments: BaseModel, context: ToolExecutionContext) -> str | None:

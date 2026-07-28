@@ -34,6 +34,35 @@ FORBIDDEN_OUTPUT_PATTERNS = (
     r"(加我微信|转到私人账户|站外支付)",
 )
 
+# Internal identifiers a shopper cannot be expected to know. The agent must resolve
+# them from the wording the customer already used instead of asking for them.
+INTERNAL_IDENTIFIER_FIELDS = {
+    "sku",
+    "sku_id",
+    "skuid",
+    "sku_code",
+    "item_id",
+    "itemid",
+    "num_iid",
+    "product_id",
+    "productid",
+    "product_code",
+    "spu",
+    "spu_id",
+    "spuid",
+    "goods_id",
+    "catalog_id",
+    "catalog_item_id",
+}
+
+INTERNAL_IDENTIFIER_LABEL = "商品名称或商品链接"
+
+INTERNAL_IDENTIFIER_REQUEST_PATTERNS = (
+    r"sku",
+    r"(item|product|spu|goods)[\s_-]*id",
+    r"(商品|宝贝|货品)\s*(id|编号|编码|货号|代码)",
+)
+
 ALLOWED_CONTEXT_FIELDS = {
     "authorized",
     "platform",
@@ -86,6 +115,28 @@ def is_business_action_request(message: str) -> bool:
     """Detect actions that require verified execution or a human handoff."""
 
     return any(re.search(pattern, message) for pattern in HIGH_RISK_ACTION_PATTERNS)
+
+
+def asks_for_internal_identifier(text: str) -> bool:
+    """Detect a reply that demands SKU/item ids a shopper does not have."""
+
+    return any(
+        re.search(pattern, text, re.IGNORECASE)
+        for pattern in INTERNAL_IDENTIFIER_REQUEST_PATTERNS
+    )
+
+
+def customer_facing_missing_fields(fields: list[str]) -> list[str]:
+    """Replace internal identifier field names with what a shopper can provide."""
+
+    described: list[str] = []
+    for field in fields:
+        label = field.strip()
+        if label.lower().replace("-", "_") in INTERNAL_IDENTIFIER_FIELDS:
+            label = INTERNAL_IDENTIFIER_LABEL
+        if label and label not in described:
+            described.append(label)
+    return described
 
 
 def review_output(answer: str, evidence: str) -> tuple[bool, str]:

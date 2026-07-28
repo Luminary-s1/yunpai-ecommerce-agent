@@ -240,3 +240,29 @@ def test_missing_tool_arguments_become_a_clarification_not_execution(tmp_path) -
         assert service.sops.get_run("tenant-test", run["id"])["steps"][0]["status"] == "pending"
     finally:
         service.close()
+
+
+def test_sku_demanding_clarification_is_rewritten_for_customers(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    service.model.generate_json = lambda _messages: {  # type: ignore[method-assign]
+        "intent": "product_info",
+        "mode": "clarify",
+        "missing_fields": ["sku_id"],
+        "response": "您好，为了准确查询空气炸锅的参数，请提供具体的 SKU 编号。",
+        "reason": "need product identifier",
+        "confidence": 0.6,
+    }
+    try:
+        response = service.chat(
+            principal_for(service),
+            "clarify-sku",
+            "你们店铺空气炸锅什么参数？",
+            {},
+        )
+        assert response.reason == "llm_clarification_required"
+        assert response.requires_human is False
+        assert "SKU" not in response.answer
+        assert "sku" not in response.answer.lower()
+        assert "商品名称或商品链接" in response.answer
+    finally:
+        service.close()

@@ -14,6 +14,8 @@ from .decision import AgentDecision
 from .handoff import HandoffService
 from .llm import ModelError, ModelGateway, ModelUnavailableError
 from .policy import (
+    asks_for_internal_identifier,
+    customer_facing_missing_fields,
     is_business_action_request,
     precheck_request,
     review_output,
@@ -629,8 +631,15 @@ def build_graph(
 
     def clarify(state: AgentState) -> dict[str, Any]:
         decision = AgentDecision.model_validate(state["decision"])
-        missing = decision.missing_fields or ["完成操作所需的信息"]
-        answer = decision.response or f"为了继续处理，请补充：{'、'.join(missing)}。"
+        missing = customer_facing_missing_fields(decision.missing_fields) or [
+            "完成操作所需的信息"
+        ]
+        fallback = f"为了继续处理，请补充：{'、'.join(missing)}。"
+        answer = decision.response or fallback
+        if asks_for_internal_identifier(answer):
+            # The model drafted a question about SKU/item ids a shopper cannot
+            # answer; ask for what they can actually provide instead.
+            answer = fallback
         return {
             "answer": answer,
             "requires_human": False,
