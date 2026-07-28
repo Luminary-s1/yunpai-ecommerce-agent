@@ -224,6 +224,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="customer test page is not built")
         return FileResponse(customer_test_page, media_type="text/html; charset=utf-8")
 
+    @app.get("/v1/channels/adapters")
+    def channel_adapter_catalog(
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> list[dict]:
+        return [item.model_dump() for item in service.channel_adapters.catalog()]
+
     @app.get("/v1/integrations/taobao/capabilities")
     def taobao_capabilities(admin: AdminPrincipal = Depends(require_admin)) -> dict:
         return service.taobao.capabilities(admin.tenant_id)

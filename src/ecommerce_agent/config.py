@@ -74,6 +74,11 @@ class Settings:
     taobao_oauth_authorize_url: str = "https://oauth.taobao.com/authorize"
     taobao_oauth_token_url: str = "https://oauth.taobao.com/token"
     taobao_callback_max_skew_seconds: int = 600
+    mockchat_enabled: bool = False
+    mockchat_auto_reply_enabled: bool = False
+    mockchat_secret: str = ""
+    mockchat_callback_max_skew_seconds: int = 600
+    mockchat_messages_per_minute: int = 120
     outbox_worker_enabled: bool = False
     outbox_sync_dispatch: bool = True
     outbox_poll_seconds: float = 1.0
@@ -197,6 +202,15 @@ class Settings:
             ),
             taobao_callback_max_skew_seconds=max(
                 60, int(os.getenv("TAOBAO_CALLBACK_MAX_SKEW_SECONDS", "600"))
+            ),
+            mockchat_enabled=_as_bool(os.getenv("MOCKCHAT_ENABLED")),
+            mockchat_auto_reply_enabled=_as_bool(os.getenv("MOCKCHAT_AUTO_REPLY_ENABLED")),
+            mockchat_secret=os.getenv("MOCKCHAT_SECRET", "").strip(),
+            mockchat_callback_max_skew_seconds=max(
+                60, int(os.getenv("MOCKCHAT_CALLBACK_MAX_SKEW_SECONDS", "600"))
+            ),
+            mockchat_messages_per_minute=max(
+                1, int(os.getenv("MOCKCHAT_MESSAGES_PER_MINUTE", "120"))
             ),
             outbox_worker_enabled=_as_bool(
                 os.getenv("OUTBOX_WORKER_ENABLED"), default=True
