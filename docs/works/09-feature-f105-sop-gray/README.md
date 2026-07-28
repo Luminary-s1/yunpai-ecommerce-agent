@@ -32,4 +32,6 @@ curl -X POST \
 
 合并后完整测试套件：`302 passed in 359.42s`。
 
+截图为隔离服务上 Swagger 实际查询活动 SOP 灰度的结果：请求 URL、HTTP `200` 与响应体同时可见，记录显示 `traffic_percentage: 25`、`status: active`，认证密钥已脱敏。
+
 ![验证截图](verification.png)

@@ -29,4 +29,6 @@
 
 合并后完整测试套件：`302 passed in 359.42s`。
 
+截图为合并后 `main` 的 VS Code 集成终端实际运行 4 个商品顾问具名回归用例，终端显示 `4 passed in 5.09s`。
+
 ![验证截图](verification.png)

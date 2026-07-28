@@ -32,4 +32,6 @@ git diff --check origin/main...main
 
 合并后完整测试套件：`302 passed in 359.42s`。
 
+截图为 macOS arm64 上 VS Code 集成终端的实际检查：Python 版本、系统架构、`bash -n scripts/start-glm-coding-test.sh` 与 `git diff --check origin/main...main` 均已执行并返回成功。
+
 ![验证截图](verification.png)

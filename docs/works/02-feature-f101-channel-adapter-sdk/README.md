@@ -42,4 +42,6 @@ curl -s http://127.0.0.1:8080/v1/channels/adapters \
 
 合并后完整测试套件：`302 passed in 359.42s`。
 
+截图为隔离服务上 Swagger 实际执行 `GET /v1/channels/adapters` 的界面：请求 URL、脱敏后的认证头、HTTP `200` 和真实响应体同时可见；响应列出 `mockchat` 与 `taobao` 的契约版本、消息类型和能力声明。
+
 ![验证截图](verification.png)

@@ -32,4 +32,6 @@
 
 合并后完整测试套件：`302 passed in 359.42s`。
 
+截图为合并后 `main` 的 VS Code 集成终端实际运行 2 个自然语言模糊检索具名回归用例，终端显示 `2 passed in 1.76s`。
+
 ![验证截图](verification.png)
