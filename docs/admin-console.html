@@ -691,6 +691,10 @@
         <div class="field wide" id="handoffShiftManager">
           <label>绝对时间班次（按本地时间录入，服务端保存 UTC）</label>
           <div class="grid" style="grid-template-columns:1fr 1fr auto"><input class="input" id="handoffShiftStart" type="datetime-local"><input class="input" id="handoffShiftEnd" type="datetime-local"><button class="button" type="button" id="addHandoffShift">新增班次</button></div>
+          <div class="grid" style="grid-template-columns:1fr 1fr">
+            <label for="handoffShiftRepeatWeeks">重复间隔（周）<select class="input" id="handoffShiftRepeatWeeks"><option value="1">每 1 周</option><option value="2">每 2 周</option><option value="3">每 3 周</option><option value="4">每 4 周</option></select></label>
+            <label for="handoffShiftOccurrences">生成次数（1 为单次）<input class="input" id="handoffShiftOccurrences" type="number" min="1" max="26" value="1"></label>
+          </div>
           <input class="input" id="handoffShiftCancelNote" maxlength="500" value="后台调整排班" placeholder="取消班次说明">
           <div class="shift-list" id="handoffShiftRows"></div>
         </div>
@@ -1219,10 +1223,22 @@
       const startsAt = new Date($('handoffShiftStart').value);
       const endsAt = new Date($('handoffShiftEnd').value);
       if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())) return toast('请选择完整的班次起止时间');
+      const repeatEveryWeeks = Number($('handoffShiftRepeatWeeks').value);
+      const occurrences = Number($('handoffShiftOccurrences').value);
+      if (!Number.isInteger(occurrences) || occurrences < 1 || occurrences > 26) return toast('生成次数必须是 1 到 26 的整数');
+      const recurring = occurrences > 1;
+      const body = { starts_at:startsAt.toISOString(), ends_at:endsAt.toISOString() };
+      if (recurring) {
+        body.repeat_every_weeks = repeatEveryWeeks;
+        body.occurrences = occurrences;
+      }
       $('addHandoffShift').disabled = true;
       try {
-        await api(`/v1/handoffs/operators/${encodeURIComponent(current.operatorId)}/shifts`, { method:'POST', body:JSON.stringify({ starts_at:startsAt.toISOString(), ends_at:endsAt.toISOString() }) });
-        toast('班次已保存');
+        const path = recurring
+          ? `/v1/handoffs/operators/${encodeURIComponent(current.operatorId)}/shifts/recurring`
+          : `/v1/handoffs/operators/${encodeURIComponent(current.operatorId)}/shifts`;
+        await api(path, { method:'POST', body:JSON.stringify(body) });
+        toast(recurring ? `已生成 ${occurrences} 个班次` : '班次已保存');
         await loadHandoffShifts(current.operatorId);
       } catch (error) { $('handoffOperatorError').textContent = error.message; }
       finally { $('addHandoffShift').disabled = false; }

@@ -197,6 +197,7 @@ def test_admin_console_page_and_audit_api(tmp_path) -> None:
         assert 'id="handoffQueueDialog"' in page.text
         assert 'id="handoffOperatorDialog"' in page.text
         assert 'id="handoffShiftManager"' in page.text
+        assert 'id="handoffShiftOccurrences"' in page.text
         assert 'id="handoffHistoryDialog"' in page.text
         assert 'id="handoffDispatchRows"' in page.text
         assert 'id="handoffDispatchAlerts"' in page.text
@@ -205,6 +206,7 @@ def test_admin_console_page_and_audit_api(tmp_path) -> None:
         assert "/v1/handoffs/dispatch/summary" in page.text
         assert "/v1/handoffs/dispatch/alerts/" in page.text
         assert "/presence-sessions" in page.text
+        assert "/shifts/recurring" in page.text
         assert "/shifts" in page.text
         assert "openHandoffActionDialog" in page.text
         assert "openDispatchActionDialog" in page.text

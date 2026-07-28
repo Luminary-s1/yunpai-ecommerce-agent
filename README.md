@@ -44,7 +44,7 @@ flowchart LR
 - 仓储管理：库存余额、可售库存、覆盖天数、缺货/滞销判断和补货建议，保留来源、时间和版本证据。
 - 竞品分析：同款候选以 GTIN、品牌、型号、标题和关键属性生成可解释评分，经版本化人工批准后，价格、商品卖点与脱敏聚合口碑才进入 Agent 建议；拒绝匹配会自动撤销相关告警资格。
 - 竞品监控：按店铺/SKU 保存带乐观锁版本的低价、降价和新鲜度阈值；原子重评形成持久告警，支持确认、解决、条件清除和新证据复发重开，不自动改价。
-- 智能客服工作台：统一查看客服指标、会话回放、知识证据和受控对话测试；人工任务支持确定性队列路由、优先级、原子认领、短租约心跳、绝对时间排班、自动/人工派单隔离、技能/队列成员、全局与队列容量、持久自动派单、SLA、转派、升级、复核和不可变事件历史。
+- 智能客服工作台：统一查看客服指标、会话回放、知识证据和受控对话测试；人工任务支持确定性队列路由、优先级、原子认领、短租约心跳、绝对时间及周期批量排班、自动/人工派单隔离、技能/队列成员、全局与队列容量、持久自动派单、SLA、转派、升级、复核和不可变事件历史。
 - 受控指标：六项固定指标由代码定义，查询只接受严格 `QuerySpec`，返回定义版本、数据水位、质量与证据数量。
 - 管理后台：本地 `/admin` 页面聚合经营总览、智能客服、商品库存、订单售后、竞品分析、模块状态和审计记录。
 - 虚拟店铺验收：内置“晴川生活电器旗舰店”关联数据包，覆盖 6 个 SKU、10 条双仓库存、8 个订单、物流/售后、3 个竞品候选、价格/口碑、4 条店铺知识和 13 个跨模块运营需求；重复导入按来源版本幂等复用，所有 7 个当前可用业务模块必须有通过场景，并明确禁止作为生产数据证据。
@@ -249,6 +249,7 @@ POST /v1/handoffs/operators/{operator_id}/presence-sessions
 POST /v1/handoffs/operators/{operator_id}/heartbeat
 GET  /v1/handoffs/operators/{operator_id}/shifts
 POST /v1/handoffs/operators/{operator_id}/shifts
+POST /v1/handoffs/operators/{operator_id}/shifts/recurring
 POST /v1/handoffs/operators/{operator_id}/shifts/{shift_id}/cancel
 GET  /v1/handoffs/dispatch/summary
 GET  /v1/handoffs/dispatch/jobs
@@ -312,6 +313,10 @@ GET  /v1/integrations/taobao/agent-jobs
 GET  /v1/integrations/taobao/agent-jobs/{job_id}
 POST /v1/integrations/taobao/agent-jobs/run
 ```
+
+周期排班接口接收带 UTC 偏移的 `starts_at`、`ends_at`，以及
+`repeat_every_weeks`（1–4）和 `occurrences`（2–26）。服务端将其展开为独立的
+UTC 绝对班次；只要任一期与现有有效班次重叠，整批请求就会回滚。
 
 ### 营销与利润模块
 

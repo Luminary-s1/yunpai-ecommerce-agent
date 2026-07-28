@@ -409,6 +409,11 @@ class HandoffShiftCreate(BaseModel):
         return self
 
 
+class HandoffRecurringShiftCreate(HandoffShiftCreate):
+    repeat_every_weeks: int = Field(default=1, ge=1, le=4)
+    occurrences: int = Field(ge=2, le=26)
+
+
 class HandoffShiftCancelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
