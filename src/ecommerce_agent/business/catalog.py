@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -9,11 +10,68 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..database import Database, utc_now
+from ..text_utils import search_terms
 from .source_versioning import canonical_source_time, decide_write, payload_digest
 
 
 CatalogStatus = Literal["draft", "active", "inactive", "deleted"]
 JsonScalar = str | int | float | bool | None
+
+# A single-character token ("5", "l") is never specific enough on its own to claim
+# a product match, so a candidate needs at least one two-character term.
+MIN_SIGNIFICANT_TERM_WEIGHT = 2
+TERM_WEIGHT_CAP = 4
+MAX_QUERY_TERMS = 32
+
+
+def _term_weight(term: str) -> int:
+    return min(len(term), TERM_WEIGHT_CAP)
+
+
+def _weight_sum(terms: list[str] | set[str]) -> int:
+    return sum(_term_weight(term) for term in terms)
+
+
+def query_terms(keyword: str) -> list[str]:
+    """Customer wording reduced to the terms worth matching against the catalog."""
+
+    return search_terms(keyword)[:MAX_QUERY_TERMS]
+
+
+def _escape_like(term: str) -> str:
+    escaped = term.replace("\\", "\\\\")
+    for wildcard in ("%", "_"):
+        escaped = escaped.replace(wildcard, f"\\{wildcard}")
+    return escaped
+
+
+def _item_terms(item: dict[str, Any]) -> set[str]:
+    parts = [str(item["title"]), str(item["sku_id"]), str(item["item_id"])]
+    for _key, value in sorted(item["attributes"].items()):
+        if value is None or isinstance(value, bool):
+            continue
+        parts.append(str(value))
+    return set(search_terms(" ".join(parts)))
+
+
+def match_score(terms: list[str], item: dict[str, Any]) -> tuple[float, list[str]]:
+    """Score customer wording against one catalog item.
+
+    Same lexical shape as knowledge retrieval: matched weight over the geometric
+    mean of query and item weight, so noise words in a full sentence lower every
+    candidate equally and never change the ranking.
+    """
+
+    item_terms = _item_terms(item)
+    matched = [term for term in terms if term in item_terms]
+    if not matched:
+        return 0.0, []
+    if max(_term_weight(term) for term in matched) < MIN_SIGNIFICANT_TERM_WEIGHT:
+        return 0.0, []
+    denominator = math.sqrt(_weight_sum(terms) * _weight_sum(item_terms))
+    if denominator <= 0:
+        return 0.0, []
+    return round(min(1.0, _weight_sum(matched) / denominator), 4), matched
 
 
 class CatalogItemUpsert(BaseModel):
@@ -150,6 +208,75 @@ class CatalogService:
                 tuple(params),
             ).fetchall()
         return [self._view(dict(row)) for row in rows]
+
+    def search_items(
+        self,
+        tenant_id: str,
+        *,
+        keyword: str,
+        store_id: str | None = None,
+        status: CatalogStatus | None = None,
+        limit: int = 5,
+        candidate_limit: int = 200,
+        min_relative_score: float = 0.35,
+    ) -> list[dict[str, Any]]:
+        """Resolve customer wording to real SKUs.
+
+        Customers say "空气炸锅 5L", never "QC-AF5-WHITE", so the identifier has to be
+        looked up here instead of being demanded from the customer. Matching covers the
+        title, the connector ids and the attribute values (brand, category, model,
+        colour, capacity). Deleted items are never surfaced.
+
+        `min_relative_score` drops candidates that only share a weak signal with the
+        best match, such as every item of the same brand, so an ambiguous result means
+        the customer really has to choose.
+        """
+
+        terms = query_terms(keyword)
+        if not terms:
+            return []
+        conditions = ["tenant_id=?"]
+        params: list[Any] = [tenant_id]
+        if store_id:
+            conditions.append("store_id=?")
+            params.append(store_id)
+        if status:
+            conditions.append("status=?")
+            params.append(status)
+        else:
+            conditions.append("status<>'deleted'")
+        fragments = []
+        for term in terms:
+            fragments.append(
+                "(title LIKE ? ESCAPE '\\' OR sku_id LIKE ? ESCAPE '\\' "
+                "OR item_id LIKE ? ESCAPE '\\' OR attributes_json LIKE ? ESCAPE '\\')"
+            )
+            pattern = f"%{_escape_like(term)}%"
+            params.extend([pattern, pattern, pattern, pattern])
+        conditions.append(f"({' OR '.join(fragments)})")
+        params.append(candidate_limit)
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM catalog_items
+                WHERE {' AND '.join(conditions)}
+                ORDER BY updated_at DESC, sku_id ASC LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+        ranked: list[dict[str, Any]] = []
+        for row in rows:
+            item = self._view(dict(row))
+            score, matched = match_score(terms, item)
+            if score <= 0:
+                continue
+            ranked.append({**item, "match_score": score, "matched_terms": matched})
+        if not ranked:
+            return []
+        ranked.sort(key=lambda item: (-item["match_score"], str(item["sku_id"])))
+        threshold = ranked[0]["match_score"] * min_relative_score
+        relevant = [item for item in ranked if item["match_score"] >= threshold]
+        return relevant[: max(1, limit)]
 
     def _row_by_id(self, tenant_id: str, item_id: str) -> dict[str, Any]:
         with self.db.connect() as conn:

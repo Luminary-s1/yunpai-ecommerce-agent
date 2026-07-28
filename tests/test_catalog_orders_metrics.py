@@ -354,3 +354,134 @@ def test_operations_api_catalog_orders_metrics_and_conflict(tmp_path) -> None:
         conflict = client.post("/v1/catalog/items", headers=headers, json=conflict_payload)
         assert conflict.status_code == 409
         assert conflict.json()["detail"] == "source_version_conflict"
+
+
+def seed_qingchuan_catalog(catalog_service: CatalogService, tenant_id: str) -> None:
+    for changes in (
+        {
+            "item_id": "QC-SPU-AF5",
+            "sku_id": "QC-AF5-WHITE",
+            "title": "晴川空气炸锅 5L 云白款",
+            "source_id": "src-af5-white",
+            "attributes": {
+                "brand": "晴川",
+                "category": "空气炸锅",
+                "model": "AF5",
+                "capacity_l": 5,
+                "color": "云白",
+            },
+        },
+        {
+            "item_id": "QC-SPU-AF5",
+            "sku_id": "QC-AF5-GREEN",
+            "title": "晴川空气炸锅 5L 松绿色",
+            "source_id": "src-af5-green",
+            "attributes": {
+                "brand": "晴川",
+                "category": "空气炸锅",
+                "model": "AF5",
+                "capacity_l": 5,
+                "color": "松绿",
+            },
+        },
+        {
+            "item_id": "QC-SPU-VC1",
+            "sku_id": "QC-VC-A1",
+            "title": "晴川无线吸尘器 A1",
+            "source_id": "src-vc-a1",
+            "attributes": {"brand": "晴川", "category": "无线吸尘器", "model": "VC-A1"},
+        },
+        {
+            "item_id": "QC-SPU-OLD",
+            "sku_id": "QC-AF-RETIRED",
+            "title": "晴川空气炸锅 3L 停售款",
+            "status": "deleted",
+            "source_id": "src-af-retired",
+            "attributes": {"brand": "晴川", "category": "空气炸锅"},
+        },
+    ):
+        catalog_service.upsert(tenant_id, catalog_item(**changes))
+
+
+def test_catalog_search_resolves_customer_wording_without_sku(tmp_path) -> None:
+    db = Database(tmp_path / "search.sqlite3")
+    db.initialize()
+    service = CatalogService(db)
+    seed_qingchuan_catalog(service, "tenant-a")
+
+    fuzzy = service.search_items("tenant-a", keyword="你们店铺空气炸锅什么参数？")
+    assert [row["sku_id"] for row in fuzzy] == ["QC-AF5-GREEN", "QC-AF5-WHITE"]
+    assert all(row["match_score"] > 0 for row in fuzzy)
+    assert {"空气", "气炸", "炸锅"} <= set(fuzzy[0]["matched_terms"])
+
+    colored = service.search_items("tenant-a", keyword="晴川空气炸锅 5L 松绿色")
+    assert colored[0]["sku_id"] == "QC-AF5-GREEN"
+    assert colored[0]["match_score"] > colored[1]["match_score"]
+
+    attribute_only = service.search_items("tenant-a", keyword="松绿")
+    assert [row["sku_id"] for row in attribute_only] == ["QC-AF5-GREEN"]
+
+    assert service.search_items("tenant-a", keyword="我要退款") == []
+    assert service.search_items("tenant-a", keyword="5") == []
+    assert service.search_items("tenant-a", keyword="") == []
+    assert service.search_items("tenant-b", keyword="空气炸锅") == []
+    assert service.search_items("tenant-a", keyword="空气炸锅", store_id="store-999") == []
+
+
+def test_search_products_tool_resolves_fuzzy_wording_within_store(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        seed_qingchuan_catalog(service.operations.catalog, "tenant-test")
+        context = ToolExecutionContext(
+            tenant_id="tenant-test",
+            client_id="client-test",
+            session_id="session-test",
+            trace_id="trace-test",
+            trusted_context={"store_id": "store-001"},
+        )
+
+        spec, arguments = service.tools.validate_selection(
+            name="search_products",
+            arguments={"keyword": "你们店铺空气炸锅什么参数？"},
+            requested_mode="observe",
+            context=context,
+        )
+        ambiguous = service.tools.execute(spec=spec, arguments=arguments, context=context)
+        assert ambiguous.status == "success"
+        assert ambiguous.postcondition_met is True
+        assert ambiguous.output["resolution"] == "ambiguous"
+        assert ambiguous.output["store_id"] == "store-001"
+        assert [item["sku_id"] for item in ambiguous.output["items"]] == [
+            "QC-AF5-GREEN",
+            "QC-AF5-WHITE",
+        ]
+
+        _, resolved_args = service.tools.validate_selection(
+            name="search_products",
+            arguments={"keyword": "松绿"},
+            requested_mode="observe",
+            context=context,
+        )
+        resolved = service.tools.execute(spec=spec, arguments=resolved_args, context=context)
+        assert resolved.output["resolution"] == "resolved"
+        assert resolved.output["items"][0]["sku_id"] == "QC-AF5-GREEN"
+
+        _, empty_args = service.tools.validate_selection(
+            name="search_products",
+            arguments={"keyword": "我要退款"},
+            requested_mode="observe",
+            context=context,
+        )
+        empty = service.tools.execute(spec=spec, arguments=empty_args, context=context)
+        assert empty.output["resolution"] == "no_match"
+        assert empty.output["items"] == []
+
+        with pytest.raises(ValueError, match="tool_policy_denied:store_scope_mismatch"):
+            service.tools.validate_selection(
+                name="search_products",
+                arguments={"keyword": "空气炸锅", "store_id": "other-store"},
+                requested_mode="observe",
+                context=context,
+            )
+    finally:
+        service.close()
