@@ -43,6 +43,7 @@
 
 ## 进度历史
 
+- 2026-07-27：在 `feature/f106-product-advisor` 分支（叠于 F-105）完成 0.28.0 商品/SKU 顾问（F-106）。实体识别/推荐/对比与版本化证据 ID 进入 context bundle；店铺与租户隔离、chat 快照嵌入有测试。F-106 转为已完成；真实商品数据接入仍归 F-110/F-204。
 - 2026-07-27：在 `feature/f105-sop-gray` 分支（叠于 F-104）完成 0.27.0 SOP 渠道灰度（F-105）。已批准候选版本按会话分桶灰度、run 固定版本在回滚后不受影响、原子完成与一步回滚、管理 API 与回归通过。F-105 转为已完成；真实业务写工具/读回补偿仍归 F-111。
 - 2026-07-27：在 `feature/f104-knowledge-gray-release` 分支（叠于 F-103，含 PR #4 schema 断言修复的 cherry-pick）完成 0.26.0 知识灰度发布（F-104）。schema v24 通用 `staged_rollouts`；已评测候选按会话稳定分桶灰度、调量、原子完成与一步回滚；评测/进化路径固定基线；chat 会话分桶与检索一致；管理 API 与迁移测试通过。F-104 转为已完成；灰度指标观测联动仍属 F-113。
 - 2026-07-27：在 `feature/f103-channel-context-envelope` 分支（基于 F-101 分支）完成 0.25.0 统一渠道会话与多消息类型信封（F-103）。信封新增归一化 `message_kind`；淘宝奇门非文本 contentType 与 mockchat 图片/卡片类载荷改为"记录 + 脱敏占位符"，不再 400 拒收也不信任媒体正文；运行时对不可读类型跳过 Agent 直接确权转人工（`unsupported_message_kind`），零 invocation/零外发；敌意载荷附带的 order 字段经契约、白名单与 context snapshot 三层验证不可达 checkpoint；跨店铺同名会话与跨租户同键落库均不合并且跨租户读取被拒。61 项渠道回归、channel_sdk 分支覆盖 90–100%、全量 261 通过；真实渠道多消息类型联调仍归 F-102/F-205。
