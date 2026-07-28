@@ -36,7 +36,7 @@ class SessionScopeError(ValueError):
 
 
 class Database:
-    SCHEMA_VERSION = 23
+    SCHEMA_VERSION = 24
 
     def __init__(self, path: Path):
         self.path = path
@@ -143,6 +143,9 @@ class Database:
             if 23 not in applied:
                 self._apply_v23(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (23, ?)", (utc_now(),))
+            if 24 not in applied:
+                self._apply_v24(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (24, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2094,6 +2097,37 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v24(conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS staged_rollouts (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                subject_type TEXT NOT NULL CHECK(subject_type IN ('knowledge','sop')),
+                subject_key TEXT NOT NULL,
+                candidate_id TEXT NOT NULL,
+                baseline_id TEXT,
+                traffic_percentage INTEGER NOT NULL
+                    CHECK(traffic_percentage BETWEEN 1 AND 100),
+                rollout_salt TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('active','completed','rolled_back')),
+                note TEXT,
+                record_version INTEGER NOT NULL DEFAULT 1,
+                created_by TEXT NOT NULL,
+                completed_by TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_staged_rollouts_one_active
+                ON staged_rollouts(tenant_id, subject_type, subject_key)
+                WHERE status='active';
+            CREATE INDEX IF NOT EXISTS idx_staged_rollouts_scope
+                ON staged_rollouts(tenant_id, subject_type, status, updated_at DESC);
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -2122,6 +2156,10 @@ class Database:
                 "tenant_id", "statement_id", "status", "difference_amount", "record_version",
             },
             "knowledge": {"knowledge_key", "layer", "review_status", "record_version"},
+            "staged_rollouts": {
+                "tenant_id", "subject_type", "subject_key", "candidate_id",
+                "traffic_percentage", "rollout_salt", "status", "record_version",
+            },
             "competitor_observations": {
                 "tenant_id",
                 "connector_id",

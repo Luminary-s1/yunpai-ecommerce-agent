@@ -118,6 +118,7 @@ class KnowledgeBase:
         tenant_id: str | None = None,
         store_id: str | None = None,
         sku_id: str | None = None,
+        rollout_unit: str | None = None,
     ) -> list[RetrievedDocument]:
         query_terms = set(search_terms(query))
         query_vector = hash_embedding(query)
@@ -147,8 +148,9 @@ class KnowledgeBase:
             )
             rows = conn.execute(
                 f"""
-                SELECT id, category, intent, question, answer, keywords, search_text,
-                       embedding, source, version, layer, store_id, sku_id, tenant_id
+                SELECT id, knowledge_key, category, intent, question, answer, keywords,
+                       search_text, embedding, source, version, layer, store_id,
+                       sku_id, tenant_id
                 FROM knowledge
                 WHERE status='active' AND effective_from <= ?
                   AND (effective_to IS NULL OR effective_to > ?)
@@ -157,6 +159,13 @@ class KnowledgeBase:
                 """,
                 params,
             ).fetchall()
+        rows = self._apply_rollouts(
+            [dict(row) for row in rows],
+            tenant_id=tenant_id,
+            rollout_unit=rollout_unit,
+            scope_clauses=scope_clauses,
+            scope_params=scope_params,
+        )
 
         ranked: list[RetrievedDocument] = []
         for row in rows:
@@ -192,6 +201,50 @@ class KnowledgeBase:
             if len(unique) >= top_k:
                 break
         return unique
+
+    def _apply_rollouts(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        tenant_id: str | None,
+        rollout_unit: str | None,
+        scope_clauses: list[str],
+        scope_params: list[Any],
+    ) -> list[dict[str, Any]]:
+        """Serve gray-release candidates to in-bucket units, baselines to the rest.
+
+        Without a rollout unit every caller stays on the approved baseline, so
+        evaluation and evolution paths never observe half-released knowledge.
+        """
+        if tenant_id is None or rollout_unit is None:
+            return rows
+        from .rollouts import active_rollouts, rollout_choice
+
+        chosen: dict[str, str] = {}
+        for rollout in active_rollouts(self.db, tenant_id, "knowledge"):
+            candidate_id = rollout_choice(rollout, rollout_unit)
+            if candidate_id is not None:
+                chosen[str(rollout["subject_key"])] = candidate_id
+        if not chosen:
+            return rows
+        placeholders = ",".join("?" for _ in chosen)
+        with self.db.connect() as conn:
+            candidates = conn.execute(
+                f"""
+                SELECT id, knowledge_key, category, intent, question, answer, keywords,
+                       search_text, embedding, source, version, layer, store_id,
+                       sku_id, tenant_id
+                FROM knowledge
+                WHERE status='candidate' AND tenant_id=? AND id IN ({placeholders})
+                  {' '.join(scope_clauses)}
+                """,
+                (tenant_id, *chosen.values(), *scope_params),
+            ).fetchall()
+        replaced = [
+            row for row in rows if str(row["knowledge_key"]) not in chosen
+        ]
+        replaced.extend(dict(row) for row in candidates)
+        return replaced
 
     def candidate_score(
         self,

@@ -10,6 +10,9 @@ from .knowledge_management import (
     KnowledgeCreateRequest,
     KnowledgeLifecycleError,
     KnowledgeReviseRequest,
+    KnowledgeRolloutBeginRequest,
+    KnowledgeRolloutTransitionRequest,
+    KnowledgeRolloutUpdateRequest,
     KnowledgeTransitionRequest,
 )
 from .quality import QualityError, QualityReviewRequest, QualityRunRequest
@@ -113,6 +116,58 @@ def build_governance_router(
     ) -> dict[str, Any]:
         return _knowledge_action(
             service.knowledge_management.rollback, admin, item_id, payload
+        )
+
+    @router.get("/knowledge-rollouts")
+    def list_knowledge_rollouts(
+        status: str | None = Query(
+            default=None, pattern=r"^(active|completed|rolled_back)$"
+        ),
+        limit: int = Query(default=100, ge=1, le=500),
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> list[dict[str, Any]]:
+        return service.knowledge_management.list_rollouts(
+            admin.tenant_id, status=status, limit=limit
+        )
+
+    @router.post("/knowledge/{item_id}/rollouts", status_code=201)
+    def begin_knowledge_rollout(
+        item_id: str,
+        payload: KnowledgeRolloutBeginRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return _knowledge_action(
+            service.knowledge_management.begin_rollout, admin, item_id, payload
+        )
+
+    @router.post("/knowledge-rollouts/{rollout_id}/traffic")
+    def update_knowledge_rollout(
+        rollout_id: str,
+        payload: KnowledgeRolloutUpdateRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return _knowledge_action(
+            service.knowledge_management.update_rollout, admin, rollout_id, payload
+        )
+
+    @router.post("/knowledge-rollouts/{rollout_id}/complete")
+    def complete_knowledge_rollout(
+        rollout_id: str,
+        payload: KnowledgeRolloutTransitionRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return _knowledge_action(
+            service.knowledge_management.complete_rollout, admin, rollout_id, payload
+        )
+
+    @router.post("/knowledge-rollouts/{rollout_id}/rollback")
+    def rollback_knowledge_rollout(
+        rollout_id: str,
+        payload: KnowledgeRolloutTransitionRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return _knowledge_action(
+            service.knowledge_management.rollback_rollout, admin, rollout_id, payload
         )
 
     @router.get("/sops")
