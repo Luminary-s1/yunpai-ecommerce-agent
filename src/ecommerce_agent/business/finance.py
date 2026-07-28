@@ -261,7 +261,7 @@ class FinanceService:
         store_id: str | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
-        limit: int = 500,
+        limit: int | None = 500,
     ) -> list[dict[str, Any]]:
         conditions = ["tenant_id=?"]
         params: list[Any] = [tenant_id]
@@ -274,12 +274,15 @@ class FinanceService:
         if end_date:
             conditions.append("occurred_on<=?")
             params.append(end_date.isoformat())
-        params.append(limit)
+        limit_clause = ""
+        if limit is not None:
+            limit_clause = "LIMIT ?"
+            params.append(limit)
         with self.db.connect() as conn:
             rows = conn.execute(
                 f"""
                 SELECT * FROM operating_expenses WHERE {' AND '.join(conditions)}
-                ORDER BY occurred_on DESC, expense_key ASC LIMIT ?
+                ORDER BY occurred_on DESC, expense_key ASC {limit_clause}
                 """,
                 tuple(params),
             ).fetchall()
@@ -346,6 +349,7 @@ class FinanceService:
             store_id=query.store_id,
             start_date=query.start_date,
             end_date=query.end_date,
+            limit=None,
         )
         currency_values = {str(row["currency"]) for row in orders} | {
             str(row["currency"]) for row in expenses
