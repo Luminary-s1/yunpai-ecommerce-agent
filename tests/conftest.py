@@ -38,6 +38,7 @@ def make_settings(data_dir: Path) -> Settings:
         bootstrap_client_key="test-client-key-12345",
         bootstrap_client_can_supply_order_context=False,
         subject_hash_key="test-subject-hash-key-12345",
+        session_idle_timeout_minutes=120,
         message_retention_days=30,
         audit_retention_days=180,
         max_request_body_bytes=2048,

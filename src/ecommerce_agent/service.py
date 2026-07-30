@@ -50,6 +50,8 @@ from .tools import ToolRegistry
 
 
 class AgentService:
+    SESSION_IDLE_WORKER_POLL_SECONDS = 60.0
+
     def __init__(
         self,
         settings: Settings | None = None,
@@ -119,6 +121,13 @@ class AgentService:
             self._handoff_dispatch_worker_assigned = 0
             self._handoff_dispatch_worker_waiting = 0
             self._handoff_dispatch_worker_failed = 0
+            self._session_idle_worker_thread: threading.Thread | None = None
+            self._session_idle_worker_stop = threading.Event()
+            self._session_idle_worker_lock = threading.Lock()
+            self._session_idle_worker_last_error: str | None = None
+            self._session_idle_worker_last_run_at: str | None = None
+            self._session_idle_worker_cycles = 0
+            self._session_idle_worker_closed = 0
             self.sops = SopService(self.db, self.tools)
             self.seeded_sops = self.sops.seed_defaults(self.settings.bootstrap_tenant_id)
             self.sop_recovery = self.sops.recover_interrupted_runs()
@@ -613,6 +622,7 @@ class AgentService:
             "registered_tools": len(self.tools),
             "business_modules": self.operations.modules(),
             "competitive_monitoring": self.competitive_monitor_worker_status(),
+            "session_idle": self.session_idle_worker_status(),
             "handoff_sla": self.handoff_sla_worker_status(),
             "handoff_dispatch": {
                 **self.handoff_dispatch.summary(
@@ -667,6 +677,7 @@ class AgentService:
                 not self.settings.competitive_monitor_worker_enabled
                 or self.competitive_monitor_worker_status()["running"]
             ),
+            "session_idle_worker": self.session_idle_worker_status()["running"],
             "handoff_sla_worker": (
                 not self.settings.handoff_sla_worker_enabled
                 or self.handoff_sla_worker_status()["running"]
@@ -704,8 +715,69 @@ class AgentService:
         self.taobao.start_outbox_worker()
         self.channel_agents.start_worker()
         self.start_competitive_monitor_worker()
+        self.start_session_idle_worker()
         self.start_handoff_sla_worker()
         self.start_handoff_dispatch_worker()
+
+    def start_session_idle_worker(self) -> None:
+        with self._session_idle_worker_lock:
+            if (
+                self._session_idle_worker_thread is not None
+                and self._session_idle_worker_thread.is_alive()
+            ):
+                return
+            self._session_idle_worker_stop.clear()
+            self._session_idle_worker_thread = threading.Thread(
+                target=self._session_idle_worker_loop,
+                name="session-idle-worker",
+                daemon=True,
+            )
+            self._session_idle_worker_thread.start()
+
+    def stop_session_idle_worker(self) -> None:
+        with self._session_idle_worker_lock:
+            thread = self._session_idle_worker_thread
+            self._session_idle_worker_stop.set()
+        if thread is not None:
+            thread.join(timeout=5)
+        with self._session_idle_worker_lock:
+            if thread is None or not thread.is_alive():
+                self._session_idle_worker_thread = None
+
+    def session_idle_worker_status(self) -> dict[str, Any]:
+        thread = self._session_idle_worker_thread
+        return {
+            "running": bool(thread and thread.is_alive()),
+            "poll_seconds": self.SESSION_IDLE_WORKER_POLL_SECONDS,
+            "timeout_minutes": self.settings.session_idle_timeout_minutes,
+            "cycles": self._session_idle_worker_cycles,
+            "closed": self._session_idle_worker_closed,
+            "last_run_at": self._session_idle_worker_last_run_at,
+            "last_error": self._session_idle_worker_last_error,
+        }
+
+    def _session_idle_worker_loop(self) -> None:
+        while not self._session_idle_worker_stop.is_set():
+            try:
+                report = self.maintenance.close_idle_sessions()
+                self._session_idle_worker_cycles += 1
+                self._session_idle_worker_closed += int(report["closed"])
+                self._session_idle_worker_last_run_at = str(report["run_at"])
+                self._session_idle_worker_last_error = None
+            except Exception as exc:
+                self._session_idle_worker_last_error = (
+                    f"{type(exc).__name__}: {str(exc)[:300]}"
+                )
+                self.db.audit(
+                    "session.idle_worker_failed",
+                    "session-idle-worker",
+                    "scheduler",
+                    {"error_type": type(exc).__name__},
+                    self.settings.bootstrap_tenant_id,
+                )
+            self._session_idle_worker_stop.wait(
+                self.SESSION_IDLE_WORKER_POLL_SECONDS
+            )
 
     def start_competitive_monitor_worker(self) -> None:
         if not self.settings.competitive_monitor_worker_enabled:
@@ -928,6 +1000,7 @@ class AgentService:
         try:
             self.stop_handoff_dispatch_worker()
             self.stop_handoff_sla_worker()
+            self.stop_session_idle_worker()
             self.stop_competitive_monitor_worker()
             self.channel_agents.close()
             self.taobao.close()
