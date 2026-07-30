@@ -160,6 +160,20 @@
     {"category": "价保规则", "intent": "refund", "question": "商品降价可以申请价保吗？", "answer": "签收后 7 日内可提交价保申请，是否符合条件以活动类型、实付金额和订单状态核验结果为准，客服不得在核验前承诺退款。", "keywords": "价保 降价 退款 7日", "risk_level": "high", "layer": "store"},
     {"category": "售后规则", "intent": "refund", "question": "未拆封商品如何退货？", "answer": "未拆封商品可先提交退货申请，由人工核验订单、商品状态和运费责任后给出处理方案，不直接承诺退款完成。", "keywords": "未拆封 退货 售后", "risk_level": "high", "layer": "store"}
   ],
+  "operations_dataset": {
+    "dataset_key": "virtual-ops-week-29",
+    "json_dataset_key": "virtual-ops-live-week-29",
+    "csv": "日期,渠道,访客数,订单数,销售额,推广花费\n2026-07-10,搜索,1000,50,10000.00,500.00\n2026-07-11,搜索,1000,48,9600.00,520.00\n2026-07-12,搜索,1000,46,9200.00,560.00\n2026-07-13,搜索,1000,30,6000.00,800.00\n2026-07-14,搜索,1000,26,5200.00,900.00\n2026-07-15,搜索,1000,24,4800.00,1000.00\nbad-date,搜索,100,10,1000.00,100.00\n2026-07-16,搜索,10,90,900.00,10.00\n",
+    "json": "{\"records\": [{\"record_date\": \"2026-07-17\", \"channel\": \"直播\", \"visitors\": 800, \"orders\": 20, \"sales_amount\": \"4000.00\", \"ad_spend\": \"600.00\"}, {\"record_date\": \"2026-07-18\", \"channel\": \"直播\", \"visitors\": 760, \"orders\": 12, \"sales_amount\": \"2400.00\", \"ad_spend\": \"680.00\"}]}",
+    "copywriting": {
+      "product_name": "晴川空气炸锅 5L 云白款",
+      "selling_points": ["5L 大容量", "一键预设菜单", "可视化烹饪窗口"],
+      "price": "499.00",
+      "target_audience": "小家庭",
+      "styles": ["formal", "playful", "urgent"],
+      "variants_per_style": 1
+    }
+  },
   "demands": [
     {
       "id": "D01", "module": "catalog", "title": "查询在售商品与版本",
@@ -235,6 +249,11 @@
       "id": "D15", "module": "finance", "title": "生成管理利润估算和可人工处置的结算差异任务",
       "input": {"operation": "FinanceService.profit_report + run_reconciliation", "parameters": {"store_id": "qingchuan-flagship-001", "period": "2026-07-10 to 2026-07-22", "tolerance_amount": "1.00"}},
       "expected": ["经营利润明确标记为 management estimate", "费用按类别归集", "结算差异生成 open 任务且不修改账务或资金"]
+    },
+    {
+      "id": "D16", "module": "ops_assistant", "title": "解析运营数据并生成多风格文案与分析报告",
+      "input": {"operation": "OpsAssistantService.parse_dataset + generate_copy + analysis_report", "parameters": {"store_id": "qingchuan-flagship-001", "dataset_key": "virtual-ops-week-29", "period": "2026-07-10 to 2026-07-16"}},
+      "expected": ["CSV 逐行拒绝坏日期和订单超访客并返回结构化记录", "JSON 与重复导入保持幂等和版本可追溯", "多风格候选文案禁止直接发布并标记生成方式", "报告数值由代码计算并命中销售下滑与花费上升建议"]
     }
   ]
 }
