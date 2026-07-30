@@ -298,7 +298,10 @@ def classify(message: str, *, model: ModelGateway | None) -> IntentResult: ...
 
 **`src/ecommerce_agent/database.py`**
 
-- `SCHEMA_VERSION` 由 25 升到 26
+- `SCHEMA_VERSION` 由 **24** 直接设为 **26**，**故意跳过 25**。25 已被尚未合并的
+  `feature/m5-operations-assistant` 分支占用（该分支新增 `ops_operation_records`），
+  跳号可避免两条分支合并时版本号冲突。迁移用 `_ensure_column` 加列，本身即为
+  additive、可从任意历史版本前向迁移，跳号不影响升级路径
 - 用既有 `_ensure_column` helper（`database.py:2161`）加列，**不要**重建表：
   - `messages.customer_intent TEXT`
   - `messages.intent_confidence REAL`
@@ -318,7 +321,8 @@ def classify(message: str, *, model: ModelGateway | None) -> IntentResult: ...
 4. 投诉意图 → `risk_level >= medium` 且 handoff payload 带 `priority_flag`
 5. 连续两轮低质 → 第三轮强制 handoff
 6. `messages` 表可查到三个新字段
-7. schema 从 v25 前向迁移到 v26 成功，旧数据不丢（参考 `tests/test_migrations.py` 既有写法）
+7. schema 从 v24 前向迁移到 v26 成功，旧数据不丢；从更早版本（v19 起）逐级前向迁移
+   同样成功（参考 `tests/test_migrations.py` 既有写法）
 8. **反证**：临时把 `handoff_confidence_threshold` 设为 `0.0`，第 3 项必须失败
 
 ### 完成判据
