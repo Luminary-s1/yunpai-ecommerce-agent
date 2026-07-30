@@ -84,6 +84,22 @@ def business_module_catalog() -> list[BusinessModule]:
             agent_tools=["get_profit_reconciliation"],
         ),
         BusinessModule(
+            module_id="ops_assistant",
+            display_name="运营辅助与文案",
+            status="available",
+            responsibilities=[
+                "CSV/JSON 与表单运营数据解析",
+                "多风格营销文案小批量生成",
+                "趋势分析与优化建议报告",
+            ],
+            boundaries=[
+                "统计数值由代码计算，模型不得修改",
+                "候选文案必须人工审核后才能发布",
+                "只输出解读与建议，不执行预算、价格或库存变更",
+            ],
+            agent_tools=[],
+        ),
+        BusinessModule(
             module_id="metrics",
             display_name="经营指标",
             status="available",

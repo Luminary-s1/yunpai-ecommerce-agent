@@ -14,6 +14,7 @@ from .finance import FinanceReportQuery, FinanceService
 from .inventory import InventoryBalanceUpsert, InventoryService
 from .marketing import MarketingDiagnosisQuery, MarketingService
 from .metrics import MetricQuery, MetricsService
+from .ops_assistant import OpsAssistantService
 from .orders import OrderService, OrderUpsert
 from .registry import business_module_catalog
 
@@ -66,6 +67,7 @@ class OperationsService:
         self.competitive = CompetitiveIntelligenceService(db)
         self.marketing = MarketingService(db)
         self.finance = FinanceService(db)
+        self.ops_assistant = OpsAssistantService(db)
         self.metrics = MetricsService(db, self.inventory)
         self.connectors = ConnectorRegistry()
         self.connectors.register(VirtualTaobaoConnector())
