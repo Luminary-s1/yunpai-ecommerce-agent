@@ -12,3 +12,4 @@ _skill_test/
 *.sqlite3
 *.db
 .idea/
+env.md
