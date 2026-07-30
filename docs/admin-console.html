@@ -142,6 +142,13 @@
     .module h3 { margin: 0; font-size: 15px; }
     .module h4 { margin: 14px 0 5px; font-size: 11px; color: var(--muted); text-transform: uppercase; }
     .module ul { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.8; }
+    .ops-style-options { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+    .ops-style-options label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink); }
+    .copy-result-grid { display: grid; gap: 9px; max-height: 390px; overflow: auto; }
+    .copy-result-card { padding: 11px 12px; border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 4px; background: var(--surface); }
+    .copy-result-card h4 { margin: 0 0 6px; font-size: 13px; }
+    .copy-result-card p { margin: 0; white-space: pre-wrap; }
+    .copy-result-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .simulation-layout { display: grid; grid-template-columns: minmax(430px, .9fr) minmax(0, 1.1fr); gap: 14px; align-items: start; }
     #view-simulation table { min-width: 0; table-layout: fixed; }
     #view-simulation th:nth-child(1) { width: 44%; }
@@ -247,6 +254,7 @@
         <button data-view="commerce">商品库存</button>
         <button data-view="orders">订单售后</button>
         <button data-view="competitive">竞品分析</button>
+        <button data-view="ops">运营辅助</button>
         <button data-view="marketing">营销投放</button>
         <button data-view="finance">利润对账</button>
         <button data-view="knowledge">知识与 SOP</button>
@@ -380,6 +388,63 @@
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>竞品明细</h3><span class="muted" id="competitiveAsOf"></span></div><div class="table-wrap"><table><thead><tr><th>竞品</th><th>本店价</th><th>竞品价</th><th>差额</th><th>位置</th><th>匹配门禁</th><th>来源</th><th>观察时间</th></tr></thead><tbody id="competitiveRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><div><h3>商品卖点与聚合口碑</h3><span class="muted">不保存评论者、订单标识或原始评论</span></div><span class="muted" id="competitiveSignalCount"></span></div><div class="table-wrap"><table><thead><tr><th>角色</th><th>类型 / 方面</th><th>脱敏摘要</th><th>样本</th><th>匹配状态</th><th>证据来源</th></tr></thead><tbody id="competitiveSignalRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>价格趋势</h3></div><div class="panel-body stack" id="trendRows"></div></article>
+        </section>
+
+        <section class="view" id="view-ops">
+          <div class="section-head">
+            <div><h2>运营辅助与文案生成</h2><p>解析 CSV / JSON / 表单数据，生成多风格候选文案与趋势分析；不执行发布、调价或预算变更</p></div>
+            <div class="toolbar"><input class="input" id="opsDatasetKey" value="ops-week-30" placeholder="数据集 Key"><input class="input" id="opsStore" value="qingchuan-flagship-001" placeholder="店铺 ID"><button class="button primary" id="refreshOpsAssistant">刷新报告</button></div>
+          </div>
+          <div class="grid kpis" id="opsKpis"></div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel">
+              <div class="panel-head"><h3>CSV / JSON 文件导入</h3><span class="status info">最多 2,000 行</span></div>
+              <form class="panel-body form-grid" id="opsImportForm">
+                <div class="field wide"><label for="opsDatasetFile">运营数据文件（UTF-8）</label><input class="input" id="opsDatasetFile" type="file" accept=".csv,.json,text/csv,application/json" required></div>
+                <div class="field"><label for="opsSourceFormat">文件格式</label><select class="input" id="opsSourceFormat"><option value="csv">CSV</option><option value="json">JSON</option></select></div>
+                <div class="field"><label>字段</label><div class="muted">日期、渠道、访客、订单、销售额、推广花费</div></div>
+                <div class="wide"><button class="button primary" type="submit" id="importOpsDataset">解析并导入</button></div>
+              </form>
+              <div class="panel-body" style="padding-top:0"><div class="notice" id="opsImportResult">选择文件后导入；错误行会单独返回，不影响有效行。</div></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3>表单录入</h3><span class="status warn">同日同渠道自动版本化</span></div>
+              <form class="panel-body form-grid" id="opsRecordForm">
+                <div class="field"><label for="opsRecordDate">日期</label><input class="input" id="opsRecordDate" type="date" value="2026-07-05" required></div>
+                <div class="field"><label for="opsChannel">渠道</label><input class="input" id="opsChannel" value="推荐" required></div>
+                <div class="field"><label for="opsVisitors">访客数</label><input class="input" id="opsVisitors" type="number" min="0" value="600" required></div>
+                <div class="field"><label for="opsOrders">订单数</label><input class="input" id="opsOrders" type="number" min="0" value="24" required></div>
+                <div class="field"><label for="opsSales">销售额</label><input class="input" id="opsSales" type="number" min="0" step="0.01" value="4800.00" required></div>
+                <div class="field"><label for="opsSpend">推广花费</label><input class="input" id="opsSpend" type="number" min="0" step="0.01" value="300.00" required></div>
+                <div class="wide"><button class="button primary" type="submit">保存运营记录</button></div>
+              </form>
+            </article>
+          </div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel">
+              <div class="panel-head"><h3>多风格候选文案</h3><span class="status warn">人工审核后发布</span></div>
+              <form class="panel-body form-grid" id="opsCopyForm">
+                <div class="field wide"><label for="opsProductName">商品名称</label><input class="input" id="opsProductName" value="青川空气炸锅 AF5" required></div>
+                <div class="field wide"><label for="opsSellingPoints">商品卖点（每行一项，最多 6 项）</label><textarea class="input" id="opsSellingPoints" required>无油低脂
+一键预设菜单
+可视化烹饪窗口</textarea></div>
+                <div class="field"><label for="opsPrice">价格</label><input class="input" id="opsPrice" type="number" min="0" step="0.01" value="499.00"></div>
+                <div class="field"><label for="opsAudience">目标人群</label><input class="input" id="opsAudience" value="租房青年"></div>
+                <div class="field"><label for="opsVariantsPerStyle">每种风格数量</label><select class="input" id="opsVariantsPerStyle"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></div>
+                <div class="field wide"><label>文案风格（总量最多 9 条）</label><div class="ops-style-options"><label><input class="ops-copy-style" type="checkbox" value="formal" checked>专业详实</label><label><input class="ops-copy-style" type="checkbox" value="playful" checked>活泼种草</label><label><input class="ops-copy-style" type="checkbox" value="urgent" checked>促销紧迫</label><label><input class="ops-copy-style" type="checkbox" value="premium">高端质感</label><label><input class="ops-copy-style" type="checkbox" value="concise">简洁卖点</label></div></div>
+                <div class="wide"><button class="button primary" type="submit" id="generateOpsCopy">生成候选文案</button></div>
+              </form>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3>生成结果</h3><span class="muted" id="opsCopyMeta">尚未生成</span></div>
+              <div class="panel-body copy-result-grid" id="opsCopyResults"><div class="empty">填写商品信息后生成多风格候选</div></div>
+            </article>
+          </div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel"><div class="panel-head"><h3>数据解读</h3><span class="muted" id="opsReportMeta"></span></div><div class="panel-body stack"><div id="opsReportSummary"><div class="empty">导入数据后生成报告</div></div><div id="opsReportNarrative"></div></div></article>
+            <article class="panel"><div class="panel-head"><h3>趋势与优化建议</h3><span class="status warn">仅建议</span></div><div class="panel-body stack" id="opsReportFindings"><div class="empty">暂无建议</div></div></article>
+          </div>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>结构化运营记录</h3><span class="muted" id="opsRecordMeta"></span></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>渠道</th><th>访客</th><th>订单</th><th>销售额</th><th>推广花费</th><th>转化率</th><th>来源 / 版本</th></tr></thead><tbody id="opsRecordRows"></tbody></table></div></article>
         </section>
 
         <section class="view" id="view-marketing">
@@ -755,11 +820,14 @@
       evaluationSuite: null,
       simulationFixture: null,
       simulationReport: null,
+      opsRecords: [],
+      opsReport: null,
+      opsCopy: null,
       selectedSimulationScenario: 'D01',
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
 
-    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', orders: '订单与售后', competitive: '竞品分析', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
+    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
     const sourceLabels = { api:'API 会话', channel:'渠道会话', simulation:'虚拟验收', evaluation:'隔离评测' };
     const $ = (id) => document.getElementById(id);
 
@@ -799,7 +867,7 @@
       const headers = new Headers(options.headers || {});
       if (state.adminId) headers.set('X-Admin-Id', state.adminId);
       if (state.adminKey) headers.set('X-Admin-Key', state.adminKey);
-      if (options.body) headers.set('Content-Type', 'application/json');
+      if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
       const response = await fetch(path, { ...options, headers });
       if (response.status === 401 || response.status === 503) {
         if (state.adminAuthRequired) showLogin();
@@ -1816,6 +1884,42 @@
       }
     }
 
+    async function loadOpsAssistant() {
+      const datasetKey = $('opsDatasetKey').value.trim();
+      const storeId = $('opsStore').value.trim();
+      const query = new URLSearchParams();
+      if (datasetKey) query.set('dataset_key', datasetKey);
+      if (storeId) query.set('store_id', storeId);
+      const [records, report] = await Promise.all([
+        api(`/v1/ops-assistant/records?${query.toString()}`),
+        api('/v1/ops-assistant/reports/analysis', {
+          method:'POST',
+          body:JSON.stringify({ dataset_key:datasetKey || null, store_id:storeId || null })
+        })
+      ]);
+      state.opsRecords = records;
+      state.opsReport = report;
+      const totals = report.totals || {};
+      $('opsKpis').innerHTML = [
+        ['运营记录', report.data_quality?.record_count || 0, `${report.data_quality?.source_formats?.join(' / ') || '暂无来源'} · 数值由代码计算`],
+        ['访客 / 订单', `${totals.visitors || 0} / ${totals.orders || 0}`, `整体转化率 ${pct(totals.conversion_rate)}`],
+        ['销售额', money(totals.sales_amount), `客单价 ${totals.average_order_value === null ? '-' : money(totals.average_order_value)}`],
+        ['推广花费', money(totals.ad_spend), `投产比 ${totals.roi || '-'}`]
+      ].map(([label,value,meta]) => `<div class="kpi"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(value)}</span><span class="meta">${escapeHtml(meta)}</span></div>`).join('');
+      $('opsRecordMeta').textContent = `${records.length} 条结构化记录 · ${report.action_boundary || ''}`;
+      $('opsRecordRows').innerHTML = records.length ? records.map((item) => `<tr><td>${escapeHtml(item.record_date)}</td><td><strong>${escapeHtml(item.channel)}</strong></td><td>${item.visitors}</td><td>${item.orders}</td><td>${money(item.sales_amount)}</td><td>${money(item.ad_spend)}</td><td>${pct(item.conversion_rate)}</td><td><span class="status ${item.source_format === 'form' ? 'warn' : 'info'}">${escapeHtml(item.source_format)}</span><div class="muted">v${item.version}</div></td></tr>`).join('') : '<tr><td colspan="8"><div class="empty">暂无运营数据，请上传 CSV / JSON 或使用表单录入。</div></td></tr>';
+      const period = report.period || {};
+      $('opsReportMeta').textContent = `${period.start_date || '-'} 至 ${period.end_date || '-'} · ${report.narrative_generator || 'disabled'}`;
+      $('opsReportSummary').innerHTML = (report.summary || []).map((line) => `<div class="notice">${escapeHtml(line)}</div>`).join('') || '<div class="empty">暂无数据解读</div>';
+      $('opsReportNarrative').innerHTML = report.narrative ? `<div class="notice" style="border-left-color:var(--blue)"><strong>模型辅助解读</strong><div>${escapeHtml(report.narrative)}</div></div>` : '<div class="muted">当前报告使用代码化摘要，模型解读未启用或已安全降级。</div>';
+      const trendHtml = (report.trends || []).map((item) => {
+        const direction = item.direction === 'up' ? '上升' : item.direction === 'down' ? '下降' : '持平';
+        return `<div class="notice"><strong>${escapeHtml(item.label)} · ${direction}</strong><div>${escapeHtml(item.first_half)} → ${escapeHtml(item.second_half)}${item.change_pct === null ? '' : ` · ${escapeHtml(item.change_pct)}%`}</div></div>`;
+      }).join('');
+      const findingHtml = (report.findings || []).map((item) => `<div class="notice" style="border-left-color:${item.severity === 'high' ? 'var(--red)' : item.severity === 'medium' ? 'var(--amber)' : 'var(--teal)'}"><div><strong>${escapeHtml(item.code)}</strong> <span class="status ${item.severity === 'high' ? 'bad' : item.severity === 'medium' ? 'warn' : 'info'}">${escapeHtml(item.severity)}</span></div><div>${escapeHtml(item.recommendation)}</div></div>`).join('');
+      $('opsReportFindings').innerHTML = trendHtml + findingHtml || '<div class="empty">暂无趋势或优化建议</div>';
+    }
+
     async function loadMarketing() {
       const storeId = $('marketingStore').value.trim();
       const query = storeId ? `?store_id=${encodeURIComponent(storeId)}` : '';
@@ -1967,6 +2071,7 @@
       if (view === 'commerce') return loadCommerce();
       if (view === 'orders') return loadOrders();
       if (view === 'competitive') return loadCompetitive();
+      if (view === 'ops') return loadOpsAssistant();
       if (view === 'marketing') return loadMarketing();
       if (view === 'finance') return loadFinance();
       if (view === 'knowledge') return loadGovernance();
@@ -1982,6 +2087,90 @@
     document.querySelectorAll('.nav button').forEach((node) => node.addEventListener('click', () => switchView(node.dataset.view)));
     document.querySelectorAll('[data-go]').forEach((node) => node.addEventListener('click', () => switchView(node.dataset.go)));
     $('refreshButton').addEventListener('click', () => loadView(state.currentView).then(() => toast('数据已刷新')).catch((error) => toast(error.message)));
+    $('refreshOpsAssistant').addEventListener('click', () => loadOpsAssistant().catch((error) => toast(error.message)));
+    $('opsDatasetFile').addEventListener('change', () => {
+      const name = $('opsDatasetFile').files?.[0]?.name?.toLowerCase() || '';
+      if (name.endsWith('.json')) $('opsSourceFormat').value = 'json';
+      if (name.endsWith('.csv')) $('opsSourceFormat').value = 'csv';
+    });
+    $('opsImportForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const file = $('opsDatasetFile').files?.[0];
+      if (!file) return toast('请选择 CSV 或 JSON 文件');
+      const datasetKey = $('opsDatasetKey').value.trim();
+      const storeId = $('opsStore').value.trim();
+      const format = $('opsSourceFormat').value;
+      const button = $('importOpsDataset');
+      button.disabled = true;
+      try {
+        const result = await api(`/v1/ops-assistant/datasets/import?dataset_key=${encodeURIComponent(datasetKey)}&store_id=${encodeURIComponent(storeId)}&source_format=${encodeURIComponent(format)}`, {
+          method:'POST',
+          headers:{'Content-Type':format === 'csv' ? 'text/csv; charset=utf-8' : 'application/json'},
+          body:await file.text()
+        });
+        const rejected = result.rejected_rows ? `<div class="muted">拒绝 ${result.rejected_rows} 行：${result.rejected.slice(0, 3).map((item) => `#${item.row} ${escapeHtml(item.reason)}`).join('；')}</div>` : '';
+        $('opsImportResult').innerHTML = `<strong>已解析 ${result.total_rows} 行，接受 ${result.accepted_rows} 行</strong><div>新增或更新 ${result.applied} 行，幂等 ${result.idempotent} 行。</div>${rejected}`;
+        toast('运营数据导入完成');
+        await loadOpsAssistant();
+      } catch (error) {
+        $('opsImportResult').textContent = error.message;
+        toast(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $('opsRecordForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const result = await api('/v1/ops-assistant/records', {
+          method:'POST',
+          body:JSON.stringify({
+            dataset_key:$('opsDatasetKey').value.trim(),
+            store_id:$('opsStore').value.trim(),
+            record_date:$('opsRecordDate').value,
+            channel:$('opsChannel').value.trim(),
+            visitors:Number($('opsVisitors').value),
+            orders:Number($('opsOrders').value),
+            sales_amount:$('opsSales').value,
+            ad_spend:$('opsSpend').value,
+            source_format:'form'
+          })
+        });
+        toast(result.write_status === 'idempotent' ? '记录未变化，已按幂等处理' : `运营记录已保存为 v${result.version}`);
+        await loadOpsAssistant();
+      } catch (error) { toast(error.message); }
+    });
+    $('opsCopyForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const styles = Array.from(document.querySelectorAll('.ops-copy-style:checked')).map((node) => node.value);
+      const variantsPerStyle = Number($('opsVariantsPerStyle').value);
+      if (!styles.length) return toast('至少选择一种文案风格');
+      if (styles.length * variantsPerStyle > 9) return toast('小批量生成最多 9 条候选文案');
+      const button = $('generateOpsCopy');
+      button.disabled = true;
+      try {
+        const sellingPoints = $('opsSellingPoints').value.split('\n').map((item) => item.trim()).filter(Boolean);
+        const result = await api('/v1/ops-assistant/copywriting/generate', {
+          method:'POST',
+          body:JSON.stringify({
+            store_id:$('opsStore').value.trim(),
+            product_name:$('opsProductName').value.trim(),
+            selling_points:sellingPoints,
+            price:$('opsPrice').value || null,
+            target_audience:$('opsAudience').value.trim() || null,
+            styles,
+            variants_per_style:variantsPerStyle
+          })
+        });
+        state.opsCopy = result;
+        const generators = new Set(result.variants.map((item) => item.generator));
+        const generationMode = generators.size > 1 ? '模型 / 模板混合' : generators.has('model') ? '模型生成' : '模板安全降级';
+        $('opsCopyMeta').textContent = `${result.batch_size} 条 · ${generationMode}`;
+        $('opsCopyResults').innerHTML = result.variants.map((item) => `<article class="copy-result-card"><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.body)}</p><div class="copy-result-meta"><span class="status info">${escapeHtml(item.style_label)}</span><span class="status ${item.needs_review ? 'warn' : 'ok'}">${item.needs_review ? '命中风险词，需复核' : '未命中绝对化风险词'}</span><span class="muted">${escapeHtml(item.generator)} · ${item.char_count} 字</span></div></article>`).join('');
+        toast(`已生成 ${result.batch_size} 条候选文案`);
+      } catch (error) { toast(error.message); }
+      finally { button.disabled = false; }
+    });
     $('refreshMarketing').addEventListener('click', () => loadMarketing().catch((error) => toast(error.message)));
     $('marketingStore').addEventListener('change', () => loadMarketing().catch((error) => toast(error.message)));
     $('marketingDraftForm').addEventListener('submit', async (event) => {
