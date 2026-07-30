@@ -21,3 +21,14 @@
 - 四项定向测试通过
 - 反证：临时把默认 `context_budget_ratio` 从 0.7 改为 0.99，同一历史截断
   用例按预期失败（保留数从 7 变为 9）；还原 0.7 后复验通过
+
+## D03 · 上下文与编排接入
+
+- `ContextBuilder` 对条数上限内的历史再次执行 token 预算，快照写入
+  `recent_history_meta` 与不可变 `history_window` evidence
+- Graph 四处历史读取均使用预算层；总预算扣除 System Prompt 与用户消息后，
+  知识和历史按 6:4 分配
+- trace 记录 `context:budget:kept{n}/dropped{n}`
+- 端到端预算测试：`5 passed`
+- 编排与上下文回归：`17 passed`（`test_react_graph.py`、`test_agent.py`、
+  `test_context_builder.py`）

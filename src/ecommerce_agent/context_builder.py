@@ -10,6 +10,7 @@ from typing import Any, Literal
 from . import product_advisor
 from .database import Database, utc_now
 from .text_utils import redact_sensitive
+from .tokens import count_messages, truncate_history
 
 
 ContextStage = Literal["decision", "generation"]
@@ -163,6 +164,7 @@ class ContextBuilder:
         sops: list[dict[str, Any]],
         tool_catalog: list[dict[str, Any]],
         history: list[dict[str, Any]],
+        history_budget_tokens: int | None = None,
         tool_result: dict[str, Any] | None = None,
         parent_snapshot_id: str | None = None,
     ) -> ContextSnapshot:
@@ -170,7 +172,16 @@ class ContextBuilder:
         safe_documents = _safe_value(documents)
         safe_sops = _safe_value(sops)
         safe_tools = _safe_value(tool_catalog)
-        safe_history = _safe_value(history[-6:])
+        history_budget = (
+            count_messages(history)
+            if history_budget_tokens is None
+            else history_budget_tokens
+        )
+        recent_history, recent_history_meta = truncate_history(
+            history,
+            budget_tokens=history_budget,
+        )
+        safe_history = _safe_value(recent_history)
         safe_tool_result = _safe_value(tool_result or {})
         conflicts = self._conflicts(safe_context)
         if safe_context.get("authorized") is not True:
@@ -194,7 +205,15 @@ class ContextBuilder:
                 freshness="current",
                 source_version=self.CONTEXT_VERSION,
                 summary={"tenant_scoped": True, "history_messages": len(safe_history)},
-            )
+            ),
+            self._evidence(
+                "history_window",
+                f"history:{_digest({'session_id': session_id, 'history': safe_history})[:24]}",
+                authority="context_budget",
+                freshness="current",
+                source_version=self.CONTEXT_VERSION,
+                summary=recent_history_meta,
+            ),
         ]
         if safe_context:
             evidence.append(
@@ -335,6 +354,7 @@ class ContextBuilder:
                 "conflict_policy": "handoff",
             },
             "recent_history": safe_history,
+            "recent_history_meta": recent_history_meta,
             "latest_tool_result": safe_tool_result,
         }
         payload = {

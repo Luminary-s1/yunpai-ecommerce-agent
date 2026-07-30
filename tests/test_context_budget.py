@@ -6,7 +6,10 @@ import pytest
 
 from ecommerce_agent.config import Settings
 from ecommerce_agent.prompts import build_decision_messages, build_messages
+from ecommerce_agent.service import AgentService
 from ecommerce_agent.tokens import count_messages, count_tokens, truncate_history
+
+from conftest import make_settings, principal_for
 
 
 def test_count_tokens_uses_deterministic_estimate() -> None:
@@ -113,3 +116,31 @@ def test_prompts_keep_upstream_history_and_at_least_highest_score_document() -> 
     payload = json.loads(decision[1]["content"])
     assert [item["id"] for item in payload["knowledge_evidence"]] == ["high"]
     assert payload["recent_history"] == history
+
+
+def test_chat_snapshot_records_history_window_evidence(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        response = service.chat(
+            principal_for(service),
+            "budget-evidence",
+            "尺码怎么选",
+        )
+        with service.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT bundle_json, evidence_json
+                FROM context_snapshots
+                WHERE tenant_id=? AND trace_id=?
+                """,
+                ("tenant-test", response.trace_id),
+            ).fetchall()
+
+        assert rows
+        for row in rows:
+            bundle = json.loads(row["bundle_json"])
+            evidence = json.loads(row["evidence_json"])
+            assert bundle["recent_history_meta"]["budget"] > 0
+            assert any(item["type"] == "history_window" for item in evidence)
+    finally:
+        service.close()

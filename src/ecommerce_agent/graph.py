@@ -21,11 +21,17 @@ from .policy import (
     review_output,
     sanitize_context,
 )
-from .prompts import build_decision_messages, build_messages
+from .prompts import (
+    DECISION_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    build_decision_messages,
+    build_messages,
+)
 from .rag import KnowledgeBase
 from .schemas import AgentState
 from .sops import SopService
 from .text_utils import normalize_text, redact_sensitive
+from .tokens import count_tokens, truncate_history
 from .tools import ToolExecutionContext, ToolRegistry, ToolResult
 
 
@@ -50,6 +56,35 @@ def build_graph(
             trace_id=state["trace_id"],
             trusted_context=state["context"],
         )
+
+    def context_budgets(question: str, system_prompt: str) -> tuple[int, int]:
+        total = int(
+            settings.model_context_limit_tokens * settings.context_budget_ratio
+        )
+        available = max(
+            0,
+            total - count_tokens(system_prompt) - count_tokens(question),
+        )
+        knowledge_budget = available * 6 // 10
+        return knowledge_budget, available - knowledge_budget
+
+    def budgeted_history(
+        state: AgentState,
+        system_prompt: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, int | bool], int]:
+        knowledge_budget, history_budget = context_budgets(
+            state["normalized_input"],
+            system_prompt,
+        )
+        history = db.recent_messages(
+            state["session_id"],
+            settings.session_history_limit,
+        )
+        selected, meta = truncate_history(
+            history,
+            budget_tokens=history_budget,
+        )
+        return selected, meta, knowledge_budget
 
     def intake(state: AgentState) -> dict[str, Any]:
         message = normalize_text(state["user_input"])
@@ -121,6 +156,10 @@ def build_graph(
 
     def build_decision_context(state: AgentState) -> dict[str, Any]:
         history = db.recent_messages(state["session_id"], settings.session_history_limit)
+        _, history_budget = context_budgets(
+            state["normalized_input"],
+            DECISION_SYSTEM_PROMPT,
+        )
         snapshot = contexts.build(
             tenant_id=state["tenant_id"],
             session_id=state["session_id"],
@@ -133,6 +172,7 @@ def build_graph(
             sops=sops.catalog_for_context(state["tenant_id"]),
             tool_catalog=tools.catalog_for_model(),
             history=history,
+            history_budget_tokens=history_budget,
             tool_result=state.get("tool_result") or None,
             parent_snapshot_id=state.get("context_snapshot_id"),
         )
@@ -142,6 +182,7 @@ def build_graph(
             if snapshot.readiness == "handoff_required"
             else "trusted_context_ready"
         )
+        history_meta = snapshot.bundle["recent_history_meta"]
         return {
             "route": route,
             "route_reason": reason,
@@ -150,7 +191,14 @@ def build_graph(
             "context_readiness": snapshot.readiness,
             "context_evidence_ids": snapshot.evidence_ids,
             "context_conflicts": snapshot.conflicts,
-            "trace": [*state["trace"], f"context:decision:{snapshot.readiness}"],
+            "trace": [
+                *state["trace"],
+                (
+                    f"context:budget:kept{history_meta['kept']}"
+                    f"/dropped{history_meta['dropped']}"
+                ),
+                f"context:decision:{snapshot.readiness}",
+            ],
         }
 
     def deliberate(state: AgentState) -> dict[str, Any]:
@@ -176,7 +224,10 @@ def build_graph(
                 "trace": [*state["trace"], "deliberate:approved_knowledge"],
             }
 
-        history = db.recent_messages(state["session_id"], settings.session_history_limit)
+        history, history_meta, knowledge_budget = budgeted_history(
+            state,
+            DECISION_SYSTEM_PROMPT,
+        )
         messages = build_decision_messages(
             question=state["normalized_input"],
             documents=state.get("retrieved", []),
@@ -186,6 +237,11 @@ def build_graph(
             observation=state.get("tool_result") or None,
             step_count=state["react_step"],
             max_steps=settings.max_react_steps,
+            knowledge_budget_tokens=knowledge_budget,
+        )
+        budget_trace = (
+            f"context:budget:kept{history_meta['kept']}"
+            f"/dropped{history_meta['dropped']}"
         )
         try:
             decision = AgentDecision.model_validate(model.generate_json(messages))
@@ -218,6 +274,7 @@ def build_graph(
                         "model_retry_advised": True,
                         "trace": [
                             *state["trace"],
+                            budget_trace,
                             "deliberate:model_temporarily_unavailable",
                         ],
                     }
@@ -233,7 +290,7 @@ def build_graph(
         return {
             "decision": decision.model_dump(),
             "model_fallback": fallback,
-            "trace": [*state["trace"], trace_step],
+            "trace": [*state["trace"], budget_trace, trace_step],
         }
 
     def decision_gate(state: AgentState) -> dict[str, Any]:
@@ -492,6 +549,10 @@ def build_graph(
 
     def build_generation_context(state: AgentState) -> dict[str, Any]:
         history = db.recent_messages(state["session_id"], settings.session_history_limit)
+        _, history_budget = context_budgets(
+            state["normalized_input"],
+            SYSTEM_PROMPT,
+        )
         active_sop = state.get("active_sop")
         snapshot = contexts.build(
             tenant_id=state["tenant_id"],
@@ -505,10 +566,12 @@ def build_graph(
             sops=[active_sop] if active_sop else [],
             tool_catalog=tools.catalog_for_model(),
             history=history,
+            history_budget_tokens=history_budget,
             tool_result=state.get("tool_result") or None,
             parent_snapshot_id=state.get("context_snapshot_id"),
         )
         route = "handoff" if snapshot.readiness == "handoff_required" else "generate"
+        history_meta = snapshot.bundle["recent_history_meta"]
         return {
             "route": route,
             "route_reason": (
@@ -521,7 +584,14 @@ def build_graph(
             "context_readiness": snapshot.readiness,
             "context_evidence_ids": snapshot.evidence_ids,
             "context_conflicts": snapshot.conflicts,
-            "trace": [*state["trace"], f"context:generation:{snapshot.readiness}"],
+            "trace": [
+                *state["trace"],
+                (
+                    f"context:budget:kept{history_meta['kept']}"
+                    f"/dropped{history_meta['dropped']}"
+                ),
+                f"context:generation:{snapshot.readiness}",
+            ],
         }
 
     def generate(state: AgentState) -> dict[str, Any]:
@@ -552,13 +622,21 @@ def build_graph(
                 "model_fallback": False,
                 "trace": [*state["trace"], "generate:approved_knowledge"],
             }
-        history = db.recent_messages(state["session_id"], settings.session_history_limit)
+        history, history_meta, knowledge_budget = budgeted_history(
+            state,
+            SYSTEM_PROMPT,
+        )
         messages = build_messages(
             question=state["normalized_input"],
             documents=state["retrieved"],
             context=state["context_bundle"],
             history=history,
             verified_tool_result=verified_result,
+            knowledge_budget_tokens=knowledge_budget,
+        )
+        budget_trace = (
+            f"context:budget:kept{history_meta['kept']}"
+            f"/dropped{history_meta['dropped']}"
         )
         try:
             draft = model.generate(messages)
@@ -589,7 +667,7 @@ def build_graph(
             "draft": draft,
             "model_fallback": fallback,
             "model_retry_advised": retry_advised,
-            "trace": [*state["trace"], trace_step],
+            "trace": [*state["trace"], budget_trace, trace_step],
         }
 
     def verify(state: AgentState) -> dict[str, Any]:
