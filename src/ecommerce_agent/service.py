@@ -96,6 +96,9 @@ class AgentService:
             self.tools = tool_registry or ToolRegistry()
             self.operations = OperationsService(self.db)
             self.operations.register_agent_tools(self.tools)
+            if self.settings.model_enabled:
+                # 文案与报告解读可走真实模型；模型异常时服务内部自动降级到模板。
+                self.operations.ops_assistant.attach_model(self.model)
             self._competitive_worker_thread: threading.Thread | None = None
             self._competitive_worker_stop = threading.Event()
             self._competitive_worker_lock = threading.Lock()

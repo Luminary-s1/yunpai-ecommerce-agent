@@ -22,6 +22,7 @@ from .handoff_dispatch import DispatchError
 from .handoff_staffing import StaffingError
 from .governance_api import build_governance_router
 from .operations_api import build_operations_router
+from .ops_assistant_api import build_ops_assistant_router
 from .outbox import OutboxReconcileRequest
 from .rate_limit import RateLimitError, SlidingWindowRateLimiter
 from .release_api import build_release_router
@@ -165,6 +166,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ) from exc
 
     app.include_router(build_operations_router(service, require_admin))
+    app.include_router(build_ops_assistant_router(service, require_admin))
     app.include_router(build_admin_router(service, require_admin))
     app.include_router(build_governance_router(service, require_admin))
     app.include_router(build_release_router(service, require_admin))
