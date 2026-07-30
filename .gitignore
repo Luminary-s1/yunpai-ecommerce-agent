@@ -11,3 +11,4 @@ _skill_test/
 *.egg-info/
 *.sqlite3
 *.db
+env.md
