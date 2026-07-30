@@ -21,6 +21,8 @@ def make_settings(data_dir: Path) -> Settings:
         model_retry_attempts=0,
         model_enabled=False,
         model_mock_mode=True,
+        model_context_limit_tokens=128000,
+        context_budget_ratio=0.7,
         rag_top_k=5,
         rag_min_score=0.08,
         rag_direct_approved_answer=True,
