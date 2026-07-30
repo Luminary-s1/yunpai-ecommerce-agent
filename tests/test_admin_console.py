@@ -150,6 +150,16 @@ def test_admin_console_page_and_audit_api(tmp_path) -> None:
         assert "active_sku_count" in page.text
         assert "知识与 SOP" in page.text
         assert "质检与 VOC" in page.text
+        assert "运营辅助与文案" in page.text
+        assert 'id="opsDatasetFile"' in page.text
+        assert 'id="opsRecordForm"' in page.text
+        assert 'id="opsCopyForm"' in page.text
+        assert 'id="opsCopyResults"' in page.text
+        assert 'id="opsReportFindings"' in page.text
+        assert "/v1/ops-assistant/datasets/import" in page.text
+        assert "/v1/ops-assistant/copywriting/generate" in page.text
+        assert "/v1/ops-assistant/reports/analysis" in page.text
+        assert "模型 / 模板混合" in page.text
         assert "客服 Agent 评测" in page.text
         assert 'id="evaluationSuiteForm"' in page.text
         assert 'id="evaluationCases"' in page.text

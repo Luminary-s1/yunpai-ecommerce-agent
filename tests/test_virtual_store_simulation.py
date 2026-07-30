@@ -31,8 +31,8 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert report["report_contract_version"] == "simulation-evidence-v1"
         assert report["passed"] is True
         assert report["summary"] == {
-            "total": 15,
-            "passed": 15,
+            "total": 16,
+            "passed": 16,
             "failed": 0,
             "skipped": 0,
         }
@@ -41,7 +41,7 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             for item in report["module_coverage"]
             if item["status"] == "available"
         ]
-        assert len(available) == 9
+        assert len(available) == 10
         assert all(item["verification"] == "passed" for item in available)
         assert report["loaded"]["catalog"] == 6
         assert report["loaded"]["inventory"] == 10
@@ -65,6 +65,7 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             "customer_service_evaluation",
             "marketing",
             "finance",
+            "ops_assistant",
         }
         assert all(item["input"] for item in report["scenarios"])
         assert all(item["expected"] for item in report["scenarios"])
@@ -94,6 +95,16 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert evidence["D14"]["agent_tool_output"]["data_quality"]["virtual_only"] is True
         assert evidence["D15"]["profit_report"]["management_profit"] == "1491.00"
         assert evidence["D15"]["tasks"][0]["difference_amount"] == "-16.00"
+        assert evidence["D16"]["csv_import"]["rejected_rows"] == 2
+        assert evidence["D16"]["csv_replay"] == {"applied": 0, "idempotent": 6}
+        assert evidence["D16"]["copywriting"]["publication_allowed"] is False
+        assert evidence["D16"]["report"]["totals"]["sales_amount"] == "44800.00"
+        assert evidence["D16"]["report"]["data_quality"][
+            "numbers_computed_by_code"
+        ] is True
+        assert {
+            item["code"] for item in evidence["D16"]["report"]["findings"]
+        } == {"sales_declining", "spend_up_sales_flat"}
 
         replay = simulation.run(
             tenant_id="tenant-test",
@@ -126,7 +137,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert summary.status_code == 200
         assert summary.json()["report_contract_version"] == "simulation-evidence-v1"
-        assert len(summary.json()["demands"]) == 15
+        assert len(summary.json()["demands"]) == 16
         demand_d07 = next(
             item for item in summary.json()["demands"] if item["id"] == "D07"
         )
@@ -140,7 +151,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
             "settlement_statements": 1,
             "competitive_candidates": 3,
             "knowledge": 4,
-            "demands": 15,
+            "demands": 16,
         }
 
         missing_confirmation = client.post(
@@ -161,7 +172,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert run.status_code == 200
         assert run.json()["passed"] is True
-        assert run.json()["summary"]["passed"] == 15
+        assert run.json()["summary"]["passed"] == 16
         assert run.json()["scenarios"][0]["input"]["operation"] == (
             "CatalogService.list_items"
         )
