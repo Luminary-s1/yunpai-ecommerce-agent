@@ -32,3 +32,13 @@
 - 端到端预算测试：`5 passed`
 - 编排与上下文回归：`17 passed`（`test_react_graph.py`、`test_agent.py`、
   `test_context_builder.py`）
+
+## D04 · 会话 CRUD
+
+- 新增四个 `/v1/chat/sessions` 客户端认证端点；创建重复请求返回同一资源，
+  认证作用域冲突返回 409，越权读取统一返回 404
+- 会话及消息查询均使用 `tenant_id + subject_hash` 过滤
+- 消息分页使用 `created_at|id` 复合游标，非法游标从第一页开始
+- DELETE 关闭会话前检查非终态 handoff，存在时返回 409
+- 7 项会话 API 判据通过；API 与会话鉴权联合回归 `16 passed`
+- 55 条消息分页结果为 20、20、15，无重复、无遗漏

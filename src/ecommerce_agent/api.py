@@ -12,6 +12,7 @@ from . import __version__
 from .auth import AdminPrincipal, AuthError, Principal
 from .admin_api import build_admin_router
 from .channel_agent import ChannelAgentError
+from .chat_sessions_api import build_chat_sessions_router
 from .config import Settings, is_loopback_host
 from .customer_test_api import build_customer_test_router
 from .database import SessionScopeError
@@ -171,6 +172,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_evaluation_router(service, require_admin))
     app.include_router(build_simulation_router(service, require_admin))
     app.include_router(build_customer_test_router(service, require_local_customer_test))
+    app.include_router(build_chat_sessions_router(service, require_client))
 
     @app.get("/health")
     def health() -> dict:
