@@ -1,0 +1,20 @@
+{
+  "records": [
+    {
+      "record_date": "2026-07-25",
+      "channel": "搜索",
+      "visitors": 1420,
+      "orders": 35,
+      "sales_amount": "7000.00",
+      "ad_spend": "1020.00"
+    },
+    {
+      "record_date": "2026-07-25",
+      "channel": "直播",
+      "visitors": 1000,
+      "orders": 16,
+      "sales_amount": "3200.00",
+      "ad_spend": "1160.00"
+    }
+  ]
+}

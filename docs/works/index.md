@@ -20,6 +20,14 @@
 | 10 | feature | `feature/f106-product-advisor` | `1a3dfa3` | [F-106 商品顾问](10-feature-f106-product-advisor/README.md) |
 | 11 | feature | `feature/f106-fuzzy-product-lookup` | `8a8f9b7` | [F-106 商品模糊检索](11-feature-f106-fuzzy-product-lookup/README.md) |
 
+## 开发完成但未合并
+
+下表的工作已完成开发与验收，但按要求保持未提交、未合并，因此不计入上面的合并顺序，也不在 `evidence.html` 中。
+
+| 类型 | 来源 | 状态 | 验证与操作文档 |
+|---|---|---|---|
+| feature | `feature/m5-operations-assistant` | 开发与验收完成，未提交 | [M5 运营辅助与文案生成](12-feature-m5-operations-assistant/README.md) |
+
 ## 本次统一验收
 
 在合并后的 `main` 上执行了覆盖 LLM、渠道、排班、订单、财务、知识、SOP、商品顾问、模糊检索与后台契约的定向集成矩阵：
