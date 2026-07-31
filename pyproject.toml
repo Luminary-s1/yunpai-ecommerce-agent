@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yunpai-ecommerce-agent"
-version = "0.28.0"
+version = "0.29.0"
 description = "Lightweight modular ecommerce operations agent with LangGraph, typed tools, RAG, and virtual connectors"
 readme = "README.md"
 requires-python = ">=3.11"

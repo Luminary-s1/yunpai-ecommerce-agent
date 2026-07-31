@@ -2130,6 +2130,20 @@ class Database:
             """
         )
 
+    @classmethod
+    def _apply_v25(cls, conn: sqlite3.Connection) -> None:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='release_policies'"
+        ).fetchone()
+        if exists is None:
+            # A drifted database without the table is rejected by
+            # _validate_schema right after the migration pass.
+            return
+        cls._ensure_column(conn, "release_policies", "night_window_start_utc", "TEXT")
+        cls._ensure_column(conn, "release_policies", "night_window_end_utc", "TEXT")
+        cls._ensure_column(conn, "release_policies", "night_mode", "TEXT")
+        cls._ensure_column(conn, "release_policies", "sop_allowlist_json", "TEXT")
+
     @staticmethod
     def _apply_v25(conn: sqlite3.Connection) -> None:
         conn.executescript(
@@ -2195,6 +2209,11 @@ class Database:
             "staged_rollouts": {
                 "tenant_id", "subject_type", "subject_key", "candidate_id",
                 "traffic_percentage", "rollout_salt", "status", "record_version",
+            },
+            "release_policies": {
+                "tenant_id", "release_key", "mode", "traffic_percentage",
+                "rollout_salt", "night_window_start_utc", "night_window_end_utc",
+                "night_mode", "sop_allowlist_json",
             },
             "competitor_observations": {
                 "tenant_id",
