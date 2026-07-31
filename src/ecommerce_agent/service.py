@@ -31,7 +31,7 @@ from .context_builder import ContextBuilder
 from .database import Database, SessionScopeError, utc_now
 from .disaster_recovery import DataDirectoryLock
 from .evaluation import EvaluationRunRequest, EvaluationService
-from .graph import build_graph, verify_response
+from .graph import MODEL_UNAVAILABLE_HANDOFF_ANSWER, build_graph, verify_response
 from .handoff import HandoffService
 from .handoff_dispatch import HandoffDispatchService
 from .handoff_staffing import HandoffStaffingService
@@ -357,6 +357,11 @@ class AgentService:
                     "message_id": response.message_id,
                     "trace_id": response.trace_id,
                 }
+                yield {
+                    "event": "delta",
+                    "text": response.answer,
+                    "replay": True,
+                }
                 yield {"event": "result", "response": response.model_dump()}
                 return
 
@@ -440,8 +445,11 @@ class AgentService:
             else None
         )
         if not state.get("retrieved") and not verified_result:
-            fallback = "当前知识库中没有足够信息，我会为您转人工客服进一步核对。"
-            return iter((fallback,)), True, "generate:no_evidence"
+            return (
+                iter((MODEL_UNAVAILABLE_HANDOFF_ANSWER,)),
+                True,
+                "generate:no_evidence",
+            )
 
         top_document = state["retrieved"][0] if state.get("retrieved") else None
         if (

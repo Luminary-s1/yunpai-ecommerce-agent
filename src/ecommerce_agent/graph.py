@@ -35,6 +35,11 @@ from .tokens import count_tokens, truncate_history
 from .tools import ToolExecutionContext, ToolRegistry, ToolResult
 
 
+MODEL_UNAVAILABLE_HANDOFF_ANSWER = (
+    "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。"
+)
+
+
 def verify_response(state: AgentState) -> dict[str, Any]:
     evidence = " ".join(document["answer"] for document in state["retrieved"])
     evidence += " " + json.dumps(state["context_bundle"], ensure_ascii=False)
@@ -880,7 +885,7 @@ def build_graph(
         elif reason.startswith("tool_policy_denied"):
             answer = "当前操作未通过已配置的权限或业务规则校验，我会转人工进一步核对。"
         elif reason in {"model_unavailable", "react_step_limit_reached"}:
-            answer = "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。"
+            answer = MODEL_UNAVAILABLE_HANDOFF_ANSWER
         else:
             decision_response = state.get("decision", {}).get("response")
             answer = decision_response or state.get("answer") or "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。"

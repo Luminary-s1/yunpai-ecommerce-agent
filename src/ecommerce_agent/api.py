@@ -524,8 +524,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         yield encode(item)
                         continue
                     if event_name == "delta":
-                        generated = True
-                        yield encode(item)
+                        generated = generated or not item.get("replay", False)
+                        yield encode({"event": "delta", "text": item["text"]})
                         continue
 
                     response = item["response"]

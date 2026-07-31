@@ -1,8 +1,8 @@
-# M4 智能客服后端 WP1
+# M4 智能客服后端 WP1–WP2
 
 - 分支：`feature/m4-customer-service`
-- 范围：客服会话管理与上下文控制
-- 执行计划：`docs/tasks_intro/M4_DAILY_PLAN.md` D01–D05
+- 范围：客服会话管理与上下文控制、知识库增强回复生成 Pipeline
+- 执行计划：`docs/tasks_intro/M4_DAILY_PLAN.md` D01–D10
 
 ## D01 · Token 计数与历史截断
 
@@ -95,3 +95,21 @@
   citations，修正后复验
 - 绿态：`tests/test_chat_stream.py` 共 `5 passed in 15.52s`
 - SSE、既有 API 与服务层流式回归合跑：`11 passed in 35.70s`
+
+## D10 · 幂等、降级与收口
+
+- 已完成 invocation 重放时，从 `response_json` 读取已持久化回答，以单个 delta
+  发出后 done；message ID 不变、assistant 消息仍为 1 条，模型流式调用计数不增加
+- 无知识命中的流式文案与非流式最终回答一致，不发送空 citations；随后沿用既有
+  handoff 语义收尾
+- `MODEL_ENABLED=false` 且关闭 mock 时，用替换后的 HTTP client 方法计数，
+  断言外部请求为 0
+- 红态：新增三项中，幂等重放因缺少 delta 失败；无知识命中因流中和最终文案
+  不一致失败；模型禁用零请求用例直接通过
+- 反证：临时把 mock `stream_generate` 从逐字符改为一次性 yield 全文，
+  `test_chat_stream_generation_event_sequence` 按预期失败：
+  `assert 1 > 1`；还原后 8 项复验通过
+- 流式 8 项最终复验：`8 passed in 13.19s`
+- 流式、ReAct 图、Agent、模型网关定向回归：`33 passed in 45.57s`
+- 全量回归：`332 passed in 575.66s`
+- 前端协议见 `SSE_EVENT_PROTOCOL.md`；本周未新增依赖，LangGraph 节点与边未改

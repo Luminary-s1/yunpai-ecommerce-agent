@@ -40,9 +40,9 @@
 - [x] 幂等设计（Idempotency-Key + agent_invocations 表，断连重放不重复回复）
 - [x] RAG 不可用降级（无知识命中时明确告知并转人工）
 - [x] 模型超时/限流降级（提示重试，不占用人工坐席）
-- [ ] **SSE 流式输出接口** — 上游 SSE 的 delta 目前被 join 成整串返回，对外无流式
+- [x] **SSE 流式输出接口**（`POST /v1/chat/stream`，逐段 delta）
 - [ ] **`POST /v1/chat/sessions/{id}/messages`** 路径（现为 `POST /v1/chat`）
-- [ ] **SSE 事件协议**（delta / citations / handoff / done / error）
+- [x] **SSE 事件协议**（meta / delta / citations / handoff / done / error）
 - [ ] 多轮指代消解的专项验证（"它多少钱"）
 
 ### WP3 客服意图识别与路由逻辑（24h）
