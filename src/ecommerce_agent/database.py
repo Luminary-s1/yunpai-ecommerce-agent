@@ -36,7 +36,7 @@ class SessionScopeError(ValueError):
 
 
 class Database:
-    SCHEMA_VERSION = 24
+    SCHEMA_VERSION = 25
 
     def __init__(self, path: Path):
         self.path = path
@@ -146,6 +146,9 @@ class Database:
             if 24 not in applied:
                 self._apply_v24(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (24, ?)", (utc_now(),))
+            if 25 not in applied:
+                self._apply_v25(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (25, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2128,6 +2131,34 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v25(conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS ops_operation_records (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                dataset_key TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                record_date TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                visitors INTEGER NOT NULL CHECK(visitors >= 0),
+                orders INTEGER NOT NULL CHECK(orders >= 0),
+                sales_amount TEXT NOT NULL,
+                ad_spend TEXT NOT NULL,
+                source_format TEXT NOT NULL CHECK(source_format IN ('csv','json','form')),
+                source_id TEXT,
+                payload_hash TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, dataset_key, record_date, channel)
+            );
+            CREATE INDEX IF NOT EXISTS idx_ops_operation_records_scope
+                ON ops_operation_records(tenant_id, store_id, record_date DESC);
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -2156,6 +2187,11 @@ class Database:
                 "tenant_id", "statement_id", "status", "difference_amount", "record_version",
             },
             "knowledge": {"knowledge_key", "layer", "review_status", "record_version"},
+            "ops_operation_records": {
+                "tenant_id", "dataset_key", "store_id", "record_date", "channel",
+                "visitors", "orders", "sales_amount", "ad_spend", "source_format",
+                "payload_hash", "version",
+            },
             "staged_rollouts": {
                 "tenant_id", "subject_type", "subject_key", "candidate_id",
                 "traffic_percentage", "rollout_salt", "status", "record_version",

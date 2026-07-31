@@ -16,12 +16,14 @@ from .business import (
     CompetitiveMonitorUpsert,
     CompetitiveSignalCreate,
     CompetitorObservationCreate,
+    CopywritingRequest,
     FinanceReportQuery,
     InventoryBalanceUpsert,
     MarketingDiagnosisQuery,
     MarketingPerformanceUpsert,
     MetricQuery,
     OperatingExpenseUpsert,
+    OpsReportQuery,
     OrderUpsert,
     SettlementStatementUpsert,
 )
@@ -142,6 +144,11 @@ class VirtualStoreSimulation:
             demands["D15"],
             lambda: self._verify_finance(fixture, tenant_id),
         )
+        self._scenario(
+            scenarios,
+            demands["D16"],
+            lambda: self._verify_ops_assistant(fixture, tenant_id),
+        )
         if include_customer_service:
             self._scenario(
                 scenarios,
@@ -252,6 +259,7 @@ class VirtualStoreSimulation:
             "competitive_intelligence": ["D05", "D06"],
             "marketing": ["D14"],
             "finance": ["D15"],
+            "ops_assistant": ["D16"],
             "metrics": ["D04"],
             "customer_service": ["D07", "D09", "D10"],
             "customer_service_evaluation": ["D13"],
@@ -839,6 +847,115 @@ class VirtualStoreSimulation:
             "reconciliation": reconciliation,
             "tasks": tasks,
             "agent_tool_output": tool_output,
+        }
+
+    def _verify_ops_assistant(
+        self, fixture: dict[str, Any], tenant_id: str
+    ) -> dict[str, Any]:
+        store_id = fixture["store"]["store_id"]
+        dataset = fixture["operations_dataset"]
+        ops = self.service.operations.ops_assistant
+        dataset_key = str(dataset["dataset_key"])
+
+        imported = ops.parse_dataset(
+            tenant_id,
+            dataset_key=dataset_key,
+            store_id=store_id,
+            source_format="csv",
+            content=str(dataset["csv"]),
+        )
+        assert imported["total_rows"] == 8
+        assert imported["accepted_rows"] == 6
+        assert imported["rejected_rows"] == 2
+        reasons = {item["reason"] for item in imported["rejected"]}
+        assert any(reason.startswith("record_date") for reason in reasons)
+        assert any("ops_orders_exceed_visitors" in reason for reason in reasons)
+        assert all(item["source_format"] == "csv" for item in imported["records"])
+        assert all(item["version"] == 1 for item in imported["records"])
+
+        # 同一份运营数据重复导入不得产生新版本。
+        replayed = ops.parse_dataset(
+            tenant_id,
+            dataset_key=dataset_key,
+            store_id=store_id,
+            source_format="csv",
+            content=str(dataset["csv"]),
+        )
+        assert replayed["applied"] == 0
+        assert replayed["idempotent"] == 6
+
+        json_imported = ops.parse_dataset(
+            tenant_id,
+            dataset_key=str(dataset["json_dataset_key"]),
+            store_id=store_id,
+            source_format="json",
+            content=str(dataset["json"]),
+        )
+        assert json_imported["accepted_rows"] == 2
+        assert json_imported["rejected_rows"] == 0
+        assert all(item["source_format"] == "json" for item in json_imported["records"])
+
+        copy_spec = dataset["copywriting"]
+        copy_result = ops.generate_copy(
+            tenant_id,
+            CopywritingRequest(
+                store_id=store_id,
+                product_name=copy_spec["product_name"],
+                selling_points=list(copy_spec["selling_points"]),
+                price=copy_spec["price"],
+                target_audience=copy_spec["target_audience"],
+                styles=list(copy_spec["styles"]),
+                variants_per_style=int(copy_spec["variants_per_style"]),
+            ),
+        )
+        assert copy_result["batch_size"] == 3
+        assert copy_result["publication_allowed"] is False
+        assert {item["style"] for item in copy_result["variants"]} == {
+            "formal",
+            "playful",
+            "urgent",
+        }
+        # 模型可用与不可用都必须显式标记生成方式，且不得产生空文案。
+        assert all(
+            item["generator"] in {"model", "template", "template_fallback"}
+            for item in copy_result["variants"]
+        )
+        assert all(item["title"] and item["body"] for item in copy_result["variants"])
+
+        report = ops.analysis_report(
+            tenant_id,
+            OpsReportQuery(dataset_key=dataset_key, store_id=store_id),
+        )
+        assert report["data_quality"]["record_count"] == 6
+        assert report["data_quality"]["numbers_computed_by_code"] is True
+        assert report["totals"]["visitors"] == 6000
+        assert report["totals"]["orders"] == 224
+        assert report["totals"]["sales_amount"] == "44800.00"
+        assert report["totals"]["ad_spend"] == "4280.00"
+        assert report["totals"]["average_order_value"] == "200.00"
+        assert report["totals"]["roi"] == "10.4673"
+        directions = {item["metric"]: item["direction"] for item in report["trends"]}
+        assert directions["sales_amount"] == "down"
+        assert directions["ad_spend"] == "up"
+        assert {item["code"] for item in report["findings"]} == {
+            "sales_declining",
+            "spend_up_sales_flat",
+        }
+        assert report["narrative_generator"] in {
+            "model",
+            "disabled",
+            "fallback_summary_only",
+        }
+        assert report["action_boundary"].startswith("仅输出数据解读")
+        return {
+            "csv_import": imported,
+            "csv_replay": {
+                "applied": replayed["applied"],
+                "idempotent": replayed["idempotent"],
+            },
+            "json_import": json_imported,
+            "copywriting": copy_result,
+            "report": report,
         }
 
     def _verify_customer_service(

@@ -24,6 +24,12 @@ from .marketing import (
     MarketingService,
 )
 from .metrics import MetricQuery, MetricsService
+from .ops_assistant import (
+    CopywritingRequest,
+    OpsAssistantService,
+    OpsOperationRecordUpsert,
+    OpsReportQuery,
+)
 from .orders import OrderService, OrderUpsert
 from .service import OperationsService
 
@@ -39,6 +45,7 @@ __all__ = [
     "CompetitiveSignalCreate",
     "CompetitorObservationCreate",
     "ContentDraftUpsert",
+    "CopywritingRequest",
     "FinanceReportQuery",
     "FinanceService",
     "InventoryBalanceUpsert",
@@ -50,6 +57,9 @@ __all__ = [
     "MarketingService",
     "OperatingExpenseUpsert",
     "OperationsService",
+    "OpsAssistantService",
+    "OpsOperationRecordUpsert",
+    "OpsReportQuery",
     "OrderService",
     "OrderUpsert",
     "ReconciliationTaskTransition",
