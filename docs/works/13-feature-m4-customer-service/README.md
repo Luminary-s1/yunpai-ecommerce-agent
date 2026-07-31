@@ -62,3 +62,12 @@
 - 红态：3 个流式用例均因缺少 `stream_generate` 失败
 - 绿态：`tests/test_llm.py` 共 `14 passed`；覆盖多个 delta、隐藏 reasoning、
   429 provider code 和流中途错误
+
+## D07 · Verify / Persist 复用
+
+- 将输出安全校验抽为模块级 `verify_response`
+- 将消息事务、invocation 完成、审计和 SOP handoff 标记抽为模块级
+  `persist_response`
+- 图内 `verify` / `persist` 节点仅调用抽取函数，节点与边文本前后完全一致
+- 三套测试逐套通过：`test_react_graph.py` 4 项、`test_agent.py` 7 项、
+  `test_api.py` 3 项
