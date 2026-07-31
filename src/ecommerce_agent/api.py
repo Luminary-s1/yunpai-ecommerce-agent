@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from . import __version__
 from .auth import AdminPrincipal, AuthError, Principal
@@ -22,6 +23,7 @@ from .handoff import HandoffError
 from .handoff_dispatch import DispatchError
 from .handoff_staffing import StaffingError
 from .governance_api import build_governance_router
+from .llm import ModelError, ModelUnavailableError
 from .operations_api import build_operations_router
 from .outbox import OutboxReconcileRequest
 from .rate_limit import RateLimitError, SlidingWindowRateLimiter
@@ -493,6 +495,122 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return service.chat(principal, payload.session_id, payload.message, payload.context)
         except SessionScopeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post("/v1/chat/stream")
+    def chat_stream(
+        payload: ChatRequest,
+        principal: Principal = Depends(require_client),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ) -> StreamingResponse:
+        def encode(event: dict) -> str:
+            data = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+            return f"data: {data}\n\n"
+
+        def events():
+            metadata: dict = {}
+            generated = False
+            try:
+                stream = service.chat_stream(
+                    principal,
+                    payload.session_id,
+                    payload.message,
+                    payload.context,
+                    idempotency_key=idempotency_key,
+                )
+                for item in stream:
+                    event_name = item["event"]
+                    if event_name == "meta":
+                        metadata = item
+                        yield encode(item)
+                        continue
+                    if event_name == "delta":
+                        generated = True
+                        yield encode(item)
+                        continue
+
+                    response = item["response"]
+                    if generated and response["sources"]:
+                        yield encode(
+                            {
+                                "event": "citations",
+                                "sources": response["sources"],
+                            }
+                        )
+                    if response["requires_human"]:
+                        yield encode(
+                            {
+                                "event": "handoff",
+                                "requires_human": True,
+                                "handoff_id": response["handoff_id"],
+                                "handoff_status": response["handoff_status"],
+                                "reason": response["reason"],
+                            }
+                        )
+                    yield encode(
+                        {
+                            "event": "done",
+                            "message_id": response["message_id"],
+                            "intent": response["intent"],
+                            "risk_level": response["risk_level"],
+                            "model_fallback": response["model_fallback"],
+                        }
+                    )
+            except ModelUnavailableError:
+                yield encode(
+                    {
+                        "event": "error",
+                        "code": "model_unavailable",
+                        "message": "model service is temporarily unavailable",
+                        "retry_advised": True,
+                    }
+                )
+                yield encode(
+                    {
+                        "event": "done",
+                        "message_id": metadata.get("message_id", ""),
+                        "intent": "unknown",
+                        "risk_level": "low",
+                        "model_fallback": True,
+                    }
+                )
+            except ModelError:
+                yield encode(
+                    {
+                        "event": "error",
+                        "code": "model_error",
+                        "message": "model generation failed",
+                        "retry_advised": False,
+                    }
+                )
+                yield encode(
+                    {
+                        "event": "done",
+                        "message_id": metadata.get("message_id", ""),
+                        "intent": "unknown",
+                        "risk_level": "low",
+                        "model_fallback": True,
+                    }
+                )
+            except Exception:
+                yield encode(
+                    {
+                        "event": "error",
+                        "code": "internal_error",
+                        "message": "streaming response failed",
+                        "retry_advised": False,
+                    }
+                )
+                yield encode(
+                    {
+                        "event": "done",
+                        "message_id": metadata.get("message_id", ""),
+                        "intent": "unknown",
+                        "risk_level": "low",
+                        "model_fallback": True,
+                    }
+                )
+
+        return StreamingResponse(events(), media_type="text/event-stream")
 
     @app.post("/v1/feedback", response_model=FeedbackResponse)
     def feedback(

@@ -81,3 +81,17 @@
 - 红态：3 项均因缺少 `chat_stream` 失败
 - 绿态：流式 mock 拼接等于非流式回答；消费一个 delta 后关闭 iterator，
   assistant 消息数为 0；定向编排回归共 `14 passed`
+
+## D09 · SSE 端点与事件协议
+
+- 新增 `POST /v1/chat/stream`，沿用客户端认证和 `Idempotency-Key` 请求头，
+  响应类型为 `text/event-stream`
+- API 将服务层内部事件映射为 `meta`、`delta`、`citations`、`handoff`、
+  `done`、`error` 六类单行 JSON 事件
+- 只有实际生成过 delta 才发送 citations；直接转人工路径为
+  `meta → handoff → done`
+- 模型不可用、模型错误和内部错误均输出脱敏错误；`error` 后立即输出 `done`
+- 红态：首个端点测试得到预期 `404`；实现后的首次测试发现直接转人工多发
+  citations，修正后复验
+- 绿态：`tests/test_chat_stream.py` 共 `5 passed in 15.52s`
+- SSE、既有 API 与服务层流式回归合跑：`11 passed in 35.70s`
