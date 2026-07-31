@@ -325,3 +325,74 @@ def test_streaming_upstream_error_body_is_read_before_retry(tmp_path) -> None:
         assert attempts == 2
     finally:
         gateway.close()
+
+
+def test_stream_generate_mock_yields_multiple_deltas_matching_generate(tmp_path) -> None:
+    gateway = ModelGateway(make_settings(tmp_path))
+    messages = [{"role": "user", "content": "没有匹配知识"}]
+    try:
+        expected = gateway.generate(messages)
+        deltas = list(gateway.stream_generate(messages))
+        assert len(deltas) > 1
+        assert "".join(deltas) == expected
+    finally:
+        gateway.close()
+
+
+def test_stream_generate_yields_only_content_deltas(tmp_path) -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        body = (
+            'data: {"choices":[{"delta":{"reasoning_content":"hidden","content":"逐"}}]}\n\n'
+            'data: {"choices":[{"delta":{"content":"段"}}]}\n\n'
+            "data: [DONE]\n\n"
+        )
+        return httpx.Response(
+            200,
+            text=body,
+            headers={"content-type": "text/event-stream"},
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        assert list(gateway.stream_generate([{"role": "user", "content": "回答"}])) == [
+            "逐",
+            "段",
+        ]
+        assert captured["stream"] is True
+    finally:
+        gateway.close()
+
+
+def test_stream_generate_surfaces_midstream_provider_error(tmp_path) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        body = (
+            'data: {"choices":[{"delta":{"content":"部分"}}]}\n\n'
+            'data: {"error":{"code":"1302","message":"private detail"}}\n\n'
+        )
+        return httpx.Response(
+            200,
+            text=body,
+            headers={"content-type": "text/event-stream"},
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(ModelUnavailableError, match="provider code 1302"):
+            list(gateway.stream_generate([{"role": "user", "content": "回答"}]))
+    finally:
+        gateway.close()

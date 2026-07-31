@@ -52,3 +52,13 @@
 - 数据模型和四端点契约见 `SESSION_DATA_MODEL_AND_API.md`
 - WP1 定向与 retention 回归：`19 passed`
 - 全量回归：`318 passed in 135.84s`
+
+## D06 · 模型网关流式输出
+
+- 新增 `ModelGateway.stream_generate()`，真实上游逐个产出 content delta，
+  mock 模式按字符产出
+- `_stream_request` 保持整串返回契约，并与 generator 共享请求构造、SSE 解析和
+  错误分类
+- 红态：3 个流式用例均因缺少 `stream_generate` 失败
+- 绿态：`tests/test_llm.py` 共 `14 passed`；覆盖多个 delta、隐藏 reasoning、
+  429 provider code 和流中途错误

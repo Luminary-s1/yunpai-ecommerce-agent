@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -65,6 +66,15 @@ class ModelGateway:
     def generate(self, messages: list[dict[str, str]]) -> str:
         return self._generate_content(messages, json_mode=False)
 
+    def stream_generate(self, messages: list[dict[str, str]]) -> Iterator[str]:
+        if self.settings.model_mock_mode:
+            yield from self._mock_generate(messages)
+            return
+        if not self.settings.model_enabled:
+            raise ModelError("model integration is disabled")
+        payload = self._chat_payload(messages, json_mode=False, stream=True)
+        yield from self._stream_deltas(payload)
+
     def generate_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
         content = self._generate_content(messages, json_mode=True)
         try:
@@ -83,19 +93,11 @@ class ModelGateway:
         if not self.settings.model_enabled:
             raise ModelError("model integration is disabled")
 
-        payload: dict[str, Any] = {
-            "model": self.settings.model_name,
-            "messages": messages,
-            "temperature": self.settings.model_temperature,
-            "max_tokens": self.settings.model_max_output_tokens,
-            "stream": self._uses_streaming,
-        }
-        if self.settings.model_provider == "glm":
-            payload["thinking"] = {
-                "type": "enabled" if self.settings.model_thinking_enabled else "disabled"
-            }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        payload = self._chat_payload(
+            messages,
+            json_mode=json_mode,
+            stream=self._uses_streaming,
+        )
         if self._uses_streaming:
             return self._stream_request(payload)
         data = self._request(payload)
@@ -106,6 +108,28 @@ class ModelGateway:
         if not isinstance(content, str) or not content.strip():
             raise ModelError("model returned empty content")
         return content.strip()
+
+    def _chat_payload(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        json_mode: bool,
+        stream: bool,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.settings.model_name,
+            "messages": messages,
+            "temperature": self.settings.model_temperature,
+            "max_tokens": self.settings.model_max_output_tokens,
+            "stream": stream,
+        }
+        if self.settings.model_provider == "glm":
+            payload["thinking"] = {
+                "type": "enabled" if self.settings.model_thinking_enabled else "disabled"
+            }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        return payload
 
     def health(self) -> tuple[bool, str]:
         if self.settings.model_mock_mode:
@@ -178,9 +202,13 @@ class ModelGateway:
         raise error_class(f"model request failed: {type(last_error).__name__}") from last_error
 
     def _stream_request(self, payload: dict[str, Any]) -> str:
+        return "".join(self._stream_deltas(payload)).strip()
+
+    def _stream_deltas(self, payload: dict[str, Any]) -> Iterator[str]:
         attempts = self.settings.model_retry_attempts + 1
         last_error: Exception | None = None
         for attempt in range(attempts):
+            emitted = False
             try:
                 with self._client.stream(
                     "POST",
@@ -197,7 +225,7 @@ class ModelGateway:
                         time.sleep(min(0.2 * (attempt + 1), 0.5))
                         continue
                     response.raise_for_status()
-                    parts: list[str] = []
+                    has_non_whitespace = False
                     for line in response.iter_lines():
                         if not line.startswith("data:"):
                             continue
@@ -218,16 +246,19 @@ class ModelGateway:
                         delta = event.get("choices", [{}])[0].get("delta", {})
                         content = delta.get("content")
                         if isinstance(content, str) and content:
-                            parts.append(content)
-                    result = "".join(parts).strip()
-                    if not result:
+                            emitted = True
+                            has_non_whitespace = has_non_whitespace or bool(
+                                content.strip()
+                            )
+                            yield content
+                    if not has_non_whitespace:
                         raise ModelError("model stream returned empty content")
-                    return result
+                    return
             except ModelError:
                 raise
             except (httpx.HTTPError, ValueError) as exc:
                 last_error = exc
-                if attempt + 1 < attempts and isinstance(
+                if not emitted and attempt + 1 < attempts and isinstance(
                     exc, (httpx.ConnectError, httpx.ConnectTimeout)
                 ):
                     time.sleep(min(0.2 * (attempt + 1), 0.5))
