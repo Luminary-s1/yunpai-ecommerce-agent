@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import uuid
+from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
@@ -30,7 +31,7 @@ from .context_builder import ContextBuilder
 from .database import Database, SessionScopeError, utc_now
 from .disaster_recovery import DataDirectoryLock
 from .evaluation import EvaluationRunRequest, EvaluationService
-from .graph import build_graph
+from .graph import build_graph, verify_response
 from .handoff import HandoffService
 from .handoff_dispatch import HandoffDispatchService
 from .handoff_staffing import HandoffStaffingService
@@ -39,13 +40,15 @@ from .knowledge_seed import seed_records
 from .llm import ModelGateway
 from .maintenance import MaintenanceService
 from .policy import sanitize_context
+from .prompts import SYSTEM_PROMPT, build_messages
 from .rag import KnowledgeBase
 from .quality import QualityService
 from .releases import ReleaseReplayRequest, ReleaseService
 from .schemas import ChatResponse, SourceItem
-from .text_utils import redact_sensitive
+from .text_utils import normalize_text, redact_sensitive
 from .taobao import TaobaoIntegrationService
 from .sops import SopService
+from .tokens import count_tokens
 from .tools import ToolRegistry
 
 
@@ -303,6 +306,183 @@ class AgentService:
                 raise RuntimeError("idempotent agent invocation did not reach a durable result")
             return self._invocation_response(dict(saved_invocation))
 
+        return self._response_from_state(state, session_id)
+
+    def chat_stream(
+        self,
+        principal: Principal,
+        session_id: str,
+        message: str,
+        context: dict[str, Any] | None = None,
+        *,
+        idempotency_key: str | None,
+    ) -> Iterator[dict[str, Any]]:
+        internal_session_id = self.db.resolve_session(
+            tenant_id=principal.tenant_id,
+            client_id=principal.client_id,
+            external_session_id=session_id,
+            subject_hash=principal.subject_hash,
+        )
+        safe_message, input_redacted = redact_sensitive(message)
+        untrusted_context = dict(context or {})
+        untrusted_context.pop("authorized", None)
+        trusted_context = sanitize_context(untrusted_context)
+        if principal.can_supply_order_context:
+            trusted_context["authorized"] = True
+        else:
+            for field in (
+                "order_id",
+                "order_status",
+                "logistics_status",
+                "carrier",
+                "tracking_last_event",
+            ):
+                trusted_context.pop(field, None)
+
+        invocation: dict[str, Any] | None = None
+        if idempotency_key is not None:
+            invocation = self._prepare_invocation(
+                principal=principal,
+                internal_session_id=internal_session_id,
+                idempotency_key=idempotency_key,
+                safe_message=safe_message,
+                trusted_context=trusted_context,
+                execution_mode="live",
+            )
+            if invocation["status"] == "completed":
+                response = self._invocation_response(invocation)
+                yield {
+                    "event": "meta",
+                    "session_id": response.session_id,
+                    "message_id": response.message_id,
+                    "trace_id": response.trace_id,
+                }
+                yield {"event": "result", "response": response.model_dump()}
+                return
+
+        config = {"configurable": {"thread_id": internal_session_id}}
+        started = time.perf_counter()
+        state = self.graph.invoke(
+            {
+                "session_id": internal_session_id,
+                "external_session_id": session_id,
+                "tenant_id": principal.tenant_id,
+                "client_id": principal.client_id,
+                "execution_mode": "live",
+                "invocation_id": invocation["id"] if invocation else None,
+                "trace_id": invocation["trace_id"] if invocation else None,
+                "message_id": invocation["assistant_message_id"] if invocation else None,
+                "user_message_id": invocation["user_message_id"] if invocation else None,
+                "user_input": safe_message,
+                "input_redacted": input_redacted,
+                "context": trusted_context,
+            },
+            config=config,
+            interrupt_before=["generate"],
+        )
+        yield {
+            "event": "meta",
+            "session_id": session_id,
+            "message_id": state["message_id"],
+            "trace_id": state["trace_id"],
+        }
+
+        if "generate" in self.graph.get_state(config).next:
+            deltas, model_fallback, trace_step = self._generation_deltas(state)
+            parts: list[str] = []
+            for delta in deltas:
+                parts.append(delta)
+                yield {"event": "delta", "text": delta}
+            draft = "".join(parts).strip()
+            generation_state = {
+                **state,
+                "draft": draft,
+                "model_fallback": model_fallback,
+                "model_retry_advised": False,
+                "trace": [*state["trace"], trace_step],
+            }
+            verified = verify_response(generation_state)
+            self.graph.update_state(
+                config,
+                {
+                    "draft": draft,
+                    "model_fallback": model_fallback,
+                    "model_retry_advised": False,
+                    "trace": generation_state["trace"],
+                    **verified,
+                },
+                as_node="verify",
+            )
+            state = self.graph.invoke(None, config=config)
+
+        duration_ms = (time.perf_counter() - started) * 1000
+        self.db.record_metric(
+            trace_id=state["trace_id"],
+            tenant_id=principal.tenant_id,
+            session_id=internal_session_id,
+            intent=state["intent"],
+            route_reason=state["route_reason"],
+            success=True,
+            model_fallback=state["model_fallback"],
+            requires_human=state["requires_human"],
+            duration_ms=duration_ms,
+        )
+        response = self._response_from_state(state, session_id)
+        yield {"event": "result", "response": response.model_dump()}
+
+    def _generation_deltas(
+        self,
+        state: dict[str, Any],
+    ) -> tuple[Iterator[str], bool, str]:
+        verified_result = (
+            state.get("tool_result")
+            if state.get("tool_result", {}).get("postcondition_met")
+            else None
+        )
+        if not state.get("retrieved") and not verified_result:
+            fallback = "当前知识库中没有足够信息，我会为您转人工客服进一步核对。"
+            return iter((fallback,)), True, "generate:no_evidence"
+
+        top_document = state["retrieved"][0] if state.get("retrieved") else None
+        if (
+            top_document
+            and state["decision"].get("reason") == "approved_knowledge_reuse"
+            and self.settings.rag_direct_approved_answer
+            and top_document["source"].startswith("evolution:")
+            and (
+                top_document["score"]
+                >= self.settings.rag_direct_approved_min_score
+                or normalize_text(top_document["question"])
+                == state["normalized_input"]
+            )
+        ):
+            return iter((top_document["answer"],)), False, "generate:approved_knowledge"
+
+        total = int(
+            self.settings.model_context_limit_tokens
+            * self.settings.context_budget_ratio
+        )
+        available = max(
+            0,
+            total
+            - count_tokens(SYSTEM_PROMPT)
+            - count_tokens(state["normalized_input"]),
+        )
+        messages = build_messages(
+            question=state["normalized_input"],
+            documents=state["retrieved"],
+            context=state["context_bundle"],
+            history=state["context_bundle"].get("recent_history", []),
+            verified_tool_result=verified_result,
+            knowledge_budget_tokens=available * 6 // 10,
+        )
+        return self.model.stream_generate(messages), False, "generate:stream"
+
+    @staticmethod
+    def _response_from_state(
+        state: dict[str, Any],
+        session_id: str,
+    ) -> ChatResponse:
         sources = [
             SourceItem(
                 id=document["id"],

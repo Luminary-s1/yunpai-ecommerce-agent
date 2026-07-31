@@ -71,3 +71,13 @@
 - 图内 `verify` / `persist` 节点仅调用抽取函数，节点与边文本前后完全一致
 - 三套测试逐套通过：`test_react_graph.py` 4 项、`test_agent.py` 7 项、
   `test_api.py` 3 项
+
+## D08 · 两段式生成
+
+- `AgentService.chat_stream` 复用原图并在 `generate` 前暂停，读取同一不可变
+  `context_bundle` 后调用 `stream_generate`
+- 流结束调用 `verify_response`，再从原图 `verify` 节点之后续跑 handoff / persist
+- clarify、handoff、refuse、retry_later 继续由原图一次性完成
+- 红态：3 项均因缺少 `chat_stream` 失败
+- 绿态：流式 mock 拼接等于非流式回答；消费一个 delta 后关闭 iterator，
+  assistant 消息数为 0；定向编排回归共 `14 passed`
