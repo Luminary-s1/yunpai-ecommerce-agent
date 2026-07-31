@@ -4,20 +4,19 @@
 
 ## 当前版本
 
-- 版本号：`0.32.0`
 - 版本号：`0.33.0`
 - 发布状态：工作台渠道与灰度可视化本机候选；生产放行阻塞
-- 兼容性说明（0.33.0 增量）：无 schema/API 契约变化；后台页面新增适配器与灰度面板、发布表单可选夜间/SOP 白名单字段（不填时请求与 0.29.0 相同）
-- 最后更新：2026-07-27
-
-## 更早版本
-
-- 版本号：`0.29.0`
-- 发布状态：夜间值守与 SOP 级发布策略本机候选；生产放行阻塞
-- 兼容性说明（0.32.0 增量）：沿用 schema v25，为 `release_policies` 增加 4 个可空列（additive 前向迁移，与 `ops_operation_records` 同版本共存，两组迁移均为幂等追加）；`assignment()` 返回的 policy 增加 `configured_mode`/`night_watch_active` 且 `mode` 为生效模式（未配置夜间窗时与原值一致）；策略创建请求新增可选 night/sop_allowlist 字段，旧请求不受影响
+- 兼容性说明（0.33.0 增量）：无 schema / API 契约变化；后台页面新增适配器与灰度面板，发布表单增加可选夜间窗与 SOP 白名单字段（不填时请求与 0.32.0 相同）
 - 最后更新：2026-07-31
 
-## 更前一版本
+## 上一版本
+
+- 版本号：`0.32.0`
+- 发布状态：夜间值守与 SOP 级发布策略本机候选；生产放行阻塞
+- 兼容性说明（0.32.0 增量）：沿用 schema v25，为 `release_policies` 增加 4 个可空列（additive 前向迁移；与 0.29.0 的 `ops_operation_records` 同版本号共存，两组迁移均为幂等追加，从 v24 升级会同时应用）；`assignment()` 返回的 policy 增加 `configured_mode` / `night_watch_active`，`mode` 为生效模式（未配置夜间窗时与原值一致）；策略创建请求新增可选 night / sop_allowlist 字段，旧请求不受影响
+- 最后更新：2026-07-31
+
+## 前一版本
 
 - 版本号：`0.31.0`
 - 发布状态：SSE 流式客服接口本机候选；生产放行阻塞
@@ -38,9 +37,9 @@
 - 兼容性说明（0.29.0 增量）：schema v25 新增 `ops_operation_records` 表（additive，可从任意历史版本前向迁移）；新增 `/v1/ops-assistant/*` 管理端点；业务模块注册表新增 `ops_assistant` 条目；`simulation-evidence-v1` 契约由 15 项扩展到 16 项
 - 最后更新：2026-07-30
 
-## 0.27.0
+## 历史版本
 
-- 版本号：`0.27.0`
+### `0.27.0`
 - 发布状态：知识与 SOP 灰度发布本机候选；生产放行阻塞
 - 兼容性说明（0.27.0 增量）：无 schema 变化（沿用 v24）；`SopService.resolve_for_session` 在无固定 run 时按灰度分桶可解析候选版本（无灰度时行为不变）；新增 `/v1/admin/sop-versions/{id}/rollouts` 与 `/v1/admin/sop-rollouts*` 端点
 - 最后更新：2026-07-27

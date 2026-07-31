@@ -2132,20 +2132,19 @@ class Database:
 
     @classmethod
     def _apply_v25(cls, conn: sqlite3.Connection) -> None:
+        # v25 carries two independent additive migrations that landed on separate
+        # branches: night-watch columns on release_policies and the ops assistant
+        # record table. Both must run in the same pass.
         exists = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='release_policies'"
         ).fetchone()
-        if exists is None:
+        if exists is not None:
             # A drifted database without the table is rejected by
             # _validate_schema right after the migration pass.
-            return
-        cls._ensure_column(conn, "release_policies", "night_window_start_utc", "TEXT")
-        cls._ensure_column(conn, "release_policies", "night_window_end_utc", "TEXT")
-        cls._ensure_column(conn, "release_policies", "night_mode", "TEXT")
-        cls._ensure_column(conn, "release_policies", "sop_allowlist_json", "TEXT")
-
-    @staticmethod
-    def _apply_v25(conn: sqlite3.Connection) -> None:
+            cls._ensure_column(conn, "release_policies", "night_window_start_utc", "TEXT")
+            cls._ensure_column(conn, "release_policies", "night_window_end_utc", "TEXT")
+            cls._ensure_column(conn, "release_policies", "night_mode", "TEXT")
+            cls._ensure_column(conn, "release_policies", "sop_allowlist_json", "TEXT")
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS ops_operation_records (
