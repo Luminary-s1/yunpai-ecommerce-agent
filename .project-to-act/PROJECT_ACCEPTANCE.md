@@ -333,6 +333,10 @@
 
 ## 证据索引
 
+- E-20260731-002：F-124 SSE 流式客服接口。`stream_generate` 只产出 delta；`verify`/`persist` 抽为可复用步骤，图内节点与流式路径共用同一实现；两段式生成后 LangGraph 节点与边零变化；`POST /v1/chat/stream` 事件协议 meta/delta/citations/handoff/done/error，error 后紧跟 done 关流；同一 `Idempotency-Key` 断连重发返回同一 message_id 且不重新调模型；`MODEL_ENABLED=false` 时零外部请求。证据：`tests/test_chat_stream.py`、`tests/test_service_stream.py`、`tests/test_llm.py`、`docs/works/13-feature-m4-customer-service/SSE_EVENT_PROTOCOL.md`。生产放行不豁免。
+- E-20260731-001：F-125 会话 Token 预算与生命周期。超长历史截断后 token 不超阈值且保留最近一轮；截断元信息作为 `history_window` 证据进入上下文快照；会话 CRUD 四端点具备鉴权、409、422、404，55 条消息按 limit=20 翻页无重复无遗漏；空闲 121 分钟自动关闭且带未结人工任务的会话不被关闭。反证：`context_budget_ratio` 由 0.7 临时调至 0.99 后保留消息数由 7 升至 9，截断断言如期失败，还原后四项复验通过。定向 16 项、回归 40 项、全量 318 项通过。证据：`tests/test_tokens.py`、`tests/test_context_budget.py`、`tests/test_chat_sessions_api.py`、`tests/test_session_idle.py`、`docs/works/13-feature-m4-customer-service/SESSION_DATA_MODEL_AND_API.md`。生产放行不豁免。
+- E-20260730-001：F-311 运营辅助与文案生成模块。CSV/JSON/表单三条录入链路按租户、数据集、日期、渠道幂等写入；五风格小批量文案与确定性模板降级，生成方式显式标记；分析报告统计值由代码计算；501 行数据集报告合计正确不被列表上限截断。门禁双反证：移除注册表模块覆盖映射后 `report["passed"]` 由 True 变 False；将 fixture 坏日期改为合法日期后场景断言失败，两处均已还原。全量 313 项通过。证据：`tests/test_ops_assistant.py`、`tests/test_virtual_store_simulation.py`、`docs/works/12-feature-m5-operations-assistant/README.md` 及 11 张实跑截图。开发数据仅用于本地验收，不构成生产经营结论。
+
 | 证据 ID | 时间 | 方法或命令 | 退出状态 | 版本或文件哈希 | 结果摘要 | 证据位置 | 有效期 |
 |---|---|---|---|---|---|---|---|
 | E-20260721-001 | 2026-07-21 | 文档结构、围栏、引用和占位符检查 | 0 | 文件大小 28,911 字节 | 原客服产品技术路线文档交付通过；实施未完成 | `云湃电商AI客服产品技术路线_20260721.md` | 文档内容变化前 |
