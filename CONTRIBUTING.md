@@ -223,7 +223,6 @@ verified all four context budget tests pass.
 |---|---|
 | `docs/tasks/M6_WORKBENCH.md` | M6 模块的工作包拆解、需求、验收标准 |
 | `docs/tasks/PROGRESS.md` | 各模块已实现与待实现项的复选框清单 |
-| `docs/tasks_intro/` | 逐日执行计划（如有） |
 | `.project-to-act/PROJECT_FEATURES.md` | 功能台账，F-xxx 编号与状态 |
 | `docs/works/` | 历史交付文档，看格式参考 `12-feature-m5-operations-assistant/README.md` |
 

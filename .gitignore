@@ -13,3 +13,6 @@ _skill_test/
 *.db
 .idea/
 env.md
+
+# 个人排期与执行计划，不随仓库分发
+docs/tasks_intro/

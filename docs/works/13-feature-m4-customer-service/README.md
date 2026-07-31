@@ -2,7 +2,7 @@
 
 - 分支：`feature/m4-customer-service`
 - 范围：客服会话管理与上下文控制、知识库增强回复生成 Pipeline
-- 执行计划：`docs/tasks_intro/M4_DAILY_PLAN.md` D01–D10
+- 交付范围：M4 工作包 1（会话管理与上下文控制）与工作包 2（知识库增强回复生成 Pipeline）
 
 ## D01 · Token 计数与历史截断
 
