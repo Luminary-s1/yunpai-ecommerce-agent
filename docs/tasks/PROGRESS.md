@@ -22,13 +22,13 @@
 - [x] 按会话时序查询完整对话历史
 - [x] 会话作用域校验：跨租户、跨主体、跨来源绑定冲突拒绝
 - [x] 空闲会话自动关闭（且跳过存在未结人工任务的会话）
-- [ ] **Token 计数器**（按模型 tokenizer）— 仓库内无任何 token 计数代码
-- [ ] **滑动窗口 Token 截断**（总量不超上下文上限 70%）— 现为「最近 6 条」条数截断
-- [ ] **`POST /v1/chat/sessions`** 创建会话接口
-- [ ] **`GET /v1/chat/sessions/{id}`** 查询会话信息接口
-- [ ] **`GET /v1/chat/sessions/{id}/messages`** 分页查询历史接口
-- [ ] **`DELETE /v1/chat/sessions/{id}`** 关闭会话接口
-- [ ] **独立会话超时参数**（现复用 30 天消息留存，不是 2 小时级）
+- [x] **Token 计数器**（D-008 确定性保守估算，不引入第三方 tokenizer）
+- [x] **滑动窗口 Token 截断**（总量不超上下文上限 70%）
+- [x] **`POST /v1/chat/sessions`** 创建会话接口
+- [x] **`GET /v1/chat/sessions/{id}`** 查询会话信息接口
+- [x] **`GET /v1/chat/sessions/{id}/messages`** 分页查询历史接口
+- [x] **`DELETE /v1/chat/sessions/{id}`** 关闭会话接口
+- [x] **独立会话超时参数**（默认 120 分钟，与消息留存解耦）
 
 ### WP2 知识库增强回复生成 Pipeline（40h）
 
@@ -40,9 +40,9 @@
 - [x] 幂等设计（Idempotency-Key + agent_invocations 表，断连重放不重复回复）
 - [x] RAG 不可用降级（无知识命中时明确告知并转人工）
 - [x] 模型超时/限流降级（提示重试，不占用人工坐席）
-- [ ] **SSE 流式输出接口** — 上游 SSE 的 delta 目前被 join 成整串返回，对外无流式
+- [x] **SSE 流式输出接口**（`POST /v1/chat/stream`，逐段 delta）
 - [ ] **`POST /v1/chat/sessions/{id}/messages`** 路径（现为 `POST /v1/chat`）
-- [ ] **SSE 事件协议**（delta / citations / handoff / done / error）
+- [x] **SSE 事件协议**（meta / delta / citations / handoff / done / error）
 - [ ] 多轮指代消解的专项验证（"它多少钱"）
 
 ### WP3 客服意图识别与路由逻辑（24h）
@@ -239,7 +239,7 @@
 
 | 模块 | 工作包 | 已实现项 | 待实现项 |
 |---|---:|---:|---:|
-| M4 | 5 | 27 | 30 |
+| M4 | 5 | 34 | 23 |
 | M5 | 5 | 26 | 20 |
 | M6 | 5 | 22 | 22 |
 

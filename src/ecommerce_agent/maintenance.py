@@ -9,6 +9,9 @@ from .config import Settings
 from .database import Database, utc_now
 
 
+TERMINAL_HANDOFF_STATUSES = ("completed", "failed", "canceled", "rejected")
+
+
 class MaintenanceService:
     def __init__(self, db: Database, settings: Settings):
         self.db = db
@@ -18,7 +21,7 @@ class MaintenanceService:
         now = datetime.now(UTC)
         message_cutoff = (now - timedelta(days=self.settings.message_retention_days)).isoformat()
         audit_cutoff = (now - timedelta(days=self.settings.audit_retention_days)).isoformat()
-        terminal = ("completed", "failed", "canceled", "rejected")
+        terminal = TERMINAL_HANDOFF_STATUSES
 
         with self.db._write_lock, self.db.connect() as conn:
             messages_delete = conn.execute(
@@ -173,3 +176,42 @@ class MaintenanceService:
                 (run_id, actor, json.dumps(report, ensure_ascii=False), utc_now()),
             )
         return report
+
+    def close_idle_sessions(self) -> dict[str, Any]:
+        run_at = utc_now()
+        cutoff = (
+            datetime.now(UTC)
+            - timedelta(minutes=self.settings.session_idle_timeout_minutes)
+        ).isoformat()
+        terminal = TERMINAL_HANDOFF_STATUSES
+        with self.db._write_lock, self.db.connect() as conn:
+            session_ids = [
+                str(row["id"])
+                for row in conn.execute(
+                    """
+                    SELECT s.id FROM sessions s
+                    WHERE s.status='active' AND s.last_seen_at < ?
+                      AND NOT EXISTS (
+                          SELECT 1 FROM handoff_tasks h
+                          WHERE h.session_id=s.id
+                            AND h.status NOT IN (?, ?, ?, ?)
+                      )
+                    """,
+                    (cutoff, *terminal),
+                ).fetchall()
+            ]
+            if session_ids:
+                placeholders = ",".join("?" for _ in session_ids)
+                conn.execute(
+                    f"""
+                    UPDATE sessions SET status='closed'
+                    WHERE status='active' AND id IN ({placeholders})
+                    """,
+                    tuple(session_ids),
+                )
+        return {
+            "run_at": run_at,
+            "cutoff": cutoff,
+            "closed": len(session_ids),
+            "session_ids": session_ids,
+        }

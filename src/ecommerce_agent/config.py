@@ -37,6 +37,8 @@ class Settings:
     model_retry_attempts: int
     model_enabled: bool
     model_mock_mode: bool
+    model_context_limit_tokens: int
+    context_budget_ratio: float
     rag_top_k: int
     rag_min_score: float
     rag_direct_approved_answer: bool
@@ -52,6 +54,7 @@ class Settings:
     bootstrap_client_key: str
     bootstrap_client_can_supply_order_context: bool
     subject_hash_key: str
+    session_idle_timeout_minutes: int
     message_retention_days: int
     audit_retention_days: int
     max_request_body_bytes: int
@@ -140,6 +143,12 @@ class Settings:
             model_retry_attempts=max(0, min(2, int(os.getenv("MODEL_RETRY_ATTEMPTS", "1")))),
             model_enabled=_as_bool(os.getenv("MODEL_ENABLED"), default=False),
             model_mock_mode=_as_bool(os.getenv("MODEL_MOCK_MODE")),
+            model_context_limit_tokens=int(
+                os.getenv("MODEL_CONTEXT_LIMIT_TOKENS", "128000")
+            ),
+            context_budget_ratio=max(
+                0.1, min(0.9, float(os.getenv("CONTEXT_BUDGET_RATIO", "0.7")))
+            ),
             rag_top_k=int(os.getenv("RAG_TOP_K", "3")),
             rag_min_score=float(os.getenv("RAG_MIN_SCORE", "0.12")),
             rag_direct_approved_answer=_as_bool(
@@ -163,6 +172,9 @@ class Settings:
                 os.getenv("BOOTSTRAP_CLIENT_CAN_SUPPLY_ORDER_CONTEXT"), default=False
             ),
             subject_hash_key=os.getenv("SUBJECT_HASH_KEY", ""),
+            session_idle_timeout_minutes=max(
+                1, int(os.getenv("SESSION_IDLE_TIMEOUT_MINUTES", "120"))
+            ),
             message_retention_days=max(1, int(os.getenv("MESSAGE_RETENTION_DAYS", "30"))),
             audit_retention_days=max(1, int(os.getenv("AUDIT_RETENTION_DAYS", "365"))),
             max_request_body_bytes=max(1024, int(os.getenv("MAX_REQUEST_BODY_BYTES", "16384"))),

@@ -21,12 +21,189 @@ from .policy import (
     review_output,
     sanitize_context,
 )
-from .prompts import build_decision_messages, build_messages
+from .prompts import (
+    DECISION_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    build_decision_messages,
+    build_messages,
+)
 from .rag import KnowledgeBase
 from .schemas import AgentState
 from .sops import SopService
 from .text_utils import normalize_text, redact_sensitive
+from .tokens import count_tokens, truncate_history
 from .tools import ToolExecutionContext, ToolRegistry, ToolResult
+
+
+MODEL_UNAVAILABLE_HANDOFF_ANSWER = (
+    "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。"
+)
+
+
+def verify_response(state: AgentState) -> dict[str, Any]:
+    evidence = " ".join(document["answer"] for document in state["retrieved"])
+    evidence += " " + json.dumps(state["context_bundle"], ensure_ascii=False)
+    passed, reason = review_output(state["draft"], evidence)
+    verified_result = state.get("tool_result", {}).get("postcondition_met") is True
+    if state.get("model_retry_advised") and not verified_result:
+        return {
+            "review_route": "retry_later",
+            "trace": [*state["trace"], "verify:model_temporarily_unavailable"],
+        }
+    if (state["model_fallback"] and not verified_result) or not passed:
+        return {
+            "answer": (
+                state["draft"]
+                if state["model_fallback"]
+                else "为避免给出未经核实的承诺，我会将这个问题转给人工客服。"
+            ),
+            "requires_human": True,
+            "review_route": "handoff",
+            "route_reason": (
+                "model_unavailable" if state["model_fallback"] else reason
+            ),
+            "trace": [
+                *state["trace"],
+                f"verify:{reason}",
+                "postcondition:handoff",
+            ],
+        }
+    return {
+        "answer": state["draft"],
+        "review_route": "pass",
+        "trace": [*state["trace"], "verify:passed", "postcondition:answer"],
+    }
+
+
+def persist_response(
+    state: AgentState,
+    *,
+    db: Database,
+    sops: SopService,
+) -> dict[str, Any]:
+    user_message_id = state.get("user_message_id") or f"msg-{uuid.uuid4().hex}"
+    now = utc_now()
+    sources = [
+        {key: document[key] for key in ("id", "category", "source", "version", "score")}
+        for document in state.get("retrieved", [])
+    ]
+    safe_user, persist_redacted = redact_sensitive(state["normalized_input"])
+    user_redacted = bool(state.get("input_redacted")) or persist_redacted
+    safe_answer, answer_redacted = redact_sensitive(state["answer"])
+    with db._write_lock, db.connect() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO messages(
+                id, trace_id, session_id, role, content, intent, risk_level,
+                route_reason, sources_json, model_fallback, created_at,
+                tenant_id, client_id, redacted, context_snapshot_id
+            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL)
+            """,
+            (
+                user_message_id,
+                state["trace_id"],
+                state["session_id"],
+                safe_user,
+                now,
+                state["tenant_id"],
+                state["client_id"],
+                int(user_redacted),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO messages(
+                id, trace_id, session_id, role, content, intent, risk_level,
+                route_reason, sources_json, model_fallback, created_at,
+                tenant_id, client_id, redacted, context_snapshot_id
+            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                state["message_id"],
+                state["trace_id"],
+                state["session_id"],
+                safe_answer,
+                state["intent"],
+                state["risk_level"],
+                state["route_reason"],
+                json.dumps(sources, ensure_ascii=False),
+                int(state["model_fallback"]),
+                utc_now(),
+                state["tenant_id"],
+                state["client_id"],
+                int(answer_redacted),
+                state.get("context_snapshot_id"),
+            ),
+        )
+        invocation_id = state.get("invocation_id")
+        if invocation_id:
+            response = {
+                "message_id": state["message_id"],
+                "trace_id": state["trace_id"],
+                "session_id": state.get("external_session_id") or state["session_id"],
+                "answer": safe_answer,
+                "intent": state["intent"],
+                "risk_level": state["risk_level"],
+                "requires_human": state["requires_human"],
+                "reason": state["route_reason"],
+                "sources": sources,
+                "model_fallback": state["model_fallback"],
+                "handoff_id": state.get("handoff_id"),
+                "handoff_status": state.get("handoff_status"),
+                "sop_id": (state.get("active_sop") or {}).get("id"),
+                "sop_version": (state.get("active_sop") or {}).get("version"),
+                "context_snapshot_id": state.get("context_snapshot_id"),
+                "context_readiness": state.get("context_readiness"),
+                "evidence_ids": state.get("context_evidence_ids", []),
+            }
+            cursor = conn.execute(
+                """
+                UPDATE agent_invocations
+                SET status='completed', response_json=?, last_error=NULL,
+                    updated_at=?, completed_at=?
+                WHERE id=? AND tenant_id=? AND status='running'
+                """,
+                (
+                    json.dumps(response, ensure_ascii=False),
+                    utc_now(),
+                    utc_now(),
+                    invocation_id,
+                    state["tenant_id"],
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("agent invocation completion was not persisted")
+    db.audit(
+        "chat.completed",
+        "agent",
+        state["message_id"],
+        {
+            "trace_id": state["trace_id"],
+            "intent": state["intent"],
+            "decision_mode": state.get("decision_mode"),
+            "selected_tool": state.get("selected_tool"),
+            "risk_level": state["risk_level"],
+            "requires_human": state["requires_human"],
+            "handoff_id": state.get("handoff_id"),
+            "react_step": state.get("react_step", 0),
+            "tool_status": state.get("tool_result", {}).get("status"),
+            "sop_id": (state.get("active_sop") or {}).get("id"),
+            "sop_version": (state.get("active_sop") or {}).get("version"),
+            "context_snapshot_id": state.get("context_snapshot_id"),
+            "context_readiness": state.get("context_readiness"),
+            "evidence_ids": state.get("context_evidence_ids", []),
+            "trace": state["trace"],
+        },
+        state["tenant_id"],
+    )
+    active_sop = state.get("active_sop") or {}
+    if (
+        state.get("execution_mode") != "shadow"
+        and active_sop.get("run_id")
+        and state["requires_human"]
+    ):
+        sops.mark_handoff(str(active_sop["run_id"]), state["route_reason"])
+    return {"trace": [*state["trace"], "persist"]}
 
 
 def build_graph(
@@ -50,6 +227,35 @@ def build_graph(
             trace_id=state["trace_id"],
             trusted_context=state["context"],
         )
+
+    def context_budgets(question: str, system_prompt: str) -> tuple[int, int]:
+        total = int(
+            settings.model_context_limit_tokens * settings.context_budget_ratio
+        )
+        available = max(
+            0,
+            total - count_tokens(system_prompt) - count_tokens(question),
+        )
+        knowledge_budget = available * 6 // 10
+        return knowledge_budget, available - knowledge_budget
+
+    def budgeted_history(
+        state: AgentState,
+        system_prompt: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, int | bool], int]:
+        knowledge_budget, history_budget = context_budgets(
+            state["normalized_input"],
+            system_prompt,
+        )
+        history = db.recent_messages(
+            state["session_id"],
+            settings.session_history_limit,
+        )
+        selected, meta = truncate_history(
+            history,
+            budget_tokens=history_budget,
+        )
+        return selected, meta, knowledge_budget
 
     def intake(state: AgentState) -> dict[str, Any]:
         message = normalize_text(state["user_input"])
@@ -121,6 +327,10 @@ def build_graph(
 
     def build_decision_context(state: AgentState) -> dict[str, Any]:
         history = db.recent_messages(state["session_id"], settings.session_history_limit)
+        _, history_budget = context_budgets(
+            state["normalized_input"],
+            DECISION_SYSTEM_PROMPT,
+        )
         snapshot = contexts.build(
             tenant_id=state["tenant_id"],
             session_id=state["session_id"],
@@ -133,6 +343,7 @@ def build_graph(
             sops=sops.catalog_for_context(state["tenant_id"]),
             tool_catalog=tools.catalog_for_model(),
             history=history,
+            history_budget_tokens=history_budget,
             tool_result=state.get("tool_result") or None,
             parent_snapshot_id=state.get("context_snapshot_id"),
         )
@@ -142,6 +353,7 @@ def build_graph(
             if snapshot.readiness == "handoff_required"
             else "trusted_context_ready"
         )
+        history_meta = snapshot.bundle["recent_history_meta"]
         return {
             "route": route,
             "route_reason": reason,
@@ -150,7 +362,14 @@ def build_graph(
             "context_readiness": snapshot.readiness,
             "context_evidence_ids": snapshot.evidence_ids,
             "context_conflicts": snapshot.conflicts,
-            "trace": [*state["trace"], f"context:decision:{snapshot.readiness}"],
+            "trace": [
+                *state["trace"],
+                (
+                    f"context:budget:kept{history_meta['kept']}"
+                    f"/dropped{history_meta['dropped']}"
+                ),
+                f"context:decision:{snapshot.readiness}",
+            ],
         }
 
     def deliberate(state: AgentState) -> dict[str, Any]:
@@ -176,7 +395,10 @@ def build_graph(
                 "trace": [*state["trace"], "deliberate:approved_knowledge"],
             }
 
-        history = db.recent_messages(state["session_id"], settings.session_history_limit)
+        history, history_meta, knowledge_budget = budgeted_history(
+            state,
+            DECISION_SYSTEM_PROMPT,
+        )
         messages = build_decision_messages(
             question=state["normalized_input"],
             documents=state.get("retrieved", []),
@@ -186,6 +408,11 @@ def build_graph(
             observation=state.get("tool_result") or None,
             step_count=state["react_step"],
             max_steps=settings.max_react_steps,
+            knowledge_budget_tokens=knowledge_budget,
+        )
+        budget_trace = (
+            f"context:budget:kept{history_meta['kept']}"
+            f"/dropped{history_meta['dropped']}"
         )
         try:
             decision = AgentDecision.model_validate(model.generate_json(messages))
@@ -218,6 +445,7 @@ def build_graph(
                         "model_retry_advised": True,
                         "trace": [
                             *state["trace"],
+                            budget_trace,
                             "deliberate:model_temporarily_unavailable",
                         ],
                     }
@@ -233,7 +461,7 @@ def build_graph(
         return {
             "decision": decision.model_dump(),
             "model_fallback": fallback,
-            "trace": [*state["trace"], trace_step],
+            "trace": [*state["trace"], budget_trace, trace_step],
         }
 
     def decision_gate(state: AgentState) -> dict[str, Any]:
@@ -492,6 +720,10 @@ def build_graph(
 
     def build_generation_context(state: AgentState) -> dict[str, Any]:
         history = db.recent_messages(state["session_id"], settings.session_history_limit)
+        _, history_budget = context_budgets(
+            state["normalized_input"],
+            SYSTEM_PROMPT,
+        )
         active_sop = state.get("active_sop")
         snapshot = contexts.build(
             tenant_id=state["tenant_id"],
@@ -505,10 +737,12 @@ def build_graph(
             sops=[active_sop] if active_sop else [],
             tool_catalog=tools.catalog_for_model(),
             history=history,
+            history_budget_tokens=history_budget,
             tool_result=state.get("tool_result") or None,
             parent_snapshot_id=state.get("context_snapshot_id"),
         )
         route = "handoff" if snapshot.readiness == "handoff_required" else "generate"
+        history_meta = snapshot.bundle["recent_history_meta"]
         return {
             "route": route,
             "route_reason": (
@@ -521,7 +755,14 @@ def build_graph(
             "context_readiness": snapshot.readiness,
             "context_evidence_ids": snapshot.evidence_ids,
             "context_conflicts": snapshot.conflicts,
-            "trace": [*state["trace"], f"context:generation:{snapshot.readiness}"],
+            "trace": [
+                *state["trace"],
+                (
+                    f"context:budget:kept{history_meta['kept']}"
+                    f"/dropped{history_meta['dropped']}"
+                ),
+                f"context:generation:{snapshot.readiness}",
+            ],
         }
 
     def generate(state: AgentState) -> dict[str, Any]:
@@ -552,13 +793,21 @@ def build_graph(
                 "model_fallback": False,
                 "trace": [*state["trace"], "generate:approved_knowledge"],
             }
-        history = db.recent_messages(state["session_id"], settings.session_history_limit)
+        history, history_meta, knowledge_budget = budgeted_history(
+            state,
+            SYSTEM_PROMPT,
+        )
         messages = build_messages(
             question=state["normalized_input"],
             documents=state["retrieved"],
             context=state["context_bundle"],
             history=history,
             verified_tool_result=verified_result,
+            knowledge_budget_tokens=knowledge_budget,
+        )
+        budget_trace = (
+            f"context:budget:kept{history_meta['kept']}"
+            f"/dropped{history_meta['dropped']}"
         )
         try:
             draft = model.generate(messages)
@@ -589,32 +838,11 @@ def build_graph(
             "draft": draft,
             "model_fallback": fallback,
             "model_retry_advised": retry_advised,
-            "trace": [*state["trace"], trace_step],
+            "trace": [*state["trace"], budget_trace, trace_step],
         }
 
     def verify(state: AgentState) -> dict[str, Any]:
-        evidence = " ".join(document["answer"] for document in state["retrieved"])
-        evidence += " " + json.dumps(state["context_bundle"], ensure_ascii=False)
-        passed, reason = review_output(state["draft"], evidence)
-        verified_result = state.get("tool_result", {}).get("postcondition_met") is True
-        if state.get("model_retry_advised") and not verified_result:
-            return {
-                "review_route": "retry_later",
-                "trace": [*state["trace"], "verify:model_temporarily_unavailable"],
-            }
-        if (state["model_fallback"] and not verified_result) or not passed:
-            return {
-                "answer": state["draft"] if state["model_fallback"] else "为避免给出未经核实的承诺，我会将这个问题转给人工客服。",
-                "requires_human": True,
-                "review_route": "handoff",
-                "route_reason": "model_unavailable" if state["model_fallback"] else reason,
-                "trace": [*state["trace"], f"verify:{reason}", "postcondition:handoff"],
-            }
-        return {
-            "answer": state["draft"],
-            "review_route": "pass",
-            "trace": [*state["trace"], "verify:passed", "postcondition:answer"],
-        }
+        return verify_response(state)
 
     def retry_later(state: AgentState) -> dict[str, Any]:
         return {
@@ -657,7 +885,7 @@ def build_graph(
         elif reason.startswith("tool_policy_denied"):
             answer = "当前操作未通过已配置的权限或业务规则校验，我会转人工进一步核对。"
         elif reason in {"model_unavailable", "react_step_limit_reached"}:
-            answer = "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。"
+            answer = MODEL_UNAVAILABLE_HANDOFF_ANSWER
         else:
             decision_response = state.get("decision", {}).get("response")
             answer = decision_response or state.get("answer") or "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。"
@@ -721,114 +949,7 @@ def build_graph(
         }
 
     def persist(state: AgentState) -> dict[str, Any]:
-        user_message_id = state.get("user_message_id") or f"msg-{uuid.uuid4().hex}"
-        now = utc_now()
-        sources = [
-            {key: document[key] for key in ("id", "category", "source", "version", "score")}
-            for document in state.get("retrieved", [])
-        ]
-        safe_user, persist_redacted = redact_sensitive(state["normalized_input"])
-        user_redacted = bool(state.get("input_redacted")) or persist_redacted
-        safe_answer, answer_redacted = redact_sensitive(state["answer"])
-        with db._write_lock, db.connect() as conn:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO messages(
-                    id, trace_id, session_id, role, content, intent, risk_level,
-                    route_reason, sources_json, model_fallback, created_at,
-                    tenant_id, client_id, redacted, context_snapshot_id
-                ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL)
-                """,
-                (
-                    user_message_id, state["trace_id"], state["session_id"], safe_user,
-                    now, state["tenant_id"], state["client_id"], int(user_redacted),
-                ),
-            )
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO messages(
-                    id, trace_id, session_id, role, content, intent, risk_level,
-                    route_reason, sources_json, model_fallback, created_at,
-                    tenant_id, client_id, redacted, context_snapshot_id
-                ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    state["message_id"], state["trace_id"], state["session_id"], safe_answer,
-                    state["intent"], state["risk_level"], state["route_reason"],
-                    json.dumps(sources, ensure_ascii=False), int(state["model_fallback"]), utc_now(),
-                    state["tenant_id"], state["client_id"], int(answer_redacted),
-                    state.get("context_snapshot_id"),
-                ),
-            )
-            invocation_id = state.get("invocation_id")
-            if invocation_id:
-                response = {
-                    "message_id": state["message_id"],
-                    "trace_id": state["trace_id"],
-                    "session_id": state.get("external_session_id") or state["session_id"],
-                    "answer": safe_answer,
-                    "intent": state["intent"],
-                    "risk_level": state["risk_level"],
-                    "requires_human": state["requires_human"],
-                    "reason": state["route_reason"],
-                    "sources": sources,
-                    "model_fallback": state["model_fallback"],
-                    "handoff_id": state.get("handoff_id"),
-                    "handoff_status": state.get("handoff_status"),
-                    "sop_id": (state.get("active_sop") or {}).get("id"),
-                    "sop_version": (state.get("active_sop") or {}).get("version"),
-                    "context_snapshot_id": state.get("context_snapshot_id"),
-                    "context_readiness": state.get("context_readiness"),
-                    "evidence_ids": state.get("context_evidence_ids", []),
-                }
-                cursor = conn.execute(
-                    """
-                    UPDATE agent_invocations
-                    SET status='completed', response_json=?, last_error=NULL,
-                        updated_at=?, completed_at=?
-                    WHERE id=? AND tenant_id=? AND status='running'
-                    """,
-                    (
-                        json.dumps(response, ensure_ascii=False),
-                        utc_now(),
-                        utc_now(),
-                        invocation_id,
-                        state["tenant_id"],
-                    ),
-                )
-                if cursor.rowcount != 1:
-                    raise RuntimeError("agent invocation completion was not persisted")
-        db.audit(
-            "chat.completed",
-            "agent",
-            state["message_id"],
-            {
-                "trace_id": state["trace_id"],
-                "intent": state["intent"],
-                "decision_mode": state.get("decision_mode"),
-                "selected_tool": state.get("selected_tool"),
-                "risk_level": state["risk_level"],
-                "requires_human": state["requires_human"],
-                "handoff_id": state.get("handoff_id"),
-                "react_step": state.get("react_step", 0),
-                "tool_status": state.get("tool_result", {}).get("status"),
-                "sop_id": (state.get("active_sop") or {}).get("id"),
-                "sop_version": (state.get("active_sop") or {}).get("version"),
-                "context_snapshot_id": state.get("context_snapshot_id"),
-                "context_readiness": state.get("context_readiness"),
-                "evidence_ids": state.get("context_evidence_ids", []),
-                "trace": state["trace"],
-            },
-            state["tenant_id"],
-        )
-        active_sop = state.get("active_sop") or {}
-        if (
-            state.get("execution_mode") != "shadow"
-            and active_sop.get("run_id")
-            and state["requires_human"]
-        ):
-            sops.mark_handoff(str(active_sop["run_id"]), state["route_reason"])
-        return {"trace": [*state["trace"], "persist"]}
+        return persist_response(state, db=db, sops=sops)
 
     builder.add_node("intake", intake)
     builder.add_node("precheck", precheck)

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from .schemas import RetrievedDocument
+from .tokens import count_tokens
 
 
 SYSTEM_PROMPT = """你是云湃电商客服 Agent。
@@ -49,6 +51,44 @@ JSON 字段：intent、mode、tool_name、arguments、missing_fields、expected_
 """
 
 
+def _budget_documents(
+    documents: list[RetrievedDocument],
+    budget_tokens: int | None,
+    render: Callable[[RetrievedDocument], str],
+) -> list[RetrievedDocument]:
+    selected = list(documents)
+    if budget_tokens is None:
+        return selected
+    while (
+        len(selected) > 1
+        and sum(count_tokens(render(document)) for document in selected)
+        > max(0, budget_tokens)
+    ):
+        lowest = min(
+            range(len(selected)),
+            key=lambda index: (selected[index]["score"], index),
+        )
+        selected.pop(lowest)
+    return selected
+
+
+def _knowledge_block(document: RetrievedDocument) -> str:
+    return (
+        f"[{document['id']}] 类别：{document['category']}\n"
+        f"适用问法：{document['question']}\n答案：{document['answer']}"
+    )
+
+
+def _decision_evidence(document: RetrievedDocument) -> dict[str, Any]:
+    return {
+        "id": document["id"],
+        "intent": document["intent"],
+        "category": document["category"],
+        "answer": document["answer"],
+        "score": document["score"],
+    }
+
+
 def build_messages(
     *,
     question: str,
@@ -56,14 +96,15 @@ def build_messages(
     context: dict[str, Any],
     history: list[dict[str, Any]],
     verified_tool_result: dict[str, Any] | None = None,
+    knowledge_budget_tokens: int | None = None,
 ) -> list[dict[str, str]]:
-    knowledge_blocks = []
-    for document in documents:
-        knowledge_blocks.append(
-            f"[{document['id']}] 类别：{document['category']}\n"
-            f"适用问法：{document['question']}\n答案：{document['answer']}"
-        )
-    history_text = "\n".join(f"{item['role']}: {item['content']}" for item in history[-6:]) or "无"
+    selected_documents = _budget_documents(
+        documents,
+        knowledge_budget_tokens,
+        _knowledge_block,
+    )
+    knowledge_blocks = [_knowledge_block(document) for document in selected_documents]
+    history_text = "\n".join(f"{item['role']}: {item['content']}" for item in history) or "无"
     safe_context = json.dumps(context, ensure_ascii=False, sort_keys=True)
     safe_tool_result = json.dumps(verified_tool_result or {}, ensure_ascii=False, sort_keys=True)
     user_prompt = (
@@ -90,6 +131,7 @@ def build_decision_messages(
     observation: dict[str, Any] | None,
     step_count: int,
     max_steps: int,
+    knowledge_budget_tokens: int | None = None,
 ) -> list[dict[str, str]]:
     context_package = context
     session_state = context_package.get("trusted_session_state", {})
@@ -100,19 +142,19 @@ def build_decision_messages(
         "platform": session_state.get("platform"),
         "store_id": session_state.get("store_id"),
     }
-    evidence = [
-        {
-            "id": item["id"],
-            "intent": item["intent"],
-            "category": item["category"],
-            "answer": item["answer"],
-            "score": item["score"],
-        }
-        for item in documents
-    ]
+    selected_documents = _budget_documents(
+        documents,
+        knowledge_budget_tokens,
+        lambda document: json.dumps(
+            _decision_evidence(document),
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+    )
+    evidence = [_decision_evidence(item) for item in selected_documents]
     history_items = [
         {"role": item["role"], "content": item["content"]}
-        for item in history[-6:]
+        for item in history
     ]
     payload = {
         "task_type": "agent_decision",

@@ -2600,6 +2600,71 @@ class Database:
             ).fetchall()
         return [dict(row) for row in reversed(rows)]
 
+    def paginated_messages(
+        self,
+        session_id: str,
+        cursor: str | None,
+        limit: int,
+        *,
+        tenant_id: str,
+        subject_hash: str,
+    ) -> dict[str, Any]:
+        decoded_cursor: tuple[str, str] | None = None
+        if cursor:
+            try:
+                created_at, message_id = cursor.rsplit("|", 1)
+                datetime.fromisoformat(created_at)
+                if created_at and message_id:
+                    decoded_cursor = (created_at, message_id)
+            except (TypeError, ValueError):
+                decoded_cursor = None
+
+        page_limit = max(1, min(100, limit))
+        conditions = [
+            "m.session_id=?",
+            "s.tenant_id=?",
+            "s.subject_hash=?",
+        ]
+        params: list[Any] = [session_id, tenant_id, subject_hash]
+        if decoded_cursor is not None:
+            conditions.append(
+                "(m.created_at > ? OR (m.created_at = ? AND m.id > ?))"
+            )
+            params.extend(
+                [
+                    decoded_cursor[0],
+                    decoded_cursor[0],
+                    decoded_cursor[1],
+                ]
+            )
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT m.id, m.trace_id, m.role, m.content, m.intent,
+                       m.risk_level, m.route_reason, m.sources_json,
+                       m.model_fallback, m.redacted, m.context_snapshot_id,
+                       m.created_at
+                FROM messages m
+                JOIN sessions s ON s.id=m.session_id
+                WHERE {' AND '.join(conditions)}
+                ORDER BY m.created_at, m.id
+                LIMIT ?
+                """,
+                (*params, page_limit + 1),
+            ).fetchall()
+
+        has_more = len(rows) > page_limit
+        page_rows = rows[:page_limit]
+        items = [dict(row) for row in page_rows]
+        next_cursor = None
+        if has_more and page_rows:
+            next_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
+        return {
+            "items": items,
+            "next_cursor": next_cursor,
+            "limit": page_limit,
+        }
+
     def get_message_pair(
         self, assistant_message_id: str, tenant_id: str | None = None
     ) -> tuple[dict[str, Any], dict[str, Any]] | None:
