@@ -87,6 +87,64 @@ def test_structured_decision_requests_json_object_mode(tmp_path) -> None:
         gateway.close()
 
 
+def test_structured_generation_accepts_a_per_call_timeout(tmp_path) -> None:
+    captured_timeout: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_timeout.update(request.extensions["timeout"])
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"intent":"chitchat"}'}}]},
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        gateway.generate_json(
+            [{"role": "user", "content": "classify"}],
+            timeout_seconds=0.25,
+        )
+    finally:
+        gateway.close()
+
+    assert captured_timeout["connect"] == 0.25
+    assert captured_timeout["read"] == 0.25
+
+
+def test_bounded_structured_generation_does_not_retry_connect_timeout(tmp_path) -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        raise httpx.ConnectTimeout("classifier deadline", request=request)
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_streaming=False,
+        model_api_key="test-model-key",
+        model_retry_attempts=2,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(ModelUnavailableError, match="ConnectTimeout"):
+            gateway.generate_json(
+                [{"role": "user", "content": "classify"}],
+                timeout_seconds=0.02,
+            )
+    finally:
+        gateway.close()
+
+    assert attempts == 1
+
+
 def test_coding_plan_endpoint_is_rejected_for_application_runtime(tmp_path) -> None:
     settings = replace(
         make_settings(tmp_path),

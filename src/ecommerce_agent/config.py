@@ -60,6 +60,7 @@ class Settings:
     max_request_body_bytes: int
     rate_limit_requests_per_minute: int
     min_free_disk_mb: int
+    intent_classify_timeout_seconds: float = 2.0
     customer_test_enabled: bool = False
     model_allow_coding_plan: bool = False
     max_react_steps: int = 4
@@ -182,6 +183,9 @@ class Settings:
                 1, int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "120"))
             ),
             min_free_disk_mb=max(1, int(os.getenv("MIN_FREE_DISK_MB", "1024"))),
+            intent_classify_timeout_seconds=max(
+                0.001, float(os.getenv("INTENT_CLASSIFY_TIMEOUT_SECONDS", "2.0"))
+            ),
             customer_test_enabled=_as_bool(
                 os.getenv("CUSTOMER_TEST_ENABLED"), default=False
             ),

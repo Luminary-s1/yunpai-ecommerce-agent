@@ -75,8 +75,17 @@ class ModelGateway:
         payload = self._chat_payload(messages, json_mode=False, stream=True)
         yield from self._stream_deltas(payload)
 
-    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
-        content = self._generate_content(messages, json_mode=True)
+    def generate_json(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        content = self._generate_content(
+            messages,
+            json_mode=True,
+            timeout_seconds=timeout_seconds,
+        )
         try:
             return extract_json_object(content)
         except ValueError as exc:
@@ -87,6 +96,7 @@ class ModelGateway:
         messages: list[dict[str, str]],
         *,
         json_mode: bool,
+        timeout_seconds: float | None = None,
     ) -> str:
         if self.settings.model_mock_mode:
             return self._mock_generate(messages)
@@ -99,8 +109,8 @@ class ModelGateway:
             stream=self._uses_streaming,
         )
         if self._uses_streaming:
-            return self._stream_request(payload)
-        data = self._request(payload)
+            return self._stream_request(payload, timeout_seconds=timeout_seconds)
+        data = self._request(payload, timeout_seconds=timeout_seconds)
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
@@ -166,8 +176,17 @@ class ModelGateway:
             "usage": data.get("usage", {}),
         }
 
-    def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        attempts = self.settings.model_retry_attempts + 1
+    def _request(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        attempts = (
+            1
+            if timeout_seconds is not None
+            else self.settings.model_retry_attempts + 1
+        )
         last_error: Exception | None = None
         for attempt in range(attempts):
             try:
@@ -175,6 +194,11 @@ class ModelGateway:
                     f"{self.settings.model_base_url}/chat/completions",
                     headers=self._headers(),
                     json=payload,
+                    timeout=(
+                        timeout_seconds
+                        if timeout_seconds is not None
+                        else self.settings.model_timeout_seconds
+                    ),
                 )
                 if self._is_retryable(response) and attempt + 1 < attempts:
                     time.sleep(min(0.2 * (attempt + 1), 0.5))
@@ -201,11 +225,27 @@ class ModelGateway:
             ) from last_error
         raise error_class(f"model request failed: {type(last_error).__name__}") from last_error
 
-    def _stream_request(self, payload: dict[str, Any]) -> str:
-        return "".join(self._stream_deltas(payload)).strip()
+    def _stream_request(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> str:
+        return "".join(
+            self._stream_deltas(payload, timeout_seconds=timeout_seconds)
+        ).strip()
 
-    def _stream_deltas(self, payload: dict[str, Any]) -> Iterator[str]:
-        attempts = self.settings.model_retry_attempts + 1
+    def _stream_deltas(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Iterator[str]:
+        attempts = (
+            1
+            if timeout_seconds is not None
+            else self.settings.model_retry_attempts + 1
+        )
         last_error: Exception | None = None
         for attempt in range(attempts):
             emitted = False
@@ -215,6 +255,11 @@ class ModelGateway:
                     f"{self.settings.model_base_url}/chat/completions",
                     headers=self._headers(),
                     json=payload,
+                    timeout=(
+                        timeout_seconds
+                        if timeout_seconds is not None
+                        else self.settings.model_timeout_seconds
+                    ),
                 ) as response:
                     if response.status_code >= 400:
                         # Error responses arrive as a regular JSON body instead of SSE.
@@ -312,6 +357,35 @@ class ModelGateway:
     @staticmethod
     def _mock_generate(messages: list[dict[str, str]]) -> str:
         context = messages[-1]["content"]
+        try:
+            task = json.loads(context)
+        except (TypeError, json.JSONDecodeError):
+            task = {}
+        if task.get("task_type") == "intent_classification":
+            message = str(task.get("message", ""))
+            intent = "chitchat"
+            mappings = (
+                (
+                    "complaint",
+                    ("态度", "不满意", "欺骗", "糟糕", "太差", "失望", "恶劣"),
+                ),
+                (
+                    "after_sales",
+                    ("坏了", "破损", "没收到", "退钱", "包裹", "补发", "维修", "少件"),
+                ),
+                (
+                    "product_inquiry",
+                    ("颜色", "款式", "功能", "适合", "有货", "库存", "介绍", "重量", "容量"),
+                ),
+            )
+            for candidate, keywords in mappings:
+                if any(keyword in message for keyword in keywords):
+                    intent = candidate
+                    break
+            return json.dumps(
+                {"intent": intent, "confidence": 0.82},
+                ensure_ascii=False,
+            )
         if '"task_type": "agent_decision"' in context:
             payload = json.loads(context)
             question = str(payload.get("user_question", ""))
