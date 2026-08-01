@@ -113,3 +113,17 @@
 - 流式、ReAct 图、Agent、模型网关定向回归：`33 passed in 45.57s`
 - 全量回归：`332 passed in 575.66s`
 - 前端协议见 `SSE_EVENT_PROTOCOL.md`；本周未新增依赖，LangGraph 节点与边未改
+
+## WP2 补齐复核 · 08-01
+
+- 新增 `POST /v1/chat/sessions/{id}/messages`，路径参数作为唯一 session ID，
+  请求体只包含 `message` 与 `context`；复用既有 SSE 适配器和幂等请求头
+- 商品问题含“它 / 这个 / 这款”等指代且当前轮无候选时，商品顾问只从
+  ContextBuilder 已截断的最近用户消息恢复候选；按匹配词数保留最相关并列项，
+  不在歧义时任意选择 SKU
+- 多轮反证用例先问“云湃保温杯 500ml 怎么样”，再问“它多少钱”；最终回答引用
+  不可变上下文中的目录事实 `89.00 CNY`
+- 红态：会话消息 POST 返回 `405`；多轮用例错误回答“补货时间”
+- 绿态：两个聚焦用例 `2 passed in 4.98s`；WP2 联合回归
+  `63 passed in 87.99s`；全量回归 `352 passed in 549.42s`
+- 未新增依赖，LangGraph 节点与边声明零变化

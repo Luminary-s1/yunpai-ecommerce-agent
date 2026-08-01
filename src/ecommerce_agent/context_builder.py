@@ -269,6 +269,7 @@ class ContextBuilder:
             tenant_id=tenant_id,
             store_id=safe_context.get("store_id") or safe_context.get("shop_id"),
             question=question,
+            history=safe_history,
         )
         safe_advisor = _safe_value(advisor)
         for candidate in advisor["candidates"]:

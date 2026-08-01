@@ -406,6 +406,28 @@ class ModelGateway:
                     "response": None, "reason": "knowledge_answer", "confidence": 0.8,
                 }
             return json.dumps(decision, ensure_ascii=False)
+        context_marker = "当前会话的授权业务上下文："
+        if context_marker in context:
+            raw_context = context.split(context_marker, 1)[1].split(
+                "\n\n已验证工具结果：", 1
+            )[0]
+            try:
+                context_package = json.loads(raw_context)
+            except ValueError:
+                context_package = {}
+            candidates = context_package.get("product_advisor", {}).get(
+                "candidates", []
+            )
+            question = context.split("用户问题：", 1)[1].split("\n\n", 1)[0]
+            if len(candidates) == 1 and any(
+                word in question for word in ("多少钱", "价格", "价钱", "售价")
+            ):
+                candidate = candidates[0]
+                return (
+                    f"{candidate['title']} 当前目录价格为 "
+                    f"{candidate['sale_price']} {candidate['currency']}，"
+                    "实际支付金额请以结算页实时展示为准。"
+                )
         marker = "参考知识："
         if marker in context:
             knowledge = context.split(marker, 1)[1].split("\n\n当前会话", 1)[0]

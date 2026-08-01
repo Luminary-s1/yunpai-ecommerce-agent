@@ -70,6 +70,11 @@ class ChatRequest(BaseModel):
     context: dict[str, Any] = Field(default_factory=dict, max_length=16)
 
 
+class ChatMessageRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    context: dict[str, Any] = Field(default_factory=dict, max_length=16)
+
+
 class SourceItem(BaseModel):
     id: str
     category: str

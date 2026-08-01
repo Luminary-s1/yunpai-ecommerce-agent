@@ -45,7 +45,7 @@
 
 ## API
 
-四个端点都要求 `X-Client-Id`、`X-Client-Key`、`X-Subject-Id`。
+五个端点都要求 `X-Client-Id`、`X-Client-Key`、`X-Subject-Id`。
 
 ### `POST /v1/chat/sessions`
 
@@ -73,6 +73,13 @@
 
 响应包含按 `created_at, id` 升序排列的 `items`、`next_cursor` 和 `limit`。
 游标无法解码时按未提供游标处理，从第一页开始。
+
+### `POST /v1/chat/sessions/{id}/messages`
+
+请求体包含 `message` 与可选 `context`，路径中的 `{id}` 是本轮唯一 session ID。
+返回 `text/event-stream`，事件契约见 `SSE_EVENT_PROTOCOL.md`。可选请求头
+`Idempotency-Key` 用于断连重试；命中已完成请求时返回相同 message ID，且不新增
+历史消息。
 
 ### `DELETE /v1/chat/sessions/{id}`
 

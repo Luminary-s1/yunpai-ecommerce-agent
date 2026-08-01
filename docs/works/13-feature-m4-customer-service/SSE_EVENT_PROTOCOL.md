@@ -2,7 +2,18 @@
 
 ## 请求
 
-`POST /v1/chat/stream`
+推荐路径：`POST /v1/chat/sessions/{session_id}/messages`
+
+请求体：
+
+```json
+{
+  "message": "尺码怎么选",
+  "context": {}
+}
+```
+
+兼容路径：`POST /v1/chat/stream`
 
 请求头：
 
@@ -13,7 +24,7 @@
 | `X-Subject-Id` | 是 | 当前顾客主体 ID |
 | `Idempotency-Key` | 否 | 1–200 字符；断连重试时复用同一值 |
 
-请求体：
+兼容路径的请求体：
 
 ```json
 {

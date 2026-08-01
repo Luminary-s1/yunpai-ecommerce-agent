@@ -205,3 +205,43 @@ def test_chat_context_snapshot_carries_product_candidates(tmp_path) -> None:
         assert "sku-earbuds-a" in skus or "sku-earbuds-b" in skus
     finally:
         service.close()
+
+
+def test_chat_resolves_product_reference_from_recent_history(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        _seed_catalog(service)
+        principal = principal_for(service, "buyer-reference-1")
+        service.chat(
+            principal,
+            "product-reference-session",
+            "云湃保温杯 500ml 怎么样",
+            {"shop_id": "shop-advisor-1"},
+        )
+        events = list(
+            service.chat_stream(
+                principal,
+                "product-reference-session",
+                "它多少钱",
+                {"shop_id": "shop-advisor-1"},
+                idempotency_key=None,
+            )
+        )
+
+        answer = "".join(
+            event["text"] for event in events if event["event"] == "delta"
+        )
+        response = events[-1]["response"]
+        assert "云湃保温杯 500ml" in answer
+        assert "89.00 CNY" in answer
+        with service.db.connect() as conn:
+            row = conn.execute(
+                "SELECT bundle_json FROM context_snapshots WHERE id=?",
+                (response["context_snapshot_id"],),
+            ).fetchone()
+        import json as jsonlib
+
+        bundle = jsonlib.loads(row["bundle_json"])
+        assert bundle["product_advisor"]["candidates"][0]["sku_id"] == "sku-bottle-1"
+    finally:
+        service.close()

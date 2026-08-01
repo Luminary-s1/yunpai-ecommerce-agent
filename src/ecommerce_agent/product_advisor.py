@@ -9,6 +9,7 @@ from .database import Database
 from .text_utils import search_terms
 
 _COMPARISON_HINTS = re.compile(r"对比|区别|哪个好|哪款|差别|比较|不同")
+_REFERENCE_HINTS = re.compile(r"它|这个|这款|那个|那款|该商品|该产品")
 
 
 def recognize_products(
@@ -113,6 +114,7 @@ def advise(
     tenant_id: str,
     store_id: str | None,
     question: str,
+    history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """The product advisor section a context bundle embeds."""
     if not store_id:
@@ -120,6 +122,26 @@ def advise(
     candidates = recognize_products(
         db, tenant_id=tenant_id, store_id=store_id, question=question
     )
+    if not candidates and _REFERENCE_HINTS.search(question):
+        for item in reversed(history or []):
+            if item.get("role") != "user":
+                continue
+            resolved = recognize_products(
+                db,
+                tenant_id=tenant_id,
+                store_id=store_id,
+                question=str(item.get("content", "")),
+            )
+            if resolved:
+                match_count = max(
+                    len(candidate["matched_terms"]) for candidate in resolved
+                )
+                candidates = [
+                    candidate
+                    for candidate in resolved
+                    if len(candidate["matched_terms"]) == match_count
+                ]
+                break
     comparison = (
         compare_products(candidates)
         if len(candidates) >= 2 and wants_comparison(question)

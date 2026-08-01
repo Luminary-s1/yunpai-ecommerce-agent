@@ -41,9 +41,9 @@
 - [x] RAG 不可用降级（无知识命中时明确告知并转人工）
 - [x] 模型超时/限流降级（提示重试，不占用人工坐席）
 - [x] **SSE 流式输出接口**（`POST /v1/chat/stream`，逐段 delta）
-- [ ] **`POST /v1/chat/sessions/{id}/messages`** 路径（现为 `POST /v1/chat`）
+- [x] **`POST /v1/chat/sessions/{id}/messages`** 流式消息路径
 - [x] **SSE 事件协议**（meta / delta / citations / handoff / done / error）
-- [ ] 多轮指代消解的专项验证（"它多少钱"）
+- [x] 多轮指代消解专项验证（"它多少钱"从预算内历史恢复商品候选）
 
 ### WP3 客服意图识别与路由逻辑（24h）
 

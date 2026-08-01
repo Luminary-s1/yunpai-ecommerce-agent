@@ -6,7 +6,16 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Path as ApiPath,
+    Query,
+    Request,
+)
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from . import __version__
@@ -32,6 +41,7 @@ from .release_api import build_release_router
 from .simulation_api import build_simulation_router
 from .schemas import (
     CandidateView,
+    ChatMessageRequest,
     ChatRequest,
     ChatResponse,
     EvolutionDecision,
@@ -613,6 +623,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
 
         return StreamingResponse(events(), media_type="text/event-stream")
+
+    @app.post("/v1/chat/sessions/{session_id}/messages")
+    def post_session_message(
+        payload: ChatMessageRequest,
+        session_id: str = ApiPath(
+            min_length=1,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9_.:-]+$",
+        ),
+        principal: Principal = Depends(require_client),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ) -> StreamingResponse:
+        return chat_stream(
+            ChatRequest(
+                session_id=session_id,
+                message=payload.message,
+                context=payload.context,
+            ),
+            principal,
+            idempotency_key,
+        )
 
     @app.post("/v1/feedback", response_model=FeedbackResponse)
     def feedback(

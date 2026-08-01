@@ -246,3 +246,19 @@ def test_chat_stream_model_disabled_makes_no_external_request(
         assert external_calls == 0
         assert events[-1]["event"] == "done"
         assert events[-1]["model_fallback"] is True
+
+
+def test_session_messages_post_streams_with_path_session_id(tmp_path) -> None:
+    app = create_app(make_settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/chat/sessions/sse-path/messages",
+            headers=CLIENT_HEADERS,
+            json={"message": "尺码怎么选", "context": {}},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        events = stream_events(response)
+        assert events[0]["session_id"] == "sse-path"
+        assert [event["event"] for event in events[-2:]] == ["citations", "done"]
