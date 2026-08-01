@@ -141,21 +141,27 @@ def test_model_exception_uses_safe_default_without_raising() -> None:
 
 
 def test_model_timeout_degrades_within_configured_latency() -> None:
+    configured_seconds = 0.02
+    default_seconds = 2.0
+
     class TimingOutModel(CapturingModel):
         def generate_json(self, messages, *, timeout_seconds):
             self.calls.append((messages, timeout_seconds))
             time.sleep(timeout_seconds)
             raise TimeoutError("classification deadline exceeded")
 
-    model = TimingOutModel(timeout_seconds=0.02)
+    model = TimingOutModel(timeout_seconds=configured_seconds)
 
     started = time.perf_counter()
     result = classify("随便聊点什么", model=model)
     elapsed = time.perf_counter() - started
 
-    assert model.calls[0][1] == 0.02
+    assert len(model.calls) == 1
+    assert model.calls[0][1] == configured_seconds
     assert result.method == "default"
-    assert elapsed < 0.5
+    # Degrading must honour the configured budget rather than falling back to the default
+    # one. A quarter of the default stays well clear of it and of scheduling noise.
+    assert elapsed < default_seconds / 4
 
 
 def test_invalid_model_result_uses_safe_default() -> None:
