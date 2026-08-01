@@ -8,19 +8,19 @@
 flowchart LR
     clients["客户端 / 管理后台 / 淘宝渠道"] --> api["FastAPI API 与认证"]
     api --> service["AgentService 编排层"]
-    service --> graph["LangGraph Agent"]
-    graph --> context["上下文构建 / RAG / SOP"]
-    graph --> model["LLM 结构化决策"]
-    graph --> tools["动态工具目录与执行器"]
+    service --> agent["LangGraph Agent"]
+    agent --> context["上下文构建 / RAG / SOP"]
+    agent --> model["LLM 结构化决策"]
+    agent --> tools["动态工具目录与执行器"]
     tools --> modules["商品 / 订单 / 仓储 / 竞品 / 营销 / 财务 / 指标"]
     tools --> connectors["Connector SDK / 虚拟淘宝"]
-    graph --> handoff["后置验证 / 人工接管"]
+    agent --> handoff["后置验证 / 人工接管"]
     service --> workers["渠道 / Outbox / 监控 / 派单 Worker"]
     context --> appdb[("SQLite 业务库")]
     modules --> appdb
     handoff --> appdb
     workers --> appdb
-    graph --> checkpoints[("LangGraph Checkpoint")]
+    agent --> checkpoints[("LangGraph Checkpoint")]
 ```
 
 ## 核心能力
