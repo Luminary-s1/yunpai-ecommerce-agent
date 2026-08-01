@@ -1,8 +1,8 @@
-# M4 智能客服后端 WP1–WP2
+# M4 智能客服后端 WP1–WP3
 
 - 分支：`feature/m4-customer-service`
-- 范围：客服会话管理与上下文控制、知识库增强回复生成 Pipeline
-- 交付范围：M4 工作包 1（会话管理与上下文控制）与工作包 2（知识库增强回复生成 Pipeline）
+- 范围：客服会话管理与上下文控制、知识库增强回复生成 Pipeline、客服意图识别与路由
+- 交付范围：M4 工作包 1、工作包 2 与工作包 3（D11 起）
 
 ## D01 · Token 计数与历史截断
 
@@ -127,3 +127,14 @@
 - 绿态：两个聚焦用例 `2 passed in 4.98s`；WP2 联合回归
   `63 passed in 87.99s`；全量回归 `352 passed in 549.42s`
 - 未新增依赖，LangGraph 节点与边声明零变化
+
+## D11 · 受控意图枚举与规则分类
+
+- 新增 `CustomerIntent` 四分类与 `IntentResult`，判定方式限定为 rule / model /
+  default
+- 关键词规则按投诉 > 售后 > 商品咨询顺序判定，规则命中固定返回 0.95 置信度
+- 空白和纯符号输入直接安全降级；超长输入仍可由规则层确定性分类
+- 红态：聚焦测试因缺少 `ecommerce_agent.intent` 在收集阶段失败
+- 绿态：`tests/test_intent_routing.py` 为 `28 passed`；四类各 5 条样例全部正确，
+  准确率 `20/20 = 100%`
+- 未新增依赖，未改 LangGraph 节点或边
