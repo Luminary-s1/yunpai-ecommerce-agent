@@ -101,8 +101,12 @@
 
 ## M5 运营辅助与文案生成开发
 
-模块任务书共 5 个工作包，116 小时。代码在 `feature/m5-operations-assistant` 分支，
-已提交未合并未推送。
+模块任务书共 5 个工作包，116 小时。代码已在 `main`（F-311，
+`src/ecommerce_agent/business/ops_assistant.py`）。
+
+工作包划分见 `docs/tasks/M5_WORKBENCH.md`：**工作包 5（运营分析与报告生成，24h）
+整包交给新人**，交接说明 `docs/tasks/M5_HANDOFF.md`；工作包 2 / 3 / 4 由模块
+负责人承接。
 
 ### WP1 运营内容与数据服务验收测试（4h）
 
@@ -261,8 +265,8 @@
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 含 M6（F-304）与全部已合并基线 |
-| `feature/m4-customer-service` | 已建，与 main 同步，尚无提交 |
-| `feature/m5-operations-assistant` | M5 全部代码已提交，未合并未推送 |
-| `feature/f107-night-watch` | 未合并 |
-| `feature/f109-workbench-visibility` | 未合并 |
+| `main` | 含 M5（F-311）、M6（F-304）与全部已合并基线，已与 `origin/main` 同步 |
+| `feature/m4-customer-service` | 领先 main 3 个提交（WP3 意图分类），未合并 |
+| `feature/m5-operations-assistant` | 已合并进 main，无剩余提交 |
+| `feature/f107-night-watch` | 已合并进 main |
+| `feature/f109-workbench-visibility` | 已合并进 main |
