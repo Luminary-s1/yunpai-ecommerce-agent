@@ -105,7 +105,7 @@
 `src/ecommerce_agent/business/ops_assistant.py`）。
 
 工作包划分见 `docs/tasks/M5_WORKBENCH.md`：**工作包 5（运营分析与报告生成，24h）
-整包交给新人**，交接说明 `docs/tasks/M5_HANDOFF.md`；工作包 2 / 3 / 4 由模块
+整包交给谢良璇**，交接说明 `docs/tasks/M5_HANDOFF.md`；工作包 2 / 3 / 4 由模块
 负责人承接。
 
 ### WP1 运营内容与数据服务验收测试（4h）
