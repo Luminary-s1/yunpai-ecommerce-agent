@@ -32,14 +32,17 @@ class IntentModel(Protocol):
     ) -> dict[str, Any]: ...
 
 
-_RULES: tuple[tuple[CustomerIntent, tuple[str, ...]], ...] = (
-    ("complaint", ("投诉", "差评", "举报", "曝光")),
-    ("after_sales", ("退货", "退款", "换货", "保修", "物流")),
-    (
-        "product_inquiry",
-        ("多少钱", "规格", "参数", "尺寸", "材质", "对比", "推荐"),
-    ),
+_RULE_PRIORITY: tuple[CustomerIntent, ...] = (
+    "complaint",
+    "after_sales",
+    "product_inquiry",
 )
+_RULE_KEYWORDS: dict[CustomerIntent, tuple[str, ...]] = {
+    "complaint": ("投诉", "差评", "举报", "曝光"),
+    "after_sales": ("退货", "退款", "换货", "保修", "物流"),
+    "product_inquiry": ("多少钱", "规格", "参数", "尺寸", "材质", "对比", "推荐"),
+}
+_RULE_CONFIDENCE = 0.95
 
 _MODEL_SYSTEM_PROMPT = (
     "你是客服消息意图分类器。只能选择 product_inquiry、after_sales、complaint、"
@@ -57,9 +60,13 @@ def classify(message: str, *, model: IntentModel | None) -> IntentResult:
     normalized = message.strip()
     if not normalized or not any(character.isalnum() for character in normalized):
         return _default_result()
-    for intent, keywords in _RULES:
-        if any(keyword in normalized for keyword in keywords):
-            return IntentResult(intent=intent, confidence=0.95, method="rule")
+    for intent in _RULE_PRIORITY:
+        if any(keyword in normalized for keyword in _RULE_KEYWORDS[intent]):
+            return IntentResult(
+                intent=intent,
+                confidence=_RULE_CONFIDENCE,
+                method="rule",
+            )
     if model is None:
         return _default_result()
     timeout_seconds = _model_timeout(model)

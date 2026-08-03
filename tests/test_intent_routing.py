@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from ecommerce_agent import intent as intent_module
 from ecommerce_agent.config import Settings
 from ecommerce_agent.intent import classify
 from ecommerce_agent.llm import ModelGateway
@@ -71,7 +72,7 @@ def test_rule_result_is_high_confidence_without_model_call() -> None:
     result = classify("请推荐一款保温杯", model=UnexpectedModel())
 
     assert result.intent == "product_inquiry"
-    assert result.confidence == 0.95
+    assert result.confidence == intent_module._RULE_CONFIDENCE == 0.95
     assert result.method == "rule"
 
 
@@ -85,6 +86,24 @@ def test_rule_result_is_high_confidence_without_model_call() -> None:
 )
 def test_rule_priority(message: str, expected: str) -> None:
     assert classify(message, model=UnexpectedModel()).intent == expected
+
+
+def test_rule_priority_is_explicit_and_mapping_order_independent(monkeypatch) -> None:
+    assert intent_module._RULE_PRIORITY == (
+        "complaint",
+        "after_sales",
+        "product_inquiry",
+    )
+    assert set(intent_module._RULE_PRIORITY) == set(intent_module._RULE_KEYWORDS)
+    reordered = {
+        intent: intent_module._RULE_KEYWORDS[intent]
+        for intent in reversed(intent_module._RULE_PRIORITY)
+    }
+    monkeypatch.setattr(intent_module, "_RULE_KEYWORDS", reordered)
+
+    result = classify("我要投诉退款商品多少钱", model=UnexpectedModel())
+
+    assert result.intent == "complaint"
 
 
 @pytest.mark.parametrize("message", ["", "   ", "！？……---"])
