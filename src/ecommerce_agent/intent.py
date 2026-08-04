@@ -19,6 +19,9 @@ class IntentResult(BaseModel):
     intent: CustomerIntent
     confidence: float = Field(ge=0.0, le=1.0)
     method: IntentMethod
+    # 降级原因。method="default" 时必然非空，让「模型判定为闲聊」与「模型链路挂了」
+    # 在数据上可区分——否则两者的返回值完全一样，线上无从发现后者。
+    error: str | None = None
 
 
 class IntentModel(Protocol):
@@ -43,10 +46,43 @@ _RULE_KEYWORDS: dict[CustomerIntent, tuple[str, ...]] = {
     "product_inquiry": ("多少钱", "规格", "参数", "尺寸", "材质", "对比", "推荐"),
 }
 _RULE_CONFIDENCE = 0.95
+_NEGATION_PREFIX_MARKERS = ("不", "别", "无需", "无须", "取消", "停止")
+_NEGATION_SUFFIX_MARKERS = ("不用", "不要", "取消", "算了", "停止", "作罢")
+_NEGATION_WINDOW = 6
+_RULE_REVIEW_CONTEXTS: dict[str, tuple[str, ...]] = {
+    "曝光": ("相机", "摄影", "拍照", "照片", "光圈", "快门", "感光", "iso"),
+    "推荐": (
+        "算法",
+        "电影",
+        "影视",
+        "电视剧",
+        "音乐",
+        "歌曲",
+        "歌单",
+        "餐厅",
+        "饭店",
+        "景点",
+        "游戏",
+        "小说",
+    ),
+    "物流": ("公司", "企业", "上班", "工作", "从业", "行业", "专业", "管理", "工程"),
+}
 
+_INTENTS: frozenset[str] = frozenset(
+    ("product_inquiry", "after_sales", "complaint", "chitchat")
+)
+
+# 用自然语言描述期望字段是不够的：examples 演示的是「怎么标注」，从未演示过
+# 「输出长什么样」，模型于是合法地把结果套进了信封。这里直接印出目标对象。
 _MODEL_SYSTEM_PROMPT = (
-    "你是客服消息意图分类器。只能选择 product_inquiry、after_sales、complaint、"
-    "chitchat，并只返回包含 intent 与 0 到 1 confidence 的 JSON 对象。"
+    "你是客服消息意图分类器。intent 只能取 product_inquiry、after_sales、"
+    "complaint、chitchat 之一，confidence 取 0 到 1 的小数。"
+    "严格返回下面这一个对象，不要嵌套、不要包装、不要额外字段："
+    '{"intent": "chitchat", "confidence": 0.5}'
+)
+_RULE_REVIEW_PROMPT = (
+    "关键词可能处于否定或非电商语境，必须按整句真实诉求判断。"
+    "已明确取消或否定某个诉求且没有新诉求时，判为 chitchat。"
 )
 _FEW_SHOT_EXAMPLES = (
     {"message": "这款还有哪些颜色", "intent": "product_inquiry"},
@@ -54,30 +90,42 @@ _FEW_SHOT_EXAMPLES = (
     {"message": "客服态度太差了", "intent": "complaint"},
     {"message": "你好呀", "intent": "chitchat"},
 )
+_RULE_REVIEW_EXAMPLES = (
+    {"message": "不用办理退货了，多谢", "intent": "chitchat"},
+)
 
 
 def classify(message: str, *, model: IntentModel | None) -> IntentResult:
     normalized = message.strip()
     if not normalized or not any(character.isalnum() for character in normalized):
         return _default_result()
-    for intent in _RULE_PRIORITY:
-        if any(keyword in normalized for keyword in _RULE_KEYWORDS[intent]):
+    review_rule_match = False
+    rule_match = _match_rule(normalized)
+    if rule_match is not None:
+        intent, keywords = rule_match
+        review_rule_match = _requires_model_review(normalized, keywords)
+        if not review_rule_match:
             return IntentResult(
                 intent=intent,
                 confidence=_RULE_CONFIDENCE,
                 method="rule",
             )
     if model is None:
-        return _default_result()
+        return _default_result("model_not_configured")
     timeout_seconds = _model_timeout(model)
+    system_prompt = _MODEL_SYSTEM_PROMPT
+    examples = _FEW_SHOT_EXAMPLES
+    if review_rule_match:
+        system_prompt += _RULE_REVIEW_PROMPT
+        examples += _RULE_REVIEW_EXAMPLES
     messages = [
-        {"role": "system", "content": _MODEL_SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {
             "role": "user",
             "content": json.dumps(
                 {
                     "task_type": "intent_classification",
-                    "examples": _FEW_SHOT_EXAMPLES,
+                    "examples": examples,
                     "message": normalized[:4000],
                 },
                 ensure_ascii=False,
@@ -86,13 +134,100 @@ def classify(message: str, *, model: IntentModel | None) -> IntentResult:
     ]
     try:
         payload = model.generate_json(messages, timeout_seconds=timeout_seconds)
-        return IntentResult(
-            intent=payload["intent"],
-            confidence=payload["confidence"],
-            method="model",
+    except Exception as exc:
+        return _default_result(f"model_call_failed:{type(exc).__name__}")
+    result = _coerce_model_payload(payload)
+    if result is None:
+        return _default_result(f"model_payload_rejected:{_payload_shape(payload)}")
+    return result
+
+
+def _match_rule(
+    message: str,
+) -> tuple[CustomerIntent, tuple[str, ...]] | None:
+    for intent in _RULE_PRIORITY:
+        matches = tuple(
+            keyword for keyword in _RULE_KEYWORDS[intent] if keyword in message
         )
-    except Exception:
-        return _default_result()
+        if matches:
+            return intent, matches
+    return None
+
+
+def _requires_model_review(message: str, keywords: tuple[str, ...]) -> bool:
+    folded = message.casefold()
+    for keyword in keywords:
+        if _keyword_is_negated(message, keyword):
+            return True
+        if any(
+            marker in folded for marker in _RULE_REVIEW_CONTEXTS.get(keyword, ())
+        ):
+            return True
+    return False
+
+
+def _keyword_is_negated(message: str, keyword: str) -> bool:
+    start = 0
+    while (index := message.find(keyword, start)) >= 0:
+        prefix = message[max(0, index - _NEGATION_WINDOW) : index]
+        suffix_start = index + len(keyword)
+        suffix = message[suffix_start : suffix_start + _NEGATION_WINDOW]
+        if any(marker in prefix for marker in _NEGATION_PREFIX_MARKERS):
+            return True
+        if any(marker in suffix for marker in _NEGATION_SUFFIX_MARKERS):
+            return True
+        start = suffix_start
+    return False
+
+
+def _coerce_model_payload(payload: Any) -> IntentResult | None:
+    """把模型返回的实际形状归一成 IntentResult，无法归一时返回 None。
+
+    提示词只能提高目标形状的概率，保证不了它。真实的 glm-4.7-flash 稳定把结果
+    包成 {"answer": {...}}，直接下标取值会整条丢弃一个本来正确的答案。
+    """
+    payload = _unwrap_envelope(payload)
+    if not isinstance(payload, dict):
+        return None
+    intent = payload.get("intent")
+    if isinstance(intent, str):
+        intent = intent.strip().lower()
+    if intent not in _INTENTS:
+        return None
+    try:
+        confidence = float(payload.get("confidence", 0.5))
+    except (TypeError, ValueError):
+        confidence = 0.5
+    # 越界只截断不否决：intent 才是有效载荷，confidence 超范围是格式毛病，
+    # 为此丢掉一个正确的分类结果不划算。
+    return IntentResult(
+        intent=intent,
+        confidence=min(1.0, max(0.0, confidence)),
+        method="model",
+    )
+
+
+def _unwrap_envelope(payload: Any) -> Any:
+    """逐层拆掉 {"answer": {...}} / {"result": {...}} 这类单键信封。
+
+    限定单键且内层仍是 dict，所以 {"intent": "chitchat"} 不会被误拆；限 3 层，
+    防畸形输出把这里变成深递归。
+    """
+    for _ in range(3):
+        if not isinstance(payload, dict) or len(payload) != 1:
+            break
+        inner = next(iter(payload.values()))
+        if not isinstance(inner, dict):
+            break
+        payload = inner
+    return payload
+
+
+def _payload_shape(payload: Any) -> str:
+    """只描述形状不带内容——诊断够用，且不会把用户消息带进日志。"""
+    if isinstance(payload, dict):
+        return "{" + ",".join(sorted(str(key) for key in payload)[:5]) + "}"
+    return type(payload).__name__
 
 
 def _model_timeout(model: IntentModel) -> float:
@@ -104,5 +239,10 @@ def _model_timeout(model: IntentModel) -> float:
         return 2.0
 
 
-def _default_result() -> IntentResult:
-    return IntentResult(intent="chitchat", confidence=0.0, method="default")
+def _default_result(error: str = "unclassifiable_input") -> IntentResult:
+    return IntentResult(
+        intent="chitchat",
+        confidence=0.0,
+        method="default",
+        error=error,
+    )

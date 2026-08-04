@@ -14,6 +14,7 @@ import argparse
 import json
 import pathlib
 import sys
+import time
 from collections import Counter, defaultdict
 from dataclasses import replace
 
@@ -72,7 +73,14 @@ def main() -> int:
     parser.add_argument("--out", type=pathlib.Path, help="把逐条结果写成 JSON，便于两次运行 diff")
     parser.add_argument("--show", choices=("errors", "all", "none"), default="errors")
     parser.add_argument("--min-accuracy", type=float, default=None)
+    parser.add_argument(
+        "--request-interval",
+        type=float,
+        default=0.0,
+        help="live 评测中两次真实模型尝试之间的最小间隔秒数",
+    )
     args = parser.parse_args()
+    request_interval = max(0.0, args.request_interval)
 
     corpus = load_corpus()
     model = build_model(args.mode)
@@ -86,9 +94,18 @@ def main() -> int:
                     "predicted": result.intent,
                     "confidence": result.confidence,
                     "method": result.method,
+                    "error": result.error,
                     "correct": result.intent == row["expected"],
                 }
             )
+            model_attempted = result.method == "model" or bool(
+                result.error
+                and result.error.startswith(
+                    ("model_call_failed:", "model_payload_rejected:")
+                )
+            )
+            if args.mode == "live" and model_attempted and request_interval:
+                time.sleep(request_interval)
     finally:
         if model is not None:
             model.close()
@@ -153,7 +170,13 @@ def main() -> int:
     if args.out:
         args.out.write_text(
             json.dumps(
-                {"mode": args.mode, "total": total, "correct": correct, "records": records},
+                {
+                    "mode": args.mode,
+                    "request_interval": request_interval,
+                    "total": total,
+                    "correct": correct,
+                    "records": records,
+                },
                 ensure_ascii=False,
                 indent=2,
             ),

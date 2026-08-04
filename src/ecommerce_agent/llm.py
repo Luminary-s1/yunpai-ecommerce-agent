@@ -382,8 +382,10 @@ class ModelGateway:
                 if any(keyword in message for keyword in keywords):
                     intent = candidate
                     break
+            # 刻意套上信封：真实的 glm-4.7-flash 就是这么返回的。mock 若只吐出
+            # 解析代码期望的完美形状，它验证的就只是作者的假设，而不是依赖的行为。
             return json.dumps(
-                {"intent": intent, "confidence": 0.82},
+                {"answer": {"intent": intent, "confidence": 0.82}},
                 ensure_ascii=False,
             )
         if '"task_type": "agent_decision"' in context:
