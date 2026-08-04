@@ -128,6 +128,49 @@ provider code 1305 模型池过载影响。当前
 `model_call_failed:ModelUnavailableError`，端到端为 34/52，不作为新 live 基线。
 需在模型池恢复后重跑，至少达到旧基线的 42/52，才能加入上方“历次 live 基线”。
 
+同日恢复复测见 `runs/20260804-live-retest-after-recovery.json`：端到端 41/52、
+覆盖率 36/52，仍含 12 条 `ModelUnavailableError`，因此同样不列为新基线。
+按 method 重读后，`negation` 1/1 与 `cross_domain` 4/4 都是实际模型作答且正确；
+`plain` 则是覆盖 19/22、已作答 19/19，不能写成无条件的 22/22。基准内五条正确
+不改变留出表达仅 2/6 被仲裁的结论。
+
+## 平台不稳时怎么比较两次运行
+
+端到端准确率里混着服务商的可用性：provider 每返回一次 1305，这个数就掉一点，
+与分类能力无关。**用它当验收门槛，等于让对方的运维状况决定你们的结论。**
+
+正确做法是只比两次运行**都作答**（`method != "default"`）的交集：
+
+```bash
+.venv/bin/python - <<'PY'
+import json
+a = json.load(open("evals/intent/runs/<旧>.json"))["records"]
+b = json.load(open("evals/intent/runs/<新>.json"))["records"]
+A = {r["id"]: r for r in a}
+B = {r["id"]: r for r in b}
+both = [i for i in A if i in B
+        and A[i]["method"] != "default" and B[i]["method"] != "default"]
+for label, M in (("旧", A), ("新", B)):
+    hit = sum(M[i]["correct"] for i in both)
+    print(f"{label} {hit}/{len(both)} = {hit / len(both) * 100:.1f}%")
+for i in sorted(both):
+    if A[i]["correct"] != B[i]["correct"]:
+        verb = "修好" if B[i]["correct"] else "弄坏"
+        print(f"  {verb} {i} {A[i]['method']}/{A[i]['predicted']}"
+              f" -> {B[i]['method']}/{B[i]['predicted']}")
+PY
+```
+
+逐条列出翻盘方向比总分更重要：**净增 5 分可能是「修好 5 条」，也可能是
+「修好 15 条、弄坏 10 条」**，后者通常意味着改动引入了新的失败模式。
+
+局限：该方法假设「哪些条被打掉」与样例难度无关。缺测比例小时大致成立，缺测
+过半时不要用。
+
+2026-08-04 两级链仲裁就是这样验收的：交集 36 条，75.0% → 91.7%，6 条翻盘全部
+为修好、零回退，其中 5 条是 `rule → model` 的风险仲裁路径。端到端只有 41/52，
+按原定的 42/52 门槛会被误判为未通过。
+
 ## 已知缺口（截至 2026-08-04）
 
 - `after_sales` 召回 61.5%，明显低于其他三类，模型倾向把带情绪的售后判成

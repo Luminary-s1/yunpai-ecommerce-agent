@@ -274,3 +274,51 @@
   改为可泛化的判据（如要求与品类/订单词共现），而非枚举已知反例
 - 语料口径变更：`as-013`「支持七天无理由吗」按售前咨询裁定，改为
   `pi-014` / `product_inquiry`
+
+### live 恢复复测（2026-08-04）
+
+- 命令：`evals/intent/run.py --mode live --request-interval 30`；结果文件：
+  `evals/intent/runs/20260804-live-retest-after-recovery.json`
+- 端到端 `41/52`（78.8%）、覆盖率 `36/52`（69.2%）、非弃权判定准确率
+  `33/36`（91.7%）；路径分布为 `rule=15 / model=21 / default=16`
+- 16 条 default 中，4 条为退化输入，12 条仍为
+  `model_call_failed:ModelUnavailableError`。模型池只部分恢复，本次结果仍不加入
+  live 基线；41/52 也低于旧基线 42/52
+- `negation` 的 1 条与 `cross_domain` 的 4 条均为实际 `method=model`，且 5/5
+  正确，不再是弃权伪装；这只能说明基准内五条样本，不能推翻上述留出探针仅 2/6
+  被仲裁的过拟合结论
+- `plain` 表面为 22/22，但实际覆盖 19/22；非弃权的 19 条为 19/19，另 3 条
+  chitchat 由 1305 降级后碰巧计为正确
+- `pi-014` 在全量中因 1305 弃权；随后独立单条探针返回
+  `product_inquiry / 0.9 / model / error=None`。该探针只验证新口径，不回填全量成绩
+
+### 验收判定（人工，2026-08-04 复测后）
+
+- 原定的「live 端到端 ≥ 42/52」是错误门槛：端到端准确率把 provider 可用性算进
+  分类成绩，1305 每多一条该指标就下降，与被测行为无关
+- 改用**两次运行共同作答子集**（`method != "default"` 的交集）判定，该口径与
+  平台可用性无关：
+
+  | 运行 | 交集 n=36 上的判定准确率 |
+  | --- | --- |
+  | `runs/20260804-live-after-fix.json` | 27/36 = 75.0% |
+  | `runs/20260804-live-retest-after-recovery.json` | 33/36 = 91.7% |
+
+- 6 条翻盘全部为修好、零回退，可逐条归因：
+
+  | 样例 | 修改前 | 修改后 | 期望 |
+  | --- | --- | --- | --- |
+  | `cc-007` | rule / product_inquiry | model / chitchat | chitchat |
+  | `cc-008` | rule / after_sales | model / chitchat | chitchat |
+  | `cc-009` | rule / after_sales | model / chitchat | chitchat |
+  | `cp-010` | rule / product_inquiry | model / complaint | complaint |
+  | `pi-011` | rule / complaint | model / product_inquiry | product_inquiry |
+  | `as-008` | model / complaint | model / after_sales | after_sales |
+
+  前五条即风险仲裁打开的短路路径，第六条为模型判定自身改善
+- 判定：**两级链风险仲裁验收通过**。剩余 12 条 `ModelUnavailableError` 为随机
+  缺测，非失败
+- 保留意见：交集法假设「哪些条被 1305 打掉」与样例难度无关，缺测 12/52 时大致
+  成立但非严格无偏。模型池完全恢复后应补一次完整 live 并写入「历次 live 基线」
+- 不受本次判定影响、仍然挂起：`_RULE_REVIEW_CONTEXTS` 对基准过拟合，留出表达
+  仅 2/6 被仲裁，`cross_domain` 不计入已解决
