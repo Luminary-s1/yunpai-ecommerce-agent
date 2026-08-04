@@ -265,8 +265,8 @@
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 含 M5（F-311）、M6（F-304）与全部已合并基线，已与 `origin/main` 同步 |
-| `feature/m4-customer-service` | 领先 main 3 个提交（WP3 意图分类），未合并 |
+| `main` | 含 M5（F-311）、M6（F-304）、M4/M5/M6 工作包划分文档与全部已合并基线 |
+| `feature/m4-customer-service` | 领先 main 5 个 M4 提交（WP3 意图分类与评测语料），未合并。M5 工作包划分的两个提交已 cherry-pick 到 main，该分支上的同名提交合并时会自动消解 |
 | `feature/m5-operations-assistant` | 已合并进 main，无剩余提交 |
 | `feature/f107-night-watch` | 已合并进 main |
 | `feature/f109-workbench-visibility` | 已合并进 main |
