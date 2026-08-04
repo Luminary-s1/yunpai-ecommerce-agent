@@ -72,12 +72,23 @@ _INTENTS: frozenset[str] = frozenset(
     ("product_inquiry", "after_sales", "complaint", "chitchat")
 )
 
+# 已裁定的标注口径，与 evals/intent/README.md「标注口径」一节保持一致。
+# 传达的是判据本身而非具体样例——把基准里的争议样例写成 few-shot 就成了对基准
+# 过拟合，那样分数会涨而能力不会。
+_LABELLING_POLICY = (
+    "判定按真实诉求，不按语气：同时表达业务诉求与不满情绪时归入诉求所属类别，"
+    "complaint 只留给诉求本身就是投诉、索赔或维权的消息。"
+    "售前询问退换货政策、保修条款、发货时效属 product_inquiry；"
+    "after_sales 要求已存在一笔交易和一个待处理的问题。"
+)
+
 # 用自然语言描述期望字段是不够的：examples 演示的是「怎么标注」，从未演示过
 # 「输出长什么样」，模型于是合法地把结果套进了信封。这里直接印出目标对象。
 _MODEL_SYSTEM_PROMPT = (
     "你是客服消息意图分类器。intent 只能取 product_inquiry、after_sales、"
     "complaint、chitchat 之一，confidence 取 0 到 1 的小数。"
-    "严格返回下面这一个对象，不要嵌套、不要包装、不要额外字段："
+    + _LABELLING_POLICY
+    + "严格返回下面这一个对象，不要嵌套、不要包装、不要额外字段："
     '{"intent": "chitchat", "confidence": 0.5}'
 )
 _RULE_REVIEW_PROMPT = (

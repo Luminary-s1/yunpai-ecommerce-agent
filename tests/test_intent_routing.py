@@ -190,6 +190,26 @@ def test_rule_miss_uses_bounded_short_few_shot_model_prompt() -> None:
     assert len(serialized) < 1200
 
 
+def test_adjudicated_labelling_policy_reaches_the_model() -> None:
+    """守的是产品决策，不是实现细节。
+
+    「诉求优先于语气」「售前咨询归商品咨询」两条口径由人裁定并写进
+    evals/intent/README.md。它们若只留在文档和语料里，模型无从知晓，基准会持续
+    在这两处扣分而看不出原因。
+    """
+    model = CapturingModel()
+
+    classify("我想看看有哪些颜色", model=model)
+
+    system_prompt = model.calls[0][0][0]["content"]
+    assert intent_module._LABELLING_POLICY in system_prompt
+    # 口径必须以判据形式传达；写成具体样例即是对基准过拟合
+    assert all(
+        sample not in system_prompt
+        for sample in ("我这东西坏了", "支持七天无理由吗")
+    )
+
+
 def test_model_exception_uses_safe_default_without_raising() -> None:
     class FailingModel(CapturingModel):
         def generate_json(self, messages, *, timeout_seconds):
