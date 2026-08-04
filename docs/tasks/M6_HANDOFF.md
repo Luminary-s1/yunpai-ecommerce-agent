@@ -153,7 +153,11 @@ python -m pip install -e ".[dev]"
 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost ALL_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 .venv/bin/python -m pytest -q
 ```
 
-全量约 9 分钟，当前基线 **350 passed**。开发时跑定向测试即可，提 PR 前跑一次全量。
+全量约 9 分钟。**从 `upstream/main` 开分支时用例数是 352**
+（`pytest --collect-only -q` 可确认）。开发时跑定向测试即可，提 PR 前跑一次全量。
+
+数字对不上先看你在哪条分支：未合并的功能分支会带自己的新测试，
+数量比 main 多。以你分支的起点数为准，PR 里说明净增了多少条。
 
 密钥放本机的 `env.md`（已被 `.gitignore` 忽略），不要写进代码、文档或命令历史。
 
