@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
@@ -49,23 +50,60 @@ _RULE_CONFIDENCE = 0.95
 _NEGATION_PREFIX_MARKERS = ("不", "别", "无需", "无须", "取消", "停止")
 _NEGATION_SUFFIX_MARKERS = ("不用", "不要", "取消", "算了", "停止", "作罢")
 _NEGATION_WINDOW = 6
-_RULE_REVIEW_CONTEXTS: dict[str, tuple[str, ...]] = {
-    "曝光": ("相机", "摄影", "拍照", "照片", "光圈", "快门", "感光", "iso"),
-    "推荐": (
-        "算法",
-        "电影",
-        "影视",
-        "电视剧",
-        "音乐",
-        "歌曲",
-        "歌单",
-        "餐厅",
-        "饭店",
-        "景点",
-        "游戏",
-        "小说",
+_RULE_CLAUSE_BOUNDARY = re.compile(r"[,，。.!！？?；;\n]")
+_RULE_BUSINESS_EVIDENCE: dict[str, tuple[tuple[str, ...], ...]] = {
+    "曝光": (
+        ("我要", "我会", "准备", "否则", "再不", "就去", "投诉", "举报", "维权"),
+        (
+            "客服",
+            "商家",
+            "卖家",
+            "店铺",
+            "平台",
+            "订单",
+            "服务",
+            "售后",
+            "假货",
+        ),
     ),
-    "物流": ("公司", "企业", "上班", "工作", "从业", "行业", "专业", "管理", "工程"),
+    "推荐": (
+        ("这款", "哪款", "一款", "两款", "型号", "预算", "价位", "选购"),
+    ),
+    "物流": (
+        (
+            "订单",
+            "包裹",
+            "快递",
+            "发货",
+            "收货",
+            "签收",
+            "单号",
+            "查询",
+            "查一下",
+            "跟踪",
+            "到哪",
+            "进度",
+        ),
+    ),
+    "退款": (
+        (
+            "订单",
+            "商品",
+            "产品",
+            "下单",
+            "购买",
+            "买了",
+            "收货",
+            "收到",
+            "签收",
+            "申请",
+            "办理",
+            "到账",
+            "售后",
+            "进度",
+            "处理",
+        ),
+    ),
 }
 
 _INTENTS: frozenset[str] = frozenset(
@@ -166,12 +204,29 @@ def _match_rule(
 
 
 def _requires_model_review(message: str, keywords: tuple[str, ...]) -> bool:
-    folded = message.casefold()
     for keyword in keywords:
         if _keyword_is_negated(message, keyword):
             return True
-        if any(
-            marker in folded for marker in _RULE_REVIEW_CONTEXTS.get(keyword, ())
+        evidence_groups = _RULE_BUSINESS_EVIDENCE.get(keyword)
+        if evidence_groups is not None and not _has_business_evidence(
+            message, keyword, evidence_groups
+        ):
+            return True
+    return False
+
+
+def _has_business_evidence(
+    message: str,
+    keyword: str,
+    evidence_groups: tuple[tuple[str, ...], ...],
+) -> bool:
+    folded_keyword = keyword.casefold()
+    for clause in _RULE_CLAUSE_BOUNDARY.split(message.casefold()):
+        if folded_keyword not in clause:
+            continue
+        if all(
+            any(marker in clause for marker in group)
+            for group in evidence_groups
         ):
             return True
     return False

@@ -80,6 +80,47 @@ AMBIGUOUS_RULE_CASES = [
     pytest.param("不需要退款了，谢谢", "chitchat", id="negated-refund"),
 ]
 
+CROSS_DOMAIN_HOLDOUT_CASES = [
+    pytest.param("帮我推荐一家医院", id="recommend-hospital"),
+    pytest.param("推荐点好玩的地方", id="recommend-attraction"),
+    pytest.param("曝光度调高一点", id="exposure-level"),
+    pytest.param("退款这词你懂吗", id="refund-meta"),
+    pytest.param("这张照片曝光过度了", id="overexposed-photo"),
+    pytest.param("我在物流行业干了十年", id="logistics-career"),
+]
+
+CROSS_CLAUSE_CONTAMINATION_CASES = [
+    pytest.param(
+        "这个商品没问题，帮我推荐一家医院", id="product-then-hospital"
+    ),
+    pytest.param(
+        "我的订单已经到了，物流专业学什么", id="order-then-major"
+    ),
+    pytest.param(
+        "客服已经回复我了，这张照片曝光怎么调", id="service-then-photo"
+    ),
+    pytest.param(
+        "我申请了会员，退款这个词怎么读", id="application-then-refund-meta"
+    ),
+]
+
+AMBIGUOUS_KEYWORD_BUSINESS_CASES = [
+    pytest.param(
+        "请推荐一款通勤背包", "product_inquiry", id="recommend-product"
+    ),
+    pytest.param(
+        "两款商品帮我对比推荐一下",
+        "product_inquiry",
+        id="recommend-catalogue",
+    ),
+    pytest.param("我会曝光这次服务", "complaint", id="expose-service"),
+    pytest.param("我要曝光这个卖假货的商家", "complaint", id="expose-merchant"),
+    pytest.param("帮我查一下订单物流", "after_sales", id="track-order"),
+    pytest.param("物流到哪里了", "after_sales", id="track-shipment"),
+    pytest.param("我想申请退款", "after_sales", id="request-refund"),
+    pytest.param("退款什么时候到账", "after_sales", id="refund-arrival"),
+]
+
 
 @pytest.mark.parametrize(("message", "expected"), SAMPLES)
 def test_customer_intent_samples(message: str, expected: str) -> None:
@@ -122,6 +163,63 @@ def test_rule_priority_is_explicit_and_mapping_order_independent(monkeypatch) ->
     result = classify("我要投诉退款商品多少钱", model=UnexpectedModel())
 
     assert result.intent == "complaint"
+
+
+@pytest.mark.parametrize("message", CROSS_DOMAIN_HOLDOUT_CASES)
+def test_cross_domain_holdout_is_deferred_to_model(message: str) -> None:
+    model = CapturingModel({"intent": "chitchat", "confidence": 0.73})
+
+    result = classify(message, model=model)
+
+    assert len(model.calls) == 1
+    assert result.method == "model"
+    assert result.error is None
+
+
+@pytest.mark.parametrize("message", CROSS_CLAUSE_CONTAMINATION_CASES)
+def test_business_evidence_from_another_clause_does_not_short_circuit(
+    message: str,
+) -> None:
+    model = CapturingModel({"intent": "chitchat", "confidence": 0.73})
+
+    result = classify(message, model=model)
+
+    assert len(model.calls) == 1
+    assert result.method == "model"
+    assert result.error is None
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"), AMBIGUOUS_KEYWORD_BUSINESS_CASES
+)
+def test_business_evidence_keeps_ambiguous_keyword_on_rule_fast_path(
+    message: str, expected: str
+) -> None:
+    result = classify(message, model=UnexpectedModel())
+
+    assert result.intent == expected
+    assert result.confidence == intent_module._RULE_CONFIDENCE
+    assert result.method == "rule"
+    assert result.error is None
+
+
+def test_cross_domain_gate_declares_positive_business_evidence() -> None:
+    assert not hasattr(intent_module, "_RULE_REVIEW_CONTEXTS")
+    assert set(intent_module._RULE_BUSINESS_EVIDENCE) == {
+        "曝光",
+        "推荐",
+        "物流",
+        "退款",
+    }
+    assert all(intent_module._RULE_BUSINESS_EVIDENCE.values())
+
+    serialized = json.dumps(
+        intent_module._RULE_BUSINESS_EVIDENCE, ensure_ascii=False
+    )
+    assert all(
+        domain_term not in serialized
+        for domain_term in ("医院", "景点", "照片", "摄影", "行业", "公司")
+    )
 
 
 @pytest.mark.parametrize(("message", "expected"), AMBIGUOUS_RULE_CASES)
