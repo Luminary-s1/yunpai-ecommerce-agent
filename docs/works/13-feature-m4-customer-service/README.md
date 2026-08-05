@@ -510,6 +510,65 @@
 - 按 provider 并发约束没有发送其他 live 语料。因此本次只关闭 `as-007` 这一条裁定
   边界，不把单条结果外推为完整 `after_sales` 召回率
 
+## D20 · WP4 自动化评测、调优与收口（2026-08-05）
+
+### 交付物与运行方式
+
+- 新增 `scripts/run_customer_eval.py`：从冻结 fixture 建立隔离虚拟店铺，复用
+  `AgentService.run_evaluation_suite`，执行 mock/live，输出四项 M4 指标、门禁、逐条
+  脱敏失败片段和四类失败归因。
+- 每个模式都在临时数据库快照中运行；基线前后及调优阶段的
+  `sessions/messages/handoff_tasks` 均为 `0/0/0` 新增，证明没有污染主库。评测来源
+  仍为 `evaluation`，没有改 LangGraph 节点或边。
+- 运行命令（密钥由 `env.md` 在子进程内读取，不回显）：
+
+  ```bash
+  env -u ALL_PROXY -u all_proxy -u HTTP_PROXY -u http_proxy \
+    -u HTTPS_PROXY -u https_proxy NO_PROXY=127.0.0.1,localhost \
+    no_proxy=127.0.0.1,localhost MODEL_MAX_OUTPUT_TOKENS=1600 \
+    MODEL_STREAMING=false .venv/bin/python scripts/run_customer_eval.py \
+    --mode live --env-file env.md \
+    --out evals/customer_service/runs/20260805-customer-service-live.json
+  ```
+
+### 结果证据
+
+| 模式 | 用例 | answer_accuracy | hallucination_rate | refusal_rate | pass_rate | 门禁 |
+|---|---:|---:|---:|---:|---:|---|
+| mock（DEEPSEEK 配置、离线） | 50 | 0.940 | 0.020 | 0.000 | 0.940 | 通过 |
+| live `deepseek-v4-flash` | 50 | 0.800 | 0.040 | 0.067 | 0.800 | 通过 |
+
+原始脱敏报告：
+
+- `evals/customer_service/runs/20260805-customer-service-mock.json`
+- `evals/customer_service/runs/20260805-customer-service-live.json`
+
+live 的意图准确率、证据覆盖率、转人工 recall 均为 `1.000`；转人工 precision 为
+`0.769`，模型 fallback 率为 `0.100`，严重失败 `3`，仍在门禁阈值内。失败归因计数为
+意图/转人工 `4`、Prompt/答案契约 `4`、检索/来源覆盖 `2`、上下文截断 `0`；报告保留
+了具体 case_key 和脱敏答案片段，未改任何 fixture 的 expected 标注。
+
+### 调优与反证
+
+- 单变量调优记录：`rag_min_score 0.12→0.05`。mock 指标无变化，候选档未被选为最终
+  配置；此前 live 探索中该变量使 `answer_accuracy 0.58→0.54`、
+  `refusal_rate 0.20→0.333`，因此最终回滚并固定 `RAG_MIN_SCORE=0.12`。
+  评测器会比较基线和每个阶段，候选变差时选择基线，不把最后一次尝试冒充最终参数。
+- 最终模型传输配置：`MODEL_MAX_OUTPUT_TOKENS=1600`、`MODEL_STREAMING=false`；这两项
+  是分别验证过的单变量修复，避免 reasoning-only 流和小输出预算耗尽。
+- 禁答反证：运行器临时从 `adversarial-001` 移除“系统提示词”禁词，合成响应的
+  `hallucination_rate` 从 `1.0` 变为 `0.0`，随后丢弃变更并确认 `restored=true`。
+- 失败用例没有被静默吞掉；例如 live 的 `adversarial-010`（不存在订单）和部分售后
+  fallback 被分别归因并保留在报告中，作为后续优化输入。
+
+### schema 与台账
+
+WP4 只使用既有评测表和隔离快照，没有新增字段、迁移或 schema 版本。根据
+`CONTRIBUTING.md`，schema v26 已由 `feature/m6-competitor-import` 占用；本分支未
+抢占 v26，也未创建 v27。`docs/tasks/PROGRESS.md` 与 `docs/tasks/M4_WORKBENCH.md`
+已同步为 WP4 `20h / 剩余 0 / 100%`，判定标准和报告索引见
+`docs/customer-service-evaluation.md`。
+
 ## D16 · 客服评测断言与四项指标
 
 - `EvaluationExpectation` 新增 `grounded_in_sources` 与 `expected_refusal`；前者使用

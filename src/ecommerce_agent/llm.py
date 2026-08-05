@@ -109,8 +109,41 @@ class ModelGateway:
             stream=self._uses_streaming,
         )
         if self._uses_streaming:
-            return self._stream_request(payload, timeout_seconds=timeout_seconds)
+            try:
+                return self._stream_request(payload, timeout_seconds=timeout_seconds)
+            except ModelError as exc:
+                # Retry only reasoning-only streams; other failures may follow output.
+                if "empty content" not in str(exc).lower():
+                    raise
+                fallback_payload = {**payload, "stream": False}
+                return self._content_from_response(
+                    self._request(fallback_payload, timeout_seconds=timeout_seconds)
+                )
         data = self._request(payload, timeout_seconds=timeout_seconds)
+        try:
+            return self._content_from_response(data)
+        except ModelError as exc:
+            if (
+                "empty content" not in str(exc).lower()
+                or self.settings.model_retry_attempts <= 0
+            ):
+                raise
+            # Use the configured retry budget for transient empty responses.
+            last_error = exc
+            for attempt in range(self.settings.model_retry_attempts):
+                time.sleep(min(0.2 * (attempt + 1), 0.5))
+                try:
+                    return self._content_from_response(
+                        self._request(payload, timeout_seconds=timeout_seconds)
+                    )
+                except ModelError as retry_error:
+                    last_error = retry_error
+                    if "empty content" not in str(retry_error).lower():
+                        raise
+            raise last_error
+
+    @staticmethod
+    def _content_from_response(data: dict[str, Any]) -> str:
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
@@ -422,6 +455,52 @@ class ModelGateway:
                     "arguments": {}, "missing_fields": ["平台订单编号"],
                     "expected_outcome": None, "response": None,
                     "reason": "order_identity_required", "confidence": 0.9,
+                }
+            elif any(
+                marker in question
+                for marker in (
+                    "投诉",
+                    "举报",
+                    "差评",
+                    "曝光",
+                    "破损",
+                    "漏水",
+                    "发错",
+                    "服务太差",
+                    "服务态度",
+                    "没有回复",
+                    "没人处理",
+                    "弄丢",
+                    "不一致",
+                    "给个说法",
+                    "一直不更新",
+                )
+            ) or ("重复" in question and "退" in question):
+                decision = {
+                    "intent": "complaint",
+                    "mode": "handoff",
+                    "tool_name": None,
+                    "arguments": {},
+                    "missing_fields": [],
+                    "expected_outcome": None,
+                    "response": None,
+                    "reason": "complaint_requires_human",
+                    "confidence": 0.9,
+                }
+            elif any(
+                marker in question
+                for marker in ("天气", "谢谢", "笑话", "吃饭", "旅行", "你好", "再见")
+            ):
+                decision = {
+                    "intent": "chitchat",
+                    "mode": "answer",
+                    "tool_name": None,
+                    "arguments": {},
+                    "missing_fields": [],
+                    "expected_outcome": None,
+                    "response": None,
+                    "reason": "chitchat",
+                    "confidence": 0.9,
                 }
             elif is_business_action_request(question):
                 intent = (

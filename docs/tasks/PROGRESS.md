@@ -66,7 +66,7 @@
 - [ ] **置信度持久化到消息记录**（`messages` 表无 confidence 列）
 - [ ] **意图路由配置文件**（意图 → 检索范围 / Prompt 变体映射）
 
-### WP4 客服模块效果评测与调优（24h）
+### WP4 客服模块效果评测与调优（20h）
 
 - [x] 评测底座：标注集不可变版本、冻结、数据集 SHA-256 哈希
 - [x] 隔离数据库快照中运行真实多轮 Agent，主库零污染
@@ -74,7 +74,7 @@
 - [x] 门禁阈值与发布关联
 - [x] 现有指标：通过率、意图准确率、转人工召回、证据覆盖、严重错误、回归率
 - [x] 断言维度：expected_intent、expected_requires_human、require_sources、
-      required/forbidden_answer_terms、max_risk_level
+      grounded_in_sources、expected_refusal、required/forbidden_answer_terms、max_risk_level
 - [x] 对抗模式基线（Prompt 注入、越权数据、禁止输出）
 - [x] 离线评测 20 例（12 检索 + 5 安全 + 3 precheck）
 - [x] **回答准确率指标**（M4 口径）
@@ -83,8 +83,8 @@
 - [x] **转人工合理率指标**
 - [x] **50+ 条用例集**（商品 15 / 售后 12 / 投诉 8 / 闲聊 5 / 对抗 10+）
 - [x] **判定标准文档化**（什么算"准确"、什么算"幻觉"）
-- [ ] **自动化评测脚本**
-- [ ] **调优记录与最终参数配置文档**
+- [x] **自动化评测脚本**（`scripts/run_customer_eval.py`，mock/live 双模式、隔离快照、四类失败归因）
+- [x] **调优记录与最终参数配置文档**（`docs/customer-service-evaluation.md`，含两次实跑报告）
 
 ### WP5 客服对话引擎核心开发（40h）
 

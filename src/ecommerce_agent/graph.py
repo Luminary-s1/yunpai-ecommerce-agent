@@ -309,17 +309,25 @@ def build_graph(
         }
 
     def retrieve(state: AgentState) -> dict[str, Any]:
+        # Reuse ContextBuilder's trusted subject when a pronoun turn omits it.
+        effective_context = dict(state.get("context") or {})
+        previous_subject = contexts.latest_subject(
+            state["tenant_id"], state["session_id"]
+        )
+        for key, value in previous_subject.items():
+            effective_context.setdefault(key, value)
         documents = knowledge.retrieve(
             state["normalized_input"],
             top_k=settings.rag_top_k,
             min_score=settings.rag_min_score,
             intent=None,
             tenant_id=state["tenant_id"],
-            store_id=state["context"].get("store_id") or state["context"].get("shop_id"),
-            sku_id=state["context"].get("sku_id"),
+            store_id=effective_context.get("store_id") or effective_context.get("shop_id"),
+            sku_id=effective_context.get("sku_id"),
             rollout_unit=state["session_id"],
         )
         return {
+            "context": effective_context,
             "retrieved": documents,
             "citations": [document["id"] for document in documents],
             "trace": [*state["trace"], f"retrieve:initial:{len(documents)}"],
