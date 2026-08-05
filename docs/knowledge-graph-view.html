@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>云湃知识图谱 · 关系视图</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #66717d;
+      --line: #dce1e5;
+      --paper: #ffffff;
+      --canvas: #f3f5f6;
+      --teal: #087f72;
+      --amber: #a05a00;
+      --amber-soft: #fff1d6;
+      --radius: 6px;
+      font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); min-width: 320px; line-height: 1.45; }
+    header { min-height: 60px; padding: 12px 20px; background: var(--paper); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    header h1 { font-size: 17px; margin: 0; font-weight: 700; }
+    header .meta { font-size: 12px; color: var(--muted); }
+    .notice { padding: 10px 14px; border-left: 3px solid var(--amber); background: var(--amber-soft); font-size: 12px; line-height: 1.6; display: none; }
+    .frame-wrap { padding: 16px 20px 24px; }
+    iframe { width: 100%; height: calc(100vh - 120px); border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>云湃知识图谱 · 关系视图</h1>
+    <span class="meta">D3 力导向图 · 静态快照（知识更新后需重跑 export_graph.py）</span>
+  </header>
+  <div class="notice" id="lagNotice"></div>
+  <div class="frame-wrap">
+    <iframe id="graphFrame" src="/kg.html" title="知识图谱可视化"></iframe>
+  </div>
+  <script>
+    // 图谱宿主页：iframe 嵌 knowledge_graph_output/knowledge_graph.html
+    // 滞后提示：图谱是静态快照，知识与它可能不同步
+    (async () => {
+      const frame = document.getElementById('graphFrame');
+      // 尝试从 /v1/wiki/stats 判断图谱滞后（admin 鉴权；无鉴权时跳过提示）
+      try {
+        const headers = {
+          'X-Admin-Id': sessionStorage.getItem('yunpai.adminId') || 'local-admin',
+          'X-Admin-Key': sessionStorage.getItem('yunpai.adminKey') || '',
+        };
+        const resp = await fetch('/v1/wiki/stats', { headers });
+        if (resp.ok) {
+          const stats = await resp.json();
+          const hint = document.getElementById('lagNotice');
+          hint.style.display = 'block';
+          hint.textContent = `提示：图谱为导出时的静态快照。知识库当前 ${stats.total || 0} 词条；若与图谱节点数差异较大，请在项目根目录重跑：.venv/Scripts/python.exe -m ecommerce_agent.knowledge_engine.export_graph，再刷新本页。`;
+        }
+      } catch (e) { /* 无鉴权环境不提示 */ }
+    })();
+  </script>
+</body>
+</html>

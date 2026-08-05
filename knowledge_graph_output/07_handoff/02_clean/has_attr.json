@@ -1,0 +1,359 @@
+[
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-AF5",
+    "target": "QC-SPU-AF5|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-AF5",
+    "target": "QC-SPU-AF5|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-AF5",
+    "target": "QC-SPU-AF5|warranty_months",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-AF5-WHITE",
+    "target": "QC-AF5-WHITE|capacity_l",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-AF5-WHITE",
+    "target": "QC-AF5-WHITE|color",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-AF5-GREEN",
+    "target": "QC-AF5-GREEN|capacity_l",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-AF5-GREEN",
+    "target": "QC-AF5-GREEN|color",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-VC1",
+    "target": "QC-SPU-VC1|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-VC1",
+    "target": "QC-SPU-VC1|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-VC1",
+    "target": "QC-SPU-VC1|warranty_months",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-VC-A1",
+    "target": "QC-VC-A1|runtime_min",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-HM3",
+    "target": "QC-SPU-HM3|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-HM3",
+    "target": "QC-SPU-HM3|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-HM3",
+    "target": "QC-SPU-HM3|warranty_months",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-HM-3L",
+    "target": "QC-HM-3L|capacity_l",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-KT17",
+    "target": "QC-SPU-KT17|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-KT17",
+    "target": "QC-SPU-KT17|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-KT17",
+    "target": "QC-SPU-KT17|warranty_months",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-KT-17",
+    "target": "QC-KT-17|capacity_l",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-FN1",
+    "target": "QC-SPU-FN1|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-FN1",
+    "target": "QC-SPU-FN1|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-SPU-FN1",
+    "target": "QC-SPU-FN1|warranty_months",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "QC-FN-D1",
+    "target": "QC-FN-D1|filter",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-SPU-M1",
+    "target": "X-SPU-M1|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-SPU-M1",
+    "target": "X-SPU-M1|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-SPU-M1",
+    "target": "X-SPU-M1|warranty_months",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-M1-WHITE",
+    "target": "X-M1-WHITE|color",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-M1-WHITE",
+    "target": "X-M1-WHITE|battery_mah",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-M1-BLACK",
+    "target": "X-M1-BLACK|color",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-M1-BLACK",
+    "target": "X-M1-BLACK|battery_mah",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-SPU-P2",
+    "target": "X-SPU-P2|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-SPU-P2",
+    "target": "X-SPU-P2|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-SPU-P2",
+    "target": "X-SPU-P2|warranty_months",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-P2-BLACK",
+    "target": "X-P2-BLACK|color",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-P2-BLACK",
+    "target": "X-P2-BLACK|storage_gb",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "X-P2-BLACK",
+    "target": "X-P2-BLACK|battery_mah",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-SPU-D01",
+    "target": "Y-SPU-D01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-SPU-D01",
+    "target": "Y-SPU-D01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-SPU-D01",
+    "target": "Y-SPU-D01|warranty_months",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-S",
+    "target": "Y-D01-S|color",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-S",
+    "target": "Y-D01-S|size",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-S",
+    "target": "Y-D01-S|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-S",
+    "target": "Y-D01-S|season",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-M",
+    "target": "Y-D01-M|color",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-M",
+    "target": "Y-D01-M|size",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-M",
+    "target": "Y-D01-M|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-M",
+    "target": "Y-D01-M|season",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-L",
+    "target": "Y-D01-L|color",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-L",
+    "target": "Y-D01-L|size",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-L",
+    "target": "Y-D01-L|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "Y-D01-L",
+    "target": "Y-D01-L|season",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  }
+]

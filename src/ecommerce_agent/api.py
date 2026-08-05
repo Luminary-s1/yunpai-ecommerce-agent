@@ -192,6 +192,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_customer_test_router(service, require_local_customer_test))
     app.include_router(build_chat_sessions_router(service, require_client))
 
+    # M3 知识库：图谱检索 API + Wiki 浏览 API（admin 鉴权）
+    from .knowledge_engine.graph_api import build_graph_router
+
+    app.include_router(build_graph_router(service, require_admin))
+
+    from .knowledge_engine.wiki_api import build_wiki_router
+
+    app.include_router(build_wiki_router(service, require_admin))
+
     @app.get("/health")
     def health() -> dict:
         return service.health()
@@ -235,6 +244,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not admin_console_page.is_file():
             raise HTTPException(status_code=404, detail="admin console is not built")
         return FileResponse(admin_console_page, media_type="text/html; charset=utf-8")
+
+    # 任务3 Wiki 前台：知识图谱可视化宿主页 + 图谱本体（M3 交付物接前端）
+    graph_view_page = (
+        Path(__file__).resolve().parents[2] / "docs" / "knowledge-graph-view.html"
+    )
+
+    @app.get("/knowledge-graph", include_in_schema=False)
+    def knowledge_graph_view() -> FileResponse:
+        if not graph_view_page.is_file():
+            raise HTTPException(status_code=404, detail="knowledge graph view is not built")
+        return FileResponse(graph_view_page, media_type="text/html; charset=utf-8")
+
+    knowledge_graph_page = (
+        Path(__file__).resolve().parents[2]
+        / "knowledge_graph_output"
+        / "knowledge_graph.html"
+    )
+
+    @app.get("/kg.html", include_in_schema=False)
+    def knowledge_graph_body() -> FileResponse:
+        if not knowledge_graph_page.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail="knowledge graph is not exported; run export_graph.py first",
+            )
+        return FileResponse(knowledge_graph_page, media_type="text/html; charset=utf-8")
 
     customer_test_page = Path(__file__).resolve().parents[2] / "docs" / "customer-test.html"
 

@@ -1,0 +1,359 @@
+[
+  {
+    "spec_key": "QC-SPU-AF5|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-AF5"
+  },
+  {
+    "spec_key": "QC-SPU-AF5|model",
+    "attr_key": "model",
+    "attr_value": "AF5",
+    "level": "SPU",
+    "owner_id": "QC-SPU-AF5"
+  },
+  {
+    "spec_key": "QC-SPU-AF5|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "QC-SPU-AF5"
+  },
+  {
+    "spec_key": "QC-AF5-WHITE|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "5",
+    "level": "SKU",
+    "owner_id": "QC-AF5-WHITE"
+  },
+  {
+    "spec_key": "QC-AF5-WHITE|color",
+    "attr_key": "color",
+    "attr_value": "云白",
+    "level": "SKU",
+    "owner_id": "QC-AF5-WHITE"
+  },
+  {
+    "spec_key": "QC-AF5-GREEN|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "5",
+    "level": "SKU",
+    "owner_id": "QC-AF5-GREEN"
+  },
+  {
+    "spec_key": "QC-AF5-GREEN|color",
+    "attr_key": "color",
+    "attr_value": "松绿",
+    "level": "SKU",
+    "owner_id": "QC-AF5-GREEN"
+  },
+  {
+    "spec_key": "QC-SPU-VC1|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-VC1"
+  },
+  {
+    "spec_key": "QC-SPU-VC1|model",
+    "attr_key": "model",
+    "attr_value": "VC-A1",
+    "level": "SPU",
+    "owner_id": "QC-SPU-VC1"
+  },
+  {
+    "spec_key": "QC-SPU-VC1|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "24",
+    "level": "SPU",
+    "owner_id": "QC-SPU-VC1"
+  },
+  {
+    "spec_key": "QC-VC-A1|runtime_min",
+    "attr_key": "runtime_min",
+    "attr_value": "45",
+    "level": "SKU",
+    "owner_id": "QC-VC-A1"
+  },
+  {
+    "spec_key": "QC-SPU-HM3|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-HM3"
+  },
+  {
+    "spec_key": "QC-SPU-HM3|model",
+    "attr_key": "model",
+    "attr_value": "HM-3L",
+    "level": "SPU",
+    "owner_id": "QC-SPU-HM3"
+  },
+  {
+    "spec_key": "QC-SPU-HM3|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "QC-SPU-HM3"
+  },
+  {
+    "spec_key": "QC-HM-3L|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "3",
+    "level": "SKU",
+    "owner_id": "QC-HM-3L"
+  },
+  {
+    "spec_key": "QC-SPU-KT17|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-KT17"
+  },
+  {
+    "spec_key": "QC-SPU-KT17|model",
+    "attr_key": "model",
+    "attr_value": "KT-17",
+    "level": "SPU",
+    "owner_id": "QC-SPU-KT17"
+  },
+  {
+    "spec_key": "QC-SPU-KT17|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "QC-SPU-KT17"
+  },
+  {
+    "spec_key": "QC-KT-17|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "1.7",
+    "level": "SKU",
+    "owner_id": "QC-KT-17"
+  },
+  {
+    "spec_key": "QC-SPU-FN1|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-FN1"
+  },
+  {
+    "spec_key": "QC-SPU-FN1|model",
+    "attr_key": "model",
+    "attr_value": "FN-D1",
+    "level": "SPU",
+    "owner_id": "QC-SPU-FN1"
+  },
+  {
+    "spec_key": "QC-SPU-FN1|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "24",
+    "level": "SPU",
+    "owner_id": "QC-SPU-FN1"
+  },
+  {
+    "spec_key": "QC-FN-D1|filter",
+    "attr_key": "filter",
+    "attr_value": "H13",
+    "level": "SKU",
+    "owner_id": "QC-FN-D1"
+  },
+  {
+    "spec_key": "X-SPU-M1|brand",
+    "attr_key": "brand",
+    "attr_value": "星脉",
+    "level": "SPU",
+    "owner_id": "X-SPU-M1"
+  },
+  {
+    "spec_key": "X-SPU-M1|model",
+    "attr_key": "model",
+    "attr_value": "X-M1",
+    "level": "SPU",
+    "owner_id": "X-SPU-M1"
+  },
+  {
+    "spec_key": "X-SPU-M1|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "X-SPU-M1"
+  },
+  {
+    "spec_key": "X-M1-WHITE|color",
+    "attr_key": "color",
+    "attr_value": "云白",
+    "level": "SKU",
+    "owner_id": "X-M1-WHITE"
+  },
+  {
+    "spec_key": "X-M1-WHITE|battery_mah",
+    "attr_key": "battery_mah",
+    "attr_value": "350",
+    "level": "SKU",
+    "owner_id": "X-M1-WHITE"
+  },
+  {
+    "spec_key": "X-M1-BLACK|color",
+    "attr_key": "color",
+    "attr_value": "曜石黑",
+    "level": "SKU",
+    "owner_id": "X-M1-BLACK"
+  },
+  {
+    "spec_key": "X-M1-BLACK|battery_mah",
+    "attr_key": "battery_mah",
+    "attr_value": "350",
+    "level": "SKU",
+    "owner_id": "X-M1-BLACK"
+  },
+  {
+    "spec_key": "X-SPU-P2|brand",
+    "attr_key": "brand",
+    "attr_value": "星脉",
+    "level": "SPU",
+    "owner_id": "X-SPU-P2"
+  },
+  {
+    "spec_key": "X-SPU-P2|model",
+    "attr_key": "model",
+    "attr_value": "X-P2",
+    "level": "SPU",
+    "owner_id": "X-SPU-P2"
+  },
+  {
+    "spec_key": "X-SPU-P2|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "X-SPU-P2"
+  },
+  {
+    "spec_key": "X-P2-BLACK|color",
+    "attr_key": "color",
+    "attr_value": "黑色",
+    "level": "SKU",
+    "owner_id": "X-P2-BLACK"
+  },
+  {
+    "spec_key": "X-P2-BLACK|storage_gb",
+    "attr_key": "storage_gb",
+    "attr_value": "0",
+    "level": "SKU",
+    "owner_id": "X-P2-BLACK"
+  },
+  {
+    "spec_key": "X-P2-BLACK|battery_mah",
+    "attr_key": "battery_mah",
+    "attr_value": "10000",
+    "level": "SKU",
+    "owner_id": "X-P2-BLACK"
+  },
+  {
+    "spec_key": "Y-SPU-D01|brand",
+    "attr_key": "brand",
+    "attr_value": "云织",
+    "level": "SPU",
+    "owner_id": "Y-SPU-D01"
+  },
+  {
+    "spec_key": "Y-SPU-D01|model",
+    "attr_key": "model",
+    "attr_value": "Y-D01",
+    "level": "SPU",
+    "owner_id": "Y-SPU-D01"
+  },
+  {
+    "spec_key": "Y-SPU-D01|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "0",
+    "level": "SPU",
+    "owner_id": "Y-SPU-D01"
+  },
+  {
+    "spec_key": "Y-D01-S|color",
+    "attr_key": "color",
+    "attr_value": "黑色",
+    "level": "SKU",
+    "owner_id": "Y-D01-S"
+  },
+  {
+    "spec_key": "Y-D01-S|size",
+    "attr_key": "size",
+    "attr_value": "S",
+    "level": "SKU",
+    "owner_id": "Y-D01-S"
+  },
+  {
+    "spec_key": "Y-D01-S|material",
+    "attr_key": "material",
+    "attr_value": "90%白鸭绒",
+    "level": "SKU",
+    "owner_id": "Y-D01-S"
+  },
+  {
+    "spec_key": "Y-D01-S|season",
+    "attr_key": "season",
+    "attr_value": "冬季",
+    "level": "SKU",
+    "owner_id": "Y-D01-S"
+  },
+  {
+    "spec_key": "Y-D01-M|color",
+    "attr_key": "color",
+    "attr_value": "黑色",
+    "level": "SKU",
+    "owner_id": "Y-D01-M"
+  },
+  {
+    "spec_key": "Y-D01-M|size",
+    "attr_key": "size",
+    "attr_value": "M",
+    "level": "SKU",
+    "owner_id": "Y-D01-M"
+  },
+  {
+    "spec_key": "Y-D01-M|material",
+    "attr_key": "material",
+    "attr_value": "90%白鸭绒",
+    "level": "SKU",
+    "owner_id": "Y-D01-M"
+  },
+  {
+    "spec_key": "Y-D01-M|season",
+    "attr_key": "season",
+    "attr_value": "冬季",
+    "level": "SKU",
+    "owner_id": "Y-D01-M"
+  },
+  {
+    "spec_key": "Y-D01-L|color",
+    "attr_key": "color",
+    "attr_value": "黑色",
+    "level": "SKU",
+    "owner_id": "Y-D01-L"
+  },
+  {
+    "spec_key": "Y-D01-L|size",
+    "attr_key": "size",
+    "attr_value": "L",
+    "level": "SKU",
+    "owner_id": "Y-D01-L"
+  },
+  {
+    "spec_key": "Y-D01-L|material",
+    "attr_key": "material",
+    "attr_value": "90%白鸭绒",
+    "level": "SKU",
+    "owner_id": "Y-D01-L"
+  },
+  {
+    "spec_key": "Y-D01-L|season",
+    "attr_key": "season",
+    "attr_value": "冬季",
+    "level": "SKU",
+    "owner_id": "Y-D01-L"
+  }
+]

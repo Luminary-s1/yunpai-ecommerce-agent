@@ -260,6 +260,7 @@
         <button data-view="marketing">营销投放</button>
         <button data-view="finance">利润对账</button>
         <button data-view="knowledge">知识与 SOP</button>
+        <button data-view="wiki">知识库</button>
         <button data-view="quality">质检 VOC</button>
         <button data-view="evaluations">客服评测</button>
         <button data-view="simulation">场景验收</button>
@@ -528,6 +529,29 @@
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>租户知识版本</h3></div><div class="table-wrap"><table><thead><tr><th>层级</th><th>问题与答案</th><th>范围</th><th>版本</th><th>状态</th><th>操作</th></tr></thead><tbody id="knowledgeRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>SOP 定义</h3></div><div class="table-wrap"><table><thead><tr><th>名称</th><th>意图</th><th>风险</th><th>活动版本</th><th>版本状态</th><th>操作</th></tr></thead><tbody id="sopRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>SOP 运行与人工恢复</h3><span class="muted">审批、不确定态核对和补偿均使用乐观锁</span></div><div class="table-wrap"><table><thead><tr><th>流程</th><th>运行状态</th><th>当前步骤</th><th>尝试</th><th>错误</th><th>操作</th></tr></thead><tbody id="sopRunRows"></tbody></table></div></article>
+        </section>
+
+        <section class="view" id="view-wiki">
+          <div class="section-head"><div><h2>知识库</h2><p>词条浏览、演化历史与搜索（M3 交付物接前端）</p></div><div class="toolbar"><input class="input" id="wikiSearch" placeholder="搜索知识（如：保修/退货）"><button class="button primary" id="wikiSearchBtn">搜索</button><button class="button" id="refreshWiki">刷新</button></div></div>
+          <div class="grid kpis" id="wikiKpis"></div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel">
+              <div class="panel-head"><h3>词条导航</h3><span class="muted">按类型浏览</span></div>
+              <div class="panel-body stack" id="wikiNav"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3 id="wikiListTitle">全部词条</h3><span class="muted" id="wikiListMeta"></span></div>
+              <div class="table-wrap"><table><thead><tr><th>类型</th><th>当前结论</th><th>层级</th><th>状态</th></tr></thead><tbody id="wikiRows"></tbody></table></div>
+            </article>
+          </div>
+          <article class="panel" style="margin-top:14px" id="wikiDetailPanel">
+            <div class="panel-head"><h3 id="wikiDetailTitle">词条详情</h3><span class="muted" id="wikiDetailMeta"></span></div>
+            <div class="panel-body stack" id="wikiDetail"></div>
+          </article>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>图谱视图</h3><span class="muted">D3 力导向图（静态快照，知识更新后需重跑导出）</span></div>
+            <div class="panel-body"><button class="button" id="wikiOpenGraph">在新标签打开图谱</button><span class="muted" id="wikiGraphHint" style="margin-left:10px"></span></div>
+          </article>
         </section>
 
         <section class="view" id="view-quality">
@@ -2299,6 +2323,105 @@
       }));
     }
 
+    async function loadWiki() {
+      const [stats, items] = await Promise.all([
+        api('/v1/wiki/stats'),
+        api('/v1/wiki/items?limit=200'),
+      ]);
+      renderWikiKpis(stats);
+      renderWikiNav();
+      renderWikiRows(items, '全部词条', `共 ${items.length} 条`);
+      // 搜索命中切换：不自动改列表，仅提示可点搜索
+      $('wikiSearch').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') doWikiSearch();
+      });
+      $('wikiSearchBtn').addEventListener('click', doWikiSearch);
+      $('refreshWiki').addEventListener('click', () => loadWiki().then(() => toast('知识库已刷新')));
+      $('wikiOpenGraph').addEventListener('click', () => {
+        window.open('/knowledge-graph', '_blank');
+        toast('已在新标签打开图谱视图');
+      });
+      // 图谱滞后提示：图谱是静态快照，知识与它可能不同步
+      try {
+        const graphStats = await api('/v1/graph/stats');
+        const wikiTotal = stats.total || 0;
+        const graphNodes = graphStats.total_nodes || 0;
+        if (Math.abs(graphNodes - wikiTotal) > 3) {
+          $('wikiGraphHint').textContent = `提示：图谱 ${graphNodes} 节点 vs 知识库 ${wikiTotal} 词条，差异较大，可能需要重跑导出（export_graph.py）`;
+        } else {
+          $('wikiGraphHint').textContent = `图谱 ${graphNodes} 节点，与知识库基本一致`;
+        }
+      } catch (error) {
+        $('wikiGraphHint').textContent = '图谱服务暂不可用（Neo4j 未启动？）——列表/详情不受影响';
+      }
+    }
+
+    function renderWikiKpis(stats) {
+      const kinds = stats.by_kind || {};
+      const total = stats.total || 0;
+      const chips = Object.entries(kinds).map(([k, v]) => `${k}: ${v}`).join(' · ');
+      $('wikiKpis').innerHTML = `<div class="kpi"><span class="label">词条总数</span><span class="value">${total}</span><span class="meta">${chips}</span></div>
+        <div class="kpi"><span class="label">数据来源</span><span class="value">${(stats.by_source && stats.by_source.runtime) || 0}</span><span class="meta">运行时知识（可编辑）</span></div>
+        <div class="kpi"><span class="label">资产层词条</span><span class="value">${(stats.by_source && stats.by_source.asset) || 0}</span><span class="meta">只读资产（02_clean）</span></div>
+        <div class="kpi"><span class="label">编辑通道</span><span class="value">生命周期</span><span class="meta">/v1/admin/knowledge</span></div>`;
+    }
+
+    function renderWikiNav() {
+      const kinds = ['rule', 'policy', 'script', 'faq', 'product', 'category', 'sku', 'attribute'];
+      const labels = { rule: '行业规则', policy: '售后政策', script: '客服话术', faq: '常见问答', product: '商品', category: '品类', sku: 'SKU', attribute: '属性' };
+      $('wikiNav').innerHTML = kinds.map((k) => `<button class="button" data-wiki-kind="${k}">${labels[k] || k}</button>`).join('');
+      document.querySelectorAll('[data-wiki-kind]').forEach((node) => node.addEventListener('click', async () => {
+        const kind = node.dataset.wikiKind;
+        const items = await api(`/v1/wiki/items?kind=${kind}&limit=200`);
+        renderWikiRows(items, labels[kind] || kind, `共 ${items.length} 条`);
+      }));
+    }
+
+    function renderWikiRows(items, title, meta) {
+      $('wikiListTitle').textContent = title;
+      $('wikiListMeta').textContent = meta;
+      const kindLabels = { rule: '行业规则', policy: '售后政策', script: '客服话术', faq: '常见问答', product: '商品', category: '品类', sku: 'SKU', attribute: '属性' };
+      const rows = items.map((item) => `<tr data-wiki-id="${item.id}" style="cursor:pointer"><td>${kindLabels[item.kind] || item.kind}</td><td>${escapeHtml(item.compiled_truth)}</td><td>${escapeHtml(item.scope)}</td><td><span class="status ${item.attributes.status === 'active' ? 'ok' : 'warn'}">${escapeHtml(item.attributes.status || 'active')}</span></td></tr>`).join('');
+      $('wikiRows').innerHTML = rows || '<tr><td colspan="4" class="empty">无词条</td></tr>';
+      document.querySelectorAll('[data-wiki-id]').forEach((node) => node.addEventListener('click', async () => {
+        const id = node.dataset.wikiId;
+        const item = await api(`/v1/wiki/items/${encodeURIComponent(id)}`);
+        renderWikiDetail(item);
+      }));
+    }
+
+    function renderWikiDetail(item) {
+      $('wikiDetailTitle').textContent = item.compiled_truth || item.id;
+      $('wikiDetailMeta').textContent = `${item.id} · ${item.kind} · ${item.scope}${item.scope_key !== 'all' ? ' · ' + item.scope_key : ''} · 来源 ${item.source}`;
+      const attrs = item.attributes || {};
+      const attrRows = Object.entries(attrs).filter(([k]) => !['question', 'answer', 'content', 'canonical_answer', 'content_summary', 'search_text', 'embedding'].includes(k)).map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>`).join('');
+      const timeline = (item.timeline || []).map((e) => `<div class="activity"><span class="dot"></span><div><span class="mono">${escapeHtml(e.at)}</span> <strong>${escapeHtml(e.action)}</strong>${e.note ? ' — ' + escapeHtml(e.note) : ''}${e.source ? ' <span class="muted">(' + escapeHtml(e.source) + ')</span>' : ''}</div></div>`).join('') || '<span class="muted">只读资产，无演化历史</span>';
+      $('wikiDetail').innerHTML = `
+        <div><h3 style="margin:0 0 6px">当前结论</h3><p style="margin:0;line-height:1.7">${escapeHtml(item.compiled_truth)}</p></div>
+        <div><h3 style="margin:0 0 6px">属性</h3><div class="table-wrap"><table><thead><tr><th>字段</th><th>值</th></tr></thead><tbody>${attrRows || '<tr><td colspan="2" class="empty">无属性</td></tr>'}</tbody></table></div></div>
+        <div><h3 style="margin:0 0 6px">演化历史</h3>${timeline}</div>`;
+      $('wikiDetailPanel').style.display = '';
+    }
+
+    async function doWikiSearch() {
+      const q = $('wikiSearch').value.trim();
+      if (!q) return;
+      try {
+        const results = await api(`/v1/graph/search?q=${encodeURIComponent(q)}&limit=20`);
+        const rows = results.map((r) => `<tr data-wiki-search-id="${r.id}" style="cursor:pointer"><td>${escapeHtml(r.label)}</td><td>${escapeHtml(r.title || r.id)}</td></tr>`).join('');
+        $('wikiListTitle').textContent = `搜索「${q}」`;
+        $('wikiListMeta').textContent = `${results.length} 条（图谱）`;
+        $('wikiRows').innerHTML = rows || '<tr><td colspan="4" class="empty">无结果（图谱搜索可能滞后于编辑，见提示）</td></tr>';
+        document.querySelectorAll('[data-wiki-search-id]').forEach((node) => node.addEventListener('click', async () => {
+          const id = node.dataset.wikiSearchId;
+          const item = await api(`/v1/wiki/items/${encodeURIComponent(id)}`);
+          renderWikiDetail(item);
+        }));
+      } catch (error) {
+        toast('图谱搜索暂不可用（Neo4j 未启动？）：' + error.message);
+      }
+    }
+
     async function loadView(view) {
       if (view === 'overview') return loadOverview();
       if (view === 'service') return Promise.all([loadConversations(), loadHandoffs()]);
@@ -2311,6 +2434,7 @@
       if (view === 'marketing') return loadMarketing();
       if (view === 'finance') return loadFinance();
       if (view === 'knowledge') return loadGovernance();
+      if (view === 'wiki') return loadWiki();
       if (view === 'quality') return loadQuality();
       if (view === 'evaluations') return loadEvaluations();
       if (view === 'simulation') return loadSimulation();

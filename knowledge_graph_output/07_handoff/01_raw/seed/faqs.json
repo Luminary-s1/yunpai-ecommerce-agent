@@ -1,0 +1,46 @@
+[
+  {
+    "category": "商品保修",
+    "intent": "product",
+    "question": "晴川空气炸锅保修多久？",
+    "answer": "晴川 AF5 空气炸锅整机保修 12 个月，保修以订单和产品序列信息核验结果为准。",
+    "keywords": "空气炸锅 AF5 保修 质保",
+    "risk_level": "low",
+    "layer": "product",
+    "sku_id": "QC-AF5-WHITE",
+    "source": "fixture"
+  },
+  {
+    "category": "物流规则",
+    "intent": "logistics",
+    "question": "订单物流异常怎么办？",
+    "answer": "先核对订单物流最新节点；若连续 24 小时无更新或显示地址异常，转人工联系承运商核查，不承诺具体送达时间。",
+    "keywords": "物流 异常 地址 核查",
+    "risk_level": "medium",
+    "layer": "store",
+    "sku_id": null,
+    "source": "fixture"
+  },
+  {
+    "category": "价保规则",
+    "intent": "refund",
+    "question": "商品降价可以申请价保吗？",
+    "answer": "签收后 7 日内可提交价保申请，是否符合条件以活动类型、实付金额和订单状态核验结果为准，客服不得在核验前承诺退款。",
+    "keywords": "价保 降价 退款 7日",
+    "risk_level": "high",
+    "layer": "store",
+    "sku_id": null,
+    "source": "fixture"
+  },
+  {
+    "category": "售后规则",
+    "intent": "refund",
+    "question": "未拆封商品如何退货？",
+    "answer": "未拆封商品可先提交退货申请，由人工核验订单、商品状态和运费责任后给出处理方案，不直接承诺退款完成。",
+    "keywords": "未拆封 退货 售后",
+    "risk_level": "high",
+    "layer": "store",
+    "sku_id": null,
+    "source": "fixture"
+  }
+]

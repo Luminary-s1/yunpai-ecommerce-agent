@@ -1,0 +1,16 @@
+{
+  "evaluation": {
+    "total": 35,
+    "passed": 35,
+    "pass_rate": 1.0,
+    "scenes": [
+      "product",
+      "policy",
+      "faq",
+      "rule",
+      "multi_hop",
+      "negative"
+    ]
+  },
+  "note": "检索质量评测报告（交付物⑦），35题覆盖六类场景，实测100%通过"
+}

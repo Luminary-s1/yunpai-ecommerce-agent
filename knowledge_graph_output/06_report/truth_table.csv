@@ -1,0 +1,40 @@
+doc_id,entity_key,entity_type,relation_key,relation_type,expected_value
+fixture,QC-SPU-AF5,Product(SPU),,,SPU QC-SPU-AF5（晴川空气炸锅 5L 云白款，价格 499.00）
+fixture,QC-SPU-VC1,Product(SPU),,,SPU QC-SPU-VC1（晴川无线吸尘器 A1，价格 899.00）
+fixture,QC-SPU-HM3,Product(SPU),,,SPU QC-SPU-HM3（晴川静音加湿器 3L，价格 239.00）
+fixture,QC-SPU-KT17,Product(SPU),,,SPU QC-SPU-KT17（晴川恒温电热水壶 1.7L，价格 159.00）
+fixture,QC-SPU-FN1,Product(SPU),,,SPU QC-SPU-FN1（晴川循环净化风扇 D1，价格 699.00）
+manual,X-SPU-M1,Product(SPU),,,SPU X-SPU-M1（星脉蓝牙耳机 X-M1 云白色，价格 299.00）
+manual,X-SPU-P2,Product(SPU),,,SPU X-SPU-P2（星脉充电宝 X-P2 10000mAh 黑色，价格 129.00）
+manual,Y-SPU-D01,Product(SPU),,,SPU Y-SPU-D01（云织羽绒服 Y-D01 黑色 S 码，价格 599.00）
+fixture,QC-AF5-WHITE,SKU,,,SKU QC-AF5-WHITE（归属 QC-SPU-AF5，品类 空气炸锅）
+fixture,QC-AF5-GREEN,SKU,,,SKU QC-AF5-GREEN（归属 QC-SPU-AF5，品类 空气炸锅）
+fixture,QC-VC-A1,SKU,,,SKU QC-VC-A1（归属 QC-SPU-VC1，品类 无线吸尘器）
+fixture,QC-HM-3L,SKU,,,SKU QC-HM-3L（归属 QC-SPU-HM3，品类 加湿器）
+fixture,QC-KT-17,SKU,,,SKU QC-KT-17（归属 QC-SPU-KT17，品类 电热水壶）
+fixture,QC-FN-D1,SKU,,,SKU QC-FN-D1（归属 QC-SPU-FN1，品类 循环风扇）
+manual,X-M1-WHITE,SKU,,,SKU X-M1-WHITE（归属 X-SPU-M1，品类 数码音频）
+manual,X-M1-BLACK,SKU,,,SKU X-M1-BLACK（归属 X-SPU-M1，品类 数码音频）
+manual,X-P2-BLACK,SKU,,,SKU X-P2-BLACK（归属 X-SPU-P2，品类 数码电源）
+manual,Y-D01-S,SKU,,,SKU Y-D01-S（归属 Y-SPU-D01，品类 服饰）
+manual,Y-D01-M,SKU,,,SKU Y-D01-M（归属 Y-SPU-D01，品类 服饰）
+manual,Y-D01-L,SKU,,,SKU Y-D01-L（归属 Y-SPU-D01，品类 服饰）
+catalog,home_appliance,Category,,,品类 home_appliance（小家电，父级 无）
+catalog,air_fryer,Category,,,品类 air_fryer（空气炸锅，父级 home_appliance）
+catalog,cordless_vacuum,Category,,,品类 cordless_vacuum（无线吸尘器，父级 home_appliance）
+catalog,humidifier,Category,,,品类 humidifier（加湿器，父级 home_appliance）
+catalog,electric_kettle,Category,,,品类 electric_kettle（电热水壶，父级 home_appliance）
+catalog,air_circulation_fan,Category,,,品类 air_circulation_fan（循环风扇，父级 home_appliance）
+catalog,digital,Category,,,品类 digital（数码，父级 无）
+catalog,digital_audio,Category,,,品类 digital_audio（数码音频，父级 digital）
+catalog,digital_power,Category,,,品类 digital_power（数码电源，父级 digital）
+catalog,apparel,Category,,,品类 apparel（服饰，父级 无）
+fixture,WARR-94d58a5b,Policy,,,政策 WARR-94d58a5b（warranty，12个月整机保修）
+fixture,WARR-00ca880e,Policy,,,政策 WARR-00ca880e（warranty，24个月整机保修）
+network,RETURN-38e401d2,Policy,,,政策 RETURN-38e401d2（return，七天无理由退货）
+network,PRICE-cf259e1c,Policy,,,政策 PRICE-cf259e1c（price_protection，价格保护（分场景））
+network,WARR-1a256956,Policy,,,政策 WARR-1a256956（warranty，小家电整机保修1年）
+network,RETURN-a041c044,Policy,,,政策 RETURN-a041c044（return，数码商品退换货）
+network,RETURN-2d243e76,Policy,,,政策 RETURN-2d243e76（return，服饰鞋帽退换货）
+network,LOGISTICS-70a98f4b,Policy,,,政策 LOGISTICS-70a98f4b（logistics，发货时效与延迟赔付）
+manual,WARR-b17b433a,Policy,,,政策 WARR-b17b433a（warranty，数码产品整机保修1年）

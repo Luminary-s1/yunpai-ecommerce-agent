@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-08-03",
+  "entities": {
+    "category.json": 10,
+    "product.json": 12,
+    "attribute.json": 51,
+    "policy.json": 9,
+    "script.json": 52,
+    "faq.json": 60,
+    "rule.json": 9
+  },
+  "relationships": {
+    "belongs_to": 12,
+    "has_attr": 51,
+    "applies_to": 34,
+    "refers_to": 64,
+    "related_to": 52
+  },
+  "validation_errors": [],
+  "status": "PASS"
+}

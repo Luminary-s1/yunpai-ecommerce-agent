@@ -1,0 +1,514 @@
+[
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-001",
+    "target": "SCRIPT-001",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-002",
+    "target": "SCRIPT-002",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-003",
+    "target": "SCRIPT-003",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-004",
+    "target": "SCRIPT-004",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-005",
+    "target": "SCRIPT-005",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-006",
+    "target": "SCRIPT-006",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-007",
+    "target": "SCRIPT-007",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-008",
+    "target": "SCRIPT-008",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-009",
+    "target": "SCRIPT-009",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-010",
+    "target": "SCRIPT-010",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-010",
+    "target": "WARR-1a256956",
+    "target_type": "Policy",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-011",
+    "target": "SCRIPT-011",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-012",
+    "target": "SCRIPT-012",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-013",
+    "target": "SCRIPT-013",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-014",
+    "target": "SCRIPT-014",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-015",
+    "target": "SCRIPT-015",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-016",
+    "target": "SCRIPT-016",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-017",
+    "target": "SCRIPT-017",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-018",
+    "target": "SCRIPT-018",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-019",
+    "target": "SCRIPT-019",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-020",
+    "target": "SCRIPT-020",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-021",
+    "target": "SCRIPT-021",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-022",
+    "target": "SCRIPT-022",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-023",
+    "target": "SCRIPT-023",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-024",
+    "target": "SCRIPT-024",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-025",
+    "target": "SCRIPT-025",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-026",
+    "target": "SCRIPT-026",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-027",
+    "target": "SCRIPT-027",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-028",
+    "target": "SCRIPT-028",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-029",
+    "target": "SCRIPT-029",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-030",
+    "target": "SCRIPT-030",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-031",
+    "target": "SCRIPT-031",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-032",
+    "target": "SCRIPT-032",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-033",
+    "target": "SCRIPT-033",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-034",
+    "target": "SCRIPT-034",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-034",
+    "target": "RETURN-38e401d2",
+    "target_type": "Policy",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-035",
+    "target": "SCRIPT-035",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-036",
+    "target": "SCRIPT-036",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-036",
+    "target": "RETURN-38e401d2",
+    "target_type": "Policy",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-037",
+    "target": "SCRIPT-037",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-037",
+    "target": "RETURN-38e401d2",
+    "target_type": "Policy",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-038",
+    "target": "SCRIPT-038",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-039",
+    "target": "SCRIPT-039",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-040",
+    "target": "SCRIPT-040",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-041",
+    "target": "SCRIPT-041",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-042",
+    "target": "SCRIPT-042",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-043",
+    "target": "SCRIPT-043",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-044",
+    "target": "SCRIPT-044",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-045",
+    "target": "SCRIPT-045",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-046",
+    "target": "SCRIPT-046",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-047",
+    "target": "SCRIPT-047",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-048",
+    "target": "SCRIPT-048",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-049",
+    "target": "SCRIPT-049",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-050",
+    "target": "SCRIPT-050",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-051",
+    "target": "SCRIPT-051",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-052",
+    "target": "SCRIPT-052",
+    "target_type": "Script",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SEED-ca01",
+    "target": "QC-AF5-WHITE",
+    "target_type": "Product",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SEED-ca01",
+    "target": "WARR-1a256956",
+    "target_type": "Policy",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SEED-3070",
+    "target": "RETURN-38e401d2",
+    "target_type": "Policy",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-MANUAL-5584",
+    "target": "X-M1-WHITE",
+    "target_type": "Product",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-MANUAL-5584",
+    "target": "WARR-1a256956",
+    "target_type": "Policy",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-MANUAL-8fbb",
+    "target": "RETURN-38e401d2",
+    "target_type": "Policy",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-MANUAL-a72c",
+    "target": "Y-D01-M",
+    "target_type": "Product",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-MANUAL-51a5",
+    "target": "Y-D01-M",
+    "target_type": "Product",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  }
+]
