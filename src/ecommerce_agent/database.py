@@ -36,7 +36,7 @@ class SessionScopeError(ValueError):
 
 
 class Database:
-    SCHEMA_VERSION = 25
+    SCHEMA_VERSION = 27
 
     def __init__(self, path: Path):
         self.path = path
@@ -149,6 +149,9 @@ class Database:
             if 25 not in applied:
                 self._apply_v25(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (25, ?)", (utc_now(),))
+            if 27 not in applied:
+                self._apply_v27(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (27, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2171,6 +2174,17 @@ class Database:
             """
         )
 
+    @classmethod
+    def _apply_v27(cls, conn: sqlite3.Connection) -> None:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'"
+        ).fetchone()
+        if exists is None:
+            return
+        cls._ensure_column(conn, "messages", "customer_intent", "TEXT")
+        cls._ensure_column(conn, "messages", "intent_confidence", "REAL")
+        cls._ensure_column(conn, "messages", "intent_method", "TEXT")
+
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
@@ -2364,7 +2378,15 @@ class Database:
                 "lease_until",
                 "record_version",
             },
-            "messages": {"tenant_id", "client_id", "redacted", "context_snapshot_id"},
+            "messages": {
+                "tenant_id",
+                "client_id",
+                "redacted",
+                "context_snapshot_id",
+                "customer_intent",
+                "intent_confidence",
+                "intent_method",
+            },
             "qa_results": {"tenant_id", "issues_json", "review_status", "record_version"},
             "channel_reply_drafts": {"outbox_id", "record_version", "status"},
             "channel_outbox": {
@@ -2661,6 +2683,7 @@ class Database:
                 SELECT m.id, m.trace_id, m.role, m.content, m.intent,
                        m.risk_level, m.route_reason, m.sources_json,
                        m.model_fallback, m.redacted, m.context_snapshot_id,
+                       m.customer_intent, m.intent_confidence, m.intent_method,
                        m.created_at
                 FROM messages m
                 JOIN sessions s ON s.id=m.session_id

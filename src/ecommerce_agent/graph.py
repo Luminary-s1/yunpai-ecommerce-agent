@@ -96,8 +96,9 @@ def persist_response(
             INSERT OR IGNORE INTO messages(
                 id, trace_id, session_id, role, content, intent, risk_level,
                 route_reason, sources_json, model_fallback, created_at,
-                tenant_id, client_id, redacted, context_snapshot_id
-            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL)
+                tenant_id, client_id, redacted, context_snapshot_id,
+                customer_intent, intent_confidence, intent_method
+            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL, ?, ?, ?)
             """,
             (
                 user_message_id,
@@ -108,6 +109,9 @@ def persist_response(
                 state["tenant_id"],
                 state["client_id"],
                 int(user_redacted),
+                state.get("customer_intent"),
+                state.get("intent_confidence"),
+                state.get("intent_method"),
             ),
         )
         conn.execute(
@@ -115,8 +119,9 @@ def persist_response(
             INSERT OR IGNORE INTO messages(
                 id, trace_id, session_id, role, content, intent, risk_level,
                 route_reason, sources_json, model_fallback, created_at,
-                tenant_id, client_id, redacted, context_snapshot_id
-            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tenant_id, client_id, redacted, context_snapshot_id,
+                customer_intent, intent_confidence, intent_method
+            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 state["message_id"],
@@ -133,6 +138,9 @@ def persist_response(
                 state["client_id"],
                 int(answer_redacted),
                 state.get("context_snapshot_id"),
+                state.get("customer_intent"),
+                state.get("intent_confidence"),
+                state.get("intent_method"),
             ),
         )
         invocation_id = state.get("invocation_id")
@@ -266,6 +274,9 @@ def build_graph(
             "context": sanitize_context(state.get("context", {})),
             "execution_mode": state.get("execution_mode") or "live",
             "intent": "general",
+            "customer_intent": None,
+            "intent_confidence": None,
+            "intent_method": None,
             "risk_level": "low",
             "route": "deliberate",
             "route_reason": "pending",

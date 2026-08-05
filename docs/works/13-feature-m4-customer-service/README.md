@@ -510,6 +510,22 @@
 - 按 provider 并发约束没有发送其他 live 语料。因此本次只关闭 `as-007` 这一条裁定
   边界，不把单条结果外推为完整 `after_sales` 召回率
 
+## D13 · schema v27 与意图持久化（2026-08-05）
+
+- 先查 `CONTRIBUTING.md` 的并行迁移登记：v26 已分配给 M6
+  `feature/m6-competitor-import`，因此 M4 不定义 `_apply_v26`，改占空闲的 v27。
+- `Database.SCHEMA_VERSION` 从 25 升至 27；`_apply_v27` 只用既有 `_ensure_column` 为
+  `messages` 增加可空的 `customer_intent`、`intent_confidence`、`intent_method`，不重建表，
+  不改变 v25 的双迁移内容。`_validate_schema` 与会话消息查询同步包含三列。
+- 图状态增加三项可选分类元数据；`persist_response` 在用户/助手消息配对中写入同一组
+  分类结果，旧状态没有分类时保持 NULL。该改动没有新增 LangGraph 节点或边。
+- 红态反证：对一份真实 v25 数据库运行迁移测试时，旧代码停在
+  `schema_version() == 25`，新断言按预期失败（`25 != 27`）。
+- 绿态：v25→v27 前向迁移与旧消息保留 `1 passed`；意图字段持久化配对测试 `1 passed`；
+  两次初始化保持幂等，`schema_migrations` 中没有本分支的 v26 记录。迁移、持久化、
+  Agent、会话和后台联合回归 `36 passed`，全量回归 `477 passed in 162.06s`。
+- 判据：三列可查、历史内容不丢、迁移不重建表；v26 继续保留给 M6，合并顺序按 v26→v27。
+
 ## D20 · WP4 自动化评测、调优与收口（2026-08-05）
 
 ### 交付物与运行方式
