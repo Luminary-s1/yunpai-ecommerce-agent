@@ -1,0 +1,45 @@
+{
+  "date": "2026-08-05",
+  "mode": "live-single-probe",
+  "environment_source": "env.md",
+  "secrets_recorded": false,
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "id": "as-007",
+  "expected": "after_sales",
+  "only_corpus_id_tested": true,
+  "production_timeout_seconds": 2.0,
+  "attempts": [
+    {
+      "stage": "before_json_prompt_compatibility_fix",
+      "elapsed_seconds": 0.229,
+      "method": "default",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "error": "model_call_failed:ModelError",
+      "upstream_detail": "HTTP 400 (provider code invalid_request_error)",
+      "correct": false
+    },
+    {
+      "stage": "compatibility_diagnosis",
+      "elapsed_seconds": 0.283,
+      "method": "default",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "error": "model_call_failed:ModelError",
+      "upstream_detail": "Prompt must contain the word 'json' in some form to use 'response_format' of type 'json_object'.",
+      "correct": false
+    },
+    {
+      "stage": "after_policy_precedence_and_json_prompt_fixes",
+      "elapsed_seconds": 1.33,
+      "method": "model",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "error": null,
+      "upstream_detail": null,
+      "correct": true
+    }
+  ],
+  "conclusion": "The current DeepSeek model classified as-007 as after_sales within the production two-second budget. No other corpus message was sent to the live provider, so this closes the adjudicated as-007 boundary only and does not establish full-corpus after-sales recall."
+}

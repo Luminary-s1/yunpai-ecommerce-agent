@@ -221,14 +221,15 @@ PY
 
 ## 已知缺口（截至 2026-08-05）
 
-- `after_sales` 召回偏低，模型倾向把带情绪的售后判成 `complaint`。口径已写进
-  `_MODEL_SYSTEM_PROMPT`（`_LABELLING_POLICY`）；同轴 few-shot 也已加入，使用
-  “已收货 + 具体故障 + 负面评价”的换措辞样例，不复述 `as-007` 原句。请求级测试
-  已确认该示例进入模型 Prompt。加载 `env.md` 后的复测中，生产 2 秒预算 6 次均因
-  1302 / 1305 / ReadTimeout 弃权；唯一成功的 10 秒诊断调用实际耗时 0.71 秒，仍返回
-  `model / complaint / 0.9`。因此该 Prompt 改动**未达成目标**，召回缺口继续保留。
-  修改前证据见 `runs/20260804-live-after-policy-prompt.json`，本次逐次结果见
-  `runs/20260805-as-007-few-shot-live-probe.json`。
+- `after_sales` 整体召回仍待下一次完整 live 量化，但 `as-007` 的“具体故障诉求 vs
+  不满语气”边界已单条收口。GLM 下仅加同轴 few-shot 后仍返回
+  `model / complaint / 0.9`；证据见 `runs/20260805-as-007-few-shot-live-probe.json`。
+  通用策略改为“先识别已发生且待处理的具体商品 / 履约问题”后，当前 DeepSeek 首次
+  又暴露 Prompt 未显式包含 `json`、因而拒绝 `response_format=json_object` 的兼容
+  问题。补齐字面契约后，`deepseek-v4-flash` 在生产 2 秒预算内用 1.33 秒返回
+  `model / after_sales / 0.95 / error=None`；证据见
+  `runs/20260805-as-007-deepseek-live.json`。本次按要求没有发送其他 live 语料，不能
+  用这一条推断完整 `after_sales` 召回率。
 - `cross_domain` 当前四个多义关键词的双门已收口：跨域回归 12/12、业务快路径
   13/13。第二批泛化探针在 2026-08-04 验收后已经泄漏，今天的 12/12 只表示没有
   回归，不是新的泛化成绩；扩展到其他关键词前必须另造未公开探针。

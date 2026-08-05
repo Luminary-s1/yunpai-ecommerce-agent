@@ -343,6 +343,15 @@ def test_rule_miss_uses_bounded_short_few_shot_model_prompt() -> None:
     assert len(serialized) < 1200
 
 
+def test_model_prompt_explicitly_requests_json() -> None:
+    model = CapturingModel()
+
+    classify("我想看看有哪些颜色", model=model)
+
+    system_prompt = model.calls[0][0][0]["content"]
+    assert "json" in system_prompt.casefold()
+
+
 def test_adjudicated_labelling_policy_reaches_the_model() -> None:
     """守的是产品决策，不是实现细节。
 
@@ -356,6 +365,9 @@ def test_adjudicated_labelling_policy_reaches_the_model() -> None:
 
     system_prompt = model.calls[0][0][0]["content"]
     assert intent_module._LABELLING_POLICY in system_prompt
+    assert "具体商品或履约问题" in system_prompt
+    assert "不要求用户明确说出退款或换货" in system_prompt
+    assert "才归 complaint" in system_prompt
     # 口径必须以判据形式传达；写成具体样例即是对基准过拟合
     assert all(
         sample not in system_prompt

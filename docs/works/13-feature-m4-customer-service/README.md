@@ -488,3 +488,24 @@
 - 脱敏逐次证据：`evals/intent/runs/20260805-as-007-few-shot-live-probe.json`
 - 结论：同轴 few-shot 已正确接线，但**实际模型效果未达成**；`after_sales` 召回缺口
   继续保持未关闭
+
+#### DeepSeek 单条复测与 `as-007` 收口（2026-08-05）
+
+- 在同轴 few-shot 仍被 GLM 判为 `complaint` 的真实红态上，进一步把通用标注策略改为
+  显式判定顺序：先识别已经发生且待处理的具体商品 / 履约问题；商品故障即使伴随
+  质量抱怨也归 `after_sales`，只有不存在这类待处理问题时才考虑 `complaint`。策略
+  没有写入 `as-007` 原句
+- 用户将 `env.md` 切换为 `deepseek / deepseek-v4-flash` 后，仅发送 `as-007`。
+  第一次生产调用在 0.229 秒被 HTTP 400 拒绝；诊断复现明确指出：使用
+  `response_format=json_object` 时 Prompt 必须出现字面量 `json`
+- 反证测试先得到 `1 failed`，随后把 system prompt 的“返回对象”改为“返回 JSON
+  对象”，同组 Prompt 契约复验 `4 passed`。这是 provider 兼容修复，不改变输出
+  schema，也不新增依赖
+- 修复后同一条在生产 2 秒预算内耗时 1.33 秒，返回
+  `model / after_sales / 0.95 / error=None`，与裁定一致；脱敏逐次证据见
+  `evals/intent/runs/20260805-as-007-deepseek-live.json`
+- 离线回归：意图与 LLM 网关 `119 passed`；rule 判定准确率保持 `15/15`、`plain`
+  保持 `22/22`；cross-domain 保持已记录的 `12/13` 与业务快路径 `13/14`（两条均为
+  既有已知边界）；全量 `457 passed in 145.48s`
+- 按 provider 并发约束没有发送其他 live 语料。因此本次只关闭 `as-007` 这一条裁定
+  边界，不把单条结果外推为完整 `after_sales` 召回率
