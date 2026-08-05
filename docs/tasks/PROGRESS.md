@@ -299,13 +299,3 @@ M4 的 37 项里有 3 项（标 ✎）在 `feature/m4-customer-service` 分支�
 | M4 效果评测报告与判定标准定义 | 模块负责人 |
 | M5 / M6 的模块交付说明与实跑截图 | 模块负责人 |
 | `.project-to-act` 四份台账同步（三个模块各一次） | 模块负责人 |
-
-### 代码分支状态
-
-| 分支 | 状态 |
-|---|---|
-| `main` | 含 M5（F-311）、M6（F-304）、M4/M5/M6 工作包划分文档与全部已合并基线 |
-| `feature/m4-customer-service` | 领先 main 5 个 M4 提交（WP3 意图分类与评测语料），未合并。M5 工作包划分的两个提交已 cherry-pick 到 main，该分支上的同名提交合并时会自动消解 |
-| `feature/m5-operations-assistant` | 已合并进 main，无剩余提交 |
-| `feature/f107-night-watch` | 已合并进 main |
-| `feature/f109-workbench-visibility` | 已合并进 main |
