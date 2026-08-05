@@ -24,6 +24,52 @@ CompetitiveMatchStatus = Literal["pending", "approved", "rejected"]
 CompetitiveSignalType = Literal["product_claim", "review_summary"]
 
 
+class CompetitiveCustomDimension(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=64)
+    label: str = Field(min_length=1, max_length=64)
+    value_type: Literal["text", "number", "boolean"]
+    value_text: str | None = Field(default=None, max_length=200)
+    value_number: Decimal | None = None
+    value_boolean: bool | None = None
+    unit: str | None = Field(default=None, max_length=32)
+
+    @field_validator("key", "label", "value_text", "unit")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("custom dimension text cannot be blank")
+        return normalized
+
+    @field_validator("key")
+    @classmethod
+    def reject_control_characters(cls, value: str) -> str:
+        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+            raise ValueError("custom dimension key cannot contain control characters")
+        return value
+
+    @model_validator(mode="after")
+    def validate_typed_value(self) -> "CompetitiveCustomDimension":
+        fields = {
+            "text": self.value_text,
+            "number": self.value_number,
+            "boolean": self.value_boolean,
+        }
+        if fields[self.value_type] is None or any(
+            value is not None
+            for value_type, value in fields.items()
+            if value_type != self.value_type
+        ):
+            raise ValueError("custom dimension must provide exactly its typed value")
+        if self.value_type != "number" and self.unit is not None:
+            raise ValueError("custom dimension unit is only valid for number values")
+        return self
+
+
 class CompetitiveProductIdentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -33,6 +79,10 @@ class CompetitiveProductIdentity(BaseModel):
     category: str | None = Field(default=None, max_length=200)
     gtin: str | None = Field(default=None, max_length=64)
     attributes: dict[str, str] = Field(default_factory=dict)
+    custom_dimensions: list[CompetitiveCustomDimension] = Field(
+        default_factory=list,
+        max_length=32,
+    )
 
     @field_validator("gtin")
     @classmethod
@@ -59,6 +109,17 @@ class CompetitiveProductIdentity(BaseModel):
                 raise ValueError("identity attribute exceeds length limit")
             cleaned[normalized_key] = normalized_value
         return cleaned
+
+    @field_validator("custom_dimensions")
+    @classmethod
+    def validate_custom_dimensions(
+        cls,
+        value: list[CompetitiveCustomDimension],
+    ) -> list[CompetitiveCustomDimension]:
+        keys = [dimension.key.casefold() for dimension in value]
+        if len(keys) != len(set(keys)):
+            raise ValueError("custom dimension keys must be unique")
+        return value
 
 
 class CompetitiveEntityMatchCreate(BaseModel):
