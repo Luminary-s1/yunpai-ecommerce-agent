@@ -10,6 +10,7 @@ from ..database import Database, utc_now
 from ..tools import ToolExecutionContext, ToolRegistry, ToolResult, ToolSpec
 from .catalog import CatalogItemUpsert, CatalogService, CatalogStatus
 from .competitive import CompetitiveIntelligenceService, CompetitorObservationCreate
+from .competitive_report import CompetitiveReportService
 from .finance import FinanceReportQuery, FinanceService
 from .inventory import InventoryBalanceUpsert, InventoryService
 from .marketing import MarketingDiagnosisQuery, MarketingService
@@ -65,6 +66,7 @@ class OperationsService:
         self.orders = OrderService(db)
         self.inventory = InventoryService(db)
         self.competitive = CompetitiveIntelligenceService(db)
+        self.competitive_report = CompetitiveReportService(db)
         self.marketing = MarketingService(db)
         self.finance = FinanceService(db)
         self.ops_assistant = OpsAssistantService(db)
