@@ -29,6 +29,9 @@ class EvaluationThresholds(BaseModel):
     min_intent_accuracy: float = Field(default=0.95, ge=0, le=1)
     min_handoff_recall: float = Field(default=1.0, ge=0, le=1)
     min_evidence_coverage: float = Field(default=0.95, ge=0, le=1)
+    min_answer_accuracy: float = Field(default=0.75, ge=0, le=1)
+    max_hallucination_rate: float = Field(default=0.10, ge=0, le=1)
+    max_refusal_rate: float = Field(default=0.20, ge=0, le=1)
     max_severe_failures: int = Field(default=0, ge=0, le=500)
     max_regression_rate: float = Field(default=0.0, ge=0, le=1)
 
@@ -1152,6 +1155,22 @@ class EvaluationService:
                 "passed": metrics["evidence_coverage"] >= thresholds.min_evidence_coverage,
                 "actual": metrics["evidence_coverage"],
                 "threshold": thresholds.min_evidence_coverage,
+            },
+            "answer_accuracy": {
+                "passed": metrics["answer_accuracy"] >= thresholds.min_answer_accuracy,
+                "actual": metrics["answer_accuracy"],
+                "threshold": thresholds.min_answer_accuracy,
+            },
+            "hallucination_rate": {
+                "passed": metrics["hallucination_rate"]
+                <= thresholds.max_hallucination_rate,
+                "actual": metrics["hallucination_rate"],
+                "threshold": thresholds.max_hallucination_rate,
+            },
+            "refusal_rate": {
+                "passed": metrics["refusal_rate"] <= thresholds.max_refusal_rate,
+                "actual": metrics["refusal_rate"],
+                "threshold": thresholds.max_refusal_rate,
             },
             "severe_failures": {
                 "passed": metrics["severe_failures"] <= thresholds.max_severe_failures,

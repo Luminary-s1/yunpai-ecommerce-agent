@@ -526,3 +526,15 @@
   `handoff_precision=0.5`
 - WP4 只扩展既有 JSON 断言与指标载荷，不需要数据库迁移；schema v26 保持由 M6
   `feature/m6-competitor-import` 占用，本提交未占 v27
+
+## D17 · 客服评测门禁与判定标准
+
+- `EvaluationThresholds` 新增 `min_answer_accuracy=0.75`、
+  `max_hallucination_rate=0.10`、`max_refusal_rate=0.20`，并加入既有版本化 gate；
+  `handoff_precision` 保留为报告指标，不擅自增加计划外门槛
+- 反证红态：给 thresholds 与 gate 测试加入三项 M4 门槛后得到 `1 failed`，旧模型因
+  `extra_forbidden` 拒绝三个字段；实现后 `hallucination_rate=0.15` 对上限 `0.10`
+  明确产生失败检查
+- 判定标准、分母与公式写入 `docs/customer-service-evaluation.md`；明确 grounding 是
+  确定性的来源数值 / 承诺核对，并如实记录它不覆盖全部自然语言语义蕴含
+- 新旧评测回归合计 `17 passed in 7.37s`；未改 API、schema 或编排拓扑

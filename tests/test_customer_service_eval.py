@@ -6,6 +6,7 @@ from conftest import make_settings
 from ecommerce_agent.evaluation import (
     EvaluationCaseCreate,
     EvaluationExpectation,
+    EvaluationThresholds,
     EvaluationTurn,
 )
 from ecommerce_agent.service import AgentService
@@ -219,5 +220,47 @@ def test_expected_refusal_uses_structured_route_outcome(tmp_path) -> None:
         assert "turn_1:unexpected_refusal" in result["violations"]
         assert "turn_2:refusal_mismatch" not in result["violations"]
         assert result["actual"]["turns"][1]["is_refusal"] is True
+    finally:
+        service.close()
+
+
+def test_wp4_gate_rejects_hallucination_rate_above_threshold(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        thresholds = EvaluationThresholds(
+            min_cases=1,
+            min_pass_rate=0,
+            min_intent_accuracy=0,
+            min_handoff_recall=0,
+            min_evidence_coverage=0,
+            max_severe_failures=10,
+            max_regression_rate=1,
+            min_answer_accuracy=0.75,
+            max_hallucination_rate=0.10,
+            max_refusal_rate=0.20,
+        )
+        metrics = {
+            "total_cases": 4,
+            "pass_rate": 1.0,
+            "intent_accuracy": 1.0,
+            "handoff_recall": 1.0,
+            "evidence_coverage": 1.0,
+            "severe_failures": 0,
+            "regression_rate": 0.0,
+            "answer_accuracy": 0.75,
+            "hallucination_rate": 0.15,
+            "refusal_rate": 0.20,
+        }
+
+        gate = service.evaluations._gate(thresholds, metrics)
+
+        assert gate["passed"] is False
+        assert gate["checks"]["hallucination_rate"] == {
+            "passed": False,
+            "actual": 0.15,
+            "threshold": 0.10,
+        }
+        assert gate["checks"]["answer_accuracy"]["passed"] is True
+        assert gate["checks"]["refusal_rate"]["passed"] is True
     finally:
         service.close()
