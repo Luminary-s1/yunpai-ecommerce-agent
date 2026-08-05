@@ -4,7 +4,7 @@
 {"id": "as-004", "message": "产品保修多久", "expected": "after_sales", "tags": ["plain"], "source": "plan-d11"}
 {"id": "as-005", "message": "物流到哪里了", "expected": "after_sales", "tags": ["plain"], "source": "plan-d11"}
 {"id": "as-006", "message": "东西收都后数量不够，有破损", "expected": "after_sales", "tags": ["keyword_free", "typo"], "source": "probe-20260804", "note": "真实用户笔误：收都后=收到后。关键词表全部落空"}
-{"id": "as-007", "message": "我这东西坏了，质量也太差了吧", "expected": "after_sales", "tags": ["keyword_free", "mixed"], "source": "probe-20260804", "note": "口径已裁定：诉求优先于语气，判 after_sales。用户要的是把东西修好，不是要道歉"}
+{"id": "as-007", "message": "我这东西坏了，质量也太差了吧", "expected": "after_sales", "tags": ["keyword_free", "mixed", "ambiguous"], "source": "probe-20260804", "note": "降级为 ambiguous：人裁定诉求优先故记 after_sales，但真实模型在口径写入 prompt 前后均判 complaint。混合信号句人类标注也会分歧，仍计入总分——失败时才降级会变成掩饰分数"}
 {"id": "as-008", "message": "包裹三天没动静了", "expected": "after_sales", "tags": ["keyword_free"], "source": "handcraft"}
 {"id": "as-009", "message": "发错货了，能补发吗", "expected": "after_sales", "tags": ["keyword_free"], "source": "handcraft"}
 {"id": "as-010", "message": "拆开发现少了一个配件", "expected": "after_sales", "tags": ["keyword_free"], "source": "handcraft"}

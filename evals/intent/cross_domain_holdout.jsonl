@@ -1,14 +1,25 @@
-{"id":"cd-001","message":"帮我推荐一家医院","expected_route":"model","source":"external-probe-20260804"}
-{"id":"cd-002","message":"推荐点好玩的地方","expected_route":"model","source":"external-probe-20260804"}
-{"id":"cd-003","message":"曝光度调高一点","expected_route":"model","source":"external-probe-20260804"}
-{"id":"cd-004","message":"退款这词你懂吗","expected_route":"model","source":"external-probe-20260804"}
-{"id":"cd-005","message":"这张照片曝光过度了","expected_route":"model","source":"external-probe-20260804"}
-{"id":"cd-006","message":"我在物流行业干了十年","expected_route":"model","source":"external-probe-20260804"}
-{"id":"biz-001","message":"请推荐一款通勤背包","expected_route":"rule","expected_intent":"product_inquiry","source":"business-guard-20260804"}
-{"id":"biz-002","message":"两款商品帮我对比推荐一下","expected_route":"rule","expected_intent":"product_inquiry","source":"business-guard-20260804"}
-{"id":"biz-003","message":"我会曝光这次服务","expected_route":"rule","expected_intent":"complaint","source":"business-guard-20260804"}
-{"id":"biz-004","message":"我要曝光这个卖假货的商家","expected_route":"rule","expected_intent":"complaint","source":"business-guard-20260804"}
-{"id":"biz-005","message":"帮我查一下订单物流","expected_route":"rule","expected_intent":"after_sales","source":"business-guard-20260804"}
-{"id":"biz-006","message":"物流到哪里了","expected_route":"rule","expected_intent":"after_sales","source":"business-guard-20260804"}
-{"id":"biz-007","message":"我想申请退款","expected_route":"rule","expected_intent":"after_sales","source":"business-guard-20260804"}
-{"id":"biz-008","message":"退款什么时候到账","expected_route":"rule","expected_intent":"after_sales","source":"business-guard-20260804"}
+{"id": "cd-001", "message": "帮我推荐一家医院", "expected_route": "model", "source": "external-probe-20260804", "leaked": true, "note": "已于 2026-08-04 公布在工作记录中，不再是留出样本；保留作回归用"}
+{"id": "cd-002", "message": "推荐点好玩的地方", "expected_route": "model", "source": "external-probe-20260804", "leaked": true, "note": "已于 2026-08-04 公布在工作记录中，不再是留出样本；保留作回归用"}
+{"id": "cd-003", "message": "曝光度调高一点", "expected_route": "model", "source": "external-probe-20260804", "leaked": true, "note": "已于 2026-08-04 公布在工作记录中，不再是留出样本；保留作回归用"}
+{"id": "cd-004", "message": "退款这词你懂吗", "expected_route": "model", "source": "external-probe-20260804", "leaked": true, "note": "已于 2026-08-04 公布在工作记录中，不再是留出样本；保留作回归用"}
+{"id": "cd-005", "message": "这张照片曝光过度了", "expected_route": "model", "source": "external-probe-20260804", "leaked": true, "note": "已于 2026-08-04 公布在工作记录中，不再是留出样本；保留作回归用"}
+{"id": "cd-006", "message": "我在物流行业干了十年", "expected_route": "model", "source": "external-probe-20260804", "leaked": true, "note": "已于 2026-08-04 公布在工作记录中，不再是留出样本；保留作回归用"}
+{"id": "biz-001", "message": "请推荐一款通勤背包", "expected_route": "rule", "expected_intent": "product_inquiry", "source": "business-guard-20260804"}
+{"id": "biz-002", "message": "两款商品帮我对比推荐一下", "expected_route": "rule", "expected_intent": "product_inquiry", "source": "business-guard-20260804"}
+{"id": "biz-003", "message": "我会曝光这次服务", "expected_route": "rule", "expected_intent": "complaint", "source": "business-guard-20260804"}
+{"id": "biz-004", "message": "我要曝光这个卖假货的商家", "expected_route": "rule", "expected_intent": "complaint", "source": "business-guard-20260804"}
+{"id": "biz-005", "message": "帮我查一下订单物流", "expected_route": "rule", "expected_intent": "after_sales", "source": "business-guard-20260804"}
+{"id": "biz-006", "message": "物流到哪里了", "expected_route": "rule", "expected_intent": "after_sales", "source": "business-guard-20260804"}
+{"id": "biz-007", "message": "我想申请退款", "expected_route": "rule", "expected_intent": "after_sales", "source": "business-guard-20260804"}
+{"id": "biz-008", "message": "退款什么时候到账", "expected_route": "rule", "expected_intent": "after_sales", "source": "business-guard-20260804"}
+{"id": "cd-101", "message": "这盏灯曝光时间太长会过热", "expected_route": "model", "source": "external-probe-20260804-second", "leaked": true, "note": "第二批留出，验收后同样公布，后续需再造新探针"}
+{"id": "cd-102", "message": "曝光这个词在新闻学里是中性的", "expected_route": "model", "source": "external-probe-20260804-second", "leaked": true, "note": "第二批留出，验收后同样公布，后续需再造新探针"}
+{"id": "cd-103", "message": "你们算法推荐的内容我不感兴趣", "expected_route": "model", "source": "external-probe-20260804-second", "leaked": true, "note": "第二批留出，验收后同样公布，后续需再造新探针"}
+{"id": "cd-104", "message": "推荐信写好了吗", "expected_route": "model", "source": "external-probe-20260804-second", "leaked": true, "note": "第二批留出，验收后同样公布，后续需再造新探针"}
+{"id": "cd-105", "message": "我表哥开物流车的", "expected_route": "model", "source": "external-probe-20260804-second", "leaked": true, "note": "第二批留出，验收后同样公布，后续需再造新探针"}
+{"id": "cd-106", "message": "退款两个字他一直挂嘴边", "expected_route": "model", "source": "external-probe-20260804-second", "leaked": true, "note": "第二批留出，验收后同样公布，后续需再造新探针"}
+{"id": "biz-101", "message": "我要退款", "expected_route": "rule", "expected_intent": "after_sales", "source": "terse-business-guard-20260804", "note": "高频短句，无业务证据可言；当前实现误交模型，模型不可用时降级为 chitchat"}
+{"id": "biz-102", "message": "退款", "expected_route": "rule", "expected_intent": "after_sales", "source": "terse-business-guard-20260804", "note": "高频短句，无业务证据可言；当前实现误交模型，模型不可用时降级为 chitchat"}
+{"id": "biz-103", "message": "物流呢", "expected_route": "rule", "expected_intent": "after_sales", "source": "terse-business-guard-20260804", "note": "高频短句，无业务证据可言；当前实现误交模型，模型不可用时降级为 chitchat"}
+{"id": "biz-104", "message": "推荐一下", "expected_route": "rule", "expected_intent": "product_inquiry", "source": "terse-business-guard-20260804", "note": "高频短句，无业务证据可言；当前实现误交模型，模型不可用时降级为 chitchat"}
+{"id": "biz-105", "message": "曝光你们", "expected_route": "rule", "expected_intent": "complaint", "source": "terse-business-guard-20260804", "note": "高频短句，无业务证据可言；当前实现误交模型，模型不可用时降级为 chitchat"}
