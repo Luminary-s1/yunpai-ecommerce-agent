@@ -453,3 +453,24 @@
 - `biz-201` 反映请求前缀表缺少 `查下` / `查一下` / `看下` 等高频动词
 - 两条已入留出集并标 `known_gap: true`，当前运行器报 12/13 与 13/14
 - 判定：**验收通过**，`cross_domain` 结项
+
+### D12 修正 · `as-007` 同轴 few-shot（2026-08-05）
+
+- 修改前证据：`evals/intent/runs/20260804-live-after-fix.json`、
+  `20260804-live-retest-after-recovery.json` 与
+  `20260804-live-after-policy-prompt.json` 中，`as-007` 实际作答均为
+  `model / complaint`；仅把裁定口径写进 system prompt 未纠正该边界
+- 红态：新增请求级测试后得到 `1 failed`，失败点是 `as-007` 的模型请求只有原四条
+  few-shot，没有“已成交的具体故障优先于不满语气”同轴示例
+- 实现：`_FEW_SHOT_EXAMPLES` 新增“刚收货的耳机就没声音，做工真让人失望 →
+  after_sales”。商品、故障和措辞均不同于基准原句；测试同时断言 examples 不包含
+  “我这东西坏了”或“质量也太差了吧”
+- Prompt 接线复验 `3 passed`；`as-007` 请求中 examples 为 5 条，序列化消息长度
+  758 字符，仍低于既有 1200 字符上限
+- 意图与 LLM 网关联合回归 `118 passed`；rule 基准保持判定准确率 `15/15`、
+  `plain 22/22`；全量回归 `456 passed in 151.75s`
+- mock 仍判 `complaint`，因为它是独立手写关键词表且不读取 few-shot，不能作为效果
+  证据；当前真实网关健康检查为 `disabled`，所以本次只确认 Prompt 实现完成，
+  `after_sales` 召回缺口仍待 live 复测后关闭
+- 未修改 `as-007.expected`，其 `ambiguous` 标签与计分方式保持不变；未新增依赖，
+  未改 LangGraph 节点或边

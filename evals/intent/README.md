@@ -222,10 +222,11 @@ PY
 ## 已知缺口（截至 2026-08-05）
 
 - `after_sales` 召回偏低，模型倾向把带情绪的售后判成 `complaint`。口径已写进
-  `_MODEL_SYSTEM_PROMPT`（`_LABELLING_POLICY`），但**未解决**：共同作答子集净增
-  仅 1 条，且该口径专为之裁定的 `as-007` 修改前后均判 `complaint`。`as-007` 已
-  加 `ambiguous` 标签但仍计入总分；下一步是补一条同轴 few-shot（不得使用语料
-  原句）。
+  `_MODEL_SYSTEM_PROMPT`（`_LABELLING_POLICY`）；同轴 few-shot 也已加入，使用
+  “已收货 + 具体故障 + 负面评价”的换措辞样例，不复述 `as-007` 原句。请求级测试
+  已确认该示例进入模型 Prompt，但当前网关为 `disabled`，无法验证真实模型是否从
+  `complaint` 改判 `after_sales`，因此召回缺口仍不关闭。修改前证据见
+  `runs/20260804-live-after-policy-prompt.json`。
 - `cross_domain` 当前四个多义关键词的双门已收口：跨域回归 12/12、业务快路径
   13/13。第二批泛化探针在 2026-08-04 验收后已经泄漏，今天的 12/12 只表示没有
   回归，不是新的泛化成绩；扩展到其他关键词前必须另造未公开探针。

@@ -363,6 +363,23 @@ def test_adjudicated_labelling_policy_reaches_the_model() -> None:
     )
 
 
+def test_mixed_after_sales_few_shot_is_paraphrased_in_model_request() -> None:
+    model = CapturingModel()
+
+    classify("我这东西坏了，质量也太差了吧", model=model)
+
+    assert len(model.calls) == 1
+    task = json.loads(model.calls[0][0][1]["content"])
+    expected_example = {
+        "message": "刚收货的耳机就没声音，做工真让人失望",
+        "intent": "after_sales",
+    }
+    assert expected_example in task["examples"]
+    examples = json.dumps(task["examples"], ensure_ascii=False)
+    assert "我这东西坏了" not in examples
+    assert "质量也太差了吧" not in examples
+
+
 def test_model_exception_uses_safe_default_without_raising() -> None:
     class FailingModel(CapturingModel):
         def generate_json(self, messages, *, timeout_seconds):

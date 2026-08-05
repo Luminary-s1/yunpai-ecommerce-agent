@@ -161,6 +161,7 @@ _RULE_REVIEW_PROMPT = (
 _FEW_SHOT_EXAMPLES = (
     {"message": "这款还有哪些颜色", "intent": "product_inquiry"},
     {"message": "收到后怎么换货", "intent": "after_sales"},
+    {"message": "刚收货的耳机就没声音，做工真让人失望", "intent": "after_sales"},
     {"message": "客服态度太差了", "intent": "complaint"},
     {"message": "你好呀", "intent": "chitchat"},
 )
