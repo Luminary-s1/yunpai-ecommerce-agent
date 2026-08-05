@@ -261,6 +261,33 @@ M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开�
 所以：**占号要提前说，合并后必须跑全量**。`grep` 到语句在文件里不等于它会被执行，
 同名函数、同名类方法、同名字典键都可能被静默覆盖。
 
+### Schema 版本号占用登记
+
+**要加表或加列，先在这张表里占号，再写迁移。** 占号之后其他人就能自己查，
+不用逐个问模块负责人。
+
+| 版本 | 占用者 | 模块 / 分支 | 用途 | 状态 |
+|---:|---|---|---|---|
+| ≤ 25 | — | 已合并进 `main` | 历史迁移，`_apply_v1` ~ `_apply_v25` | 已合并 |
+| **26** | 缪海南 | M6 / `feature/m6-competitor-import` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已分配，未合并 |
+| 27 | *（空闲）* | | | |
+
+占号规则：
+
+1. **认领前先自己查一遍**，别只看 `main`：
+   ```bash
+   for b in $(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | grep -v HEAD); do
+     git grep -ho "_apply_v[0-9]\+" "$b" -- src/ecommerce_agent/database.py 2>/dev/null | sort -u -V | tail -1
+   done | sort -u -V | tail -3
+   ```
+   未合并的分支也会占号，只看 `main` 就是 v25 那次事故的成因
+2. 在上表加一行，连同占号的提交一起提 PR，**在群里说一声**
+3. 迁移方法名必须是 `_apply_v<你的号>`，不得与任何分支重名
+4. 加列用 `_ensure_column`，**不重建表**；范例见 `database.py` 的 `_apply_v8`
+   （给 `competitor_observations` 加 `payload_hash`）
+5. 存量行没有新列的值，所以**新列必须可空或带默认值**，不能是无默认的 `NOT NULL`
+6. 合并后跑一次全量测试再关掉这一行
+
 ---
 
 有拿不准的，先问再写。改错方向返工的成本远高于问一句。
