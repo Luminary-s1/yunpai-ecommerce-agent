@@ -121,6 +121,27 @@ AMBIGUOUS_KEYWORD_BUSINESS_CASES = [
     pytest.param("退款什么时候到账", "after_sales", id="refund-arrival"),
 ]
 
+TERSE_BUSINESS_CASES = [
+    pytest.param("我要退款", "after_sales", id="terse-request-refund"),
+    pytest.param("退款", "after_sales", id="terse-refund"),
+    pytest.param("物流呢", "after_sales", id="terse-logistics"),
+    pytest.param("推荐一下", "product_inquiry", id="terse-recommend"),
+    pytest.param("曝光你们", "complaint", id="terse-expose"),
+]
+
+SHORT_CROSS_DOMAIN_GUARDS = [
+    pytest.param("相机曝光", id="short-camera-exposure"),
+    pytest.param("推荐信", id="short-reference-letter"),
+    pytest.param("物流公司", id="short-logistics-company"),
+    pytest.param("退款一词", id="short-refund-meta"),
+]
+
+TERSE_POLICY_QUESTIONS = [
+    pytest.param("可以退款吗", id="can-refund"),
+    pytest.param("请问退款吗", id="ask-refund"),
+    pytest.param("退款可以吗", id="refund-allowed"),
+]
+
 
 @pytest.mark.parametrize(("message", "expected"), SAMPLES)
 def test_customer_intent_samples(message: str, expected: str) -> None:
@@ -200,6 +221,40 @@ def test_business_evidence_keeps_ambiguous_keyword_on_rule_fast_path(
     assert result.intent == expected
     assert result.confidence == intent_module._RULE_CONFIDENCE
     assert result.method == "rule"
+    assert result.error is None
+
+
+@pytest.mark.parametrize(("message", "expected"), TERSE_BUSINESS_CASES)
+def test_terse_business_message_stays_on_rule_fast_path(
+    message: str, expected: str
+) -> None:
+    result = classify(message, model=UnexpectedModel())
+
+    assert result.intent == expected
+    assert result.confidence == intent_module._RULE_CONFIDENCE
+    assert result.method == "rule"
+    assert result.error is None
+
+
+@pytest.mark.parametrize("message", SHORT_CROSS_DOMAIN_GUARDS)
+def test_short_cross_domain_context_is_still_deferred(message: str) -> None:
+    model = CapturingModel({"intent": "chitchat", "confidence": 0.73})
+
+    result = classify(message, model=model)
+
+    assert len(model.calls) == 1
+    assert result.method == "model"
+    assert result.error is None
+
+
+@pytest.mark.parametrize("message", TERSE_POLICY_QUESTIONS)
+def test_terse_policy_question_is_deferred_to_model(message: str) -> None:
+    model = CapturingModel({"intent": "product_inquiry", "confidence": 0.73})
+
+    result = classify(message, model=model)
+
+    assert len(model.calls) == 1
+    assert result.method == "model"
     assert result.error is None
 
 

@@ -51,6 +51,31 @@ _NEGATION_PREFIX_MARKERS = ("不", "别", "无需", "无须", "取消", "停止"
 _NEGATION_SUFFIX_MARKERS = ("不用", "不要", "取消", "算了", "停止", "作罢")
 _NEGATION_WINDOW = 6
 _RULE_CLAUSE_BOUNDARY = re.compile(r"[,，。.!！？?；;\n]")
+_TERSE_RULE_PREFIXES = (
+    "麻烦",
+    "帮我",
+    "给我",
+    "替我",
+    "我要",
+    "我想",
+    "想要",
+    "请",
+)
+_TERSE_RULE_SUFFIXES = (
+    "怎么办",
+    "怎么弄",
+    "一下",
+    "你们",
+    "呢",
+    "吧",
+    "啊",
+    "呀",
+    "嘛",
+    "了",
+    "呗",
+    "下",
+    "你",
+)
 _RULE_BUSINESS_EVIDENCE: dict[str, tuple[tuple[str, ...], ...]] = {
     "曝光": (
         ("我要", "我会", "准备", "否则", "再不", "就去", "投诉", "举报", "维权"),
@@ -208,11 +233,40 @@ def _requires_model_review(message: str, keywords: tuple[str, ...]) -> bool:
         if _keyword_is_negated(message, keyword):
             return True
         evidence_groups = _RULE_BUSINESS_EVIDENCE.get(keyword)
-        if evidence_groups is not None and not _has_business_evidence(
-            message, keyword, evidence_groups
+        if evidence_groups is not None and not (
+            _is_terse_rule_request(message, keyword)
+            or _has_business_evidence(message, keyword, evidence_groups)
         ):
             return True
     return False
+
+
+def _is_terse_rule_request(message: str, keyword: str) -> bool:
+    folded_keyword = keyword.casefold()
+    for clause in _RULE_CLAUSE_BOUNDARY.split(message.casefold()):
+        compact = "".join(character for character in clause if character.isalnum())
+        start = 0
+        while (index := compact.find(folded_keyword, start)) >= 0:
+            prefix = compact[:index]
+            suffix_start = index + len(folded_keyword)
+            suffix = compact[suffix_start:]
+            if _contains_only_markers(
+                prefix, _TERSE_RULE_PREFIXES
+            ) and _contains_only_markers(suffix, _TERSE_RULE_SUFFIXES):
+                return True
+            start = suffix_start
+    return False
+
+
+def _contains_only_markers(value: str, markers: tuple[str, ...]) -> bool:
+    while value:
+        for marker in markers:
+            if value.startswith(marker):
+                value = value[len(marker) :]
+                break
+        else:
+            return False
+    return True
 
 
 def _has_business_evidence(
