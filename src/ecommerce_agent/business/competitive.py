@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from ..database import Database, utc_now
 from ..text_utils import redact_sensitive
-from .source_versioning import canonical_source_time, payload_digest
+from .source_versioning import canonical_source_time, decide_write, payload_digest
 
 
 CompetitorSource = Literal[
@@ -168,6 +168,10 @@ class CompetitorObservationCreate(BaseModel):
     subject_price: Decimal = Field(gt=0)
     competitor_price: Decimal = Field(gt=0)
     currency: str = Field(default="CNY", min_length=3, max_length=3)
+    rating_value: Decimal | None = Field(default=None, ge=0)
+    rating_scale: Decimal | None = Field(default=None, gt=0)
+    sales_rank: int | None = Field(default=None, ge=1)
+    rank_scope: str | None = Field(default=None, min_length=1, max_length=200)
     source_type: CompetitorSource
     source_ref: str = Field(min_length=4, max_length=500)
     is_estimate: bool = True
@@ -181,10 +185,30 @@ class CompetitorObservationCreate(BaseModel):
         canonical_source_time(value)
         return value
 
+    @field_validator("rank_scope")
+    @classmethod
+    def normalize_rank_scope(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("rank_scope cannot be blank")
+        return normalized
+
     @model_validator(mode="after")
     def protect_virtual_provenance(self) -> "CompetitorObservationCreate":
         if self.source_type == "virtual" and not self.is_estimate:
             raise ValueError("virtual competitor observations must be marked as estimates")
+        if (self.rating_value is None) != (self.rating_scale is None):
+            raise ValueError("rating_value and rating_scale must be provided together")
+        if (
+            self.rating_value is not None
+            and self.rating_scale is not None
+            and self.rating_value > self.rating_scale
+        ):
+            raise ValueError("rating_value cannot exceed rating_scale")
+        if (self.sales_rank is None) != (self.rank_scope is None):
+            raise ValueError("sales_rank and rank_scope must be provided together")
         return self
 
 
@@ -683,8 +707,15 @@ class CompetitiveIntelligenceService:
                 legacy_payload = dict(payload)
                 legacy_payload.pop("entity_match_id", None)
                 legacy_hash = payload_digest(legacy_payload)
-                if existing_hash not in {payload_hash, legacy_hash}:
-                    raise ValueError("observation_version_conflict")
+                comparable_hash = (
+                    legacy_hash if existing_hash == legacy_hash else payload_hash
+                )
+                decide_write(
+                    existing_source_time=str(existing["observed_at"]),
+                    existing_payload_hash=existing_hash,
+                    incoming_source_time=observed_at,
+                    incoming_payload_hash=comparable_hash,
+                )
                 write_status = "idempotent"
                 observation_id = str(existing["id"])
                 if not existing["payload_hash"]:
@@ -698,17 +729,21 @@ class CompetitiveIntelligenceService:
                     INSERT INTO competitor_observations(
                         id, tenant_id, connector_id, store_id, subject_sku,
                         competitor_name, competitor_sku, subject_price, competitor_price,
-                        currency, source_type, source_ref, is_estimate, observed_at,
-                        source_id, created_at, payload_hash, entity_match_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        currency, rating_value, rating_scale, sales_rank, rank_scope,
+                        source_type, source_ref, is_estimate, observed_at, source_id,
+                        created_at, payload_hash, entity_match_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         observation_id, tenant_id, value.connector_id, value.store_id,
                         value.subject_sku, value.competitor_name, value.competitor_sku,
                         str(value.subject_price), str(value.competitor_price),
-                        value.currency.upper(), value.source_type, value.source_ref,
-                        int(value.is_estimate), observed_at, value.source_id, now, payload_hash,
-                        value.entity_match_id,
+                        value.currency.upper(),
+                        str(value.rating_value) if value.rating_value is not None else None,
+                        str(value.rating_scale) if value.rating_scale is not None else None,
+                        value.sales_rank, value.rank_scope, value.source_type, value.source_ref,
+                        int(value.is_estimate), observed_at, value.source_id, now,
+                        payload_hash, value.entity_match_id,
                     ),
                 )
             row = conn.execute(
@@ -2030,6 +2065,13 @@ class CompetitiveIntelligenceService:
             if "entity_match_status" in row
             else self._match_brief(row["tenant_id"], row.get("entity_match_id"))
         )
+        rating_value = row.get("rating_value")
+        rating_scale = row.get("rating_scale")
+        normalized_rating = None
+        if rating_value is not None and rating_scale is not None:
+            normalized_rating = self._decimal(
+                Decimal(str(rating_value)) / Decimal(str(rating_scale)) * Decimal("5")
+            )
         return {
             "id": row["id"],
             "connector_id": row["connector_id"],
@@ -2040,6 +2082,11 @@ class CompetitiveIntelligenceService:
             "subject_price": row["subject_price"],
             "competitor_price": row["competitor_price"],
             "currency": row["currency"],
+            "rating_value": rating_value,
+            "rating_scale": rating_scale,
+            "normalized_rating": normalized_rating,
+            "sales_rank": row.get("sales_rank"),
+            "rank_scope": row.get("rank_scope"),
             "source_type": row["source_type"],
             "source_ref": row["source_ref"],
             "is_estimate": bool(row["is_estimate"]),
