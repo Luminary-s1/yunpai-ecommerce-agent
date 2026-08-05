@@ -159,6 +159,20 @@ class VirtualStoreSimulation:
             self._skipped(
                 scenarios, demands["D07"], "include_customer_service=false"
             )
+        if include_customer_service:
+            self._scenario(
+                scenarios,
+                demands["D17"],
+                lambda: self._verify_multi_turn_reference(
+                    fixture, tenant_id, run_id
+                ),
+            )
+        else:
+            self._skipped(
+                scenarios,
+                demands["D17"],
+                "include_customer_service=false",
+            )
         self._scenario(
             scenarios,
             demands["D08"],
@@ -995,6 +1009,93 @@ class VirtualStoreSimulation:
             ),
             "agent_response": answer.model_dump(mode="json"),
         }
+
+    def _verify_multi_turn_reference(
+        self, fixture: dict[str, Any], tenant_id: str, run_id: str
+    ) -> dict[str, Any]:
+        """D17：验证多轮对话指代消解——第二轮"它"能从上文恢复商品候选。
+
+        第一轮带商品上下文（shop_id + sku_id）询问 AF5 价格，第二轮只问
+        "它保修多久？"（不带任何商品参数）。若指代消解正常，第二轮应能
+        从上文历史恢复出 AF5 候选并复用知识库回答，而不是报"不知道你说的它"。
+        """
+        principal = self.service.auth.authenticate(
+            self.service.settings.bootstrap_client_id,
+            self.service.settings.bootstrap_client_key,
+            f"virtual-buyer-{uuid.uuid4().hex[:8]}",
+        )
+        session_id = f"virtual-presale-{uuid.uuid4().hex}"
+        context = {
+            "shop_id": fixture["store"]["store_id"],
+            "sku_id": "QC-AF5-WHITE",
+        }
+        first = self.service.chat(
+            principal,
+            session_id,
+            "晴川 AF5 空气炸锅多少钱？",
+            context,
+            source_type="simulation",
+            source_reference=run_id,
+        )
+        second = self.service.chat(
+            principal,
+            session_id,
+            "它保修多久？",
+            context,
+            source_type="simulation",
+            source_reference=run_id,
+        )
+        assert first.sources, "第一轮必须带知识来源"
+        assert first.context_snapshot_id, "第一轮必须带上下文快照"
+        assert second.context_snapshot_id, "第二轮必须带上下文快照"
+        # 指代消解的核心断言：第二轮只问"它"（不带 sku_id 等商品参数），
+        # 上下文快照里的商品候选仍必须含 AF5（从上文历史恢复）。
+        # 若指代失败（"它"无法解析成具体商品），candidates 会为空。
+        second_candidates = self._snapshot_candidates(second.context_snapshot_id)
+        first_candidates = self._snapshot_candidates(first.context_snapshot_id)
+        assert first_candidates, "第一轮必须识别出商品候选"
+        assert any(
+            sku.startswith("QC-AF5") for sku in second_candidates
+        ), "第二轮（它）必须从上文恢复出 AF5 商品候选"
+        return {
+            "session_id": session_id,
+            "first_intent": first.intent,
+            "first_requires_human": first.requires_human,
+            "first_sources": len(first.sources),
+            "first_candidates": first_candidates,
+            "second_intent": second.intent,
+            "second_requires_human": second.requires_human,
+            "second_sources": len(second.sources),
+            "second_answer": second.answer,
+            "second_candidates": second_candidates,
+            "second_context_snapshot": bool(second.context_snapshot_id),
+            "reference_resolved": bool(
+                any(sku.startswith("QC-AF5") for sku in second_candidates)
+            ),
+        }
+
+    def _snapshot_candidates(self, snapshot_id: str | None) -> list[str]:
+        """从 F-106 上下文快照读取商品顾问（product_advisor）候选 SKU 列表。
+
+        指代消解是否成功以候选是否包含目标商品为准——第二轮"它"能从上文
+        历史恢复 AF5，则快照 candidates 含 QC-AF5-*；失败则为空。
+        """
+        if not snapshot_id:
+            return []
+        with self.service.db.connect() as conn:
+            row = conn.execute(
+                "SELECT bundle_json FROM context_snapshots WHERE id=?",
+                (snapshot_id,),
+            ).fetchone()
+        if row is None:
+            return []
+        bundle = json.loads(str(row["bundle_json"]))
+        advisor = bundle.get("product_advisor", {})
+        return [
+            str(candidate.get("sku_id", ""))
+            for candidate in advisor.get("candidates", [])
+            if candidate.get("sku_id")
+        ]
 
     def _verify_customer_service_evaluation(
         self, fixture: dict[str, Any], tenant_id: str, actor: str

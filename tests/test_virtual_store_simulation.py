@@ -31,8 +31,8 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert report["report_contract_version"] == "simulation-evidence-v1"
         assert report["passed"] is True
         assert report["summary"] == {
-            "total": 16,
-            "passed": 16,
+            "total": 17,
+            "passed": 17,
             "failed": 0,
             "skipped": 0,
         }
@@ -82,6 +82,7 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             "eligible_competitors"
         ] == 1
         assert evidence["D07"]["agent_response"]["sources"]
+        assert evidence["D17"]["reference_resolved"] is True
         assert evidence["D08"]["blocked_probe_result"]["error_type"] == "ValueError"
         assert evidence["D09"]["dispatch_job"]["status"] == "assigned"
         assert evidence["D12"]["first_result"]["external_request_id"] == evidence[
@@ -137,11 +138,15 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert summary.status_code == 200
         assert summary.json()["report_contract_version"] == "simulation-evidence-v1"
-        assert len(summary.json()["demands"]) == 16
+        assert len(summary.json()["demands"]) == 17
         demand_d07 = next(
             item for item in summary.json()["demands"] if item["id"] == "D07"
         )
         assert demand_d07["input"]["message"] == "晴川 AF5 空气炸锅保修多久？"
+        demand_d17 = next(
+            item for item in summary.json()["demands"] if item["id"] == "D17"
+        )
+        assert demand_d17["input"]["second_message"] == "它保修多久？"
         assert summary.json()["records"] == {
             "catalog": 6,
             "inventory": 10,
@@ -151,7 +156,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
             "settlement_statements": 1,
             "competitive_candidates": 3,
             "knowledge": 4,
-            "demands": 16,
+            "demands": 17,
         }
 
         missing_confirmation = client.post(
@@ -160,7 +165,6 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
             json={"fixture_id": "qingchuan-home-appliance-v1"},
         )
         assert missing_confirmation.status_code == 422
-
         run = client.post(
             "/v1/simulations/virtual-store/run",
             headers=ADMIN_HEADERS,
@@ -172,7 +176,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert run.status_code == 200
         assert run.json()["passed"] is True
-        assert run.json()["summary"]["passed"] == 16
+        assert run.json()["summary"]["passed"] == 17
         assert run.json()["scenarios"][0]["input"]["operation"] == (
             "CatalogService.list_items"
         )
@@ -183,3 +187,49 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert audit.status_code == 200
         assert audit.json()[0]["detail"]["passed"] is True
+
+
+def test_d17_counterexample_fails_without_reference_resolution(tmp_path) -> None:
+    """反证：临时移除多轮指代消解逻辑后，D17 场景断言必须失败。
+
+    指代消解的载体是 product_advisor._REFERENCE_HINTS——当问题含指代词
+    （"它"）且当前问题解析不到候选时，回看历史恢复商品候选。把该正则
+    换成永不匹配的占位符，等价于移除指代消解能力；此时第二轮"它"无法
+    恢复 AF5 候选，D17 场景应失败。还原后恢复正常。
+    """
+    import ecommerce_agent.product_advisor as advisor
+
+    original = advisor._REFERENCE_HINTS
+    try:
+        advisor._REFERENCE_HINTS = advisor.re.compile(r"(?!)")  # 永不匹配
+        service = AgentService(make_settings(tmp_path))
+        try:
+            simulation = VirtualStoreSimulation(service)
+            report = simulation.run(
+                tenant_id="tenant-test",
+                actor="admin-test",
+                include_customer_service=True,
+            )
+        finally:
+            service.close()
+        d17 = next(
+            item for item in report["scenarios"] if item["id"] == "D17"
+        )
+        # 指代消解被移除后，D17 的"第二轮命中知识来源"断言必须失败。
+        assert d17["status"] == "failed"
+    finally:
+        advisor._REFERENCE_HINTS = original
+
+    # 还原后 D17 恢复正常（对照组，防止误伤）
+    service = AgentService(make_settings(tmp_path))
+    try:
+        simulation = VirtualStoreSimulation(service)
+        report = simulation.run(
+            tenant_id="tenant-test",
+            actor="admin-test",
+            include_customer_service=True,
+        )
+    finally:
+        service.close()
+    d17 = next(item for item in report["scenarios"] if item["id"] == "D17")
+    assert d17["status"] == "passed"
