@@ -526,6 +526,24 @@
   Agent、会话和后台联合回归 `36 passed`，全量回归 `477 passed in 162.06s`。
 - 判据：三列可查、历史内容不丢、迁移不重建表；v26 继续保留给 M6，合并顺序按 v26→v27。
 
+## D14 · 置信度与人工兜底（2026-08-05）
+
+- `HANDOFF_CONFIDENCE_THRESHOLD` 新增为可配置项，默认 `0.6`，在 `0..1` 范围内钳制。
+  `decision_gate` 仅对 `answer` / `finish` 目标路由应用低置信度门，改为
+  `handoff / low_confidence_handoff`；已批准且可直接复用的不可变知识答案保留其
+  确定性快路径，已验证的动作权限门和原有工具后置校验不绕过。
+- 受控 `customer_intent=complaint` 时风险至少为 `medium`，回答路径转人工并携带
+  `priority_flag=complaint`；已有队列匹配将任务送入 `complaints / urgent`，没有新建队列。
+- 查询同一会话最近两条 assistant 消息；当两条 `route_reason` 都属于
+  `model_unavailable`、`low_confidence_handoff`、`no_evidence` 时强制
+  `consecutive_low_quality`，不足两条或中间有正常回复则不触发。
+- 红态反证：临时将测试 Settings 的阈值设为 `0.0`，`confidence=0.5` 的 handoff 断言按预期
+  失败，实际返回 `answer / knowledge_answer_allowed`；恢复 `0.6` 后同一断言通过。
+- 绿态：D14 guardrail 用例 `6 passed`，与意图、Agent、图、人工任务和派单联合回归
+  `140 passed`；全量回归 `483 passed in 160.32s`；投诉任务实际由既有 bootstrap 坐席自动派单消费。
+- 未新增依赖、未改变 LangGraph 节点或边；低质查询只读取已落库 assistant 记录，不改变
+  D-007 的非终态 handoff 保护逻辑。
+
 ## D20 · WP4 自动化评测、调优与收口（2026-08-05）
 
 ### 交付物与运行方式
@@ -581,7 +599,8 @@ live 的意图准确率、证据覆盖率、转人工 recall 均为 `1.000`；�
 
 WP4 只使用既有评测表和隔离快照，没有新增字段、迁移或 schema 版本。根据
 `CONTRIBUTING.md`，schema v26 已由 `feature/m6-competitor-import` 占用；本分支未
-抢占 v26，也未创建 v27。`docs/tasks/PROGRESS.md` 与 `docs/tasks/M4_WORKBENCH.md`
+抢占 v26。随后 D13 已按登记占用 v27，WP4 的评测表仍未依赖该迁移。`docs/tasks/PROGRESS.md` 与
+`docs/tasks/M4_WORKBENCH.md`
 已同步为 WP4 `20h / 剩余 0 / 100%`，判定标准和报告索引见
 `docs/customer-service-evaluation.md`。
 

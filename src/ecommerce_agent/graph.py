@@ -38,6 +38,9 @@ from .tools import ToolExecutionContext, ToolRegistry, ToolResult
 MODEL_UNAVAILABLE_HANDOFF_ANSWER = (
     "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。"
 )
+LOW_QUALITY_ROUTE_REASONS = frozenset(
+    {"model_unavailable", "low_confidence_handoff", "no_evidence"}
+)
 
 
 def verify_response(state: AgentState) -> dict[str, Any]:
@@ -518,6 +521,27 @@ def build_graph(
         if business_action and route not in {"act", "handoff", "refuse", "finish"}:
             route = "handoff"
             reason = "business_action_requires_verified_execution"
+        if (
+            decision.confidence < settings.handoff_confidence_threshold
+            and route in {"answer", "finish"}
+            and decision.reason != "approved_knowledge_reuse"
+        ):
+            route = "handoff"
+            reason = "low_confidence_handoff"
+        customer_intent = state.get("customer_intent")
+        if customer_intent == "complaint":
+            if risk_level == "low":
+                risk_level = "medium"
+            if route not in {"handoff", "refuse"}:
+                route = "handoff"
+                reason = "complaint_attention_required"
+        if route not in {"handoff", "refuse"}:
+            recent_reasons = db.recent_assistant_route_reasons(state["session_id"], 2)
+            if len(recent_reasons) == 2 and all(
+                item in LOW_QUALITY_ROUTE_REASONS for item in recent_reasons
+            ):
+                route = "handoff"
+                reason = "consecutive_low_quality"
         shadow = state.get("execution_mode") == "shadow"
         active_sop = None
         if not shadow:
@@ -930,23 +954,26 @@ def build_graph(
             business_context["order_id"] = normalize_text(str(order_id))[:128]
         if isinstance(store_id, (str, int)) and not isinstance(store_id, bool):
             business_context["store_id"] = normalize_text(str(store_id))[:128]
+        handoff_payload = {
+            "trace_id": state["trace_id"],
+            "intent": state.get("customer_intent") or state["intent"],
+            "risk_level": state["risk_level"],
+            "question": safe_question,
+            "selected_tool": state.get("selected_tool"),
+            "react_step": state.get("react_step", 0),
+            "context_snapshot_id": state.get("context_snapshot_id"),
+            "context_readiness": state.get("context_readiness"),
+            "context_conflicts": state.get("context_conflicts", []),
+            "business_context": business_context,
+        }
+        if state.get("customer_intent") == "complaint":
+            handoff_payload["priority_flag"] = "complaint"
         task = handoffs.create(
             tenant_id=state["tenant_id"],
             session_id=state["session_id"],
             message_id=state["message_id"],
             reason=reason,
-            payload={
-                "trace_id": state["trace_id"],
-                "intent": state["intent"],
-                "risk_level": state["risk_level"],
-                "question": safe_question,
-                "selected_tool": state.get("selected_tool"),
-                "react_step": state.get("react_step", 0),
-                "context_snapshot_id": state.get("context_snapshot_id"),
-                "context_readiness": state.get("context_readiness"),
-                "context_conflicts": state.get("context_conflicts", []),
-                "business_context": business_context,
-            },
+            payload=handoff_payload,
         )
         return {
             "answer": answer,

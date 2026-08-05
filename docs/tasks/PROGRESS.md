@@ -59,10 +59,11 @@
 - [x] **独立轻量分类调用**（few-shot 短 Prompt，默认限时 2 秒；DeepSeek JSON 契约与
       `as-007` 单条 live 已验收）
 - [x] **跨域歧义仲裁**（正向证据 + 动作式短句旁路；跨域回归 12/12、业务快路径 13/13）
-- [ ] **置信度阈值转人工** — `AgentDecision.confidence` 已产出但从未参与路由判定
-- [ ] **转人工阈值可配置**
-- [ ] **投诉意图优先标记人工关注**
-- [ ] **连续 2 轮低质回复检测**
+- [x] **置信度阈值转人工** — `AgentDecision.confidence < 0.6` 且目标路由为回答/完成时转人工
+- [x] **转人工阈值可配置**（`HANDOFF_CONFIDENCE_THRESHOLD`，默认 0.6，钳制 0–1）
+- [x] **投诉意图优先标记人工关注**（投诉队列 urgent、`priority_flag=complaint`）
+- [x] **连续 2 轮低质回复检测**（`model_unavailable` / `low_confidence_handoff` /
+      `no_evidence`）
 - [x] **意图分类结果持久化**（schema v27：`customer_intent` / `intent_confidence` /
       `intent_method`，v25 前向迁移保留旧消息）
 - [ ] **意图路由配置文件**（意图 → 检索范围 / Prompt 变体映射）

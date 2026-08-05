@@ -2640,6 +2640,20 @@ class Database:
             ).fetchall()
         return [dict(row) for row in reversed(rows)]
 
+    def recent_assistant_route_reasons(
+        self, session_id: str, limit: int = 2
+    ) -> list[str]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT route_reason FROM messages
+                WHERE session_id=? AND role='assistant'
+                ORDER BY created_at DESC, id DESC LIMIT ?
+                """,
+                (session_id, limit),
+            ).fetchall()
+        return [str(row[0]) for row in rows if row[0] is not None]
+
     def paginated_messages(
         self,
         session_id: str,
