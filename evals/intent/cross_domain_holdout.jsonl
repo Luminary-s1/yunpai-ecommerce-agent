@@ -23,3 +23,5 @@
 {"id": "biz-103", "message": "物流呢", "expected_route": "rule", "expected_intent": "after_sales", "source": "terse-business-guard-20260804", "note": "高频短句，无业务证据可言；当前实现误交模型，模型不可用时降级为 chitchat"}
 {"id": "biz-104", "message": "推荐一下", "expected_route": "rule", "expected_intent": "product_inquiry", "source": "terse-business-guard-20260804", "note": "高频短句，无业务证据可言；当前实现误交模型，模型不可用时降级为 chitchat"}
 {"id": "biz-105", "message": "曝光你们", "expected_route": "rule", "expected_intent": "complaint", "source": "terse-business-guard-20260804", "note": "高频短句，无业务证据可言；当前实现误交模型，模型不可用时降级为 chitchat"}
+{"id": "cd-201", "message": "我想推荐你", "expected_route": "model", "source": "external-probe-20260805", "leaked": true, "known_gap": true, "note": "当前误判为 rule/product_inquiry：后缀表把代词『你』与语气助词混同。语气词可安全剥离，论元不可。应由 _RULE_BUSINESS_EVIDENCE 的对象组接住"}
+{"id": "biz-201", "message": "查下物流", "expected_route": "rule", "expected_intent": "after_sales", "source": "terse-business-guard-20260805", "known_gap": true, "note": "当前交模型：『查下』/『查一下』/『看下』不在请求前缀表，是电商客服高频动词。代价为一次模型调用，不误判"}
