@@ -1,0 +1,148 @@
+data: {"event":"meta","session_id":"m4-stream-evidence-003","message_id":"msg-48dc7097ecc54e3e83784559444001ba","trace_id":"trace-7d8722e32fcf4bd3825c8298c49681cd"}
+
+data: {"event":"delta","text":"您好"}
+
+data: {"event":"delta","text":"，"}
+
+data: {"event":"delta","text":"关于"}
+
+data: {"event":"delta","text":"晴"}
+
+data: {"event":"delta","text":"川"}
+
+data: {"event":"delta","text":" AF"}
+
+data: {"event":"delta","text":"5"}
+
+data: {"event":"delta","text":" "}
+
+data: {"event":"delta","text":"空"}
+
+data: {"event":"delta","text":"气"}
+
+data: {"event":"delta","text":"炸"}
+
+data: {"event":"delta","text":"锅"}
+
+data: {"event":"delta","text":"的"}
+
+data: {"event":"delta","text":"保修"}
+
+data: {"event":"delta","text":"期限"}
+
+data: {"event":"delta","text":"，"}
+
+data: {"event":"delta","text":"具体"}
+
+data: {"event":"delta","text":"时长"}
+
+data: {"event":"delta","text":"请"}
+
+data: {"event":"delta","text":"以"}
+
+data: {"event":"delta","text":"商品"}
+
+data: {"event":"delta","text":"详情"}
+
+data: {"event":"delta","text":"页"}
+
+data: {"event":"delta","text":"、"}
+
+data: {"event":"delta","text":"保修"}
+
+data: {"event":"delta","text":"卡"}
+
+data: {"event":"delta","text":"及"}
+
+data: {"event":"delta","text":"店铺"}
+
+data: {"event":"delta","text":"的"}
+
+data: {"event":"delta","text":"售后"}
+
+data: {"event":"delta","text":"政策"}
+
+data: {"event":"delta","text":"为准"}
+
+data: {"event":"delta","text":"。"}
+
+data: {"event":"delta","text":"如果"}
+
+data: {"event":"delta","text":"涉及"}
+
+data: {"event":"delta","text":"人为"}
+
+data: {"event":"delta","text":"损坏"}
+
+data: {"event":"delta","text":"、"}
+
+data: {"event":"delta","text":"耗材"}
+
+data: {"event":"delta","text":"或"}
+
+data: {"event":"delta","text":"非"}
+
+data: {"event":"delta","text":"正常"}
+
+data: {"event":"delta","text":"使用"}
+
+data: {"event":"delta","text":"的情况"}
+
+data: {"event":"delta","text":"，"}
+
+data: {"event":"delta","text":"是否"}
+
+data: {"event":"delta","text":"在"}
+
+data: {"event":"delta","text":"保修"}
+
+data: {"event":"delta","text":"范围内"}
+
+data: {"event":"delta","text":"需要"}
+
+data: {"event":"delta","text":"人工"}
+
+data: {"event":"delta","text":"依据"}
+
+data: {"event":"delta","text":"凭证"}
+
+data: {"event":"delta","text":"进行"}
+
+data: {"event":"delta","text":"判定"}
+
+data: {"event":"delta","text":"。"}
+
+data: {"event":"delta","text":"建议"}
+
+data: {"event":"delta","text":"您"}
+
+data: {"event":"delta","text":"提供"}
+
+data: {"event":"delta","text":"商品"}
+
+data: {"event":"delta","text":"链接"}
+
+data: {"event":"delta","text":"或"}
+
+data: {"event":"delta","text":"订单"}
+
+data: {"event":"delta","text":"信息"}
+
+data: {"event":"delta","text":"，"}
+
+data: {"event":"delta","text":"以便"}
+
+data: {"event":"delta","text":"我"}
+
+data: {"event":"delta","text":"为您"}
+
+data: {"event":"delta","text":"进一步"}
+
+data: {"event":"delta","text":"核实"}
+
+data: {"event":"delta","text":"。"}
+
+data: {"event":"citations","sources":[{"id":"seed-0106","category":"退款","source":"builtin:ecommerce-sop-v1","version":1,"score":0.1834},{"id":"seed-0071","category":"发货","source":"builtin:ecommerce-sop-v1","version":1,"score":0.1571},{"id":"seed-0028","category":"商品","source":"builtin:ecommerce-sop-v1","version":1,"score":0.1397}]}
+
+data: {"event":"done","message_id":"msg-48dc7097ecc54e3e83784559444001ba","intent":"查询商品保修信息","risk_level":"low","model_fallback":false}
+
