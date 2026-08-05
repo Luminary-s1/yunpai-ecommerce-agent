@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Literal
 
@@ -357,6 +357,7 @@ class OpsAssistantService:
         totals = self._totals(rows)
         first_half, second_half = self._split_halves(rows)
         trends = self._trends(self._totals(first_half), self._totals(second_half))
+        week_over_week = self._week_over_week(rows)
         channels = self._channel_breakdown(rows)
         findings = self._findings(rows, totals, trends, channels)
         summary = self._summary_lines(rows, totals, trends)
@@ -371,6 +372,7 @@ class OpsAssistantService:
             },
             "totals": totals,
             "trends": trends,
+            "week_over_week": week_over_week,
             "channels": channels,
             "findings": findings,
             "summary": summary,
@@ -571,6 +573,134 @@ class OpsAssistantService:
             "average_order_value": _money(sales / Decimal(orders)) if orders else None,
             "roi": _ratio(sales / spend) if spend else None,
         }
+
+    @classmethod
+    def _week_over_week(
+        cls,
+        rows: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if not rows:
+            return {
+                "comparable": False,
+                "reason": "insufficient_data",
+                "previous_period": None,
+                "current_period": None,
+                "metrics": [],
+            }
+
+        dated_rows = [
+            (date.fromisoformat(str(item["record_date"])), item)
+            for item in rows
+        ]
+        latest_date = max(item_date for item_date, _ in dated_rows)
+        current_start = latest_date - timedelta(
+            days=latest_date.weekday()
+        )
+        current_end = current_start + timedelta(days=6)
+        previous_start = current_start - timedelta(days=7)
+        previous_end = current_start - timedelta(days=1)
+
+        current_rows = [
+            item
+            for item_date, item in dated_rows
+            if current_start <= item_date <= current_end
+        ]
+        previous_rows = [
+            item
+            for item_date, item in dated_rows
+            if previous_start <= item_date <= previous_end
+        ]
+        current_date_count = len(
+            {
+                item_date
+                for item_date, _ in dated_rows
+                if current_start <= item_date <= current_end
+            }
+        )
+        previous_date_count = len(
+            {
+                item_date
+                for item_date, _ in dated_rows
+                if previous_start <= item_date <= previous_end
+            }
+        )
+
+        comparison = {
+            "comparable": False,
+            "reason": None,
+            "previous_period": {
+                "start_date": previous_start.isoformat(),
+                "end_date": previous_end.isoformat(),
+                "date_count": previous_date_count,
+            },
+            "current_period": {
+                "start_date": current_start.isoformat(),
+                "end_date": current_end.isoformat(),
+                "date_count": current_date_count,
+            },
+            "metrics": [],
+        }
+        if current_date_count < 7:
+            comparison["reason"] = "current_week_incomplete"
+            return comparison
+        if previous_date_count < 7:
+            comparison["reason"] = "previous_week_incomplete"
+            return comparison
+        previous_totals = cls._totals(previous_rows)
+        current_totals = cls._totals(current_rows)
+
+        for metric, label in (
+            ("visitors", "访客数"),
+            ("orders", "订单数"),
+            ("sales_amount", "销售额"),
+            ("ad_spend", "推广花费"),
+            ("conversion_rate", "转化率"),
+            ("average_order_value", "客单价"),
+            ("roi", "ROI"),
+        ):
+            previous_value = previous_totals[metric]
+            current_value = current_totals[metric]
+            metric_result = {
+                "metric": metric,
+                "label": label,
+                "previous_value": previous_value,
+                "current_value": current_value,
+                "change_pct": None,
+                "direction": None,
+                "comparable": False,
+                "reason": None,
+            }
+
+            if previous_value is None or current_value is None:
+                metric_result["reason"] = "value_unavailable"
+            else:
+                before = Decimal(str(previous_value))
+                after = Decimal(str(current_value))
+                if before == 0:
+                    metric_result["direction"] = (
+                        "flat" if after == 0 else "up"
+                    )
+                    metric_result["reason"] = "previous_value_zero"
+                else:
+                    change = (after - before) / before
+                    metric_result["change_pct"] = str(
+                        (change * 100).quantize(
+                            Decimal("0.1"),
+                            rounding=ROUND_HALF_UP,
+                        )
+                    )
+                    if abs(change) < Decimal("0.05"):
+                        metric_result["direction"] = "flat"
+                    elif change > 0:
+                        metric_result["direction"] = "up"
+                    else:
+                        metric_result["direction"] = "down"
+                    metric_result["comparable"] = True
+
+            comparison["metrics"].append(metric_result)
+
+        comparison["comparable"] = True
+        return comparison
 
     @staticmethod
     def _split_halves(

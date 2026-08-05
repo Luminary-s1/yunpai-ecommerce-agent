@@ -17,6 +17,7 @@ ADMIN_HEADERS = {
 }
 TENANT = "tenant-test"
 STORE_ID = "qingchuan-flagship-001"
+VIRTUAL_WOW_DATASET_KEY = "virtual-ops-wow-cross-month"
 
 CSV_SAMPLE = (
     "日期,渠道,访客数,订单数,销售额,推广花费\n"
@@ -56,10 +57,18 @@ class FailingOpsModel:
         raise RuntimeError("model unavailable")
 
 
-def _record(record_date: str, channel: str, visitors: int, orders: int,
-            sales: str, spend: str) -> OpsOperationRecordUpsert:
+def _record(
+    record_date: str,
+    channel: str,
+    visitors: int,
+    orders: int,
+    sales: str,
+    spend: str,
+    *,
+    dataset_key: str = "ops-week-30",
+) -> OpsOperationRecordUpsert:
     return OpsOperationRecordUpsert(
-        dataset_key="ops-week-30",
+        dataset_key=dataset_key,
         store_id=STORE_ID,
         record_date=record_date,
         channel=channel,
@@ -279,6 +288,188 @@ def test_analysis_report_produces_trends_and_recommendations(tmp_path) -> None:
         service.close()
 
 
+def test_analysis_report_calculates_natural_week_over_week_across_month_boundary(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        previous_week_rows = (
+            ("2026-07-20", 80, 8, "800.00", "80.00"),
+            ("2026-07-21", 90, 9, "900.00", "90.00"),
+            ("2026-07-22", 100, 10, "1000.00", "100.00"),
+            ("2026-07-23", 110, 11, "1100.00", "110.00"),
+            ("2026-07-24", 120, 12, "1200.00", "120.00"),
+            ("2026-07-25", 95, 9, "950.00", "95.00"),
+            ("2026-07-26", 105, 11, "1050.00", "105.00"),
+        )
+        current_week_rows = (
+            ("2026-07-27", 95, 4, "400.00", "90.00"),
+            ("2026-07-28", 105, 5, "500.00", "100.00"),
+            ("2026-07-29", 85, 3, "300.00", "80.00"),
+            ("2026-07-30", 115, 6, "600.00", "120.00"),
+            ("2026-07-31", 90, 4, "400.00", "110.00"),
+            ("2026-08-01", 110, 7, "700.00", "95.00"),
+            ("2026-08-02", 100, 6, "600.00", "105.00"),
+        )
+
+        for record_date, visitors, orders, sales, spend in (
+            previous_week_rows + current_week_rows
+        ):
+            ops.upsert_record(
+                TENANT,
+                _record(
+                    record_date,
+                    "搜索",
+                    visitors,
+                    orders,
+                    sales,
+                    spend,
+                    dataset_key=VIRTUAL_WOW_DATASET_KEY,
+                ),
+            )
+
+        report = ops.analysis_report(
+            TENANT,
+            OpsReportQuery(
+                dataset_key=VIRTUAL_WOW_DATASET_KEY,
+                store_id=STORE_ID,
+            ),
+        )
+
+        comparison = report["week_over_week"]
+        assert comparison["comparable"] is True
+        assert comparison["reason"] is None
+        assert comparison["previous_period"] == {
+            "start_date": "2026-07-20",
+            "end_date": "2026-07-26",
+            "date_count": 7,
+        }
+        assert comparison["current_period"] == {
+            "start_date": "2026-07-27",
+            "end_date": "2026-08-02",
+            "date_count": 7,
+        }
+
+        metrics = {
+            item["metric"]: item
+            for item in comparison["metrics"]
+        }
+        assert metrics["visitors"]["previous_value"] == 700
+        assert metrics["visitors"]["current_value"] == 700
+        assert metrics["visitors"]["change_pct"] == "0.0"
+        assert metrics["visitors"]["direction"] == "flat"
+
+        assert metrics["orders"]["previous_value"] == 70
+        assert metrics["orders"]["current_value"] == 35
+        assert metrics["orders"]["change_pct"] == "-50.0"
+        assert metrics["orders"]["direction"] == "down"
+
+        assert metrics["sales_amount"]["previous_value"] == "7000.00"
+        assert metrics["sales_amount"]["current_value"] == "3500.00"
+        assert metrics["sales_amount"]["change_pct"] == "-50.0"
+
+        assert metrics["ad_spend"]["change_pct"] == "0.0"
+        assert metrics["conversion_rate"]["previous_value"] == "0.1000"
+        assert metrics["conversion_rate"]["current_value"] == "0.0500"
+        assert metrics["conversion_rate"]["change_pct"] == "-50.0"
+        assert metrics["average_order_value"]["change_pct"] == "0.0"
+        assert metrics["roi"]["previous_value"] == "10.0000"
+        assert metrics["roi"]["current_value"] == "5.0000"
+        assert metrics["roi"]["change_pct"] == "-50.0"
+    finally:
+        service.close()
+
+
+@pytest.mark.parametrize(
+    (
+        "record_dates",
+        "expected_reason",
+        "previous_date_count",
+        "current_date_count",
+    ),
+    (
+        (
+            (
+                "2026-07-20",
+                "2026-07-21",
+                "2026-07-22",
+                "2026-07-23",
+                "2026-07-24",
+                "2026-07-25",
+                "2026-07-26",
+            ),
+            "previous_week_incomplete",
+            0,
+            7,
+        ),
+        (
+            (
+                "2026-07-20",
+                "2026-07-21",
+                "2026-07-22",
+                "2026-07-23",
+                "2026-07-24",
+                "2026-07-25",
+                "2026-07-26",
+                "2026-07-27",
+                "2026-07-28",
+                "2026-07-29",
+            ),
+            "current_week_incomplete",
+            7,
+            3,
+        ),
+    ),
+)
+def test_analysis_report_marks_incomplete_weeks_as_not_comparable(
+    tmp_path,
+    record_dates,
+    expected_reason,
+    previous_date_count,
+    current_date_count,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        for record_date in record_dates:
+            ops.upsert_record(
+                TENANT,
+                _record(
+                    record_date,
+                    "搜索",
+                    100,
+                    10,
+                    "1000.00",
+                    "100.00",
+                    dataset_key=VIRTUAL_WOW_DATASET_KEY,
+                ),
+            )
+
+        report = ops.analysis_report(
+            TENANT,
+            OpsReportQuery(
+                dataset_key=VIRTUAL_WOW_DATASET_KEY,
+                store_id=STORE_ID,
+            ),
+        )
+
+        comparison = report["week_over_week"]
+        assert comparison["comparable"] is False
+        assert comparison["reason"] == expected_reason
+        assert comparison["metrics"] == []
+        assert (
+            comparison["previous_period"]["date_count"]
+            == previous_date_count
+        )
+        assert (
+            comparison["current_period"]["date_count"]
+            == current_date_count
+        )
+    finally:
+        service.close()
+
+
 def test_records_and_reports_are_tenant_isolated(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     try:
@@ -288,6 +479,13 @@ def test_records_and_reports_are_tenant_isolated(tmp_path) -> None:
         other_report = ops.analysis_report("tenant-other", OpsReportQuery())
         assert other_report["data_quality"]["record_count"] == 0
         assert other_report["findings"][0]["code"] == "no_data"
+
+        comparison = other_report["week_over_week"]
+        assert comparison["comparable"] is False
+        assert comparison["reason"] == "insufficient_data"
+        assert comparison["previous_period"] is None
+        assert comparison["current_period"] is None
+        assert comparison["metrics"] == []
     finally:
         service.close()
 
@@ -379,6 +577,14 @@ def test_ops_assistant_api_end_to_end(tmp_path) -> None:
         assert report.status_code == 200
         body = report.json()
         assert body["data_quality"]["record_count"] == 5
+
+        comparison = body["week_over_week"]
+        assert comparison["comparable"] is False
+        assert comparison["reason"] == "current_week_incomplete"
+        assert comparison["previous_period"]["date_count"] == 0
+        assert comparison["current_period"]["date_count"] == 3
+        assert comparison["metrics"] == []
+
         assert body["summary"]
         assert body["action_boundary"].startswith("仅输出数据解读")
         report_audit = client.get(
