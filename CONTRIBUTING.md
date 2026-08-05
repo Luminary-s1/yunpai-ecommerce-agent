@@ -269,8 +269,15 @@ M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开�
 | 版本 | 占用者 | 模块 / 分支 | 用途 | 状态 |
 |---:|---|---|---|---|
 | ≤ 25 | — | 已合并进 `main` | 历史迁移，`_apply_v1` ~ `_apply_v25` | 已合并 |
-| **26** | 缪海南 | M6 / `feature/m6-competitor-import` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已分配，未合并 |
-| 27 | *（空闲）* | | | |
+| **26** | 缪海南 | M6 / `feature/m6-competitor-data-service` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已分配，未合并 |
+| **27** | 技术负责人 | M4 / `feature/m4-customer-service` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已分配，未合并 |
+| 28 | *（空闲）* | | | |
+
+26 和 27 并行占号，两条分支都会改 `database.py` 的 `SCHEMA_VERSION` 那一行，
+合并时 git 会报冲突。**解冲突的唯一正确结果是：`SCHEMA_VERSION` 取两者较大值，
+且 `if 26 not in applied` 和 `if 27 not in applied` 两个块都保留。** 整块取
+ours 或 theirs 就会丢掉一组迁移——那正是下面第 3 条要防的事故。迁移按
+`schema_migrations` 的成员判断执行，与先后合并顺序无关。
 
 占号规则：
 
