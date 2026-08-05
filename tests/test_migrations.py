@@ -1037,3 +1037,59 @@ def test_v24_release_policies_gain_night_watch_and_sop_allowlist(tmp_path) -> No
         "night_window_start_utc", "night_window_end_utc", "night_mode",
         "sop_allowlist_json",
     } <= columns
+
+
+def test_v26_competitor_observations_gain_rating_and_rank_columns(tmp_path) -> None:
+    db = Database(tmp_path / "v26-competitive-observations.sqlite3")
+    db.path.parent.mkdir(parents=True, exist_ok=True)
+    with db.connect() as conn:
+        conn.execute(
+            "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        for version in range(1, 26):
+            getattr(Database, f"_apply_v{version}")(conn)
+            conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (version, "2026-08-05T00:00:00+00:00"),
+            )
+        conn.execute(
+            """
+            INSERT INTO competitor_observations(
+                id, tenant_id, connector_id, store_id, subject_sku,
+                competitor_name, competitor_sku, subject_price, competitor_price,
+                currency, source_type, source_ref, is_estimate, observed_at,
+                source_id, created_at, payload_hash, entity_match_id
+            ) VALUES ('observation-v25', 'tenant-v26', 'feed-v26', 'store-v26',
+                      'sku-v26', '历史竞店', 'comp-v26', '100', '90', 'CNY',
+                      'manual', 'file://legacy-v25.csv', 0, ?, 'source-v26', ?,
+                      'hash-v26', NULL)
+            """,
+            ("2026-08-05T00:00:00+00:00", "2026-08-05T00:00:00+00:00"),
+        )
+
+    db.initialize()
+    db.initialize()
+
+    assert db.schema_version() == 26
+    with db.connect() as conn:
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(competitor_observations)")
+        }
+        legacy = conn.execute(
+            """
+            SELECT rating_value, rating_scale, sales_rank, rank_scope
+            FROM competitor_observations WHERE id='observation-v25'
+            """
+        ).fetchone()
+        migration_count = conn.execute(
+            "SELECT COUNT(*) FROM schema_migrations WHERE version=26"
+        ).fetchone()[0]
+
+    assert {"rating_value", "rating_scale", "sales_rank", "rank_scope"} <= columns
+    assert dict(legacy) == {
+        "rating_value": None,
+        "rating_scale": None,
+        "sales_rank": None,
+        "rank_scope": None,
+    }
+    assert migration_count == 1

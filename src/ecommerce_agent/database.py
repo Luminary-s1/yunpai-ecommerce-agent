@@ -36,7 +36,7 @@ class SessionScopeError(ValueError):
 
 
 class Database:
-    SCHEMA_VERSION = 25
+    SCHEMA_VERSION = 26
 
     def __init__(self, path: Path):
         self.path = path
@@ -149,6 +149,9 @@ class Database:
             if 25 not in applied:
                 self._apply_v25(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (25, ?)", (utc_now(),))
+            if 26 not in applied:
+                self._apply_v26(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (26, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2171,6 +2174,19 @@ class Database:
             """
         )
 
+    @classmethod
+    def _apply_v26(cls, conn: sqlite3.Connection) -> None:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type='table' AND name='competitor_observations'"
+        ).fetchone()
+        if exists is None:
+            return
+        cls._ensure_column(conn, "competitor_observations", "rating_value", "TEXT")
+        cls._ensure_column(conn, "competitor_observations", "rating_scale", "TEXT")
+        cls._ensure_column(conn, "competitor_observations", "sales_rank", "INTEGER")
+        cls._ensure_column(conn, "competitor_observations", "rank_scope", "TEXT")
+
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
@@ -2222,6 +2238,10 @@ class Database:
                 "competitor_sku",
                 "payload_hash",
                 "entity_match_id",
+                "rating_value",
+                "rating_scale",
+                "sales_rank",
+                "rank_scope",
             },
             "sop_definitions": {"tenant_id", "sop_key", "current_active_version"},
             "sop_versions": {"definition_id", "version", "dsl_json", "status"},
