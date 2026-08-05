@@ -224,9 +224,11 @@ PY
 - `after_sales` 召回偏低，模型倾向把带情绪的售后判成 `complaint`。口径已写进
   `_MODEL_SYSTEM_PROMPT`（`_LABELLING_POLICY`）；同轴 few-shot 也已加入，使用
   “已收货 + 具体故障 + 负面评价”的换措辞样例，不复述 `as-007` 原句。请求级测试
-  已确认该示例进入模型 Prompt，但当前网关为 `disabled`，无法验证真实模型是否从
-  `complaint` 改判 `after_sales`，因此召回缺口仍不关闭。修改前证据见
-  `runs/20260804-live-after-policy-prompt.json`。
+  已确认该示例进入模型 Prompt。加载 `env.md` 后的复测中，生产 2 秒预算 6 次均因
+  1302 / 1305 / ReadTimeout 弃权；唯一成功的 10 秒诊断调用实际耗时 0.71 秒，仍返回
+  `model / complaint / 0.9`。因此该 Prompt 改动**未达成目标**，召回缺口继续保留。
+  修改前证据见 `runs/20260804-live-after-policy-prompt.json`，本次逐次结果见
+  `runs/20260805-as-007-few-shot-live-probe.json`。
 - `cross_domain` 当前四个多义关键词的双门已收口：跨域回归 12/12、业务快路径
   13/13。第二批泛化探针在 2026-08-04 验收后已经泄漏，今天的 12/12 只表示没有
   回归，不是新的泛化成绩；扩展到其他关键词前必须另造未公开探针。

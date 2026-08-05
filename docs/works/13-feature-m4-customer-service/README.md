@@ -470,7 +470,21 @@
 - 意图与 LLM 网关联合回归 `118 passed`；rule 基准保持判定准确率 `15/15`、
   `plain 22/22`；全量回归 `456 passed in 151.75s`
 - mock 仍判 `complaint`，因为它是独立手写关键词表且不读取 few-shot，不能作为效果
-  证据；当前真实网关健康检查为 `disabled`，所以本次只确认 Prompt 实现完成，
-  `after_sales` 召回缺口仍待 live 复测后关闭
+  证据；提交时真实网关未加载配置，所以当时只确认了 Prompt 实现
 - 未修改 `as-007.expected`，其 `ambiguous` 标签与计分方式保持不变；未新增依赖，
   未改 LangGraph 节点或边
+
+#### live 复测（2026-08-05）
+
+- 从仓库根目录 `env.md` 在单个子进程内加载参数，未回显、落盘或记录任何密钥；网关
+  健康检查由 `disabled` 变为 `configured`
+- 生产 `intent_classify_timeout_seconds=2.0` 下共试 6 次，全部为
+  `default / chitchat / model_call_failed:ModelUnavailableError`：明确捕获到 provider
+  1302 一次、1305 一次、ReadTimeout 三次，另一次未采集上游细分原因
+- 为区分 Prompt 语义与 provider 可用性，单独做一次 10 秒诊断调用；请求实际仅耗时
+  0.71 秒并成功得到模型结果，但仍为 `complaint / 0.9`，不是期望的 `after_sales`
+- 因单条生产门未通过，没有继续跑全量 live，避免用大批随机弃权污染基线；诊断的
+  10 秒预算也不计作生产验收
+- 脱敏逐次证据：`evals/intent/runs/20260805-as-007-few-shot-live-probe.json`
+- 结论：同轴 few-shot 已正确接线，但**实际模型效果未达成**；`after_sales` 召回缺口
+  继续保持未关闭

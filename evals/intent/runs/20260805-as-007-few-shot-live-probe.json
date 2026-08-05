@@ -1,0 +1,63 @@
+{
+  "date": "2026-08-05",
+  "mode": "live-single-probe",
+  "environment_source": "env.md",
+  "secrets_recorded": false,
+  "id": "as-007",
+  "expected": "after_sales",
+  "production_timeout_seconds": 2.0,
+  "production_attempts": [
+    {
+      "attempt": 1,
+      "method": "default",
+      "predicted": "chitchat",
+      "error": "model_call_failed:ModelUnavailableError",
+      "upstream_detail": "not_captured"
+    },
+    {
+      "attempt": 2,
+      "method": "default",
+      "predicted": "chitchat",
+      "error": "model_call_failed:ModelUnavailableError",
+      "upstream_detail": "ReadTimeout"
+    },
+    {
+      "attempt": 3,
+      "method": "default",
+      "predicted": "chitchat",
+      "error": "model_call_failed:ModelUnavailableError",
+      "upstream_detail": "HTTP 429 provider code 1302"
+    },
+    {
+      "attempt": 4,
+      "method": "default",
+      "predicted": "chitchat",
+      "error": "model_call_failed:ModelUnavailableError",
+      "upstream_detail": "HTTP 429 provider code 1305"
+    },
+    {
+      "attempt": 5,
+      "method": "default",
+      "predicted": "chitchat",
+      "error": "model_call_failed:ModelUnavailableError",
+      "upstream_detail": "ReadTimeout"
+    },
+    {
+      "attempt": 6,
+      "method": "default",
+      "predicted": "chitchat",
+      "error": "model_call_failed:ModelUnavailableError",
+      "upstream_detail": "ReadTimeout"
+    }
+  ],
+  "diagnostic_attempt": {
+    "timeout_seconds": 10.0,
+    "elapsed_seconds": 0.71,
+    "method": "model",
+    "predicted": "complaint",
+    "confidence": 0.9,
+    "error": null,
+    "correct": false
+  },
+  "conclusion": "The same-axis few-shot reached the live model request but did not change as-007 from complaint to after_sales. Production availability was also insufficient for a full live run."
+}
