@@ -261,16 +261,39 @@ M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开�
 所以：**占号要提前说，合并后必须跑全量**。`grep` 到语句在文件里不等于它会被执行，
 同名函数、同名类方法、同名字典键都可能被静默覆盖。
 
-### 当前 schema 版本占用登记
+### Schema 版本号占用登记
 
-| 版本 | 模块 / 分支 | 用途 | 状态 |
-|---:|---|---|---|
-| ≤ 25 | 已合并历史迁移 | `_apply_v1` ~ `_apply_v25` | 已合并 |
-| **26** | M6 / `feature/m6-competitor-import` | `competitor_observations` 的评分与排名字段 | 已分配，未合并 |
-| **27** | M4 / `feature/m4-customer-service` | `messages` 意图分类三列 | 已占用，待合并 |
+**要加表或加列，先在这张表里占号，再写迁移。** 占号之后其他人就能自己查，
+不用逐个问模块负责人。
 
-M4 的迁移因此必须实现为 `_apply_v27`；不要在本分支创建 `_apply_v26`，也不要把
-v26 当作“当前最大版本”复用。合并 M6 后仍应按迁移记录顺序执行 v26，再执行 v27。
+| 版本 | 占用者 | 模块 / 分支 | 用途 | 状态 |
+|---:|---|---|---|---|
+| ≤ 25 | — | 已合并进 `main` | 历史迁移，`_apply_v1` ~ `_apply_v25` | 已合并 |
+| **26** | 缪海南 | M6 / `feature/m6-competitor-data-service` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已分配，未合并 |
+| **27** | 技术负责人 | M4 / `feature/m4-customer-service` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已分配，未合并 |
+| 28 | *（空闲）* | | | |
+
+26 和 27 并行占号，两条分支都会改 `database.py` 的 `SCHEMA_VERSION` 那一行，
+合并时 git 会报冲突。**解冲突的唯一正确结果是：`SCHEMA_VERSION` 取两者较大值，
+且 `if 26 not in applied` 和 `if 27 not in applied` 两个块都保留。** 整块取
+ours 或 theirs 就会丢掉一组迁移——那正是下面第 3 条要防的事故。迁移按
+`schema_migrations` 的成员判断执行，与先后合并顺序无关。
+
+占号规则：
+
+1. **认领前先自己查一遍**，别只看 `main`：
+   ```bash
+   for b in $(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | grep -v HEAD); do
+     git grep -ho "_apply_v[0-9]\+" "$b" -- src/ecommerce_agent/database.py 2>/dev/null | sort -u -V | tail -1
+   done | sort -u -V | tail -3
+   ```
+   未合并的分支也会占号，只看 `main` 就是 v25 那次事故的成因
+2. 在上表加一行，连同占号的提交一起提 PR，**在群里说一声**
+3. 迁移方法名必须是 `_apply_v<你的号>`，不得与任何分支重名
+4. 加列用 `_ensure_column`，**不重建表**；范例见 `database.py` 的 `_apply_v8`
+   （给 `competitor_observations` 加 `payload_hash`）
+5. 存量行没有新列的值，所以**新列必须可空或带默认值**，不能是无默认的 `NOT NULL`
+6. 合并后跑一次全量测试再关掉这一行
 
 ---
 
