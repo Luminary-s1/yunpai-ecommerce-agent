@@ -86,22 +86,17 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 - [x] 转人工兜底全套（队列路由、优先级、原子认领、坐席技能与容量、SLA、
       升级、自动派单、双人复核）
 - [x] 意图分布统计（后台可查）
-- [x] **受控四分类枚举**（商品咨询/售后/投诉/闲聊）
-- [x] **关键词规则分类表**（投诉 > 售后 > 商品咨询）
-- [x] **独立轻量分类调用**（few-shot 短 Prompt，默认限时 2 秒；DeepSeek JSON 契约与
-      `as-007` 单条 live 已验收）
-- [x] **跨域歧义仲裁**（正向证据 + 动作式短句旁路；跨域回归 12/12、业务快路径 13/13）
-- [x] **置信度阈值转人工** — `AgentDecision.confidence < 0.6` 且目标路由为回答/完成时转人工
-- [x] **转人工阈值可配置**（`HANDOFF_CONFIDENCE_THRESHOLD`，默认 0.6，钳制 0–1）
-- [x] **投诉意图优先标记人工关注**（投诉队列 urgent、`priority_flag=complaint`）
-- [x] **连续 2 轮低质回复检测**（`model_unavailable` / `low_confidence_handoff` /
-      `no_evidence`）
-- [x] **意图分类结果持久化**（schema v27：`customer_intent` / `intent_confidence` /
-      `intent_method`，v25 前向迁移保留旧消息）
-- [x] **意图路由配置文件**（`src/ecommerce_agent/intent_routing.json`：意图 → 检索范围 /
-      Prompt 变体 / SOP 意图映射；预检分类与检索、决策和生成 Prompt 已接入）
+- [x] **受控四分类枚举**（商品咨询/售后/投诉/闲聊）✎
+- [x] **关键词规则分类表**（投诉 > 售后 > 商品咨询）✎
+- [x] **独立轻量分类调用**（few-shot 短 Prompt，默认限时 2 秒）✎
+- [ ] **置信度阈值转人工** — `AgentDecision.confidence` 已产出但从未参与路由判定
+- [ ] **转人工阈值可配置**
+- [ ] **投诉意图优先标记人工关注**
+- [ ] **连续 2 轮低质回复检测**
+- [ ] **置信度持久化到消息记录**（`messages` 表无 confidence 列）
+- [ ] **意图路由配置文件**（意图 → 检索范围 / Prompt 变体映射）
 
-### WP4 客服模块效果评测与调优（20h）
+### WP4 客服模块效果评测与调优（24h）
 
 - [x] 评测底座：标注集不可变版本、冻结、数据集 SHA-256 哈希
 - [x] 隔离数据库快照中运行真实多轮 Agent，主库零污染
@@ -109,17 +104,17 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 - [x] 门禁阈值与发布关联
 - [x] 现有指标：通过率、意图准确率、转人工召回、证据覆盖、严重错误、回归率
 - [x] 断言维度：expected_intent、expected_requires_human、require_sources、
-      grounded_in_sources、expected_refusal、required/forbidden_answer_terms、max_risk_level
+      required/forbidden_answer_terms、max_risk_level
 - [x] 对抗模式基线（Prompt 注入、越权数据、禁止输出）
 - [x] 离线评测 20 例（12 检索 + 5 安全 + 3 precheck）
-- [x] **回答准确率指标**（M4 口径）
-- [x] **幻觉率指标**
-- [x] **拒答率指标**
-- [x] **转人工合理率指标**
-- [x] **50+ 条用例集**（商品 15 / 售后 12 / 投诉 8 / 闲聊 5 / 对抗 10+）
-- [x] **判定标准文档化**（什么算"准确"、什么算"幻觉"）
-- [x] **自动化评测脚本**（`scripts/run_customer_eval.py`，mock/live 双模式、隔离快照、四类失败归因）
-- [x] **调优记录与最终参数配置文档**（`docs/customer-service-evaluation.md`，含两次实跑报告）
+- [ ] **回答准确率指标**（M4 口径）
+- [ ] **幻觉率指标**
+- [ ] **拒答率指标**
+- [ ] **转人工合理率指标**
+- [ ] **50+ 条用例集**（商品 15 / 售后 12 / 投诉 8 / 闲聊 5 / 对抗 10+）
+- [ ] **判定标准文档化**（什么算"准确"、什么算"幻觉"）
+- [ ] **自动化评测脚本**
+- [ ] **调优记录与最终参数配置文档**
 
 ### WP5 客服对话引擎核心开发（40h）
 
@@ -304,13 +299,3 @@ M4 的 37 项里有 3 项（标 ✎）在 `feature/m4-customer-service` 分支�
 | M4 效果评测报告与判定标准定义 | 模块负责人 |
 | M5 / M6 的模块交付说明与实跑截图 | 模块负责人 |
 | `.project-to-act` 四份台账同步（三个模块各一次） | 模块负责人 |
-
-### 代码分支状态
-
-| 分支 | 状态 |
-|---|---|
-| `main` | 含 M5（F-311）、M6（F-304）、M4/M5/M6 工作包划分文档、schema 版本号占用登记与全部已合并基线 |
-| `feature/m4-customer-service` | WP3 意图分类与置信度路由（schema v27）、评测语料已完成，未合并；已合并 `main` 至 `eae765a`，无待解冲突 |
-| `feature/m5-operations-assistant` | 已合并进 main，无剩余提交 |
-| `feature/f107-night-watch` | 已合并进 main |
-| `feature/f109-workbench-visibility` | 已合并进 main |
