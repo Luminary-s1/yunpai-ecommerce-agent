@@ -176,7 +176,10 @@ git checkout -b feature/m6-competitor-import upstream/main
 
 ### schema 版本号要提前占号
 
-当前 `SCHEMA_VERSION = 25`。如果你的改动需要加表或加列，**先在群里说一声占号**。
+当前 `main` 的 `SCHEMA_VERSION = 25`。要加表或加列，**先到 `CONTRIBUTING.md`
+第 9 节的「Schema 版本号占用登记」表里占号**，那里有认领规则和自查命令，
+不用再逐个问负责人。**26 已分配给缪海南**（competitor_observations 加评分与
+销量排名四列），下一个空闲号是 27。
 
 这条不是理论风险：此前有两条分支各自把版本推到 25 并各自定义了同名的
 `_apply_v25` 方法，git 文本合并完全干净没有冲突提示，但后定义的方法静默覆盖了
