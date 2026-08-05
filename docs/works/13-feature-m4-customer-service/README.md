@@ -544,6 +544,25 @@
 - 未新增依赖、未改变 LangGraph 节点或边；低质查询只读取已落库 assistant 记录，不改变
   D-007 的非终态 handoff 保护逻辑。
 
+## D15 · 路由配置与 WP3 收口（2026-08-05）
+
+- 新增 `src/ecommerce_agent/intent_routing.json`，由 `intent.py` 统一加载并校验四个受控
+  意图的 `knowledge_intent`、`prompt_variant`、`sop_intent`；资源同时登记到
+  `pyproject.toml` 的 package data，避免安装包漏文件。
+- `precheck` 在既有节点内调用两级 `classify`：规则命中仍直接走零成本快路径，规则未命中
+  仅在模型启用或 mock 模式下调用轻量分类器；模型关闭时传 `None`，不会触发网关请求。
+  分类的意图、置信度、method、降级原因和路由配置写入图状态，之后由 D13 的持久化配对
+  写入用户/助手消息。
+- 初次检索使用配置中的 `knowledge_intent`；决策 Prompt 携带完整路由三元组，生成 Prompt
+  携带 `prompt_variant`。ContextBuilder 仍是决策和生成上下文的唯一入口，未旁路上下文链。
+- 反证与回归：新增 D15 集成测试先于 loader 接入时按预期无法导入路由契约；首次全量还
+  暴露 mock 网关未识别“退款”导致既有售后队列回归（`general`），补齐 mock 意图分支后
+  单项回归 `9 passed`。最终 D15 专项 `8 passed`，计划指定的 `test_react_graph.py` /
+  `test_handoffs.py` / `test_migrations.py` 为 `22 passed`，意图与客服链路联合回归为
+  `144 passed`，全量 `491 passed in 156.97s`。
+- 拓扑硬检查：修改前后均为 **20 个节点、35 条边**，新增配置和分类调用没有新增节点或
+  边；无第三方依赖，D-005、D-010、D-023 保持满足。WP3 D11–D15 至此完成。
+
 ## D20 · WP4 自动化评测、调优与收口（2026-08-05）
 
 ### 交付物与运行方式

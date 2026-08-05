@@ -36,6 +36,8 @@ class AgentState(TypedDict, total=False):
     customer_intent: str | None
     intent_confidence: float | None
     intent_method: str | None
+    intent_error: str | None
+    intent_routing: dict[str, str]
     risk_level: str
     route: str
     route_reason: str

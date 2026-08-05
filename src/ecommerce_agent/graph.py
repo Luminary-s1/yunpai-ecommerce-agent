@@ -12,6 +12,7 @@ from .context_builder import ContextBuilder
 from .database import Database, utc_now
 from .decision import AgentDecision
 from .handoff import HandoffService
+from .intent import classify, routing_for_intent
 from .llm import ModelError, ModelGateway, ModelUnavailableError
 from .policy import (
     asks_for_internal_identifier,
@@ -280,6 +281,8 @@ def build_graph(
             "customer_intent": None,
             "intent_confidence": None,
             "intent_method": None,
+            "intent_error": None,
+            "intent_routing": {},
             "risk_level": "low",
             "route": "deliberate",
             "route_reason": "pending",
@@ -312,14 +315,25 @@ def build_graph(
         }
 
     def precheck(state: AgentState) -> dict[str, Any]:
+        classifier_model = model if (settings.model_enabled or settings.model_mock_mode) else None
+        classified = classify(state["normalized_input"], model=classifier_model)
+        intent_routing = routing_for_intent(classified.intent)
         decision = precheck_request(state["normalized_input"], state["context"])
         route = "retrieve" if decision.route == "deliberate" else decision.route
         risk_level = "blocked" if route == "refuse" else "medium" if route == "handoff" else "low"
+        intent_trace = f"intent:{classified.method}:{classified.intent}"
+        if classified.error is not None:
+            intent_trace += f":{classified.error}"
         return {
             "route": route,
             "route_reason": decision.reason,
             "risk_level": risk_level,
-            "trace": [*state["trace"], f"precheck:{decision.route}"],
+            "customer_intent": classified.intent,
+            "intent_confidence": classified.confidence,
+            "intent_method": classified.method,
+            "intent_error": classified.error,
+            "intent_routing": intent_routing,
+            "trace": [*state["trace"], intent_trace, f"precheck:{decision.route}"],
         }
 
     def retrieve(state: AgentState) -> dict[str, Any]:
@@ -330,11 +344,14 @@ def build_graph(
         )
         for key, value in previous_subject.items():
             effective_context.setdefault(key, value)
+        intent_routing = state.get("intent_routing") or routing_for_intent(
+            state.get("customer_intent") or "chitchat"
+        )
         documents = knowledge.retrieve(
             state["normalized_input"],
             top_k=settings.rag_top_k,
             min_score=settings.rag_min_score,
-            intent=None,
+            intent=intent_routing["knowledge_intent"],
             tenant_id=state["tenant_id"],
             store_id=effective_context.get("store_id") or effective_context.get("shop_id"),
             sku_id=effective_context.get("sku_id"),
@@ -431,6 +448,9 @@ def build_graph(
             step_count=state["react_step"],
             max_steps=settings.max_react_steps,
             knowledge_budget_tokens=knowledge_budget,
+            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
+            sop_intent=(state.get("intent_routing") or {}).get("sop_intent"),
+            knowledge_intent=(state.get("intent_routing") or {}).get("knowledge_intent"),
         )
         budget_trace = (
             f"context:budget:kept{history_meta['kept']}"
@@ -847,6 +867,7 @@ def build_graph(
             history=history,
             verified_tool_result=verified_result,
             knowledge_budget_tokens=knowledge_budget,
+            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
         )
         budget_trace = (
             f"context:budget:kept{history_meta['kept']}"

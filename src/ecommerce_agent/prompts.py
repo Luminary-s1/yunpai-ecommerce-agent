@@ -107,6 +107,7 @@ def build_messages(
     history: list[dict[str, Any]],
     verified_tool_result: dict[str, Any] | None = None,
     knowledge_budget_tokens: int | None = None,
+    prompt_variant: str | None = None,
 ) -> list[dict[str, str]]:
     selected_documents = _budget_documents(
         documents,
@@ -117,7 +118,12 @@ def build_messages(
     history_text = "\n".join(f"{item['role']}: {item['content']}" for item in history) or "无"
     safe_context = json.dumps(context, ensure_ascii=False, sort_keys=True)
     safe_tool_result = json.dumps(verified_tool_result or {}, ensure_ascii=False, sort_keys=True)
-    user_prompt = (
+    variant_hint = (
+        f"当前客服回复变体：{prompt_variant}\n\n"
+        if prompt_variant
+        else ""
+    )
+    user_prompt = variant_hint + (
         f"用户问题：{question}\n\n"
         f"参考知识：\n{chr(10).join(knowledge_blocks) if knowledge_blocks else '无匹配知识'}\n\n"
         f"当前会话的授权业务上下文：{safe_context}\n\n"
@@ -142,6 +148,9 @@ def build_decision_messages(
     step_count: int,
     max_steps: int,
     knowledge_budget_tokens: int | None = None,
+    prompt_variant: str | None = None,
+    sop_intent: str | None = None,
+    knowledge_intent: str | None = None,
 ) -> list[dict[str, str]]:
     context_package = context
     session_state = context_package.get("trusted_session_state", {})
@@ -176,6 +185,11 @@ def build_decision_messages(
         "current_tool_catalog": tool_catalog,
         "latest_observation": observation or {},
         "react_budget": {"used_steps": step_count, "max_steps": max_steps},
+        "routing": {
+            "knowledge_intent": knowledge_intent,
+            "prompt_variant": prompt_variant,
+            "sop_intent": sop_intent,
+        },
     }
     return [
         {"role": "system", "content": DECISION_SYSTEM_PROMPT},

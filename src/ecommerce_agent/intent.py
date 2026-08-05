@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
@@ -134,6 +135,34 @@ _RULE_BUSINESS_EVIDENCE: dict[str, tuple[tuple[str, ...], ...]] = {
 _INTENTS: frozenset[str] = frozenset(
     ("product_inquiry", "after_sales", "complaint", "chitchat")
 )
+
+_ROUTING_FIELDS = frozenset({"knowledge_intent", "prompt_variant", "sop_intent"})
+_ROUTING_CONFIG_PATH = Path(__file__).with_name("intent_routing.json")
+
+
+def load_intent_routing(path: str | Path = _ROUTING_CONFIG_PATH) -> dict[str, dict[str, str]]:
+    """Load and validate the controlled-intent routing contract."""
+    with Path(path).open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict) or set(payload) != set(_INTENTS):
+        raise ValueError("intent routing must declare exactly the controlled intents")
+    routing: dict[str, dict[str, str]] = {}
+    for intent in _INTENTS:
+        entry = payload[intent]
+        if not isinstance(entry, dict) or set(entry) != _ROUTING_FIELDS:
+            raise ValueError(f"invalid routing entry for {intent}")
+        if any(not isinstance(value, str) or not value.strip() for value in entry.values()):
+            raise ValueError(f"routing values for {intent} must be non-empty strings")
+        routing[intent] = {key: entry[key].strip() for key in _ROUTING_FIELDS}
+    return routing
+
+
+INTENT_ROUTING = load_intent_routing()
+
+
+def routing_for_intent(intent: str) -> dict[str, str]:
+    """Return a copy so callers cannot mutate the process-wide routing contract."""
+    return dict(INTENT_ROUTING.get(intent, INTENT_ROUTING["chitchat"]))
 
 # 已裁定的标注口径，与 evals/intent/README.md「标注口径」一节保持一致。
 # 传达的是判据本身而非具体样例——把基准里的争议样例写成 few-shot 就成了对基准

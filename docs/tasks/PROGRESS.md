@@ -66,7 +66,8 @@
       `no_evidence`）
 - [x] **意图分类结果持久化**（schema v27：`customer_intent` / `intent_confidence` /
       `intent_method`，v25 前向迁移保留旧消息）
-- [ ] **意图路由配置文件**（意图 → 检索范围 / Prompt 变体映射）
+- [x] **意图路由配置文件**（`src/ecommerce_agent/intent_routing.json`：意图 → 检索范围 /
+      Prompt 变体 / SOP 意图映射；预检分类与检索、决策和生成 Prompt 已接入）
 
 ### WP4 客服模块效果评测与调优（20h）
 
@@ -270,7 +271,7 @@
 | 分支 | 状态 |
 |---|---|
 | `main` | 含 M5（F-311）、M6（F-304）与全部已合并基线，已与 `origin/main` 同步 |
-| `feature/m4-customer-service` | 领先 main 3 个提交（WP3 意图分类），未合并 |
+| `feature/m4-customer-service` | WP3 D11–D15 已完成，领先 main，未合并 |
 | `feature/m5-operations-assistant` | 已合并进 main，无剩余提交 |
 | `feature/f107-night-watch` | 已合并进 main |
 | `feature/f109-workbench-visibility` | 已合并进 main |
