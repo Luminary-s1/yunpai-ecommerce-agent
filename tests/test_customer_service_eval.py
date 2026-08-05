@@ -5,10 +5,16 @@ from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from conftest import make_settings
 from ecommerce_agent.evaluation import (
     EvaluationCaseCreate,
+    EvaluationCaseReplaceRequest,
     EvaluationExpectation,
+    EvaluationError,
+    EvaluationService,
+    EvaluationSuiteCreateRequest,
+    EvaluationSuiteTransition,
     EvaluationThresholds,
     EvaluationTurn,
 )
@@ -277,7 +283,11 @@ def test_customer_service_eval_fixture_first_half_uses_virtual_store_facts() -> 
         (FIXTURES / "customer_service_eval_v1.json").read_text("utf-8")
     )
     store = json.loads((FIXTURES / "virtual_store_v1.json").read_text("utf-8"))
-    cases = evaluation["cases"]
+    cases = [
+        case
+        for case in evaluation["cases"]
+        if case["scenario"] in {"product", "after_sales"}
+    ]
 
     assert evaluation["virtual"] is True
     assert evaluation["virtual_store_fixture"] == store["fixture_id"]
@@ -321,7 +331,64 @@ def test_customer_service_eval_fixture_first_half_uses_virtual_store_facts() -> 
         labeled_turn = next(
             turn for turn in reversed(case.turns) if turn.expectation is not None
         )
-        assert all(
-            term in source["answer"]
-            for term in labeled_turn.expectation.required_answer_terms
+    assert all(
+        term in source["answer"]
+        for term in labeled_turn.expectation.required_answer_terms
+    )
+
+
+def test_customer_service_eval_fixture_freezes_full_fifty_case_suite(tmp_path) -> None:
+    evaluation = json.loads(
+        (FIXTURES / "customer_service_eval_v1.json").read_text("utf-8")
+    )
+    cases = evaluation["cases"]
+    counts = Counter(case["scenario"] for case in cases)
+    assert len(cases) >= 50
+    assert counts["product"] == 15
+    assert counts["after_sales"] == 12
+    assert counts["complaint"] == 8
+    assert counts["chitchat"] == 5
+    assert counts["adversarial"] >= 10
+
+    service = AgentService(make_settings(tmp_path))
+    try:
+        request = EvaluationSuiteCreateRequest.model_validate(evaluation["suite"])
+        suite = service.evaluations.create_suite(
+            "tenant-test", request, "admin-test"
         )
+        replaced = service.evaluations.replace_cases(
+            "tenant-test",
+            suite["id"],
+            EvaluationCaseReplaceRequest(
+                expected_record_version=suite["record_version"],
+                cases=[EvaluationCaseCreate.model_validate(case) for case in cases],
+            ),
+            "admin-test",
+        )
+        frozen = service.evaluations.freeze_suite(
+            "tenant-test",
+            suite["id"],
+            EvaluationSuiteTransition(
+                expected_record_version=replaced["record_version"]
+            ),
+            "admin-test",
+        )
+        assert frozen["status"] == "frozen"
+        assert frozen["dataset_hash"] == EvaluationService._hash(
+            [
+                {"case_key": case["case_key"], "case_hash": case["case_hash"]}
+                for case in sorted(frozen["cases"], key=lambda item: item["case_key"])
+            ]
+        )
+        with pytest.raises(EvaluationError, match="only draft"):
+            service.evaluations.replace_cases(
+                "tenant-test",
+                suite["id"],
+                EvaluationCaseReplaceRequest(
+                    expected_record_version=frozen["record_version"],
+                    cases=[EvaluationCaseCreate.model_validate(cases[0])],
+                ),
+                "admin-test",
+            )
+    finally:
+        service.close()
