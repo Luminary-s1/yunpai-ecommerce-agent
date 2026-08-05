@@ -734,17 +734,28 @@ class CompetitiveIntelligenceService:
                     )
                 ):
                     raise ValueError("competitive_match_scope_mismatch")
-            existing = conn.execute(
-                """
-                SELECT * FROM competitor_observations
-                WHERE tenant_id=? AND connector_id=? AND store_id=?
-                  AND subject_sku=? AND competitor_sku=? AND observed_at=?
-                """,
-                (
-                    tenant_id, value.connector_id, value.store_id, value.subject_sku,
-                    value.competitor_sku, observed_at,
-                ),
-            ).fetchone()
+            if value.source_id:
+                existing = conn.execute(
+                    """
+                    SELECT * FROM competitor_observations
+                    WHERE tenant_id=? AND connector_id=? AND source_id=?
+                    ORDER BY observed_at DESC
+                    LIMIT 1
+                    """,
+                    (tenant_id, value.connector_id, value.source_id),
+                ).fetchone()
+            else:
+                existing = conn.execute(
+                    """
+                    SELECT * FROM competitor_observations
+                    WHERE tenant_id=? AND connector_id=? AND store_id=?
+                      AND subject_sku=? AND competitor_sku=? AND observed_at=?
+                    """,
+                    (
+                        tenant_id, value.connector_id, value.store_id,
+                        value.subject_sku, value.competitor_sku, observed_at,
+                    ),
+                ).fetchone()
             if existing is not None:
                 existing_hash = str(existing["payload_hash"] or "")
                 if not existing_hash:
@@ -763,7 +774,7 @@ class CompetitiveIntelligenceService:
                         observed_at=existing["observed_at"],
                         source_id=existing["source_id"],
                     ).model_dump(mode="json")
-                    legacy["observed_at"] = observed_at
+                    legacy["observed_at"] = str(existing["observed_at"])
                     existing_hash = payload_digest(legacy)
                 legacy_payload = dict(payload)
                 legacy_payload.pop("entity_match_id", None)
@@ -771,20 +782,23 @@ class CompetitiveIntelligenceService:
                 comparable_hash = (
                     legacy_hash if existing_hash == legacy_hash else payload_hash
                 )
-                decide_write(
+                write_decision = decide_write(
                     existing_source_time=str(existing["observed_at"]),
                     existing_payload_hash=existing_hash,
                     incoming_source_time=observed_at,
                     incoming_payload_hash=comparable_hash,
                 )
-                write_status = "idempotent"
-                observation_id = str(existing["id"])
-                if not existing["payload_hash"]:
-                    conn.execute(
-                        "UPDATE competitor_observations SET payload_hash=? WHERE id=?",
-                        (payload_hash, observation_id),
-                    )
-            else:
+                if write_decision == "idempotent":
+                    write_status = "idempotent"
+                    observation_id = str(existing["id"])
+                    if not existing["payload_hash"]:
+                        conn.execute(
+                            "UPDATE competitor_observations SET payload_hash=? WHERE id=?",
+                            (payload_hash, observation_id),
+                        )
+                else:
+                    existing = None
+            if existing is None:
                 conn.execute(
                     """
                     INSERT INTO competitor_observations(

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -89,6 +89,41 @@ def test_observation_persists_normalizes_and_hashes_rating_and_rank(tmp_path) ->
             competitive.record(
                 "tenant-test",
                 value.model_copy(update={"rating_value": Decimal("8")}),
+            )
+    finally:
+        service.close()
+
+
+def test_observation_source_id_applies_newer_and_rejects_stale_versions(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    competitive = service.operations.competitive
+    first_value = observation()
+    try:
+        first = competitive.record("tenant-test", first_value)
+        newer = competitive.record(
+            "tenant-test",
+            first_value.model_copy(
+                update={
+                    "competitor_price": Decimal("88"),
+                    "observed_at": first_value.observed_at + timedelta(hours=1),
+                }
+            ),
+        )
+
+        assert first["write_status"] == "applied"
+        assert newer["write_status"] == "applied"
+        assert newer["id"] != first["id"]
+        assert newer["competitor_price"] == "88"
+
+        with pytest.raises(SourceVersionError, match="stale_source_version"):
+            competitive.record(
+                "tenant-test",
+                first_value.model_copy(
+                    update={
+                        "competitor_price": Decimal("92"),
+                        "observed_at": first_value.observed_at - timedelta(minutes=1),
+                    }
+                ),
             )
     finally:
         service.close()
