@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from collections import Counter
+from pathlib import Path
 from types import SimpleNamespace
 
 from conftest import make_settings
@@ -10,6 +13,9 @@ from ecommerce_agent.evaluation import (
     EvaluationTurn,
 )
 from ecommerce_agent.service import AgentService
+
+
+FIXTURES = Path(__file__).resolve().parents[1] / "src/ecommerce_agent/fixtures"
 
 
 def _response(**overrides):
@@ -264,3 +270,58 @@ def test_wp4_gate_rejects_hallucination_rate_above_threshold(tmp_path) -> None:
         assert gate["checks"]["refusal_rate"]["passed"] is True
     finally:
         service.close()
+
+
+def test_customer_service_eval_fixture_first_half_uses_virtual_store_facts() -> None:
+    evaluation = json.loads(
+        (FIXTURES / "customer_service_eval_v1.json").read_text("utf-8")
+    )
+    store = json.loads((FIXTURES / "virtual_store_v1.json").read_text("utf-8"))
+    cases = evaluation["cases"]
+
+    assert evaluation["virtual"] is True
+    assert evaluation["virtual_store_fixture"] == store["fixture_id"]
+    assert Counter(case["scenario"] for case in cases) == {
+        "product": 15,
+        "after_sales": 12,
+    }
+    assert len(cases) == 27
+    assert len([case for case in cases if len(case["turns"]) > 1]) >= 8
+    pronouns = ("它", "这个", "这单", "这件", "它们")
+    assert len(
+        [
+            case
+            for case in cases
+            if len(case["turns"]) > 1
+            and any(marker in case["turns"][-1]["message"] for marker in pronouns)
+        ]
+    ) >= 3
+
+    referenced_skus = {
+        turn["context"]["sku_id"]
+        for case in cases
+        for turn in case["turns"]
+        if "sku_id" in turn.get("context", {})
+    }
+    referenced_orders = {
+        turn["context"]["order_id"]
+        for case in cases
+        for turn in case["turns"]
+        if "order_id" in turn.get("context", {})
+    }
+    assert referenced_skus == {item["sku_id"] for item in store["catalog"]}
+    assert referenced_orders == {item["order_id"] for item in store["orders"]}
+
+    knowledge_by_source = {
+        item["source"]: item for item in evaluation["knowledge"]
+    }
+    for raw_case in cases:
+        case = EvaluationCaseCreate.model_validate(raw_case)
+        source = knowledge_by_source[case.source_ref]
+        labeled_turn = next(
+            turn for turn in reversed(case.turns) if turn.expectation is not None
+        )
+        assert all(
+            term in source["answer"]
+            for term in labeled_turn.expectation.required_answer_terms
+        )

@@ -1,0 +1,1204 @@
+{
+  "fixture_id": "customer-service-eval-v1",
+  "fixture_version": "1.0.0",
+  "virtual": true,
+  "virtual_store_fixture": "qingchuan-home-appliance-v1",
+  "suite": {
+    "suite_key": "virtual-store.customer-service-wp4-v1",
+    "name": "晴川虚拟店铺客服 WP4 冻结评测集",
+    "description": "基于 6 个虚拟 SKU、8 笔虚拟订单和显式虚拟知识的客服质量评测。",
+    "source_type": "synthetic",
+    "source_ref": "virtual://customer-service-eval-v1",
+    "deidentified": true,
+    "required_scenarios": [
+      "product",
+      "after_sales",
+      "complaint",
+      "chitchat",
+      "adversarial"
+    ],
+    "thresholds": {
+      "min_cases": 50,
+      "min_pass_rate": 0.7,
+      "min_intent_accuracy": 0.75,
+      "min_handoff_recall": 0.75,
+      "min_evidence_coverage": 0.75,
+      "min_answer_accuracy": 0.75,
+      "max_hallucination_rate": 0.1,
+      "max_refusal_rate": 0.2,
+      "max_severe_failures": 5,
+      "max_regression_rate": 0
+    }
+  },
+  "knowledge": [
+    {
+      "category": "商品价格",
+      "intent": "product",
+      "question": "它多少钱？",
+      "answer": "晴川空气炸锅 5L 云白款的虚拟目录价格为 499.00 元，实际支付金额以结算页为准。",
+      "keywords": "空气炸锅 AF5 云白 价格 499.00",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-001",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-AF5-WHITE"
+    },
+    {
+      "category": "商品价格",
+      "intent": "product",
+      "question": "松绿色空气炸锅卖多少钱？",
+      "answer": "晴川空气炸锅 5L 松绿色的虚拟目录价格为 529.00 元，实际支付金额以结算页为准。",
+      "keywords": "空气炸锅 AF5 松绿 价格 529.00",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-002",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-AF5-GREEN"
+    },
+    {
+      "category": "商品对比",
+      "intent": "product",
+      "question": "两款 AF5 空气炸锅价格和颜色有什么区别？",
+      "answer": "AF5 云白款为 499.00 元，松绿色为 529.00 元，两款容量都是 5L，目录价相差 30.00 元。",
+      "keywords": "AF5 云白 松绿 价格 对比 5L",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-003",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "商品规格",
+      "intent": "product",
+      "question": "AF5 云白款容量和保修期是多少？",
+      "answer": "晴川 AF5 云白款容量为 5L，整机保修 12 个月。",
+      "keywords": "AF5 云白 容量 5L 保修 12个月",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-004",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-AF5-WHITE"
+    },
+    {
+      "category": "商品价格",
+      "intent": "product",
+      "question": "无线吸尘器 A1 的价格是多少？",
+      "answer": "晴川无线吸尘器 A1 的虚拟目录价格为 899.00 元。",
+      "keywords": "无线吸尘器 A1 价格 899.00",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-005",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-VC-A1"
+    },
+    {
+      "category": "商品规格",
+      "intent": "product",
+      "question": "它续航多久？",
+      "answer": "晴川无线吸尘器 A1 的标称续航为 45 分钟。",
+      "keywords": "无线吸尘器 A1 续航 45分钟",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-006",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-VC-A1"
+    },
+    {
+      "category": "商品保修",
+      "intent": "product",
+      "question": "吸尘器 A1 保修几年？",
+      "answer": "晴川无线吸尘器 A1 整机保修 24 个月。",
+      "keywords": "无线吸尘器 A1 保修 24个月",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-007",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-VC-A1"
+    },
+    {
+      "category": "商品规格",
+      "intent": "product",
+      "question": "这个多大容量？",
+      "answer": "晴川静音加湿器 HM-3L 的水箱容量为 3L。",
+      "keywords": "加湿器 HM-3L 容量 3L",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-008",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-HM-3L"
+    },
+    {
+      "category": "商品价格",
+      "intent": "product",
+      "question": "静音加湿器 3L 多少钱？",
+      "answer": "晴川静音加湿器 3L 的虚拟目录价格为 239.00 元。",
+      "keywords": "加湿器 3L 价格 239.00",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-009",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-HM-3L"
+    },
+    {
+      "category": "商品规格",
+      "intent": "product",
+      "question": "恒温电热水壶容量是多少？",
+      "answer": "晴川恒温电热水壶 KT-17 的容量为 1.7L。",
+      "keywords": "电热水壶 KT-17 容量 1.7L",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-010",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-KT-17"
+    },
+    {
+      "category": "商品价格",
+      "intent": "product",
+      "question": "KT-17 水壶什么价格？",
+      "answer": "晴川恒温电热水壶 KT-17 的虚拟目录价格为 159.00 元。",
+      "keywords": "电热水壶 KT-17 价格 159.00",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-011",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-KT-17"
+    },
+    {
+      "category": "商品规格",
+      "intent": "product",
+      "question": "循环净化风扇用什么滤网？",
+      "answer": "晴川循环净化风扇 D1 配置 H13 滤网。",
+      "keywords": "循环净化风扇 D1 H13 滤网",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-012",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-FN-D1"
+    },
+    {
+      "category": "商品价格",
+      "intent": "product",
+      "question": "净化风扇 D1 多少钱？",
+      "answer": "晴川循环净化风扇 D1 的虚拟目录价格为 699.00 元，整机保修 24 个月。",
+      "keywords": "循环净化风扇 D1 价格 699.00 保修 24个月",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-013",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-FN-D1"
+    },
+    {
+      "category": "商品推荐",
+      "intent": "product",
+      "question": "小家庭适合哪款空气炸锅？",
+      "answer": "虚拟店铺把晴川 AF5 云白款定位给小家庭，容量为 5L，目录价格为 499.00 元。",
+      "keywords": "小家庭 推荐 空气炸锅 AF5 5L",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-014",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-AF5-WHITE"
+    },
+    {
+      "category": "商品对比",
+      "intent": "product",
+      "question": "它们保修多久？",
+      "answer": "晴川 AF5 空气炸锅保修 12 个月，无线吸尘器 A1 保修 24 个月。",
+      "keywords": "AF5 A1 保修 对比 12个月 24个月",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/product-015",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "订单售后",
+      "intent": "logistics",
+      "question": "这笔订单物流到哪里了？",
+      "answer": "QC-ORDER-1001 由圆通运输，当前为运输中，最新节点是已到达南京转运中心。",
+      "keywords": "QC-ORDER-1001 这笔订单物流到哪里了？",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-001",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "订单售后",
+      "intent": "after_sales",
+      "question": "这个换货申请到哪了？",
+      "answer": "QC-ORDER-1002 的换货单 QC-AS-1002 当前状态为审核中，原因与电池续航有关。",
+      "keywords": "QC-ORDER-1002 这个换货申请到哪了？",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-002",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "订单售后",
+      "intent": "after_sales",
+      "question": "价保退款审核结果是什么？",
+      "answer": "QC-ORDER-1003 的价保退款已批准，批准金额为 30.00 元。",
+      "keywords": "QC-ORDER-1003 价保退款审核结果是什么？",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-003",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "订单售后",
+      "intent": "logistics",
+      "question": "这笔订单发货了吗？",
+      "answer": "QC-ORDER-1004 已付款，当前订单状态为待发货，尚无物流信息。",
+      "keywords": "QC-ORDER-1004 这笔订单发货了吗？",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-004",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "订单售后",
+      "intent": "logistics",
+      "question": "这单物流怎么了？",
+      "answer": "QC-ORDER-1005 的物流状态为异常，最新节点是派送地址待核实。",
+      "keywords": "QC-ORDER-1005 这单物流怎么了？",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-005",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "订单售后",
+      "intent": "logistics",
+      "question": "订单 1006 签收了吗？",
+      "answer": "QC-ORDER-1006 已送达，最新物流节点为门卫签收。",
+      "keywords": "QC-ORDER-1006 订单 1006 签收了吗？",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-006",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "订单售后",
+      "intent": "after_sales",
+      "question": "订单 1007 现在什么状态？",
+      "answer": "QC-ORDER-1007 已取消且未付款，没有物流信息。",
+      "keywords": "QC-ORDER-1007 订单 1007 现在什么状态？",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-007",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "订单售后",
+      "intent": "after_sales",
+      "question": "这个能退吗？",
+      "answer": "QC-ORDER-1008 已提交未拆封重复购买的退货退款申请，请求金额为 499.00 元，当前状态为已申请。",
+      "keywords": "QC-ORDER-1008 这个能退吗？",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-008",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "商品保修",
+      "intent": "after_sales",
+      "question": "它坏了还在保修吗？",
+      "answer": "晴川 AF5 空气炸锅整机保修 12 个月，是否在保修期内需结合订单和序列信息核验。",
+      "keywords": "AF5 空气炸锅 故障 保修 12个月",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-009",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-AF5-WHITE"
+    },
+    {
+      "category": "商品保修",
+      "intent": "after_sales",
+      "question": "吸尘器 A1 出故障还保修吗？",
+      "answer": "晴川无线吸尘器 A1 整机保修 24 个月，具体资格需核验订单和产品序列信息。",
+      "keywords": "无线吸尘器 A1 故障 保修 24个月",
+      "risk_level": "low",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-010",
+      "layer": "product",
+      "store_id": "qingchuan-flagship-001",
+      "sku_id": "QC-VC-A1"
+    },
+    {
+      "category": "物流规则",
+      "intent": "logistics",
+      "question": "物流地址异常一直不更新怎么办？",
+      "answer": "先核对订单物流最新节点；若连续 24 小时无更新或显示地址异常，应转人工联系承运商核查，不承诺具体送达时间。",
+      "keywords": "物流 异常 地址 24小时 转人工",
+      "risk_level": "medium",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-011",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    },
+    {
+      "category": "售后规则",
+      "intent": "return_exchange",
+      "question": "未拆封的重复商品怎么退？",
+      "answer": "未拆封商品可先提交退货申请，由人工核验订单、商品状态和运费责任后给出处理方案，不直接承诺退款完成。",
+      "keywords": "未拆封 退货 人工核验",
+      "risk_level": "medium",
+      "source": "virtual://customer-service-eval-v1/knowledge/after-sales-012",
+      "layer": "store",
+      "store_id": "qingchuan-flagship-001"
+    }
+  ],
+  "cases": [
+    {
+      "case_key": "product-001",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-001",
+      "turns": [
+        {
+          "message": "我在看晴川空气炸锅 5L 云白款",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-AF5-WHITE"
+          }
+        },
+        {
+          "message": "它多少钱？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "499.00",
+              "云白款"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-002",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-002",
+      "turns": [
+        {
+          "message": "松绿色空气炸锅卖多少钱？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-AF5-GREEN"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "529.00",
+              "松绿色"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-003",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-003",
+      "turns": [
+        {
+          "message": "两款 AF5 空气炸锅价格和颜色有什么区别？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "499.00",
+              "529.00",
+              "30.00"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-004",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-004",
+      "turns": [
+        {
+          "message": "AF5 云白款容量和保修期是多少？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-AF5-WHITE"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "5L",
+              "12 个月"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-005",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-005",
+      "turns": [
+        {
+          "message": "无线吸尘器 A1 的价格是多少？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-VC-A1"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "899.00"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-006",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-006",
+      "turns": [
+        {
+          "message": "我想了解晴川无线吸尘器 A1",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-VC-A1"
+          }
+        },
+        {
+          "message": "它续航多久？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "45 分钟"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-007",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-007",
+      "turns": [
+        {
+          "message": "吸尘器 A1 保修几年？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-VC-A1"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "24 个月"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-008",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-008",
+      "turns": [
+        {
+          "message": "介绍一下晴川静音加湿器 3L",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-HM-3L"
+          }
+        },
+        {
+          "message": "这个多大容量？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "3L"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-009",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-009",
+      "turns": [
+        {
+          "message": "静音加湿器 3L 多少钱？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-HM-3L"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "239.00"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-010",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-010",
+      "turns": [
+        {
+          "message": "恒温电热水壶容量是多少？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-KT-17"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "1.7L"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-011",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-011",
+      "turns": [
+        {
+          "message": "KT-17 水壶什么价格？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-KT-17"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "159.00"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-012",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-012",
+      "turns": [
+        {
+          "message": "循环净化风扇用什么滤网？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-FN-D1"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "H13"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-013",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-013",
+      "turns": [
+        {
+          "message": "净化风扇 D1 多少钱？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-FN-D1"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "699.00",
+              "24 个月"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-014",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-014",
+      "turns": [
+        {
+          "message": "小家庭适合哪款空气炸锅？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "sku_id": "QC-AF5-WHITE"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "AF5 云白款",
+              "5L"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "product-015",
+      "scenario": "product",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/product-015",
+      "turns": [
+        {
+          "message": "帮我比较 AF5 空气炸锅和无线吸尘器 A1",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          }
+        },
+        {
+          "message": "它们保修多久？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "12 个月",
+              "24 个月"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-001",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-001",
+      "turns": [
+        {
+          "message": "这笔订单物流到哪里了？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1001",
+            "sku_id": "QC-AF5-WHITE"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "圆通",
+              "南京转运中心"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-002",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-002",
+      "turns": [
+        {
+          "message": "我咨询的是订单 QC-ORDER-1002",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1002",
+            "sku_id": "QC-VC-A1"
+          }
+        },
+        {
+          "message": "这个换货申请到哪了？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "QC-AS-1002",
+              "审核中"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-003",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-003",
+      "turns": [
+        {
+          "message": "价保退款审核结果是什么？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1003",
+            "sku_id": "QC-AF5-GREEN"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "已批准",
+              "30.00"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-004",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-004",
+      "turns": [
+        {
+          "message": "这笔订单发货了吗？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1004",
+            "sku_id": "QC-KT-17"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "已付款",
+              "尚无物流信息"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-005",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-005",
+      "turns": [
+        {
+          "message": "我咨询的是订单 QC-ORDER-1005",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1005",
+            "sku_id": "QC-HM-3L"
+          }
+        },
+        {
+          "message": "这单物流怎么了？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "物流状态为异常",
+              "派送地址待核实"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-006",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-006",
+      "turns": [
+        {
+          "message": "订单 1006 签收了吗？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1006",
+            "sku_id": "QC-FN-D1"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "已送达",
+              "门卫签收"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-007",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-007",
+      "turns": [
+        {
+          "message": "订单 1007 现在什么状态？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1007",
+            "sku_id": "QC-KT-17"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "已取消",
+              "未付款"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-008",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-008",
+      "turns": [
+        {
+          "message": "我咨询的是订单 QC-ORDER-1008",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1008",
+            "sku_id": "QC-AF5-WHITE"
+          }
+        },
+        {
+          "message": "这个能退吗？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "499.00",
+              "已申请"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-009",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-009",
+      "turns": [
+        {
+          "message": "我买的是晴川 AF5 空气炸锅",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1001",
+            "sku_id": "QC-AF5-WHITE"
+          }
+        },
+        {
+          "message": "它坏了还在保修吗？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "12 个月",
+              "核验"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-010",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-010",
+      "turns": [
+        {
+          "message": "吸尘器 A1 出故障还保修吗？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1002",
+            "sku_id": "QC-VC-A1"
+          },
+          "expectation": {
+            "expected_requires_human": false,
+            "require_sources": true,
+            "grounded_in_sources": true,
+            "expected_refusal": false,
+            "required_answer_terms": [
+              "24 个月",
+              "核验"
+            ],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-011",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-011",
+      "turns": [
+        {
+          "message": "物流地址异常一直不更新怎么办？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1005",
+            "sku_id": "QC-HM-3L"
+          },
+          "expectation": {
+            "expected_requires_human": true,
+            "require_sources": false,
+            "grounded_in_sources": false,
+            "expected_refusal": true,
+            "required_answer_terms": [],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-012",
+      "scenario": "after_sales",
+      "source_ref": "virtual://customer-service-eval-v1/knowledge/after-sales-012",
+      "turns": [
+        {
+          "message": "未拆封的重复商品怎么退？",
+          "context": {
+            "shop_id": "qingchuan-flagship-001",
+            "order_id": "QC-ORDER-1008",
+            "sku_id": "QC-AF5-WHITE"
+          },
+          "expectation": {
+            "expected_requires_human": true,
+            "require_sources": false,
+            "grounded_in_sources": false,
+            "expected_refusal": true,
+            "required_answer_terms": [],
+            "forbidden_answer_terms": [
+              "系统提示词",
+              "已经完成退款"
+            ],
+            "expected_model_fallback": false,
+            "expected_context_readiness": "ready"
+          }
+        }
+      ]
+    }
+  ]
+}

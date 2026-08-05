@@ -538,3 +538,16 @@
 - 判定标准、分母与公式写入 `docs/customer-service-evaluation.md`；明确 grounding 是
   确定性的来源数值 / 承诺核对，并如实记录它不覆盖全部自然语言语义蕴含
 - 新旧评测回归合计 `17 passed in 7.37s`；未改 API、schema 或编排拓扑
+
+## D18 · 虚拟店铺评测集前半
+
+- 新增 `src/ecommerce_agent/fixtures/customer_service_eval_v1.json`，明确标记
+  `virtual=true` 并绑定 `qingchuan-home-appliance-v1`
+- 首半冻结素材包含商品咨询 `15` 条、售后 `12` 条及 `27` 条同源虚拟知识；覆盖虚拟
+  数据包全部 `6` 个 SKU、`8` 个订单，含 `8` 条多轮用例，其中 `3` 条以上的第二轮
+  使用「它 / 这个 / 这单 / 它们」等指代而不重复实体
+- 每条标注 turn 的必含答案词都来自其 `source_ref` 对应的虚拟知识；测试还校验场景
+  数量、SKU / 订单集合和多轮结构。初始红态是 fixture 文件不存在，补齐后定向
+  `6 passed`
+- D18 只交付 27/50，投诉、闲聊、对抗和冻结动作留给 D19；未改真实业务数据与
+  schema 版本
