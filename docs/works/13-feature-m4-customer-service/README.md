@@ -509,3 +509,20 @@
   既有已知边界）；全量 `457 passed in 145.48s`
 - 按 provider 并发约束没有发送其他 live 语料。因此本次只关闭 `as-007` 这一条裁定
   边界，不把单条结果外推为完整 `after_sales` 召回率
+
+## D16 · 客服评测断言与四项指标
+
+- `EvaluationExpectation` 新增 `grounded_in_sources` 与 `expected_refusal`；前者使用
+  返回的知识 source ID 回查冻结来源文本，确定性核对回答中的数值与明确承诺，后者
+  使用结构化 `reason` / `requires_human` 判定，不让模型自行给自己打分
+- 四项指标按有标注 turn 计算：断言全通过且非 fallback / severe 才计回答准确；
+  `forbidden_answer_terms` 或来源不支持的数值 / 承诺计幻觉；仅在
+  `expected_refusal=false` 的机会集中计算不必要拒答；转人工合理率沿用混淆矩阵中的
+  precision
+- 红态：新增 `tests/test_customer_service_eval.py` 后为 `4 failed`，分别暴露字段被
+  Pydantic 拒绝、指标键缺失、grounding 与 refusal 断言未执行
+- 绿态：新测试与既有评测回归合计 `16 passed in 9.49s`；手算四条结果与实现均为
+  `answer_accuracy=0.5`、`hallucination_rate=0.25`、`refusal_rate=0.5`、
+  `handoff_precision=0.5`
+- WP4 只扩展既有 JSON 断言与指标载荷，不需要数据库迁移；schema v26 保持由 M6
+  `feature/m6-competitor-import` 占用，本提交未占 v27
