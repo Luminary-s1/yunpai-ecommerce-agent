@@ -18,6 +18,9 @@ ADMIN_HEADERS = {
 TENANT = "tenant-test"
 STORE_ID = "qingchuan-flagship-001"
 VIRTUAL_WOW_DATASET_KEY = "virtual-ops-wow-cross-month"
+VIRTUAL_MONTH_COMPARISON_DATASET_KEY = (
+    "virtual-ops-month-comparison-daily-average"
+)
 
 CSV_SAMPLE = (
     "日期,渠道,访客数,订单数,销售额,推广花费\n"
@@ -381,6 +384,245 @@ def test_analysis_report_calculates_natural_week_over_week_across_month_boundary
         service.close()
 
 
+def test_analysis_report_normalizes_month_comparison_by_daily_average_across_year_boundary(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        previous_month_rows = (
+            ("2025-12-29", 90, 9, "900.00", "90.00"),
+            ("2025-12-30", 120, 12, "1200.00", "120.00"),
+            ("2025-12-31", 90, 9, "900.00", "90.00"),
+        )
+        current_month_rows = (
+            ("2026-01-01", 80, 4, "400.00", "80.00"),
+            ("2026-01-02", 120, 6, "600.00", "120.00"),
+        )
+
+        for record_date, visitors, orders, sales, spend in (
+            previous_month_rows + current_month_rows
+        ):
+            ops.upsert_record(
+                TENANT,
+                _record(
+                    record_date,
+                    "搜索",
+                    visitors,
+                    orders,
+                    sales,
+                    spend,
+                    dataset_key=VIRTUAL_MONTH_COMPARISON_DATASET_KEY,
+                ),
+            )
+
+        report = ops.analysis_report(
+            TENANT,
+            OpsReportQuery(
+                dataset_key=VIRTUAL_MONTH_COMPARISON_DATASET_KEY,
+                store_id=STORE_ID,
+            ),
+        )
+
+        comparison = report["month_over_month"]
+        assert comparison["comparable"] is True
+        assert comparison["reason"] is None
+        assert comparison["normalization"] == "daily_avg"
+        assert comparison["previous_period"] == {
+            "start_date": "2025-12-01",
+            "end_date": "2025-12-31",
+            "date_count": 3,
+        }
+        assert comparison["current_period"] == {
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-31",
+            "date_count": 2,
+        }
+
+        metrics = {
+            item["metric"]: item
+            for item in comparison["metrics"]
+        }
+        assert metrics["visitors"]["previous_value"] == "100.00"
+        assert metrics["visitors"]["current_value"] == "100.00"
+        assert metrics["visitors"]["change_pct"] == "0.0"
+        assert metrics["visitors"]["direction"] == "flat"
+
+        assert metrics["orders"]["previous_value"] == "10.00"
+        assert metrics["orders"]["current_value"] == "5.00"
+        assert metrics["orders"]["change_pct"] == "-50.0"
+        assert metrics["orders"]["direction"] == "down"
+
+        assert metrics["sales_amount"]["previous_value"] == "1000.00"
+        assert metrics["sales_amount"]["current_value"] == "500.00"
+        assert metrics["sales_amount"]["change_pct"] == "-50.0"
+
+        assert metrics["ad_spend"]["previous_value"] == "100.00"
+        assert metrics["ad_spend"]["current_value"] == "100.00"
+        assert metrics["ad_spend"]["change_pct"] == "0.0"
+
+        assert metrics["conversion_rate"]["previous_value"] == "0.1000"
+        assert metrics["conversion_rate"]["current_value"] == "0.0500"
+        assert metrics["conversion_rate"]["change_pct"] == "-50.0"
+
+        assert metrics["average_order_value"]["previous_value"] == "100.00"
+        assert metrics["average_order_value"]["current_value"] == "100.00"
+        assert metrics["average_order_value"]["change_pct"] == "0.0"
+
+        assert metrics["roi"]["previous_value"] == "10.0000"
+        assert metrics["roi"]["current_value"] == "5.0000"
+        assert metrics["roi"]["change_pct"] == "-50.0"
+    finally:
+        service.close()
+
+
+def test_analysis_report_marks_missing_previous_month_as_not_comparable(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        ops.upsert_record(
+            TENANT,
+            _record(
+                "2026-01-02",
+                "搜索",
+                100,
+                5,
+                "500.00",
+                "100.00",
+                dataset_key=VIRTUAL_MONTH_COMPARISON_DATASET_KEY,
+            ),
+        )
+
+        report = ops.analysis_report(
+            TENANT,
+            OpsReportQuery(
+                dataset_key=VIRTUAL_MONTH_COMPARISON_DATASET_KEY,
+                store_id=STORE_ID,
+            ),
+        )
+
+        comparison = report["month_over_month"]
+        assert comparison["comparable"] is False
+        assert comparison["reason"] == "previous_month_missing"
+        assert comparison["normalization"] == "daily_avg"
+        assert comparison["previous_period"] == {
+            "start_date": "2025-12-01",
+            "end_date": "2025-12-31",
+            "date_count": 0,
+        }
+        assert comparison["current_period"] == {
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-31",
+            "date_count": 1,
+        }
+        assert comparison["metrics"] == []
+    finally:
+        service.close()
+
+
+def test_month_comparison_counts_distinct_dates_across_channels(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        rows = (
+            ("2025-12-31", "搜索", 60, 6, "600.00", "60.00"),
+            ("2025-12-31", "直播", 40, 4, "400.00", "40.00"),
+            ("2026-01-01", "搜索", 80, 4, "400.00", "80.00"),
+            ("2026-01-01", "直播", 20, 1, "100.00", "20.00"),
+        )
+        for record_date, channel, visitors, orders, sales, spend in rows:
+            ops.upsert_record(
+                TENANT,
+                _record(
+                    record_date,
+                    channel,
+                    visitors,
+                    orders,
+                    sales,
+                    spend,
+                    dataset_key=VIRTUAL_MONTH_COMPARISON_DATASET_KEY,
+                ),
+            )
+
+        report = ops.analysis_report(
+            TENANT,
+            OpsReportQuery(
+                dataset_key=VIRTUAL_MONTH_COMPARISON_DATASET_KEY,
+                store_id=STORE_ID,
+            ),
+        )
+
+        comparison = report["month_over_month"]
+        assert comparison["comparable"] is True
+        assert comparison["normalization"] == "daily_avg"
+        assert comparison["previous_period"]["date_count"] == 1
+        assert comparison["current_period"]["date_count"] == 1
+
+        metrics = {
+            item["metric"]: item
+            for item in comparison["metrics"]
+        }
+        assert metrics["visitors"]["previous_value"] == "100.00"
+        assert metrics["visitors"]["current_value"] == "100.00"
+        assert metrics["visitors"]["change_pct"] == "0.0"
+        assert metrics["orders"]["previous_value"] == "10.00"
+        assert metrics["orders"]["current_value"] == "5.00"
+        assert metrics["orders"]["change_pct"] == "-50.0"
+    finally:
+        service.close()
+
+
+def test_month_comparison_change_uses_unrounded_daily_averages(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        rows = (
+            ("2025-12-29", 100, 1, "100.00", "100.00"),
+            ("2025-12-30", 100, 0, "100.00", "100.00"),
+            ("2025-12-31", 100, 0, "100.00", "100.00"),
+            ("2026-01-01", 100, 1, "100.00", "100.00"),
+            ("2026-01-02", 100, 0, "100.00", "100.00"),
+        )
+        for record_date, visitors, orders, sales, spend in rows:
+            ops.upsert_record(
+                TENANT,
+                _record(
+                    record_date,
+                    "搜索",
+                    visitors,
+                    orders,
+                    sales,
+                    spend,
+                    dataset_key=VIRTUAL_MONTH_COMPARISON_DATASET_KEY,
+                ),
+            )
+
+        report = ops.analysis_report(
+            TENANT,
+            OpsReportQuery(
+                dataset_key=VIRTUAL_MONTH_COMPARISON_DATASET_KEY,
+                store_id=STORE_ID,
+            ),
+        )
+
+        metrics = {
+            item["metric"]: item
+            for item in report["month_over_month"]["metrics"]
+        }
+        assert metrics["orders"]["previous_value"] == "0.33"
+        assert metrics["orders"]["current_value"] == "0.50"
+        assert metrics["orders"]["change_pct"] == "50.0"
+        assert metrics["orders"]["direction"] == "up"
+    finally:
+        service.close()
+
+
 @pytest.mark.parametrize(
     (
         "record_dates",
@@ -584,6 +826,22 @@ def test_ops_assistant_api_end_to_end(tmp_path) -> None:
         assert comparison["previous_period"]["date_count"] == 0
         assert comparison["current_period"]["date_count"] == 3
         assert comparison["metrics"] == []
+
+        month_comparison = body["month_over_month"]
+        assert month_comparison["comparable"] is False
+        assert month_comparison["reason"] == "previous_month_missing"
+        assert month_comparison["normalization"] == "daily_avg"
+        assert month_comparison["previous_period"] == {
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-30",
+            "date_count": 0,
+        }
+        assert month_comparison["current_period"] == {
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-31",
+            "date_count": 3,
+        }
+        assert month_comparison["metrics"] == []
 
         assert body["summary"]
         assert body["action_boundary"].startswith("仅输出数据解读")

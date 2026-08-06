@@ -358,6 +358,7 @@ class OpsAssistantService:
         first_half, second_half = self._split_halves(rows)
         trends = self._trends(self._totals(first_half), self._totals(second_half))
         week_over_week = self._week_over_week(rows)
+        month_over_month = self._month_over_month(rows)
         channels = self._channel_breakdown(rows)
         findings = self._findings(rows, totals, trends, channels)
         summary = self._summary_lines(rows, totals, trends)
@@ -373,6 +374,7 @@ class OpsAssistantService:
             "totals": totals,
             "trends": trends,
             "week_over_week": week_over_week,
+            "month_over_month": month_over_month,
             "channels": channels,
             "findings": findings,
             "summary": summary,
@@ -574,6 +576,30 @@ class OpsAssistantService:
             "roi": _ratio(sales / spend) if spend else None,
         }
 
+    @staticmethod
+    def _daily_average_metrics(
+        totals: dict[str, Any],
+        date_count: int,
+    ) -> dict[str, Any]:
+        metrics = dict(totals)
+        divisor = Decimal(date_count)
+        for metric in (
+            "visitors",
+            "orders",
+            "sales_amount",
+            "ad_spend",
+        ):
+            metrics[metric] = str(
+                (
+                    Decimal(str(metrics[metric]))
+                    / divisor
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP,
+                )
+            )
+        return metrics
+
     @classmethod
     def _week_over_week(
         cls,
@@ -676,6 +702,171 @@ class OpsAssistantService:
             else:
                 before = Decimal(str(previous_value))
                 after = Decimal(str(current_value))
+                if before == 0:
+                    metric_result["direction"] = (
+                        "flat" if after == 0 else "up"
+                    )
+                    metric_result["reason"] = "previous_value_zero"
+                else:
+                    change = (after - before) / before
+                    metric_result["change_pct"] = str(
+                        (change * 100).quantize(
+                            Decimal("0.1"),
+                            rounding=ROUND_HALF_UP,
+                        )
+                    )
+                    if abs(change) < Decimal("0.05"):
+                        metric_result["direction"] = "flat"
+                    elif change > 0:
+                        metric_result["direction"] = "up"
+                    else:
+                        metric_result["direction"] = "down"
+                    metric_result["comparable"] = True
+
+            comparison["metrics"].append(metric_result)
+
+        comparison["comparable"] = True
+        return comparison
+
+    @classmethod
+    def _month_over_month(
+        cls,
+        rows: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if not rows:
+            return {
+                "comparable": False,
+                "reason": "insufficient_data",
+                "normalization": "daily_avg",
+                "previous_period": None,
+                "current_period": None,
+                "metrics": [],
+            }
+
+        dated_rows = [
+            (date.fromisoformat(str(item["record_date"])), item)
+            for item in rows
+        ]
+        latest_date = max(item_date for item_date, _ in dated_rows)
+        current_start = latest_date.replace(day=1)
+        if current_start.month == 12:
+            next_month_start = date(
+                current_start.year + 1,
+                1,
+                1,
+            )
+        else:
+            next_month_start = date(
+                current_start.year,
+                current_start.month + 1,
+                1,
+            )
+        current_end = next_month_start - timedelta(days=1)
+        previous_end = current_start - timedelta(days=1)
+        previous_start = previous_end.replace(day=1)
+
+        current_rows = [
+            item
+            for item_date, item in dated_rows
+            if current_start <= item_date <= current_end
+        ]
+        previous_rows = [
+            item
+            for item_date, item in dated_rows
+            if previous_start <= item_date <= previous_end
+        ]
+        current_date_count = len(
+            {
+                item_date
+                for item_date, _ in dated_rows
+                if current_start <= item_date <= current_end
+            }
+        )
+        previous_date_count = len(
+            {
+                item_date
+                for item_date, _ in dated_rows
+                if previous_start <= item_date <= previous_end
+            }
+        )
+
+        comparison = {
+            "comparable": False,
+            "reason": None,
+            "normalization": "daily_avg",
+            "previous_period": {
+                "start_date": previous_start.isoformat(),
+                "end_date": previous_end.isoformat(),
+                "date_count": previous_date_count,
+            },
+            "current_period": {
+                "start_date": current_start.isoformat(),
+                "end_date": current_end.isoformat(),
+                "date_count": current_date_count,
+            },
+            "metrics": [],
+        }
+        if current_date_count == 0:
+            comparison["reason"] = "current_month_missing"
+            return comparison
+        if previous_date_count == 0:
+            comparison["reason"] = "previous_month_missing"
+            return comparison
+
+        previous_totals = cls._totals(previous_rows)
+        current_totals = cls._totals(current_rows)
+        previous_metrics = cls._daily_average_metrics(
+            previous_totals,
+            previous_date_count,
+        )
+        current_metrics = cls._daily_average_metrics(
+            current_totals,
+            current_date_count,
+        )
+
+        for metric, label in (
+            ("visitors", "日均访客数"),
+            ("orders", "日均订单数"),
+            ("sales_amount", "日均销售额"),
+            ("ad_spend", "日均推广花费"),
+            ("conversion_rate", "转化率"),
+            ("average_order_value", "客单价"),
+            ("roi", "ROI"),
+        ):
+            previous_value = previous_metrics[metric]
+            current_value = current_metrics[metric]
+            metric_result = {
+                "metric": metric,
+                "label": label,
+                "previous_value": previous_value,
+                "current_value": current_value,
+                "change_pct": None,
+                "direction": None,
+                "comparable": False,
+                "reason": None,
+            }
+
+            if previous_value is None or current_value is None:
+                metric_result["reason"] = "value_unavailable"
+            else:
+                if metric in (
+                    "visitors",
+                    "orders",
+                    "sales_amount",
+                    "ad_spend",
+                ):
+                    before = (
+                        Decimal(str(previous_totals[metric]))
+                        / Decimal(previous_date_count)
+                    )
+                    after = (
+                        Decimal(str(current_totals[metric]))
+                        / Decimal(current_date_count)
+                    )
+                else:
+                    before = Decimal(str(previous_value))
+                    after = Decimal(str(current_value))
+
                 if before == 0:
                     metric_result["direction"] = (
                         "flat" if after == 0 else "up"
