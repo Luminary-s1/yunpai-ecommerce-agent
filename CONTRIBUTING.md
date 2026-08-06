@@ -269,13 +269,13 @@ M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开�
 | 版本 | 占用者 | 模块 / 分支 | 用途 | 状态 |
 |---:|---|---|---|---|
 | ≤ 25 | — | 已合并进 `main` | 历史迁移，`_apply_v1` ~ `_apply_v25` | 已合并 |
-| **26** | 缪海南 | M6 / `feature/m6-competitor-data-service` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已分配，未合并 |
+| 26 | 缪海南 | M6 / 已合并进 `main` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已合并 |
 | 27 | 闫睿涵 | M4 / 已合并进 `main` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已合并 |
 | **28** | 缪海南 | M5 工作包 3 / 待建分支 | `ops_operation_records` 新增 `sku_id`，唯一约束改为 `(tenant_id, dataset_key, record_date, channel, sku_id)` | 已分配，未合并 |
 | 29 | *（空闲）* | | | |
 
-27 已合并，26 和 28 在途。**并行占号的分支合并时，`database.py` 必然在三处
-冲突**（2026-08-06 实测：26 对 27 就是这三处）：
+26 和 27 已合并，28 在途。**并行占号的分支合并时，`database.py` 必然在三处
+冲突**（2026-08-06 实测：26 对 27 就是这三处，已按下面的解法合入）：
 
 1. `SCHEMA_VERSION` 那一行 —— 取两者较大值
 2. `initialize()` 里的 `if NN not in applied` 块 —— **两个块都保留**，按版本号排序
