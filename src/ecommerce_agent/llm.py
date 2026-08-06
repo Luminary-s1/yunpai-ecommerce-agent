@@ -81,15 +81,46 @@ class ModelGateway:
         *,
         timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
-        content = self._generate_content(
-            messages,
-            json_mode=True,
-            timeout_seconds=timeout_seconds,
+        attempts = (
+            1
+            if timeout_seconds is not None
+            else self.settings.model_retry_attempts + 1
         )
-        try:
-            return extract_json_object(content)
-        except ValueError as exc:
-            raise ModelError(str(exc)) from exc
+        last_error: ModelError | None = None
+        for attempt in range(attempts):
+            try:
+                content = self._generate_content(
+                    messages,
+                    json_mode=True,
+                    timeout_seconds=timeout_seconds,
+                )
+                return extract_json_object(content)
+            except ValueError as exc:
+                last_error = ModelError(str(exc))
+            except ModelError as exc:
+                last_error = exc
+            if (
+                last_error is None
+                or attempt + 1 >= attempts
+                or not self._should_retry_json_error(last_error)
+            ):
+                raise last_error
+            time.sleep(min(0.2 * (attempt + 1), 0.5))
+        raise AssertionError("structured generation retry loop did not return")
+
+    @staticmethod
+    def _should_retry_json_error(error: ModelError) -> bool:
+        if isinstance(error, ModelUnavailableError):
+            return False
+        message = str(error).lower()
+        return any(
+            marker in message
+            for marker in (
+                "empty content",
+                "not valid json",
+                "response did not match",
+            )
+        )
 
     def _generate_content(
         self,

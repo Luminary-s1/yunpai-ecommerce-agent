@@ -24,9 +24,24 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 
 ## M4 智能客服后端开发
 
-模块任务书共 5 个工作包，152 小时。
+模块任务书共 5 个工作包，134 小时。
 
-### WP1 客服会话管理与上下文控制（24h）
+### WP1 知识库增强回复生成 Pipeline（32h）
+
+- [x] 回复生成主流程（加载历史 → 检索 → 组装 Prompt → 调模型 → 校验 → 落库）
+- [x] RAG 检索集成（五层知识、版本审批回滚、会话稳定分桶灰度）
+- [x] Prompt 组装（知识片段 + 对话历史 + 用户消息 + 已验证工具结果）
+- [x] 防幻觉指令（SYSTEM_PROMPT 八条硬边界）
+- [x] 输出后置安全校验，不通过转人工
+- [x] 幂等设计（Idempotency-Key + agent_invocations 表，断连重放不重复回复）
+- [x] RAG 不可用降级（无知识命中时明确告知并转人工）
+- [x] 模型超时/限流降级（提示重试，不占用人工坐席）
+- [x] **SSE 流式输出接口**（`POST /v1/chat/stream`，逐段 delta）
+- [x] **`POST /v1/chat/sessions/{id}/messages`** 流式消息路径
+- [x] **SSE 事件协议**（meta / delta / citations / handoff / done / error）
+- [x] 多轮指代消解专项验证（"它多少钱"从预算内历史恢复商品候选）
+
+### WP2 客服会话管理与上下文控制（24h）
 
 - [x] Session 数据模型：`sessions` 表含状态、创建/更新时间、租户与主体绑定
 - [x] Message 数据模型：`messages` 表含 session_id、role、content、created_at
@@ -42,22 +57,7 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 - [x] **`DELETE /v1/chat/sessions/{id}`** 关闭会话接口
 - [x] **独立会话超时参数**（默认 120 分钟，与消息留存解耦）
 
-### WP2 知识库增强回复生成 Pipeline（40h）
-
-- [x] 回复生成主流程（加载历史 → 检索 → 组装 Prompt → 调模型 → 校验 → 落库）
-- [x] RAG 检索集成（五层知识、版本审批回滚、会话稳定分桶灰度）
-- [x] Prompt 组装（知识片段 + 对话历史 + 用户消息 + 已验证工具结果）
-- [x] 防幻觉指令（SYSTEM_PROMPT 八条硬边界）
-- [x] 输出后置安全校验，不通过转人工
-- [x] 幂等设计（Idempotency-Key + agent_invocations 表，断连重放不重复回复）
-- [x] RAG 不可用降级（无知识命中时明确告知并转人工）
-- [x] 模型超时/限流降级（提示重试，不占用人工坐席）
-- [x] **SSE 流式输出接口**（`POST /v1/chat/stream`，逐段 delta）
-- [x] **`POST /v1/chat/sessions/{id}/messages`** 流式消息路径
-- [x] **SSE 事件协议**（meta / delta / citations / handoff / done / error）
-- [x] 多轮指代消解专项验证（"它多少钱"从预算内历史恢复商品候选）
-
-### WP3 客服意图识别与路由逻辑（24h）
+### WP3 客服意图识别与路由逻辑（46h）
 
 > 标 ✎ 的条目代码在 `feature/m4-customer-service` 分支，尚未合入 `main`。
 > 从 `main` 开分支的同学看不到这部分实现，也不要重复做。
@@ -82,7 +82,7 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 - [x] **意图路由配置文件**（`intent_routing.json`，意图 → 检索范围 / Prompt
       变体 / SOP 意图）✎
 
-### WP4 客服模块效果评测与调优（24h）
+### WP4 客服模块效果评测与调优（16h）
 
 > 标 ✎ 的条目代码在 `feature/m4-customer-service` 分支，尚未合入 `main`。
 > 最新一次运行：mock `0.940 / 0.020 / 0.000`、live `deepseek-v4-flash`
@@ -109,7 +109,7 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
       `RAG_MIN_SCORE=0.12`、`MODEL_MAX_OUTPUT_TOKENS=1600`、
       `MODEL_STREAMING=false`）✎
 
-### WP5 客服对话引擎核心开发（40h）
+### WP5 客服对话引擎端到端联调与交付（16h）
 
 > 内容与 WP1 + WP2 重叠，勾选状态同上。本包按"端到端联调与交付证据"执行。
 

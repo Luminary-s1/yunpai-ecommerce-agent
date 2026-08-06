@@ -116,6 +116,41 @@ def test_structured_generation_accepts_a_per_call_timeout(tmp_path) -> None:
     assert captured_timeout["read"] == 0.25
 
 
+def test_structured_generation_retries_malformed_json(tmp_path) -> None:
+    attempts = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        content = (
+            '{"intent":"shipping","mode":"answer","reason":"ok"}\n'
+            "extra explanation"
+            if attempts == 1
+            else '{"intent":"shipping","mode":"answer","reason":"ok"}'
+        )
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": content}}]},
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_streaming=False,
+        model_retry_attempts=1,
+        model_api_key="test-model-key",
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        decision = gateway.generate_json([{"role": "user", "content": "decide"}])
+    finally:
+        gateway.close()
+
+    assert decision["intent"] == "shipping"
+    assert attempts == 2
+
+
 def test_bounded_structured_generation_does_not_retry_connect_timeout(tmp_path) -> None:
     attempts = 0
 
