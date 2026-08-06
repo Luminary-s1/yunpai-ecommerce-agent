@@ -8,7 +8,6 @@ __pycache__/
 data/
 tmp/
 _skill_test/
-.worktrees/
 *.egg-info/
 *.sqlite3
 *.db
