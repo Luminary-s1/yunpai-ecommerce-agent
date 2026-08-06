@@ -269,8 +269,16 @@ M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开�
 | 版本 | 占用者 | 模块 / 分支 | 用途 | 状态 |
 |---:|---|---|---|---|
 | ≤ 25 | — | 已合并进 `main` | 历史迁移，`_apply_v1` ~ `_apply_v25` | 已合并 |
-| **26** | 缪海南 | M6 / `feature/m6-competitor-import` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已分配，未合并 |
-| 27 | *（空闲）* | | | |
+| **26** | 缪海南 | M6 / `feature/m6-competitor-data-service` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已分配，未合并 |
+| **27** | 闫睿涵 | M4 / `feature/m4-customer-service` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已分配，未合并 |
+| **28** | 缪海南 | M5 工作包 3 / 待建分支 | `ops_operation_records` 新增 `sku_id`，唯一约束改为 `(tenant_id, dataset_key, record_date, channel, sku_id)` | 已分配，未合并 |
+| 29 | *（空闲）* | | | |
+
+26 和 27 并行占号，两条分支都会改 `database.py` 的 `SCHEMA_VERSION` 那一行，
+合并时 git 会报冲突。**解冲突的唯一正确结果是：`SCHEMA_VERSION` 取两者较大值，
+且 `if 26 not in applied` 和 `if 27 not in applied` 两个块都保留。** 整块取
+ours 或 theirs 就会丢掉一组迁移——那正是下面第 3 条要防的事故。迁移按
+`schema_migrations` 的成员判断执行，与先后合并顺序无关。
 
 占号规则：
 
@@ -287,6 +295,30 @@ M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开�
    （给 `competitor_observations` 加 `payload_hash`）
 5. 存量行没有新列的值，所以**新列必须可空或带默认值**，不能是无默认的 `NOT NULL`
 6. 合并后跑一次全量测试再关掉这一行
+
+### 协调文档的冲突约定
+
+2026-08-05 一次合并撞出 24 个冲突块，**全部在协调文档里，代码零冲突**，其中
+23 个是「同一张表被两个人从不同分支改了数字或名字」。所以有下面四条：
+
+**1. 可变状态不进 git。** 工时、剩余、进度百分比一律不写进文档，进度以飞书
+机器人为唯一源。`*_WORKBENCH.md` 的表只留任务名、关联子功能、优先级、
+工作类型、承接人——这些不会天天变。已按此清理，别再加回来。
+
+**2. 文档有主，功能分支不碰别人的。**
+
+| 文档 | 谁能改 |
+|---|---|
+| `docs/tasks/M*_WORKBENCH.md`、`M*_HANDOFF.md` | 该模块承接人 |
+| `docs/tasks/PROGRESS.md`、`CONTRIBUTING.md`、一切分工调整 | 模块负责人，且只在 `main` 上改 |
+
+功能分支只改自己模块的文档和代码。要动别人的文档，在群里说，由对应的人改。
+
+**3. 不在文档里抄分支状态。** 分支和 PR 的状态用 `gh pr list` 看，实时且不会
+过期。文档里抄一份必然和现实不一致。
+
+**4. 落后超过 3 个提交就先同步。** 今天那 24 个冲突块，起因是一条分支从
+`36a3779` 一路开到 `main` 走完 15 个提交才合。天天同步，冲突永远是小的。
 
 ---
 

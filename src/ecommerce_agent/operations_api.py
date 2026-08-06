@@ -791,4 +791,20 @@ def build_operations_router(
             admin.tenant_id, subject_sku, store_id=store_id
         )
 
+    @router.get("/competitive/reports/analysis")
+    def competitive_report_analysis(
+        subject_sku: str = Query(min_length=1, max_length=128),
+        store_id: str | None = Query(default=None, max_length=128),
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """M6 分析层入口：已批准数据之上的竞品价格区间对比分析（F-312）。
+
+        与 /competitive/analysis 的区别：本端点经由 CompetitiveReportService，
+        只返回 D-025 已批准的价格证据，并产出可量化的价格区间分布
+        （price_bands），供报告引擎组装结构化报告。
+        """
+        return service.operations.competitive_report.analyze(
+            admin.tenant_id, subject_sku, store_id=store_id
+        )
+
     return router
