@@ -2,7 +2,7 @@
 
 > 文档版本：`M6-DD-1.2`
 > 日期：2026-08-05
-> 状态：字段设计已按最新分工和 Schema 26 对齐，待分析层确认后冻结接口；代码实现与验收尚未开始
+> 状态：接口口径已冻结；Schema 26 数据基础已提交 PR #2，完整工作包验收尚未完成
 > 适用范围：M6 工作包 3「竞品数据模型定义与结构化管理服务」（数据层唯一归口）
 > 下游消费者：工作包 2「竞品数据采集与结构化管理」只做分析侧取数适配，不重复实现本字典定义的数据层能力
 
@@ -125,8 +125,8 @@ F-305 当前版本生成；竞品商品快照来自合法数据源。两侧使�
 | `subject_sku` | string | 是 | 现有 | F-305 自有 SKU；同租户同店铺必须存在且非 deleted | 是 | CSV/API |
 | `competitor_name` | string | 是 | 现有 | 竞品店铺、供应商或主体展示名，1–200 | 否 | CSV/API |
 | `competitor_sku` | string | 是 | 现有 | 来源侧竞品 SKU，1–128 | 是 | CSV/API |
-| `subject_identity` | ProductIdentity | 是 | 现有 | 从 F-305 读取并保存不可变证据快照 | 否 | 服务端 |
-| `competitor_identity` | ProductIdentity | 是 | 现有+扩展 | 竞品身份及自定义维度 | 品牌、品类、维度 | CSV/API |
+| `subject_identity` | CompetitiveProductIdentity | 是 | 现有 | 从 F-305 读取并保存不可变证据快照 | 否 | 服务端 |
+| `competitor_identity` | CompetitiveProductIdentity | 是 | 现有+扩展 | 竞品身份及自定义维度 | 品牌、品类、维度 | CSV/API |
 | `comparison_keys` | array<string> | 否 | 现有 | 最多 20 个，单项 1–64，casefold 去重 | 否 | CSV/API |
 | `match_score` | integer | 是 | 现有字段 `score` 的逻辑名 | 0–100；确定性计算；不得作为商品评分 | 可独立筛选 | 服务端 |
 | `matched_fields` | array | 是 | 只读生成 | 对评分有正贡献的字段证据 | 否 | 服务端 |
@@ -177,7 +177,7 @@ F-305 当前版本生成；竞品商品快照来自合法数据源。两侧使�
 | `currency` | ISO-4217 string | 是 | 现有 | 三位大写，默认 `CNY` | 是 | `currency`、`币种` |
 | `rating_value` | decimal string | 否 | 建议新增 | 大于等于 0；必须与 `rating_scale` 成对 | 通过派生值 | `rating_value`、`商品评分`、`评分` |
 | `rating_scale` | decimal string | 否 | 建议新增 | 大于 0，且 `rating_value <= rating_scale` | 否 | `rating_scale`、`评分满分`、`满分` |
-| `normalized_rating` | decimal | 否 | 派生 | `rating_value / rating_scale * 5`，保留两位 | 是，0–5 | 不入库 |
+| `normalized_rating` | decimal string | 否 | 派生 | `rating_value / rating_scale * 5`，保留两位 | 是，0–5 | 不入库 |
 | `sales_rank` | integer | 否 | 建议新增 | 大于等于 1；必须与 `rank_scope` 成对 | 是 | `sales_rank`、`销量排名`、`排名` |
 | `rank_scope` | string | 否 | 建议新增 | 1–200；平台/品类/榜单范围 | 是 | `rank_scope`、`排名范围`、`榜单` |
 | `entity_match_id` | string | 否 | 现有 | 同租户且店铺、双方 SKU 必须一致 | 是 | `entity_match_id`、`匹配ID` |
