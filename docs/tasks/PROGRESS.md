@@ -59,9 +59,6 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 
 ### WP3 客服意图识别与路由逻辑（46h）
 
-> 标 ✎ 的条目代码在 `feature/m4-customer-service` 分支，尚未合入 `main`。
-> 从 `main` 开分支的同学看不到这部分实现，也不要重复做。
-
 - [x] 规则预筛（Prompt 注入、越权数据请求拦截）
 - [x] 高风险动作识别（退款/赔付/改价强制走验证执行或转人工）
 - [x] 意图落库（`messages.intent`、`request_metrics.intent`）
@@ -69,22 +66,21 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 - [x] 转人工兜底全套（队列路由、优先级、原子认领、坐席技能与容量、SLA、
       升级、自动派单、双人复核）
 - [x] 意图分布统计（后台可查）
-- [x] **受控四分类枚举**（商品咨询/售后/投诉/闲聊）✎
-- [x] **关键词规则分类表**（投诉 > 售后 > 商品咨询）✎
-- [x] **独立轻量分类调用**（few-shot 短 Prompt，默认限时 2 秒）✎
+- [x] **受控四分类枚举**（商品咨询/售后/投诉/闲聊）
+- [x] **关键词规则分类表**（投诉 > 售后 > 商品咨询）
+- [x] **独立轻量分类调用**（few-shot 短 Prompt，默认限时 2 秒）
 - [x] **置信度阈值转人工**（`answer` / `finish` 路由低于阈值转
-      `low_confidence_handoff`）✎
-- [x] **转人工阈值可配置**（`HANDOFF_CONFIDENCE_THRESHOLD`，默认 0.6）✎
+      `low_confidence_handoff`）
+- [x] **转人工阈值可配置**（`HANDOFF_CONFIDENCE_THRESHOLD`，默认 0.6）
 - [x] **投诉意图优先标记人工关注**（`priority_flag=complaint` 进既有
-      `complaints / urgent` 队列）✎
-- [x] **连续 2 轮低质回复检测**（`consecutive_low_quality`）✎
-- [x] **置信度持久化到消息记录**（schema v27 `messages.intent_confidence`）✎
+      `complaints / urgent` 队列）
+- [x] **连续 2 轮低质回复检测**（`consecutive_low_quality`）
+- [x] **置信度持久化到消息记录**（schema v27 `messages.intent_confidence`）
 - [x] **意图路由配置文件**（`intent_routing.json`，意图 → 检索范围 / Prompt
-      变体 / SOP 意图）✎
+      变体 / SOP 意图）
 
 ### WP4 客服模块效果评测与调优（16h）
 
-> 标 ✎ 的条目代码在 `feature/m4-customer-service` 分支，尚未合入 `main`。
 > 最新一次运行：mock `0.940 / 0.020 / 0.000`、live `deepseek-v4-flash`
 > `0.800 / 0.040 / 0.067`，报告在 `evals/customer_service/runs/`。
 
@@ -97,30 +93,31 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
       required/forbidden_answer_terms、max_risk_level
 - [x] 对抗模式基线（Prompt 注入、越权数据、禁止输出）
 - [x] 离线评测 20 例（12 检索 + 5 安全 + 3 precheck）
-- [x] **回答准确率指标**（M4 口径，门槛 `>= 0.75`）✎
-- [x] **幻觉率指标**（来源数值 / 承诺确定性核对，门槛 `<= 0.10`）✎
-- [x] **拒答率指标**（分母为 `expected_refusal=false` 的机会集，门槛 `<= 0.20`）✎
-- [x] **转人工合理率指标**（`handoff_precision`，报告项不设门槛）✎
+- [x] **回答准确率指标**（M4 口径，门槛 `>= 0.75`）
+- [x] **幻觉率指标**（来源数值 / 承诺确定性核对，门槛 `<= 0.10`）
+- [x] **拒答率指标**（分母为 `expected_refusal=false` 的机会集，门槛 `<= 0.20`）
+- [x] **转人工合理率指标**（`handoff_precision`，报告项不设门槛）
 - [x] **50 条用例集**（商品 15 / 售后 12 / 投诉 8 / 闲聊 5 / 对抗 10，
-      `fixtures/customer_service_eval_v1.json`，已冻结）✎
-- [x] **判定标准文档化**（`docs/customer-service-evaluation.md`）✎
-- [x] **自动化评测脚本**（`scripts/run_customer_eval.py`，mock / live 双模式）✎
+      `fixtures/customer_service_eval_v1.json`，已冻结）
+- [x] **判定标准文档化**（`docs/customer-service-evaluation.md`）
+- [x] **自动化评测脚本**（`scripts/run_customer_eval.py`，mock / live 双模式）
 - [x] **调优记录与最终参数配置文档**（`rag_min_score` 单变量回滚记录，最终
       `RAG_MIN_SCORE=0.12`、`MODEL_MAX_OUTPUT_TOKENS=1600`、
-      `MODEL_STREAMING=false`）✎
+      `MODEL_STREAMING=false`）
 
 ### WP5 客服对话引擎端到端联调与交付（16h）
 
 > 内容与 WP1 + WP2 重叠，勾选状态同上。本包按"端到端联调与交付证据"执行。
 
 - [x] 多轮对话可用，能基于知识库回答商品咨询
-- [x] 虚拟店铺跨模块场景验收框架（simulation-evidence-v1，当前 16 项）
+- [x] 虚拟店铺跨模块场景验收框架（simulation-evidence-v1，当前 17 项）
 - [x] 本机顾客直测入口（`/admin` 智能客服页，无需客户端密钥）
 - [x] 客服管理后台（会话回放、人工任务、评测、场景验收、审计）
-- [ ] **流式输出端到端实跑证据**
-- [ ] **新增场景 D17 多轮指代 / D18 意图路由与低置信度转人工**
+- [x] **流式输出端到端实跑证据**（`docs/works/13-feature-m4-customer-service/EVIDENCE.md`）
+- [x] **新增场景 D17 多轮指代**（含反证 `test_d17_counterexample_*`）
+- [ ] **新增场景 D18 意图路由与低置信度转人工**（胡磊承接）
 - [x] **`docs/works/13-feature-m4-customer-service/README.md` 验证文档**（已覆盖
-      D1–D20，含红态反证与回归数）✎
+      D1–D20，含红态反证与回归数）
 - [ ] **四份项目台账同步**（FEATURES / PROGRESS / VERSIONS / ACCEPTANCE）——
       FEATURES 与本文件已同步到 D20；VERSIONS 版本条目与 ACCEPTANCE 验收条目
       待 WP5 出口一并补
