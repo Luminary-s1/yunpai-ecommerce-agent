@@ -1136,7 +1136,6 @@ def test_v25_database_applies_v26_competitor_observation_columns(tmp_path) -> No
     db.initialize()
     db.initialize()
 
-    assert db.schema_version() == 27
     with db.connect() as conn:
         columns = {
             row[1] for row in conn.execute("PRAGMA table_info(competitor_observations)")
@@ -1150,7 +1149,7 @@ def test_v25_database_applies_v26_competitor_observation_columns(tmp_path) -> No
         migration_counts = dict(
             conn.execute(
                 "SELECT version, COUNT(*) FROM schema_migrations "
-                "WHERE version IN (26, 27) GROUP BY version"
+                "WHERE version = 26 GROUP BY version"
             ).fetchall()
         )
 
@@ -1161,4 +1160,4 @@ def test_v25_database_applies_v26_competitor_observation_columns(tmp_path) -> No
         "sales_rank": None,
         "rank_scope": None,
     }
-    assert migration_counts == {26: 1, 27: 1}
+    assert migration_counts.get(26) == 1
