@@ -23,6 +23,29 @@ CompetitiveAlertStatus = Literal["open", "acknowledged", "resolved"]
 CompetitiveMatchStatus = Literal["pending", "approved", "rejected"]
 CompetitiveSignalType = Literal["product_claim", "review_summary"]
 
+_OBSERVATION_V26_PAYLOAD_FIELDS = frozenset(
+    {"rating_value", "rating_scale", "sales_rank", "rank_scope"}
+)
+
+
+def _observation_payload_hash_candidates(payload: dict[str, Any]) -> set[str]:
+    omission_sets: list[frozenset[str]] = [frozenset()]
+    entity_match_omission = frozenset({"entity_match_id"})
+    if payload.get("entity_match_id") is None:
+        omission_sets.append(entity_match_omission)
+    if all(payload.get(field) is None for field in _OBSERVATION_V26_PAYLOAD_FIELDS):
+        omission_sets.append(_OBSERVATION_V26_PAYLOAD_FIELDS)
+        if payload.get("entity_match_id") is None:
+            omission_sets.append(
+                _OBSERVATION_V26_PAYLOAD_FIELDS | entity_match_omission
+            )
+    return {
+        payload_digest(
+            {key: value for key, value in payload.items() if key not in omitted_fields}
+        )
+        for omitted_fields in omission_sets
+    }
+
 
 class CompetitiveCustomDimension(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -739,7 +762,7 @@ class CompetitiveIntelligenceService:
                     """
                     SELECT * FROM competitor_observations
                     WHERE tenant_id=? AND connector_id=? AND source_id=?
-                    ORDER BY observed_at DESC
+                    ORDER BY observed_at DESC, created_at DESC
                     LIMIT 1
                     """,
                     (tenant_id, value.connector_id, value.source_id),
@@ -776,11 +799,9 @@ class CompetitiveIntelligenceService:
                     ).model_dump(mode="json")
                     legacy["observed_at"] = str(existing["observed_at"])
                     existing_hash = payload_digest(legacy)
-                legacy_payload = dict(payload)
-                legacy_payload.pop("entity_match_id", None)
-                legacy_hash = payload_digest(legacy_payload)
+                compatible_hashes = _observation_payload_hash_candidates(payload)
                 comparable_hash = (
-                    legacy_hash if existing_hash == legacy_hash else payload_hash
+                    existing_hash if existing_hash in compatible_hashes else payload_hash
                 )
                 write_decision = decide_write(
                     existing_source_time=str(existing["observed_at"]),

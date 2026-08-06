@@ -9,7 +9,11 @@ from ecommerce_agent.business import (
     CompetitiveProductIdentity,
     CompetitorObservationCreate,
 )
-from ecommerce_agent.business.source_versioning import SourceVersionError
+from ecommerce_agent.business.source_versioning import (
+    SourceVersionError,
+    canonical_source_time,
+    payload_digest,
+)
 from ecommerce_agent.service import AgentService
 
 from conftest import make_settings
@@ -90,6 +94,134 @@ def test_observation_persists_normalizes_and_hashes_rating_and_rank(tmp_path) ->
                 "tenant-test",
                 value.model_copy(update={"rating_value": Decimal("8")}),
             )
+    finally:
+        service.close()
+
+
+@pytest.mark.parametrize(
+    "omitted_fields",
+    [
+        (),
+        ("entity_match_id",),
+        ("rating_value", "rating_scale", "sales_rank", "rank_scope"),
+        (
+            "entity_match_id",
+            "rating_value",
+            "rating_scale",
+            "sales_rank",
+            "rank_scope",
+        ),
+    ],
+)
+def test_observation_replay_accepts_compatible_legacy_hash_field_sets(
+    tmp_path,
+    omitted_fields,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    competitive = service.operations.competitive
+    value = observation()
+    try:
+        created = competitive.record("tenant-test", value)
+        legacy_payload = value.model_dump(mode="json")
+        legacy_payload["observed_at"] = canonical_source_time(value.observed_at)
+        for field in omitted_fields:
+            legacy_payload.pop(field)
+        legacy_hash = payload_digest(legacy_payload)
+        with service.db.connect() as conn:
+            conn.execute(
+                "UPDATE competitor_observations SET payload_hash=? WHERE id=?",
+                (legacy_hash, created["id"]),
+            )
+
+        repeated = competitive.record("tenant-test", value)
+
+        assert repeated["id"] == created["id"]
+        assert repeated["write_status"] == "idempotent"
+        with service.db.connect() as conn:
+            stored_hash = conn.execute(
+                "SELECT payload_hash FROM competitor_observations WHERE id=?",
+                (created["id"],),
+            ).fetchone()[0]
+        assert stored_hash == legacy_hash
+    finally:
+        service.close()
+
+
+def test_observation_legacy_hash_rejects_nonempty_v26_facts(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    competitive = service.operations.competitive
+    value = observation()
+    try:
+        created = competitive.record("tenant-test", value)
+        legacy_payload = value.model_dump(mode="json")
+        legacy_payload["observed_at"] = canonical_source_time(value.observed_at)
+        for field in ("rating_value", "rating_scale", "sales_rank", "rank_scope"):
+            legacy_payload.pop(field)
+        with service.db.connect() as conn:
+            conn.execute(
+                "UPDATE competitor_observations SET payload_hash=? WHERE id=?",
+                (payload_digest(legacy_payload), created["id"]),
+            )
+
+        with pytest.raises(SourceVersionError, match="source_version_conflict"):
+            competitive.record(
+                "tenant-test",
+                value.model_copy(
+                    update={
+                        "rating_value": Decimal("4.5"),
+                        "rating_scale": Decimal("5"),
+                    }
+                ),
+            )
+    finally:
+        service.close()
+
+
+def test_observation_source_id_tie_uses_latest_created_record(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    competitive = service.operations.competitive
+    value = observation()
+    try:
+        older = competitive.record(
+            "tenant-test",
+            value.model_copy(update={"competitor_sku": "aaa-older"}),
+        )
+        current_payload = value.model_dump(mode="json")
+        current_payload["observed_at"] = canonical_source_time(value.observed_at)
+        with service.db.connect() as conn:
+            conn.execute(
+                "UPDATE competitor_observations SET created_at=? WHERE id=?",
+                ("2026-08-05T01:01:00+00:00", older["id"]),
+            )
+            conn.execute(
+                """
+                INSERT INTO competitor_observations(
+                    id, tenant_id, connector_id, store_id, subject_sku,
+                    competitor_name, competitor_sku, subject_price, competitor_price,
+                    currency, rating_value, rating_scale, sales_rank, rank_scope,
+                    source_type, source_ref, is_estimate, observed_at, source_id,
+                    created_at, payload_hash, entity_match_id
+                )
+                SELECT ?, tenant_id, connector_id, store_id, subject_sku,
+                       competitor_name, ?, subject_price, competitor_price,
+                       currency, rating_value, rating_scale, sales_rank, rank_scope,
+                       source_type, source_ref, is_estimate, observed_at, source_id,
+                       ?, ?, entity_match_id
+                FROM competitor_observations WHERE id=?
+                """,
+                (
+                    "competitor-latest-created",
+                    value.competitor_sku,
+                    "2026-08-05T01:02:00+00:00",
+                    payload_digest(current_payload),
+                    older["id"],
+                ),
+            )
+
+        repeated = competitive.record("tenant-test", value)
+
+        assert repeated["id"] == "competitor-latest-created"
+        assert repeated["write_status"] == "idempotent"
     finally:
         service.close()
 
