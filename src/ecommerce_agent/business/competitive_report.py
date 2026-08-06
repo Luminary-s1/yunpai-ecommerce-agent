@@ -18,7 +18,7 @@ P1 范围（本文件当前实现）：
 """
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from ..database import Database
@@ -28,8 +28,8 @@ from .competitive import CompetitiveIntelligenceService
 class CompetitiveReportService:
     """竞品对比分析引擎。消费已批准竞品事实，输出可量化对比结论。"""
 
-    #: 分析引擎允许消费的价格证据数量上限（防越权拉全量，与数据层口径一致）
-    MAX_PRICE_EVIDENCE = 5000
+    #: 分析层输出的百分比字段统一两位小数，与数据层口径一致
+    _PERCENT_QUANT = Decimal("0.01")
 
     def __init__(self, db: Database) -> None:
         self.db = db
@@ -70,7 +70,9 @@ class CompetitiveReportService:
                 "total_observations": len(entries),
                 "approved_observations": len(actionable),
                 "blocked_by_gate": len(entries) - len(actionable),
-                "price_evidence_cap": self.MAX_PRICE_EVIDENCE,
+                # 透传数据层的截断信号：竞品证据超过数据层上限时被静默截断，
+                # 分析层如实暴露，避免响应宣称有 cap 而实际数据不完整。
+                "history_truncated": raw["summary"]["history_truncated"],
                 "guardrail": "分析只使用已批准同款匹配的价格证据（D-025）",
             },
             "price_bands": price_bands,
@@ -91,6 +93,9 @@ class CompetitiveReportService:
         - band == "our_price_higher" —— 自有价格更高（竞品价 < 自有价）
 
         每个竞品只取最新一条证据；差异百分比为纯算术（gap / 自有价）。
+
+        未知 position 直接抛 KeyError（而非静默吞掉）：上游数据层一旦新增
+        第四种 position，这里必须显式失败以便补充分组，而不是悄悄丢数据。
         """
         bands: dict[str, list[dict[str, Any]]] = {
             "our_price_lower": [],
@@ -98,7 +103,7 @@ class CompetitiveReportService:
             "our_price_higher": [],
         }
         for item in actionable:
-            bands.setdefault(item["position"], []).append(
+            bands[item["position"]].append(
                 {
                     "competitor_name": item["competitor_name"],
                     "competitor_sku": item["competitor_sku"],
@@ -118,7 +123,7 @@ class CompetitiveReportService:
                 {
                     "band": band,
                     "competitor_count": len(members),
-                    "share_percent": self._share(len(members), len(actionable)),
+                    "share_percent": self._decimal(self._share(len(members), len(actionable))),
                     "average_gap_percent": self._decimal(
                         sum(gaps) / len(gaps)
                     )
@@ -141,6 +146,13 @@ class CompetitiveReportService:
 
     @staticmethod
     def _decimal(value: Decimal | None) -> str | None:
+        """Decimal 转两位小数字符串（ROUND_HALF_UP），与数据层口径一致。
+
+        average_gap_percent 等除法结果若不 quantize 会输出超长小数
+        （如 10.00333333...），统一为两位。
+        """
         if value is None:
             return None
-        return format(value, "f")
+        return format(
+            value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "f"
+        )

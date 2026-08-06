@@ -177,9 +177,34 @@ def test_price_band_arithmetic_is_correct(tmp_path) -> None:
         assert higher_member["competitor_sku"] == "comp-a"
         assert Decimal(higher_member["gap_percent"]) == Decimal("-20")
 
-        assert by_band["our_price_lower"]["share_percent"] == Decimal("33.33")
-        assert by_band["same_price"]["share_percent"] == Decimal("33.33")
-        assert by_band["our_price_higher"]["share_percent"] == Decimal("33.33")
+        # share_percent 现在统一为两位小数字符串（与 dict 其他字段一致）
+        assert by_band["our_price_lower"]["share_percent"] == "33.33"
+        assert by_band["same_price"]["share_percent"] == "33.33"
+        assert by_band["our_price_higher"]["share_percent"] == "33.33"
+    finally:
+        service.close()
+
+
+def test_percent_outputs_are_rounded_to_two_decimals(tmp_path) -> None:
+    """精度回归：除法结果必须 quantize 到两位小数（负责人实测 28 位小数场景）。
+
+    用不整除的 gaps（10.00 / 10.00 / 10.01 → 平均 10.0033...）验证
+    average_gap_percent 输出 10.00 而非超长小数；share_percent 同理。
+    """
+    service = AgentService(make_settings(tmp_path))
+    report = service.operations.competitive_report
+    try:
+        # 直接调 _decimal 验证除法结果被截断到两位
+        from decimal import Decimal
+
+        average = Decimal("10.00") + Decimal("10.00") + Decimal("10.01")
+        average /= Decimal("3")
+        assert report._decimal(average) == "10.00"
+
+        # share_percent 走 _decimal（字符串），非整除时也两位
+        share = report._decimal(report._share(1, 3))
+        assert share == "33.33"
+        assert report._share(1, 3) == Decimal("33.33")  # _share 本身保留 Decimal
     finally:
         service.close()
 
