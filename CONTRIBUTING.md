@@ -271,7 +271,8 @@ M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开�
 | ≤ 25 | — | 已合并进 `main` | 历史迁移，`_apply_v1` ~ `_apply_v25` | 已合并 |
 | **26** | 缪海南 | M6 / `feature/m6-competitor-data-service` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已分配，未合并 |
 | **27** | 闫睿涵 | M4 / `feature/m4-customer-service` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已分配，未合并 |
-| 28 | *（空闲）* | | | |
+| **28** | 缪海南 | M5 工作包 3 / 待建分支 | `ops_operation_records` 新增 `sku_id`，唯一约束改为 `(tenant_id, dataset_key, record_date, channel, sku_id)` | 已分配，未合并 |
+| 29 | *（空闲）* | | | |
 
 26 和 27 并行占号，两条分支都会改 `database.py` 的 `SCHEMA_VERSION` 那一行，
 合并时 git 会报冲突。**解冲突的唯一正确结果是：`SCHEMA_VERSION` 取两者较大值，
