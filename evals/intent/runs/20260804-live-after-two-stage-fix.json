@@ -1,0 +1,756 @@
+{
+  "mode": "live",
+  "request_interval": 45.0,
+  "total": 52,
+  "correct": 34,
+  "records": [
+    {
+      "id": "as-001",
+      "message": "这个订单怎么退货",
+      "expected": "after_sales",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "as-002",
+      "message": "我想申请退款",
+      "expected": "after_sales",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "as-003",
+      "message": "收到后可以换货吗",
+      "expected": "after_sales",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "as-004",
+      "message": "产品保修多久",
+      "expected": "after_sales",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "as-005",
+      "message": "物流到哪里了",
+      "expected": "after_sales",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "as-006",
+      "message": "东西收都后数量不够，有破损",
+      "expected": "after_sales",
+      "tags": [
+        "keyword_free",
+        "typo"
+      ],
+      "source": "probe-20260804",
+      "note": "真实用户笔误：收都后=收到后。关键词表全部落空",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "as-007",
+      "message": "我这东西坏了，质量也太差了吧",
+      "expected": "after_sales",
+      "tags": [
+        "keyword_free",
+        "mixed"
+      ],
+      "source": "probe-20260804",
+      "note": "口径已裁定：诉求优先于语气，判 after_sales。用户要的是把东西修好，不是要道歉",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "as-008",
+      "message": "包裹三天没动静了",
+      "expected": "after_sales",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "as-009",
+      "message": "发错货了，能补发吗",
+      "expected": "after_sales",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "as-010",
+      "message": "拆开发现少了一个配件",
+      "expected": "after_sales",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "as-011",
+      "message": "单号能帮我查一下吗",
+      "expected": "after_sales",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "correct": false
+    },
+    {
+      "id": "as-012",
+      "message": "签收的时候没验货，现在还能申请吗",
+      "expected": "after_sales",
+      "tags": [
+        "keyword_free",
+        "ambiguous"
+      ],
+      "source": "handcraft",
+      "predicted": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "as-013",
+      "message": "支持七天无理由吗",
+      "expected": "after_sales",
+      "tags": [
+        "keyword_free",
+        "ambiguous"
+      ],
+      "source": "handcraft",
+      "note": "待裁定：售前问退货政策，属『售前 vs 售后』轴，与 as-007 的『诉求 vs 语气』不同",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "cp-001",
+      "message": "我要投诉客服",
+      "expected": "complaint",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cp-002",
+      "message": "准备给你们差评",
+      "expected": "complaint",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cp-003",
+      "message": "我要举报这个商家",
+      "expected": "complaint",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cp-004",
+      "message": "我会曝光这次服务",
+      "expected": "complaint",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cp-005",
+      "message": "投诉退款一直没人处理",
+      "expected": "complaint",
+      "tags": [
+        "plain",
+        "mixed"
+      ],
+      "source": "plan-d11",
+      "note": "同时命中 complaint 与 after_sales，验证优先级",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cp-006",
+      "message": "你们这服务态度也太恶劣了",
+      "expected": "complaint",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "cp-007",
+      "message": "等了半个月还没发货，我真是服了",
+      "expected": "complaint",
+      "tags": [
+        "keyword_free",
+        "mixed"
+      ],
+      "source": "handcraft",
+      "predicted": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cp-008",
+      "message": "宣传跟实物完全不符，这是欺骗消费者",
+      "expected": "complaint",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "cp-009",
+      "message": "已经第三次找你们了还没解决",
+      "expected": "complaint",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cp-010",
+      "message": "你这个推荐算法真烂",
+      "expected": "complaint",
+      "tags": [
+        "cross_domain",
+        "meta"
+      ],
+      "source": "probe-20260804",
+      "note": "对 AI 本身的不满。规则层被『推荐』劫持成 product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "cp-011",
+      "message": "不给解决我就去消协了",
+      "expected": "complaint",
+      "tags": [
+        "keyword_free",
+        "escalation"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "pi-001",
+      "message": "这款水杯多少钱",
+      "expected": "product_inquiry",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "pi-002",
+      "message": "请问有哪些规格",
+      "expected": "product_inquiry",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "pi-003",
+      "message": "这个背包尺寸多大",
+      "expected": "product_inquiry",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "pi-004",
+      "message": "两款商品帮我对比推荐一下",
+      "expected": "product_inquiry",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "pi-005",
+      "message": "材质是纯棉的吗",
+      "expected": "product_inquiry",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "pi-006",
+      "message": "有别的颜色吗",
+      "expected": "product_inquiry",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "pi-007",
+      "message": "现在还有货吗",
+      "expected": "product_inquiry",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "pi-008",
+      "message": "适合送人吗",
+      "expected": "product_inquiry",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "pi-009",
+      "message": "双十一有活动吗",
+      "expected": "product_inquiry",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "probe-20260804",
+      "note": "促销/优惠类高频词，关键词表完全没覆盖",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "pi-010",
+      "message": "这个能装下 15 寸笔记本吗",
+      "expected": "product_inquiry",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "pi-011",
+      "message": "这个相机曝光怎么调",
+      "expected": "product_inquiry",
+      "tags": [
+        "cross_domain"
+      ],
+      "source": "probe-20260804",
+      "note": "『曝光』在相机品类是商品参数，被规则层判成 complaint",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "pi-012",
+      "message": "两个型号有啥区别",
+      "expected": "product_inquiry",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "pi-013",
+      "message": "充电宝能带上飞机吗",
+      "expected": "product_inquiry",
+      "tags": [
+        "keyword_free"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": false
+    },
+    {
+      "id": "cc-001",
+      "message": "你好",
+      "expected": "chitchat",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": true
+    },
+    {
+      "id": "cc-002",
+      "message": "今天天气不错",
+      "expected": "chitchat",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cc-003",
+      "message": "谢谢你的帮助",
+      "expected": "chitchat",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cc-004",
+      "message": "再见",
+      "expected": "chitchat",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": true
+    },
+    {
+      "id": "cc-005",
+      "message": "你是谁",
+      "expected": "chitchat",
+      "tags": [
+        "plain"
+      ],
+      "source": "plan-d11",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": true
+    },
+    {
+      "id": "cc-006",
+      "message": "你调用的是什么模型？",
+      "expected": "chitchat",
+      "tags": [
+        "meta"
+      ],
+      "source": "probe-20260804",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": true
+    },
+    {
+      "id": "cc-007",
+      "message": "给我推荐个电影",
+      "expected": "chitchat",
+      "tags": [
+        "cross_domain"
+      ],
+      "source": "probe-20260804",
+      "note": "『推荐』过泛，规则层假阳性",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": true
+    },
+    {
+      "id": "cc-008",
+      "message": "我朋友在物流公司上班",
+      "expected": "chitchat",
+      "tags": [
+        "cross_domain"
+      ],
+      "source": "probe-20260804",
+      "note": "『物流』出现在非诉求语境，规则层假阳性",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": true
+    },
+    {
+      "id": "cc-009",
+      "message": "不需要退款了，谢谢",
+      "expected": "chitchat",
+      "tags": [
+        "negation"
+      ],
+      "source": "probe-20260804",
+      "note": "子串匹配看不见否定。规则层截胡，模型层无法挽救",
+      "predicted": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "correct": true
+    },
+    {
+      "id": "cc-010",
+      "message": "哈哈哈",
+      "expected": "chitchat",
+      "tags": [
+        "plain"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": true
+    },
+    {
+      "id": "cc-011",
+      "message": "在吗",
+      "expected": "chitchat",
+      "tags": [
+        "plain"
+      ],
+      "source": "handcraft",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_call_failed:ModelUnavailableError",
+      "correct": true
+    },
+    {
+      "id": "dg-001",
+      "message": "",
+      "expected": "chitchat",
+      "tags": [
+        "degenerate"
+      ],
+      "source": "plan-d11",
+      "note": "空串必须走 default 且不抛",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "unclassifiable_input",
+      "correct": true
+    },
+    {
+      "id": "dg-002",
+      "message": "   ",
+      "expected": "chitchat",
+      "tags": [
+        "degenerate"
+      ],
+      "source": "plan-d11",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "unclassifiable_input",
+      "correct": true
+    },
+    {
+      "id": "dg-003",
+      "message": "！？……---",
+      "expected": "chitchat",
+      "tags": [
+        "degenerate"
+      ],
+      "source": "plan-d11",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "unclassifiable_input",
+      "correct": true
+    },
+    {
+      "id": "dg-004",
+      "message": "😀😀😀",
+      "expected": "chitchat",
+      "tags": [
+        "degenerate"
+      ],
+      "source": "probe-20260804",
+      "note": "纯 emoji：isalnum 全 False，走 default",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "unclassifiable_input",
+      "correct": true
+    }
+  ]
+}

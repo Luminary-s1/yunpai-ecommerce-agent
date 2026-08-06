@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 
 import pytest
@@ -191,9 +192,14 @@ def test_write_handler_exception_is_uncertain_and_never_retried() -> None:
 
 def test_read_timeout_is_bounded_and_reported() -> None:
     registry = ToolRegistry()
+    handler_seconds = 2.0
+    timeout_seconds = 0.02
+    # The abandoned worker keeps running after the registry gives up; releasing it once
+    # the assertions are done keeps the interpreter from joining a sleeping thread at exit.
+    release = threading.Event()
 
     def slow(_args, _context):
-        time.sleep(0.2)
+        release.wait(timeout=handler_seconds)
         return ToolResult(status="success")
 
     spec = ToolSpec(
@@ -202,19 +208,26 @@ def test_read_timeout_is_bounded_and_reported() -> None:
         kind="read",
         input_model=OrderInput,
         handler=slow,
-        timeout_seconds=0.02,
+        timeout_seconds=timeout_seconds,
     )
-    started = time.perf_counter()
-    result = registry.execute(
-        spec=spec,
-        arguments=OrderInput(order_id="order-1"),
-        context=context(),
-    )
-    assert time.perf_counter() - started < 0.15
-    assert result.status == "failed"
-    assert result.error_code == "tool_timeout"
-    assert result.postcondition_met is False
-    registry.close()
+    try:
+        started = time.perf_counter()
+        result = registry.execute(
+            spec=spec,
+            arguments=OrderInput(order_id="order-1"),
+            context=context(),
+        )
+        elapsed = time.perf_counter() - started
+        # The registry must abandon the call at its own timeout instead of waiting for the
+        # handler. Bounding at half the handler duration keeps that meaning while leaving
+        # enough headroom for thread scheduling on a loaded CI machine.
+        assert elapsed < handler_seconds / 2
+        assert result.status == "failed"
+        assert result.error_code == "tool_timeout"
+        assert result.postcondition_met is False
+    finally:
+        release.set()
+        registry.close()
 
 
 def test_write_timeout_is_uncertain_and_not_retried() -> None:

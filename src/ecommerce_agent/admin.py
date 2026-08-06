@@ -211,7 +211,8 @@ class AdminConsoleService:
                 """
                 SELECT m.id, m.trace_id, m.role, m.content, m.intent, m.risk_level,
                        m.route_reason, m.sources_json, m.model_fallback, m.redacted,
-                       m.context_snapshot_id, m.created_at,
+                       m.context_snapshot_id, m.customer_intent,
+                       m.intent_confidence, m.intent_method, m.created_at,
                        (SELECT a.detail_json FROM audit_log a
                         WHERE a.tenant_id=m.tenant_id AND a.subject_id=m.id
                           AND a.event_type='chat.completed'

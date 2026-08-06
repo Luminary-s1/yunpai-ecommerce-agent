@@ -1,0 +1,22 @@
+{
+  "product_inquiry": {
+    "knowledge_intent": "product",
+    "prompt_variant": "product_inquiry",
+    "sop_intent": "product_inquiry"
+  },
+  "after_sales": {
+    "knowledge_intent": "after_sales",
+    "prompt_variant": "after_sales",
+    "sop_intent": "after_sales"
+  },
+  "complaint": {
+    "knowledge_intent": "complaint",
+    "prompt_variant": "complaint",
+    "sop_intent": "complaint"
+  },
+  "chitchat": {
+    "knowledge_intent": "greeting",
+    "prompt_variant": "chitchat",
+    "sop_intent": "chitchat"
+  }
+}
