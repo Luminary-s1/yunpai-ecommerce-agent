@@ -204,7 +204,12 @@ def test_percent_outputs_are_rounded_to_two_decimals(tmp_path) -> None:
         # share_percent 走 _decimal（字符串），非整除时也两位
         share = report._decimal(report._share(1, 3))
         assert share == "33.33"
-        assert report._share(1, 3) == Decimal("33.33")  # _share 本身保留 Decimal
+
+        # 量化只在 _decimal 做一次：_share 交出未量化的原值。若 _share 自己
+        # 先按默认 ROUND_HALF_EVEN 量化，_decimal 的 ROUND_HALF_UP 就成了
+        # 空转——1/800 = 0.125 正好能区分两种舍入模式。
+        assert report._share(1, 800) == Decimal("0.125")
+        assert report._decimal(report._share(1, 800)) == "0.13"
     finally:
         service.close()
 

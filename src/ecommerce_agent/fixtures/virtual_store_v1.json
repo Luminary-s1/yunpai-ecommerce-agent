@@ -242,7 +242,7 @@
     },
     {
       "id": "D17", "module": "customer_service", "title": "多轮对话指代消解：第二轮“它”能恢复上文商品候选",
-      "input": {"operation": "AgentService.chat (multi-turn, same session)", "first_message": "晴川 AF5 空气炸锅多少钱？", "second_message": "它保修多久？", "context": {"shop_id": "qingchuan-flagship-001", "sku_id": "QC-AF5-WHITE"}},
+      "input": {"operation": "AgentService.chat (multi-turn, same session)", "first_message": "晴川 AF5 空气炸锅多少钱？", "first_context": {"shop_id": "qingchuan-flagship-001", "sku_id": "QC-AF5-WHITE"}, "second_message": "它保修多久？", "second_context": {"shop_id": "qingchuan-flagship-001"}},
       "expected": ["第一轮识别出商品候选（含 AF5）", "第二轮“它”从上文历史恢复出 AF5 商品候选而非无法解析", "第二轮上下文快照仍含 AF5 候选", "两轮共用同一会话，指代不依赖客户端额外传参"]
     },
     {

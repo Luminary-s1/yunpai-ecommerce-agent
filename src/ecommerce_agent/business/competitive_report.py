@@ -140,19 +140,19 @@ class CompetitiveReportService:
     def _share(part: int, total: int) -> Decimal | None:
         if total <= 0:
             return None
-        return (Decimal(part) / Decimal(total) * Decimal("100")).quantize(
-            Decimal("0.01")
-        )
+        return Decimal(part) / Decimal(total) * Decimal("100")
 
-    @staticmethod
-    def _decimal(value: Decimal | None) -> str | None:
+    @classmethod
+    def _decimal(cls, value: Decimal | None) -> str | None:
         """Decimal 转两位小数字符串（ROUND_HALF_UP），与数据层口径一致。
 
         average_gap_percent 等除法结果若不 quantize 会输出超长小数
-        （如 10.00333333...），统一为两位。
+        （如 10.00333333...），统一为两位。量化只在这里做一次：调用方交出
+        未量化的原值，否则先按默认 ROUND_HALF_EVEN 量化再进来，这里的
+        ROUND_HALF_UP 就成了空转。
         """
         if value is None:
             return None
         return format(
-            value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "f"
+            value.quantize(cls._PERCENT_QUANT, rounding=ROUND_HALF_UP), "f"
         )

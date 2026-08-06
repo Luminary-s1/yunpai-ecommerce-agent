@@ -147,6 +147,12 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
             item for item in summary.json()["demands"] if item["id"] == "D17"
         )
         assert demand_d17["input"]["second_message"] == "它保修多久？"
+        # 场景契约声称「指代不依赖客户端额外传参」，所以公开的证据里
+        # 第二轮 context 必须只有 shop_id——第一轮才带 sku_id。
+        assert demand_d17["input"]["first_context"]["sku_id"] == "QC-AF5-WHITE"
+        assert demand_d17["input"]["second_context"] == {
+            "shop_id": "qingchuan-flagship-001"
+        }
         assert summary.json()["records"] == {
             "catalog": 6,
             "inventory": 10,
