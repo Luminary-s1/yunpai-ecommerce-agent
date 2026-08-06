@@ -189,38 +189,42 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         assert audit.json()[0]["detail"]["passed"] is True
 
 
-def test_d17_counterexample_fails_without_reference_resolution(tmp_path) -> None:
+def test_d17_counterexample_fails_without_reference_resolution(
+    tmp_path, monkeypatch
+) -> None:
     """反证：临时移除多轮指代消解逻辑后，D17 场景断言必须失败。
 
     指代消解的载体是 product_advisor._REFERENCE_HINTS——当问题含指代词
-    （"它"）且当前问题解析不到候选时，回看历史恢复商品候选。把该正则
-    换成永不匹配的占位符，等价于移除指代消解能力；此时第二轮"它"无法
-    恢复 AF5 候选，D17 场景应失败。还原后恢复正常。
+    （"它"）且当前问题解析不到候选时，回看历史恢复商品候选。用 monkeypatch
+    把该正则换成永不匹配的占位符，等价于移除指代消解能力；此时第二轮"它"
+    无法恢复 AF5 候选，D17 场景应失败（失败在 _verify_multi_turn_reference
+    的 second_candidates 含 QC-AF5 断言上）。
     """
     import ecommerce_agent.product_advisor as advisor
 
-    original = advisor._REFERENCE_HINTS
+    monkeypatch.setattr(advisor, "_REFERENCE_HINTS", advisor.re.compile(r"(?!)"))
+    service = AgentService(make_settings(tmp_path))
     try:
-        advisor._REFERENCE_HINTS = advisor.re.compile(r"(?!)")  # 永不匹配
-        service = AgentService(make_settings(tmp_path))
-        try:
-            simulation = VirtualStoreSimulation(service)
-            report = simulation.run(
-                tenant_id="tenant-test",
-                actor="admin-test",
-                include_customer_service=True,
-            )
-        finally:
-            service.close()
-        d17 = next(
-            item for item in report["scenarios"] if item["id"] == "D17"
+        simulation = VirtualStoreSimulation(service)
+        report = simulation.run(
+            tenant_id="tenant-test",
+            actor="admin-test",
+            include_customer_service=True,
         )
-        # 指代消解被移除后，D17 的"第二轮命中知识来源"断言必须失败。
-        assert d17["status"] == "failed"
     finally:
-        advisor._REFERENCE_HINTS = original
+        service.close()
+    d17 = next(
+        item for item in report["scenarios"] if item["id"] == "D17"
+    )
+    assert d17["status"] == "failed"
 
-    # 还原后 D17 恢复正常（对照组，防止误伤）
+
+def test_d17_reference_resolution_passes_normally(tmp_path) -> None:
+    """对照组：不移除指代消解时，D17 场景正常通过。
+
+    与反证测试互补——反证证明"移除指代 → D17 失败"，本测试证明
+    "正常路径 → D17 通过"，防止误伤。
+    """
     service = AgentService(make_settings(tmp_path))
     try:
         simulation = VirtualStoreSimulation(service)
@@ -233,3 +237,4 @@ def test_d17_counterexample_fails_without_reference_resolution(tmp_path) -> None
         service.close()
     d17 = next(item for item in report["scenarios"] if item["id"] == "D17")
     assert d17["status"] == "passed"
+    assert d17["output"]["reference_resolved"] is True

@@ -1016,8 +1016,9 @@ class VirtualStoreSimulation:
         """D17：验证多轮对话指代消解——第二轮"它"能从上文恢复商品候选。
 
         第一轮带商品上下文（shop_id + sku_id）询问 AF5 价格，第二轮只问
-        "它保修多久？"（不带任何商品参数）。若指代消解正常，第二轮应能
-        从上文历史恢复出 AF5 候选并复用知识库回答，而不是报"不知道你说的它"。
+        "它保修多久？"且只传 shop_id（不带 sku_id 等任何商品参数）。若指代
+        消解正常，第二轮应能从上下文快照恢复出 AF5 候选，而不是报
+        "不知道你说的它"。
         """
         principal = self.service.auth.authenticate(
             self.service.settings.bootstrap_client_id,
@@ -1025,15 +1026,17 @@ class VirtualStoreSimulation:
             f"virtual-buyer-{uuid.uuid4().hex[:8]}",
         )
         session_id = f"virtual-presale-{uuid.uuid4().hex}"
-        context = {
+        first_context = {
             "shop_id": fixture["store"]["store_id"],
             "sku_id": "QC-AF5-WHITE",
         }
+        # 第二轮不带任何商品参数：只传 shop_id，指代必须靠上文历史恢复。
+        second_context = {"shop_id": fixture["store"]["store_id"]}
         first = self.service.chat(
             principal,
             session_id,
             "晴川 AF5 空气炸锅多少钱？",
-            context,
+            first_context,
             source_type="simulation",
             source_reference=run_id,
         )
@@ -1041,7 +1044,7 @@ class VirtualStoreSimulation:
             principal,
             session_id,
             "它保修多久？",
-            context,
+            second_context,
             source_type="simulation",
             source_reference=run_id,
         )
