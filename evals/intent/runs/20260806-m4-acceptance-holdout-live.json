@@ -1,0 +1,373 @@
+{
+  "model_name": "deepseek-v4-flash",
+  "provider": "deepseek",
+  "request_interval": 2.0,
+  "totals": {
+    "cases": 40,
+    "correct": 32,
+    "answered": 40,
+    "answered_correct": 32
+  },
+  "records": [
+    {
+      "index": 0,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.19
+    },
+    {
+      "index": 1,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 1.0,
+      "method": "model",
+      "error": null,
+      "seconds": 1.357
+    },
+    {
+      "index": 2,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.466
+    },
+    {
+      "index": 3,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 2.11
+    },
+    {
+      "index": 4,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 1.0,
+      "method": "model",
+      "error": null,
+      "seconds": 1.484
+    },
+    {
+      "index": 5,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 1.0,
+      "method": "model",
+      "error": null,
+      "seconds": 1.335
+    },
+    {
+      "index": 6,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.474
+    },
+    {
+      "index": 7,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.98,
+      "method": "model",
+      "error": null,
+      "seconds": 1.529
+    },
+    {
+      "index": 8,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.654
+    },
+    {
+      "index": 9,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.668
+    },
+    {
+      "index": 10,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 2.531
+    },
+    {
+      "index": 11,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 2.211
+    },
+    {
+      "index": 12,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.342
+    },
+    {
+      "index": 13,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.832
+    },
+    {
+      "index": 14,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 4.99
+    },
+    {
+      "index": 15,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0
+    },
+    {
+      "index": 16,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 2.645
+    },
+    {
+      "index": 17,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.591
+    },
+    {
+      "index": 18,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.534
+    },
+    {
+      "index": 19,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 3.657
+    },
+    {
+      "index": 20,
+      "expected": "complaint",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 2.821
+    },
+    {
+      "index": 21,
+      "expected": "complaint",
+      "intent": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.787
+    },
+    {
+      "index": 22,
+      "expected": "complaint",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.297
+    },
+    {
+      "index": 23,
+      "expected": "complaint",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.589
+    },
+    {
+      "index": 24,
+      "expected": "complaint",
+      "intent": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.637
+    },
+    {
+      "index": 25,
+      "expected": "complaint",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 2.929
+    },
+    {
+      "index": 26,
+      "expected": "complaint",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.368
+    },
+    {
+      "index": 27,
+      "expected": "complaint",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.287
+    },
+    {
+      "index": 28,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 2.262
+    },
+    {
+      "index": 29,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4
+    },
+    {
+      "index": 30,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.281
+    },
+    {
+      "index": 31,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.49
+    },
+    {
+      "index": 32,
+      "expected": "chitchat",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.424
+    },
+    {
+      "index": 33,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 0.952
+    },
+    {
+      "index": 34,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.138
+    },
+    {
+      "index": 35,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.583
+    },
+    {
+      "index": 36,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.666
+    },
+    {
+      "index": 37,
+      "expected": "after_sales",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.283
+    },
+    {
+      "index": 38,
+      "expected": "complaint",
+      "intent": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0
+    },
+    {
+      "index": 39,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.616
+    }
+  ]
+}

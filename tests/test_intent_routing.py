@@ -136,6 +136,59 @@ SHORT_CROSS_DOMAIN_GUARDS = [
     pytest.param("退款一词", id="short-refund-meta"),
 ]
 
+PROCESS_ACCOUNTABILITY_CASES = [
+    pytest.param(
+        "返修工单无故被关闭两回，谁能说明处理依据",
+        id="closed-repair-ticket",
+    ),
+    pytest.param(
+        "补送安排一再延期，为什么始终没有进展",
+        id="repeated-reship-delay",
+    ),
+    pytest.param(
+        "客服来回转接却无人跟进，给个明确说法",
+        id="repeated-transfer",
+    ),
+    pytest.param(
+        "第三回把型号寄错了，仓库核对环节到底谁负责",
+        id="repeated-wrong-fulfilment",
+    ),
+    pytest.param(
+        "箱子一拆商品就碎了，包装检查环节是怎么放行的",
+        id="quality-process-accountability-regression",
+    ),
+    pytest.param(
+        "鞋盒被压扁还沾水，这种包装也能出库吗",
+        id="packaging-accountability-regression",
+    ),
+    pytest.param(
+        "第二回把颜色发错，出库环节到底怎么核验",
+        id="warehouse-process-regression",
+    ),
+    pytest.param(
+        "送来的餐具缺了两件，装箱环节为何没有发现",
+        id="packing-process-regression",
+    ),
+    pytest.param(
+        "换新的机器开机又报错，之前处理根本没解决",
+        id="unresolved-repair-regression",
+    ),
+    pytest.param(
+        "配送员把包裹放错楼栋，反馈后仍无人联系",
+        id="unresolved-delivery-regression",
+    ),
+]
+
+PROCESS_ACCOUNTABILITY_NEGATIVES = [
+    pytest.param("杯盖裂了想换新", "after_sales", id="defect-remedy"),
+    pytest.param("退回的货多久能收到款", "after_sales", id="refund-status"),
+    pytest.param("快递今天停在站点了", "after_sales", id="shipment-status"),
+    pytest.param("这款鞋有几个型号", "product_inquiry", id="product-options"),
+    pytest.param("客服几点下班", "chitchat", id="service-hours"),
+    pytest.param("这种包装也能回收吗", "product_inquiry", id="packaging-policy"),
+    pytest.param("收到商品后如何申请换货", "after_sales", id="received-remedy"),
+]
+
 TERSE_POLICY_QUESTIONS = [
     pytest.param("可以退款吗", id="can-refund"),
     pytest.param("请问退款吗", id="ask-refund"),
@@ -245,6 +298,73 @@ def test_short_cross_domain_context_is_still_deferred(message: str) -> None:
     assert len(model.calls) == 1
     assert result.method == "model"
     assert result.error is None
+
+
+@pytest.mark.parametrize("message", PROCESS_ACCOUNTABILITY_CASES)
+def test_process_accountability_structure_requires_model_confirmation(
+    message: str,
+) -> None:
+    model = CapturingModel({"intent": "complaint", "confidence": 0.87})
+
+    result = classify(message, model=model)
+
+    assert intent_module._matches_process_accountability(message)
+    assert len(model.calls) == 1
+    assert result.intent == "complaint"
+    assert result.method == "model"
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"), PROCESS_ACCOUNTABILITY_NEGATIVES
+)
+def test_process_accountability_structure_does_not_absorb_normal_business(
+    message: str,
+    expected: str,
+) -> None:
+    model = CapturingModel({"intent": expected, "confidence": 0.86})
+
+    result = classify(message, model=model)
+
+    assert not intent_module._matches_process_accountability(message)
+    assert result.intent == expected
+
+
+def test_product_care_question_is_not_a_process_accountability_complaint() -> None:
+    result = classify("可拆卸椅套沾了污渍该怎么处理", model=None)
+
+    assert result.intent != "complaint"
+
+
+@pytest.mark.parametrize(
+    "message",
+    (
+        "售后审核为什么还没有通过",
+        "为什么我的订单还没有发货提醒",
+    ),
+)
+def test_neutral_progress_question_requires_model_arbitration(message: str) -> None:
+    model = CapturingModel({"intent": "after_sales", "confidence": 0.88})
+
+    result = classify(message, model=model)
+
+    assert len(model.calls) == 1
+    assert result.intent == "after_sales"
+    assert result.method == "model"
+
+
+@pytest.mark.parametrize(
+    "message",
+    (
+        "售后审核为什么还没有通过",
+        "为什么我的订单还没有发货提醒",
+    ),
+)
+def test_neutral_progress_question_without_model_abstains(message: str) -> None:
+    result = classify(message, model=None)
+
+    assert result.intent == "chitchat"
+    assert result.method == "default"
+    assert result.error == "model_not_configured"
 
 
 @pytest.mark.parametrize("message", TERSE_POLICY_QUESTIONS)
@@ -375,6 +495,29 @@ def test_adjudicated_labelling_policy_reaches_the_model() -> None:
     )
 
 
+def test_labelling_policy_distinguishes_remedy_from_process_accountability() -> None:
+    model = CapturingModel()
+
+    classify("我想看看有哪些颜色", model=model)
+
+    system_prompt = model.calls[0][0][0]["content"]
+    assert "主要诉求" in system_prompt
+    assert "处理流程本身" in system_prompt
+    assert "追责" in system_prompt
+    assert "办理退换修或查询进度" in system_prompt
+
+
+def test_labelling_policy_keeps_order_invoice_service_in_after_sales() -> None:
+    model = CapturingModel()
+
+    classify("我想看看有哪些颜色", model=model)
+
+    system_prompt = model.calls[0][0][0]["content"]
+    assert "发票开具" in system_prompt
+    assert "抬头变更" in system_prompt
+    assert "订单服务" in system_prompt
+
+
 def test_mixed_after_sales_few_shot_is_paraphrased_in_model_request() -> None:
     model = CapturingModel()
 
@@ -390,6 +533,18 @@ def test_mixed_after_sales_few_shot_is_paraphrased_in_model_request() -> None:
     examples = json.dumps(task["examples"], ensure_ascii=False)
     assert "我这东西坏了" not in examples
     assert "质量也太差了吧" not in examples
+
+
+def test_process_accountability_complaint_few_shot_uses_an_unseen_scenario() -> None:
+    model = CapturingModel()
+
+    classify("我想看看有哪些颜色", model=model)
+
+    task = json.loads(model.calls[0][0][1]["content"])
+    assert {
+        "message": "安装预约改了三次仍没人上门，之前的处理为什么一直无效",
+        "intent": "complaint",
+    } in task["examples"]
 
 
 def test_model_exception_uses_safe_default_without_raising() -> None:

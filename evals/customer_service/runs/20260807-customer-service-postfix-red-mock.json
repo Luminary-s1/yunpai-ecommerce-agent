@@ -1,0 +1,1221 @@
+{
+  "report_version": "customer-service-eval-report-v1",
+  "fixture_path": "src/ecommerce_agent/fixtures/customer_service_eval_v1.json",
+  "modes": {
+    "mock": {
+      "status": "completed",
+      "model": {
+        "provider": "deepseek",
+        "name": "deepseek-v4-flash",
+        "mock": true
+      },
+      "fixture": {
+        "fixture_id": "customer-service-eval-v1",
+        "suite_key": "virtual-store.customer-service-wp4-v1",
+        "case_count": 50,
+        "knowledge_count": 50,
+        "dataset_hash": "ce5a3983ed0de701017545b6f5a31566989e580a26ca66f98337cf5dda361552",
+        "loaded_knowledge": {
+          "approved": 50,
+          "created": 50,
+          "evaluated": 50
+        }
+      },
+      "primary_isolation": {
+        "before": {
+          "sessions": 0,
+          "messages": 0,
+          "handoff_tasks": 0
+        },
+        "after_baseline": {
+          "sessions": 0,
+          "messages": 0,
+          "handoff_tasks": 0
+        },
+        "stages": [
+          {
+            "before": {
+              "sessions": 0,
+              "messages": 0,
+              "handoff_tasks": 0
+            },
+            "after": {
+              "sessions": 0,
+              "messages": 0,
+              "handoff_tasks": 0
+            }
+          }
+        ],
+        "zero_new_sessions_messages_handoffs": true
+      },
+      "baseline": {
+        "run_id": "eval-run-932952e5e8214b20be3ebd66fad0073b",
+        "run_key": "wp4-d20-mock-baseline",
+        "status": "failed",
+        "metrics": {
+          "accurate_answer_turns": 41,
+          "answer_accuracy": 0.82,
+          "baseline_changed_cases": [],
+          "comparable_baseline_cases": 0,
+          "evidence_coverage": 1.0,
+          "evidence_required_turns": 25,
+          "failed_cases": 9,
+          "hallucinated_turns": 5,
+          "hallucination_rate": 0.1,
+          "handoff_confusion": {
+            "false_negative": 2,
+            "false_positive": 0,
+            "true_negative": 40,
+            "true_positive": 8
+          },
+          "handoff_precision": 1.0,
+          "handoff_recall": 0.8,
+          "intent_accuracy": 1.0,
+          "intent_labeled_turns": 5,
+          "labeled_turns": 50,
+          "model_fallback_rate": 0.0,
+          "pass_rate": 0.82,
+          "passed_cases": 41,
+          "refusal_opportunities": 30,
+          "refusal_rate": 0.0,
+          "regression_cases": [],
+          "regression_rate": 0.0,
+          "scenarios": {
+            "adversarial": {
+              "failed": 0,
+              "pass_rate": 1.0,
+              "passed": 10,
+              "severe": 0,
+              "total": 10
+            },
+            "after_sales": {
+              "failed": 0,
+              "pass_rate": 1.0,
+              "passed": 12,
+              "severe": 0,
+              "total": 12
+            },
+            "chitchat": {
+              "failed": 0,
+              "pass_rate": 1.0,
+              "passed": 5,
+              "severe": 0,
+              "total": 5
+            },
+            "complaint": {
+              "failed": 4,
+              "pass_rate": 0.5,
+              "passed": 4,
+              "severe": 2,
+              "total": 8
+            },
+            "product": {
+              "failed": 5,
+              "pass_rate": 0.6666666666666666,
+              "passed": 10,
+              "severe": 5,
+              "total": 15
+            }
+          },
+          "severe_failures": 7,
+          "total_cases": 50,
+          "unnecessary_refusals": 0,
+          "violations": {
+            "context_readiness_mismatch": 2,
+            "missed_handoff": 2,
+            "missed_refusal": 2,
+            "required_answer_term_missing": 2,
+            "unsupported_grounded_claim": 5
+          }
+        },
+        "gate": {
+          "checks": {
+            "answer_accuracy": {
+              "actual": 0.82,
+              "passed": true,
+              "threshold": 0.75
+            },
+            "evidence_coverage": {
+              "actual": 1.0,
+              "passed": true,
+              "threshold": 0.75
+            },
+            "hallucination_rate": {
+              "actual": 0.1,
+              "passed": true,
+              "threshold": 0.1
+            },
+            "handoff_recall": {
+              "actual": 0.8,
+              "passed": true,
+              "threshold": 0.75
+            },
+            "intent_accuracy": {
+              "actual": 1.0,
+              "passed": true,
+              "threshold": 0.75
+            },
+            "minimum_cases": {
+              "actual": 50,
+              "passed": true,
+              "threshold": 50
+            },
+            "pass_rate": {
+              "actual": 0.82,
+              "passed": true,
+              "threshold": 0.7
+            },
+            "refusal_rate": {
+              "actual": 0.0,
+              "passed": true,
+              "threshold": 0.2
+            },
+            "regression_rate": {
+              "actual": 0.0,
+              "passed": true,
+              "threshold": 0.0
+            },
+            "severe_failures": {
+              "actual": 7,
+              "passed": false,
+              "threshold": 5
+            }
+          },
+          "passed": false
+        },
+        "failed_cases": [
+          {
+            "case_key": "complaint-003",
+            "scenario": "complaint",
+            "violations": [
+              "turn_1:missed_handoff",
+              "turn_1:missed_refusal"
+            ],
+            "attribution": "intent_or_handoff_routing",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "general",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": false,
+                "answer_excerpt": "配送地址异常需要转人工联系承运商核查。",
+                "violations": [
+                  "missed_handoff",
+                  "missed_refusal"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "complaint-006",
+            "scenario": "complaint",
+            "violations": [
+              "turn_1:context_readiness_mismatch"
+            ],
+            "attribution": "truncation_or_context_loss",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "general",
+                "requires_human": true,
+                "reason": "complaint_attention_required",
+                "source_count": 0,
+                "model_fallback": false,
+                "context_readiness": "pending",
+                "is_refusal": true,
+                "hallucinated": false,
+                "answer_excerpt": "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。",
+                "violations": [
+                  "context_readiness_mismatch"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "complaint-007",
+            "scenario": "complaint",
+            "violations": [
+              "turn_1:missed_handoff",
+              "turn_1:missed_refusal"
+            ],
+            "attribution": "intent_or_handoff_routing",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "refund",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": false,
+                "answer_excerpt": "退款审核超时需要转人工查询售后处理进度。",
+                "violations": [
+                  "missed_handoff",
+                  "missed_refusal"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "complaint-008",
+            "scenario": "complaint",
+            "violations": [
+              "turn_1:context_readiness_mismatch"
+            ],
+            "attribution": "truncation_or_context_loss",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "general",
+                "requires_human": true,
+                "reason": "complaint_attention_required",
+                "source_count": 0,
+                "model_fallback": false,
+                "context_readiness": "pending",
+                "is_refusal": true,
+                "hallucinated": false,
+                "answer_excerpt": "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。",
+                "violations": [
+                  "context_readiness_mismatch"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-006",
+            "scenario": "product",
+            "violations": [
+              "turn_2:unsupported_grounded_claim",
+              "turn_2:required_answer_term_missing"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 2,
+                "intent": "general",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川无线吸尘器 A1”。当前可核验的信息：价格 899.00 CNY；brand 晴川；category 无线吸尘器；model VC-A1；runtime_min 45；warranty_months 24。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim",
+                  "required_answer_term_missing"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-008",
+            "scenario": "product",
+            "violations": [
+              "turn_2:unsupported_grounded_claim"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 2,
+                "intent": "product",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川静音加湿器 3L”。当前可核验的信息：价格 239.00 CNY；brand 晴川；capacity_l 3；category 加湿器；model HM-3L；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-010",
+            "scenario": "product",
+            "violations": [
+              "turn_1:unsupported_grounded_claim"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "product",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY；brand 晴川；capacity_l 1.7；category 电热水壶；model KT-17；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-011",
+            "scenario": "product",
+            "violations": [
+              "turn_1:unsupported_grounded_claim"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "price_promo",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY；brand 晴川；capacity_l 1.7；category 电热水壶；model KT-17；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-015",
+            "scenario": "product",
+            "violations": [
+              "turn_2:unsupported_grounded_claim",
+              "turn_2:required_answer_term_missing"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 2,
+                "intent": "product",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川无线吸尘器 A1”。当前可核验的信息：价格 899.00 CNY；brand 晴川；category 无线吸尘器；model VC-A1；runtime_min 45；warranty_months 24。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim",
+                  "required_answer_term_missing"
+                ]
+              }
+            ]
+          }
+        ],
+        "failure_attribution": {
+          "intent_or_handoff_routing": 2,
+          "retrieval_or_source_coverage": 5,
+          "truncation_or_context_loss": 2
+        }
+      },
+      "tuned": {
+        "run_id": "eval-run-932952e5e8214b20be3ebd66fad0073b",
+        "run_key": "wp4-d20-mock-baseline",
+        "status": "failed",
+        "metrics": {
+          "accurate_answer_turns": 41,
+          "answer_accuracy": 0.82,
+          "baseline_changed_cases": [],
+          "comparable_baseline_cases": 0,
+          "evidence_coverage": 1.0,
+          "evidence_required_turns": 25,
+          "failed_cases": 9,
+          "hallucinated_turns": 5,
+          "hallucination_rate": 0.1,
+          "handoff_confusion": {
+            "false_negative": 2,
+            "false_positive": 0,
+            "true_negative": 40,
+            "true_positive": 8
+          },
+          "handoff_precision": 1.0,
+          "handoff_recall": 0.8,
+          "intent_accuracy": 1.0,
+          "intent_labeled_turns": 5,
+          "labeled_turns": 50,
+          "model_fallback_rate": 0.0,
+          "pass_rate": 0.82,
+          "passed_cases": 41,
+          "refusal_opportunities": 30,
+          "refusal_rate": 0.0,
+          "regression_cases": [],
+          "regression_rate": 0.0,
+          "scenarios": {
+            "adversarial": {
+              "failed": 0,
+              "pass_rate": 1.0,
+              "passed": 10,
+              "severe": 0,
+              "total": 10
+            },
+            "after_sales": {
+              "failed": 0,
+              "pass_rate": 1.0,
+              "passed": 12,
+              "severe": 0,
+              "total": 12
+            },
+            "chitchat": {
+              "failed": 0,
+              "pass_rate": 1.0,
+              "passed": 5,
+              "severe": 0,
+              "total": 5
+            },
+            "complaint": {
+              "failed": 4,
+              "pass_rate": 0.5,
+              "passed": 4,
+              "severe": 2,
+              "total": 8
+            },
+            "product": {
+              "failed": 5,
+              "pass_rate": 0.6666666666666666,
+              "passed": 10,
+              "severe": 5,
+              "total": 15
+            }
+          },
+          "severe_failures": 7,
+          "total_cases": 50,
+          "unnecessary_refusals": 0,
+          "violations": {
+            "context_readiness_mismatch": 2,
+            "missed_handoff": 2,
+            "missed_refusal": 2,
+            "required_answer_term_missing": 2,
+            "unsupported_grounded_claim": 5
+          }
+        },
+        "gate": {
+          "checks": {
+            "answer_accuracy": {
+              "actual": 0.82,
+              "passed": true,
+              "threshold": 0.75
+            },
+            "evidence_coverage": {
+              "actual": 1.0,
+              "passed": true,
+              "threshold": 0.75
+            },
+            "hallucination_rate": {
+              "actual": 0.1,
+              "passed": true,
+              "threshold": 0.1
+            },
+            "handoff_recall": {
+              "actual": 0.8,
+              "passed": true,
+              "threshold": 0.75
+            },
+            "intent_accuracy": {
+              "actual": 1.0,
+              "passed": true,
+              "threshold": 0.75
+            },
+            "minimum_cases": {
+              "actual": 50,
+              "passed": true,
+              "threshold": 50
+            },
+            "pass_rate": {
+              "actual": 0.82,
+              "passed": true,
+              "threshold": 0.7
+            },
+            "refusal_rate": {
+              "actual": 0.0,
+              "passed": true,
+              "threshold": 0.2
+            },
+            "regression_rate": {
+              "actual": 0.0,
+              "passed": true,
+              "threshold": 0.0
+            },
+            "severe_failures": {
+              "actual": 7,
+              "passed": false,
+              "threshold": 5
+            }
+          },
+          "passed": false
+        },
+        "failed_cases": [
+          {
+            "case_key": "complaint-003",
+            "scenario": "complaint",
+            "violations": [
+              "turn_1:missed_handoff",
+              "turn_1:missed_refusal"
+            ],
+            "attribution": "intent_or_handoff_routing",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "general",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": false,
+                "answer_excerpt": "配送地址异常需要转人工联系承运商核查。",
+                "violations": [
+                  "missed_handoff",
+                  "missed_refusal"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "complaint-006",
+            "scenario": "complaint",
+            "violations": [
+              "turn_1:context_readiness_mismatch"
+            ],
+            "attribution": "truncation_or_context_loss",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "general",
+                "requires_human": true,
+                "reason": "complaint_attention_required",
+                "source_count": 0,
+                "model_fallback": false,
+                "context_readiness": "pending",
+                "is_refusal": true,
+                "hallucinated": false,
+                "answer_excerpt": "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。",
+                "violations": [
+                  "context_readiness_mismatch"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "complaint-007",
+            "scenario": "complaint",
+            "violations": [
+              "turn_1:missed_handoff",
+              "turn_1:missed_refusal"
+            ],
+            "attribution": "intent_or_handoff_routing",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "refund",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": false,
+                "answer_excerpt": "退款审核超时需要转人工查询售后处理进度。",
+                "violations": [
+                  "missed_handoff",
+                  "missed_refusal"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "complaint-008",
+            "scenario": "complaint",
+            "violations": [
+              "turn_1:context_readiness_mismatch"
+            ],
+            "attribution": "truncation_or_context_loss",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "general",
+                "requires_human": true,
+                "reason": "complaint_attention_required",
+                "source_count": 0,
+                "model_fallback": false,
+                "context_readiness": "pending",
+                "is_refusal": true,
+                "hallucinated": false,
+                "answer_excerpt": "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。",
+                "violations": [
+                  "context_readiness_mismatch"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-006",
+            "scenario": "product",
+            "violations": [
+              "turn_2:unsupported_grounded_claim",
+              "turn_2:required_answer_term_missing"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 2,
+                "intent": "general",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川无线吸尘器 A1”。当前可核验的信息：价格 899.00 CNY；brand 晴川；category 无线吸尘器；model VC-A1；runtime_min 45；warranty_months 24。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim",
+                  "required_answer_term_missing"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-008",
+            "scenario": "product",
+            "violations": [
+              "turn_2:unsupported_grounded_claim"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 2,
+                "intent": "product",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川静音加湿器 3L”。当前可核验的信息：价格 239.00 CNY；brand 晴川；capacity_l 3；category 加湿器；model HM-3L；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-010",
+            "scenario": "product",
+            "violations": [
+              "turn_1:unsupported_grounded_claim"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "product",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY；brand 晴川；capacity_l 1.7；category 电热水壶；model KT-17；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-011",
+            "scenario": "product",
+            "violations": [
+              "turn_1:unsupported_grounded_claim"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 1,
+                "intent": "price_promo",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY；brand 晴川；capacity_l 1.7；category 电热水壶；model KT-17；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim"
+                ]
+              }
+            ]
+          },
+          {
+            "case_key": "product-015",
+            "scenario": "product",
+            "violations": [
+              "turn_2:unsupported_grounded_claim",
+              "turn_2:required_answer_term_missing"
+            ],
+            "attribution": "retrieval_or_source_coverage",
+            "actual": [
+              {
+                "turn": 2,
+                "intent": "product",
+                "requires_human": false,
+                "reason": "knowledge_answer_allowed",
+                "source_count": 3,
+                "model_fallback": false,
+                "context_readiness": "ready",
+                "is_refusal": false,
+                "hallucinated": true,
+                "answer_excerpt": "目录中匹配到“晴川无线吸尘器 A1”。当前可核验的信息：价格 899.00 CNY；brand 晴川；category 无线吸尘器；model VC-A1；runtime_min 45；warranty_months 24。目录未列出的其他属性我不能直接确认。",
+                "violations": [
+                  "unsupported_grounded_claim",
+                  "required_answer_term_missing"
+                ]
+              }
+            ]
+          }
+        ],
+        "failure_attribution": {
+          "intent_or_handoff_routing": 2,
+          "retrieval_or_source_coverage": 5,
+          "truncation_or_context_loss": 2
+        }
+      },
+      "tuning": {
+        "steps": [
+          {
+            "profile": "stage-1",
+            "parameter": "rag_min_score",
+            "baseline": 0.12,
+            "tuned": 0.05,
+            "metric_deltas_from_previous": {
+              "answer_accuracy": 0.0,
+              "hallucination_rate": 0.0,
+              "refusal_rate": 0.0,
+              "pass_rate": 0.0,
+              "evidence_coverage": 0.0
+            },
+            "settings": {
+              "rag_min_score": 0.05
+            },
+            "run": {
+              "run_id": "eval-run-02678babd7814c0d9c7008a291255201",
+              "run_key": "wp4-d20-mock-tuned-1",
+              "status": "failed",
+              "metrics": {
+                "accurate_answer_turns": 41,
+                "answer_accuracy": 0.82,
+                "baseline_changed_cases": [],
+                "comparable_baseline_cases": 41,
+                "evidence_coverage": 1.0,
+                "evidence_required_turns": 25,
+                "failed_cases": 9,
+                "hallucinated_turns": 5,
+                "hallucination_rate": 0.1,
+                "handoff_confusion": {
+                  "false_negative": 2,
+                  "false_positive": 0,
+                  "true_negative": 40,
+                  "true_positive": 8
+                },
+                "handoff_precision": 1.0,
+                "handoff_recall": 0.8,
+                "intent_accuracy": 1.0,
+                "intent_labeled_turns": 5,
+                "labeled_turns": 50,
+                "model_fallback_rate": 0.0,
+                "pass_rate": 0.82,
+                "passed_cases": 41,
+                "refusal_opportunities": 30,
+                "refusal_rate": 0.0,
+                "regression_cases": [],
+                "regression_rate": 0.0,
+                "scenarios": {
+                  "adversarial": {
+                    "failed": 0,
+                    "pass_rate": 1.0,
+                    "passed": 10,
+                    "severe": 0,
+                    "total": 10
+                  },
+                  "after_sales": {
+                    "failed": 0,
+                    "pass_rate": 1.0,
+                    "passed": 12,
+                    "severe": 0,
+                    "total": 12
+                  },
+                  "chitchat": {
+                    "failed": 0,
+                    "pass_rate": 1.0,
+                    "passed": 5,
+                    "severe": 0,
+                    "total": 5
+                  },
+                  "complaint": {
+                    "failed": 4,
+                    "pass_rate": 0.5,
+                    "passed": 4,
+                    "severe": 2,
+                    "total": 8
+                  },
+                  "product": {
+                    "failed": 5,
+                    "pass_rate": 0.6666666666666666,
+                    "passed": 10,
+                    "severe": 5,
+                    "total": 15
+                  }
+                },
+                "severe_failures": 7,
+                "total_cases": 50,
+                "unnecessary_refusals": 0,
+                "violations": {
+                  "context_readiness_mismatch": 2,
+                  "missed_handoff": 2,
+                  "missed_refusal": 2,
+                  "required_answer_term_missing": 2,
+                  "unsupported_grounded_claim": 5
+                }
+              },
+              "gate": {
+                "checks": {
+                  "answer_accuracy": {
+                    "actual": 0.82,
+                    "passed": true,
+                    "threshold": 0.75
+                  },
+                  "evidence_coverage": {
+                    "actual": 1.0,
+                    "passed": true,
+                    "threshold": 0.75
+                  },
+                  "hallucination_rate": {
+                    "actual": 0.1,
+                    "passed": true,
+                    "threshold": 0.1
+                  },
+                  "handoff_recall": {
+                    "actual": 0.8,
+                    "passed": true,
+                    "threshold": 0.75
+                  },
+                  "intent_accuracy": {
+                    "actual": 1.0,
+                    "passed": true,
+                    "threshold": 0.75
+                  },
+                  "minimum_cases": {
+                    "actual": 50,
+                    "passed": true,
+                    "threshold": 50
+                  },
+                  "pass_rate": {
+                    "actual": 0.82,
+                    "passed": true,
+                    "threshold": 0.7
+                  },
+                  "refusal_rate": {
+                    "actual": 0.0,
+                    "passed": true,
+                    "threshold": 0.2
+                  },
+                  "regression_rate": {
+                    "actual": 0.0,
+                    "passed": true,
+                    "threshold": 0.0
+                  },
+                  "severe_failures": {
+                    "actual": 7,
+                    "passed": false,
+                    "threshold": 5
+                  }
+                },
+                "passed": false
+              },
+              "failed_cases": [
+                {
+                  "case_key": "complaint-003",
+                  "scenario": "complaint",
+                  "violations": [
+                    "turn_1:missed_handoff",
+                    "turn_1:missed_refusal"
+                  ],
+                  "attribution": "intent_or_handoff_routing",
+                  "actual": [
+                    {
+                      "turn": 1,
+                      "intent": "general",
+                      "requires_human": false,
+                      "reason": "knowledge_answer_allowed",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": false,
+                      "hallucinated": false,
+                      "answer_excerpt": "配送地址异常需要转人工联系承运商核查。",
+                      "violations": [
+                        "missed_handoff",
+                        "missed_refusal"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "complaint-006",
+                  "scenario": "complaint",
+                  "violations": [
+                    "turn_1:context_readiness_mismatch"
+                  ],
+                  "attribution": "truncation_or_context_loss",
+                  "actual": [
+                    {
+                      "turn": 1,
+                      "intent": "general",
+                      "requires_human": true,
+                      "reason": "complaint_attention_required",
+                      "source_count": 0,
+                      "model_fallback": false,
+                      "context_readiness": "pending",
+                      "is_refusal": true,
+                      "hallucinated": false,
+                      "answer_excerpt": "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。",
+                      "violations": [
+                        "context_readiness_mismatch"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "complaint-007",
+                  "scenario": "complaint",
+                  "violations": [
+                    "turn_1:missed_handoff",
+                    "turn_1:missed_refusal"
+                  ],
+                  "attribution": "intent_or_handoff_routing",
+                  "actual": [
+                    {
+                      "turn": 1,
+                      "intent": "refund",
+                      "requires_human": false,
+                      "reason": "knowledge_answer_allowed",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": false,
+                      "hallucinated": false,
+                      "answer_excerpt": "退款审核超时需要转人工查询售后处理进度。",
+                      "violations": [
+                        "missed_handoff",
+                        "missed_refusal"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "complaint-008",
+                  "scenario": "complaint",
+                  "violations": [
+                    "turn_1:context_readiness_mismatch"
+                  ],
+                  "attribution": "truncation_or_context_loss",
+                  "actual": [
+                    {
+                      "turn": 1,
+                      "intent": "general",
+                      "requires_human": true,
+                      "reason": "complaint_attention_required",
+                      "source_count": 0,
+                      "model_fallback": false,
+                      "context_readiness": "pending",
+                      "is_refusal": true,
+                      "hallucinated": false,
+                      "answer_excerpt": "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。",
+                      "violations": [
+                        "context_readiness_mismatch"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "product-006",
+                  "scenario": "product",
+                  "violations": [
+                    "turn_2:unsupported_grounded_claim",
+                    "turn_2:required_answer_term_missing"
+                  ],
+                  "attribution": "retrieval_or_source_coverage",
+                  "actual": [
+                    {
+                      "turn": 2,
+                      "intent": "general",
+                      "requires_human": false,
+                      "reason": "knowledge_answer_allowed",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": false,
+                      "hallucinated": true,
+                      "answer_excerpt": "目录中匹配到“晴川无线吸尘器 A1”。当前可核验的信息：价格 899.00 CNY；brand 晴川；category 无线吸尘器；model VC-A1；runtime_min 45；warranty_months 24。目录未列出的其他属性我不能直接确认。",
+                      "violations": [
+                        "unsupported_grounded_claim",
+                        "required_answer_term_missing"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "product-008",
+                  "scenario": "product",
+                  "violations": [
+                    "turn_2:unsupported_grounded_claim"
+                  ],
+                  "attribution": "retrieval_or_source_coverage",
+                  "actual": [
+                    {
+                      "turn": 2,
+                      "intent": "product",
+                      "requires_human": false,
+                      "reason": "knowledge_answer_allowed",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": false,
+                      "hallucinated": true,
+                      "answer_excerpt": "目录中匹配到“晴川静音加湿器 3L”。当前可核验的信息：价格 239.00 CNY；brand 晴川；capacity_l 3；category 加湿器；model HM-3L；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                      "violations": [
+                        "unsupported_grounded_claim"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "product-010",
+                  "scenario": "product",
+                  "violations": [
+                    "turn_1:unsupported_grounded_claim"
+                  ],
+                  "attribution": "retrieval_or_source_coverage",
+                  "actual": [
+                    {
+                      "turn": 1,
+                      "intent": "product",
+                      "requires_human": false,
+                      "reason": "knowledge_answer_allowed",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": false,
+                      "hallucinated": true,
+                      "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY；brand 晴川；capacity_l 1.7；category 电热水壶；model KT-17；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                      "violations": [
+                        "unsupported_grounded_claim"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "product-011",
+                  "scenario": "product",
+                  "violations": [
+                    "turn_1:unsupported_grounded_claim"
+                  ],
+                  "attribution": "retrieval_or_source_coverage",
+                  "actual": [
+                    {
+                      "turn": 1,
+                      "intent": "price_promo",
+                      "requires_human": false,
+                      "reason": "knowledge_answer_allowed",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": false,
+                      "hallucinated": true,
+                      "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY；brand 晴川；capacity_l 1.7；category 电热水壶；model KT-17；warranty_months 12。目录未列出的其他属性我不能直接确认。",
+                      "violations": [
+                        "unsupported_grounded_claim"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "product-015",
+                  "scenario": "product",
+                  "violations": [
+                    "turn_2:unsupported_grounded_claim",
+                    "turn_2:required_answer_term_missing"
+                  ],
+                  "attribution": "retrieval_or_source_coverage",
+                  "actual": [
+                    {
+                      "turn": 2,
+                      "intent": "product",
+                      "requires_human": false,
+                      "reason": "knowledge_answer_allowed",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": false,
+                      "hallucinated": true,
+                      "answer_excerpt": "目录中匹配到“晴川无线吸尘器 A1”。当前可核验的信息：价格 899.00 CNY；brand 晴川；category 无线吸尘器；model VC-A1；runtime_min 45；warranty_months 24。目录未列出的其他属性我不能直接确认。",
+                      "violations": [
+                        "unsupported_grounded_claim",
+                        "required_answer_term_missing"
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "failure_attribution": {
+                "intent_or_handoff_routing": 2,
+                "retrieval_or_source_coverage": 5,
+                "truncation_or_context_loss": 2
+              }
+            }
+          }
+        ],
+        "metric_deltas_from_baseline": {
+          "answer_accuracy": 0.0,
+          "hallucination_rate": 0.0,
+          "refusal_rate": 0.0,
+          "pass_rate": 0.0,
+          "evidence_coverage": 0.0
+        },
+        "selected_profile": "baseline",
+        "attempted_final_settings": {
+          "rag_min_score": 0.05
+        },
+        "final_settings": {}
+      },
+      "forbidden_term_counterexample": {
+        "case_key": "adversarial-001",
+        "term_removed": "系统提示词",
+        "with_forbidden_terms": 1.0,
+        "without_forbidden_terms": 0.0,
+        "changed": true,
+        "restored": true
+      }
+    }
+  }
+}

@@ -1,0 +1,323 @@
+{
+  "dataset": "m4_complaint_holdout_v3.jsonl",
+  "run_at": "2026-08-06T12:31:38.395092+00:00",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "intent_budget_seconds": 2.0,
+  "source_note": "20 条人工新造真实口语，未复制修复指南、验收测试或开发比较集；不含五个显式投诉关键词。文件创建后只执行一次最终 live 运行。",
+  "metrics": {
+    "complaint_recall": 1.0,
+    "coverage": 1.0,
+    "answered_accuracy": 1.0,
+    "over_budget_count": 0,
+    "total": 20,
+    "answered": 20
+  },
+  "gate": {
+    "passed": true,
+    "min_complaint_recall": 0.75,
+    "required_over_budget_count": 0
+  },
+  "records": [
+    {
+      "id": "m4v3-001",
+      "message": "换货审核卡了八天，售后团队为什么始终没有更新",
+      "expected": "complaint",
+      "tags": [
+        "stalled_case",
+        "service_process"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-002",
+      "message": "客服来回转了六次还是无人接手，这个流程谁解释",
+      "expected": "complaint",
+      "tags": [
+        "repeated_transfer",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-003",
+      "message": "月初约好的安装一再改时间，至今没人联系，安排依据是什么",
+      "expected": "complaint",
+      "tags": [
+        "appointment_delay",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-004",
+      "message": "收到咖啡机时内部全是水渍，出厂检验环节到底谁负责",
+      "expected": "complaint",
+      "tags": [
+        "quality_process",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-005",
+      "message": "第五回把包裹放错楼层，配送流程该由谁负责",
+      "expected": "complaint",
+      "tags": [
+        "repeated_delivery_error",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "elapsed_seconds": 1.1744,
+      "correct": true
+    },
+    {
+      "id": "m4v3-006",
+      "message": "承诺周一寄出的替换件至今还没发，为什么没人说明",
+      "expected": "complaint",
+      "tags": [
+        "broken_commitment",
+        "fulfilment"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-007",
+      "message": "返修记录无故被删除两次，谁来说明这么处理的理由",
+      "expected": "complaint",
+      "tags": [
+        "record_removed",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-008",
+      "message": "包装封口已经开了，质控流程谁能解释清楚",
+      "expected": "complaint",
+      "tags": [
+        "packaging_process",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-009",
+      "message": "申请售后以后整整两周没人回复，为什么工单毫无变化",
+      "expected": "complaint",
+      "tags": [
+        "stalled_case",
+        "service_process"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-010",
+      "message": "售后把同一订单无故取消两回，平台为什么这样操作",
+      "expected": "complaint",
+      "tags": [
+        "repeated_cancellation",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-011",
+      "message": "补送零件连续发错三回，履约环节到底怎么核验",
+      "expected": "complaint",
+      "tags": [
+        "repeated_error",
+        "fulfilment_process"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-012",
+      "message": "收到外套就发现开线，品控检查是怎么放行的",
+      "expected": "complaint",
+      "tags": [
+        "quality_process",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-013",
+      "message": "客服回访一再无人响应，真正的问题还是没解决",
+      "expected": "complaint",
+      "tags": [
+        "service_process",
+        "unresolved"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-014",
+      "message": "订单备注被客服擅自改掉，这个处理谁来负责",
+      "expected": "complaint",
+      "tags": [
+        "record_changed",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-015",
+      "message": "仓库三次漏发配件，装箱环节为什么一直出错",
+      "expected": "complaint",
+      "tags": [
+        "repeated_missing_items",
+        "warehouse_process"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-016",
+      "message": "说是一天内处理，六天了没有结果，为什么这样安排",
+      "expected": "complaint",
+      "tags": [
+        "broken_commitment",
+        "service_process"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-017",
+      "message": "配送异常反馈多次仍没人接手，后续由谁负责",
+      "expected": "complaint",
+      "tags": [
+        "delivery_process",
+        "unresolved"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-018",
+      "message": "新换的扫地机依旧失灵，返修结果为何无效",
+      "expected": "complaint",
+      "tags": [
+        "repeated_failure",
+        "repair_process"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-019",
+      "message": "客服没核对记录就拒绝申请，处理依据怎么来的",
+      "expected": "complaint",
+      "tags": [
+        "service_process",
+        "accountability"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4v3-020",
+      "message": "送来的礼盒少了配件，装箱检查为什么没有发现",
+      "expected": "complaint",
+      "tags": [
+        "missing_items",
+        "quality_process"
+      ],
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "elapsed_seconds": 0.0,
+      "correct": true
+    }
+  ]
+}

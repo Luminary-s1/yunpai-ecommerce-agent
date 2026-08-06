@@ -1,0 +1,223 @@
+{
+  "run_at": "2026-08-06T13:25:13.894403+00:00",
+  "dataset": "m4_complaint_negative_dev_v1.jsonl",
+  "mode": "rule",
+  "provider": null,
+  "model": null,
+  "metrics": {
+    "total": 20,
+    "positives": 0,
+    "negatives": 20,
+    "answered": 3,
+    "coverage": 0.15,
+    "complaint_true_positives": 0,
+    "complaint_false_positives": 0,
+    "complaint_precision": null,
+    "complaint_recall": null,
+    "negative_false_positive_rate": 0.0,
+    "answered_accuracy": 1.0,
+    "over_budget_count": 0
+  },
+  "records": [
+    {
+      "id": "m4neg-dev-001",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-002",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-003",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-004",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-005",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-006",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-007",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-008",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-009",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4neg-dev-010",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4neg-dev-011",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-012",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-013",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-014",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-015",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-016",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-017",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-018",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-019",
+      "expected": "product_inquiry",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_not_configured",
+      "seconds": 0.0,
+      "correct": false
+    },
+    {
+      "id": "m4neg-dev-020",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0,
+      "correct": true
+    }
+  ]
+}

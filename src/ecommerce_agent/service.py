@@ -31,7 +31,12 @@ from .context_builder import ContextBuilder
 from .database import Database, SessionScopeError, utc_now
 from .disaster_recovery import DataDirectoryLock
 from .evaluation import EvaluationRunRequest, EvaluationService
-from .graph import MODEL_UNAVAILABLE_HANDOFF_ANSWER, build_graph, verify_response
+from .graph import (
+    MODEL_UNAVAILABLE_HANDOFF_ANSWER,
+    build_graph,
+    catalog_fact_answer,
+    verify_response,
+)
 from .handoff import HandoffService
 from .handoff_dispatch import HandoffDispatchService
 from .handoff_staffing import HandoffStaffingService
@@ -395,6 +400,14 @@ class AgentService:
             "trace_id": state["trace_id"],
         }
 
+        if state.get("knowledge_error"):
+            yield {
+                "event": "error",
+                "code": "knowledge_unavailable",
+                "message": "当前无法引用知识库，已转交人工客服继续核对",
+                "retry_advised": True,
+            }
+
         if "generate" in self.graph.get_state(config).next:
             deltas, model_fallback, trace_step = self._generation_deltas(state)
             parts: list[str] = []
@@ -447,6 +460,13 @@ class AgentService:
             if state.get("tool_result", {}).get("postcondition_met")
             else None
         )
+        direct_catalog_answer = catalog_fact_answer(state)
+        if direct_catalog_answer is not None:
+            return (
+                iter((direct_catalog_answer,)),
+                False,
+                "generate:catalog_fact",
+            )
         if not state.get("retrieved") and not verified_result:
             return (
                 iter((MODEL_UNAVAILABLE_HANDOFF_ANSWER,)),
@@ -597,7 +617,8 @@ class AgentService:
                     or row["request_hash"] != request_hash
                 ):
                     raise SessionScopeError(
-                        "agent idempotency key is already bound to another request"
+                        "agent idempotency key is already bound to another request",
+                        code="idempotency_key_conflict",
                     )
                 if row["status"] == "running":
                     conn.execute(

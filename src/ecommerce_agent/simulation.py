@@ -173,6 +173,20 @@ class VirtualStoreSimulation:
                 demands["D17"],
                 "include_customer_service=false",
             )
+        if include_customer_service:
+            self._scenario(
+                scenarios,
+                demands["D18"],
+                lambda: self._verify_low_confidence_handoff(
+                    fixture, tenant_id, run_id
+                ),
+            )
+        else:
+            self._skipped(
+                scenarios,
+                demands["D18"],
+                "include_customer_service=false",
+            )
         self._scenario(
             scenarios,
             demands["D08"],
@@ -1099,6 +1113,79 @@ class VirtualStoreSimulation:
             for candidate in advisor.get("candidates", [])
             if candidate.get("sku_id")
         ]
+
+    def _verify_low_confidence_handoff(
+        self, fixture: dict[str, Any], tenant_id: str, run_id: str
+    ) -> dict[str, Any]:
+        """D18：低置信度 answer 必须被配置门转成人工任务。"""
+
+        principal = self.service.auth.authenticate(
+            self.service.settings.bootstrap_client_id,
+            self.service.settings.bootstrap_client_key,
+            f"virtual-low-confidence-{uuid.uuid4().hex[:8]}",
+        )
+        external_session_id = f"virtual-low-confidence-{uuid.uuid4().hex}"
+        session_id = self.service.db.resolve_session(
+            tenant_id=tenant_id,
+            client_id=principal.client_id,
+            external_session_id=external_session_id,
+            subject_hash=principal.subject_hash,
+            source_type="simulation",
+            source_reference=run_id,
+        )
+        confidence = 0.59
+        state = {
+            "session_id": session_id,
+            "external_session_id": external_session_id,
+            "tenant_id": tenant_id,
+            "client_id": principal.client_id,
+            "execution_mode": "live",
+            "normalized_input": "请帮我判断这个商品问题",
+            "context": {"shop_id": fixture["store"]["store_id"]},
+            "customer_intent": "product_inquiry",
+            "intent_confidence": confidence,
+            "intent_method": "model",
+            "decision": {
+                "intent": "product",
+                "mode": "answer",
+                "reason": "model_decision",
+                "confidence": confidence,
+            },
+            "tool_result": {},
+            "react_step": 0,
+            "trace": [],
+        }
+        graph = self.service.graph.get_graph()
+        gated = graph.nodes["decision_gate"].data.invoke(state)
+        assert gated["route"] == "handoff"
+        assert gated["route_reason"] == "low_confidence_handoff"
+        message_id = f"simulation-d18-{uuid.uuid4().hex}"
+        handed_off = graph.nodes["handoff"].data.invoke(
+            {
+                **state,
+                **gated,
+                "message_id": message_id,
+                "trace_id": f"trace-{message_id}",
+            }
+        )
+        assert handed_off["requires_human"] is True
+        assert handed_off["handoff_id"]
+        task = self.service.handoffs.get(
+            tenant_id=tenant_id,
+            handoff_id=handed_off["handoff_id"],
+        )
+        assert task.reason == "low_confidence_handoff"
+        return {
+            "decision_confidence": confidence,
+            "configured_threshold": self.service.settings.handoff_confidence_threshold,
+            "route": gated["route"],
+            "route_reason": gated["route_reason"],
+            "requires_human": handed_off["requires_human"],
+            "handoff_id": handed_off["handoff_id"],
+            "handoff_status": handed_off["handoff_status"],
+            "task_queue": task.queue_key,
+            "task_priority": task.priority,
+        }
 
     def _verify_customer_service_evaluation(
         self, fixture: dict[str, Any], tenant_id: str, actor: str

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from fastapi.testclient import TestClient
 
 from ecommerce_agent.api import create_app
@@ -31,8 +33,8 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert report["report_contract_version"] == "simulation-evidence-v1"
         assert report["passed"] is True
         assert report["summary"] == {
-            "total": 17,
-            "passed": 17,
+            "total": 18,
+            "passed": 18,
             "failed": 0,
             "skipped": 0,
         }
@@ -83,6 +85,9 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         ] == 1
         assert evidence["D07"]["agent_response"]["sources"]
         assert evidence["D17"]["reference_resolved"] is True
+        assert evidence["D18"]["route"] == "handoff"
+        assert evidence["D18"]["route_reason"] == "low_confidence_handoff"
+        assert evidence["D18"]["requires_human"] is True
         assert evidence["D08"]["blocked_probe_result"]["error_type"] == "ValueError"
         assert evidence["D09"]["dispatch_job"]["status"] == "assigned"
         assert evidence["D12"]["first_result"]["external_request_id"] == evidence[
@@ -143,7 +148,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert summary.status_code == 200
         assert summary.json()["report_contract_version"] == "simulation-evidence-v1"
-        assert len(summary.json()["demands"]) == 17
+        assert len(summary.json()["demands"]) == 18
         demand_d07 = next(
             item for item in summary.json()["demands"] if item["id"] == "D07"
         )
@@ -158,6 +163,11 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         assert demand_d17["input"]["second_context"] == {
             "shop_id": "qingchuan-flagship-001"
         }
+        demand_d18 = next(
+            item for item in summary.json()["demands"] if item["id"] == "D18"
+        )
+        assert demand_d18["input"]["decision_confidence"] == 0.59
+        assert demand_d18["input"]["configured_threshold"] == 0.6
         assert summary.json()["records"] == {
             "catalog": 6,
             "inventory": 10,
@@ -167,7 +177,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
             "settlement_statements": 1,
             "competitive_candidates": 3,
             "knowledge": 4,
-            "demands": 17,
+            "demands": 18,
         }
 
         missing_confirmation = client.post(
@@ -187,7 +197,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert run.status_code == 200
         assert run.json()["passed"] is True
-        assert run.json()["summary"]["passed"] == 17
+        assert run.json()["summary"]["passed"] == 18
         assert run.json()["scenarios"][0]["input"]["operation"] == (
             "CatalogService.list_items"
         )
@@ -249,3 +259,39 @@ def test_d17_reference_resolution_passes_normally(tmp_path) -> None:
     d17 = next(item for item in report["scenarios"] if item["id"] == "D17")
     assert d17["status"] == "passed"
     assert d17["output"]["reference_resolved"] is True
+
+
+def test_d18_counterexample_fails_when_handoff_threshold_is_zero(tmp_path) -> None:
+    """反证：取消低置信度阈值后，D18 必须明确失败。"""
+
+    settings = replace(make_settings(tmp_path), handoff_confidence_threshold=0.0)
+    service = AgentService(settings)
+    try:
+        report = VirtualStoreSimulation(service).run(
+            tenant_id="tenant-test",
+            actor="admin-test",
+            include_customer_service=True,
+        )
+    finally:
+        service.close()
+
+    d18 = next(item for item in report["scenarios"] if item["id"] == "D18")
+    assert d18["status"] == "failed"
+    assert d18["output"]["error_type"] == "AssertionError"
+
+
+def test_d18_low_confidence_handoff_passes_normally(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        report = VirtualStoreSimulation(service).run(
+            tenant_id="tenant-test",
+            actor="admin-test",
+            include_customer_service=True,
+        )
+    finally:
+        service.close()
+
+    d18 = next(item for item in report["scenarios"] if item["id"] == "D18")
+    assert d18["status"] == "passed"
+    assert d18["output"]["route_reason"] == "low_confidence_handoff"
+    assert d18["output"]["requires_human"] is True

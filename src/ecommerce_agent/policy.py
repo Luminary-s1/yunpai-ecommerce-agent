@@ -13,6 +13,20 @@ PROMPT_INJECTION_PATTERNS = (
     r"(system prompt|系统提示词|开发者消息|隐藏指令)",
     r"(越权|绕过).{0,8}(限制|权限|审核|平台)",
 )
+PROMPT_DISCLOSURE_ACTION_PATTERN = re.compile(
+    r"(输出|打印|显示|展示|复述|重复|回显|泄露|贴出|逐字|原样|一字不差|"
+    r"print|show|reveal|repeat|recite|display|dump|quote|verbatim|word\s+for\s+word)",
+    re.IGNORECASE,
+)
+PROMPT_DISCLOSURE_TARGET_PATTERN = re.compile(
+    r"((?:system|系统).{0,6}(?:prompt|提示|消息|指令|规则|设定)|"
+    r"内部.{0,6}(提示|消息|指令|规则|设定)|"
+    r"开发者.{0,6}(消息|指令|规则|模式)|隐藏.{0,6}(消息|指令|规则|设定)|"
+    r"角色.{0,6}(设定|规则|文字)|设定.{0,6}角色|"
+    r"developer\s+(message|instruction|mode)|"
+    r"hidden\s+(prompt|policy|instruction|rule)|internal\s+(prompt|policy|instruction|rule))",
+    re.IGNORECASE,
+)
 
 HIGH_RISK_ACTION_PATTERNS = (
     r"(帮我|给我|立即|马上|现在).{0,6}(退款|退钱|赔付|赔偿|补偿)",
@@ -106,6 +120,10 @@ def precheck_request(message: str, context: dict[str, Any]) -> PrecheckDecision:
     for pattern in PROMPT_INJECTION_PATTERNS:
         if re.search(pattern, message, re.IGNORECASE):
             return PrecheckDecision("refuse", "prompt_injection_detected")
+    if PROMPT_DISCLOSURE_ACTION_PATTERN.search(
+        message
+    ) and PROMPT_DISCLOSURE_TARGET_PATTERN.search(message):
+        return PrecheckDecision("refuse", "prompt_injection_detected")
     for pattern in UNAUTHORIZED_DATA_PATTERNS:
         if re.search(pattern, message, re.IGNORECASE):
             return PrecheckDecision("refuse", "unauthorized_data_request")

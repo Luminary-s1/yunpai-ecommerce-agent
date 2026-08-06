@@ -1,0 +1,454 @@
+{
+  "run_at": "2026-08-06T13:28:51.675845+00:00",
+  "dataset": "m4_complaint_balanced_holdout_v1.jsonl",
+  "dataset_status": "frozen post-fix holdout; first live run; unmodified after execution",
+  "mode": "live",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "metrics": {
+    "total": 40,
+    "positives": 20,
+    "negatives": 20,
+    "answered": 33,
+    "coverage": 0.825,
+    "complaint_true_positives": 15,
+    "complaint_false_positives": 0,
+    "complaint_precision": 1.0,
+    "complaint_recall": 0.75,
+    "negative_false_positive_rate": 0.0,
+    "answered_accuracy": 0.9393939393939394,
+    "over_budget_count": 0,
+    "by_expected": {
+      "after_sales": {
+        "total": 10,
+        "answered": 7,
+        "coverage": 0.7,
+        "correct": 7,
+        "answered_accuracy": 1.0
+      },
+      "complaint": {
+        "total": 20,
+        "answered": 16,
+        "coverage": 0.8,
+        "correct": 15,
+        "answered_accuracy": 0.9375
+      },
+      "product_inquiry": {
+        "total": 10,
+        "answered": 10,
+        "coverage": 1.0,
+        "correct": 9,
+        "answered_accuracy": 0.9
+      }
+    }
+  },
+  "gate": {
+    "passed": true,
+    "min_complaint_precision": 0.9,
+    "min_complaint_recall": 0.75,
+    "max_negative_false_positive_rate": 0.05,
+    "required_over_budget_count": 0
+  },
+  "records": [
+    {
+      "id": "m4bal-001",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.9582,
+      "correct": true
+    },
+    {
+      "id": "m4bal-002",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.7043,
+      "correct": true
+    },
+    {
+      "id": "m4bal-003",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4315,
+      "correct": true
+    },
+    {
+      "id": "m4bal-004",
+      "expected": "complaint",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9849,
+      "correct": false
+    },
+    {
+      "id": "m4bal-005",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.1448,
+      "correct": true
+    },
+    {
+      "id": "m4bal-006",
+      "expected": "complaint",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9833,
+      "correct": false
+    },
+    {
+      "id": "m4bal-007",
+      "expected": "complaint",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.985,
+      "correct": false
+    },
+    {
+      "id": "m4bal-008",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4376,
+      "correct": true
+    },
+    {
+      "id": "m4bal-009",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.7443,
+      "correct": true
+    },
+    {
+      "id": "m4bal-010",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.397,
+      "correct": true
+    },
+    {
+      "id": "m4bal-011",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.3164,
+      "correct": true
+    },
+    {
+      "id": "m4bal-012",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4392,
+      "correct": true
+    },
+    {
+      "id": "m4bal-013",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.2794,
+      "correct": true
+    },
+    {
+      "id": "m4bal-014",
+      "expected": "complaint",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9864,
+      "correct": false
+    },
+    {
+      "id": "m4bal-015",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.5435,
+      "correct": true
+    },
+    {
+      "id": "m4bal-016",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.1453,
+      "correct": true
+    },
+    {
+      "id": "m4bal-017",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.0175,
+      "correct": true
+    },
+    {
+      "id": "m4bal-018",
+      "expected": "complaint",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0002,
+      "correct": false
+    },
+    {
+      "id": "m4bal-019",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.92,
+      "method": "model",
+      "error": null,
+      "seconds": 1.291,
+      "correct": true
+    },
+    {
+      "id": "m4bal-020",
+      "expected": "complaint",
+      "predicted": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4355,
+      "correct": true
+    },
+    {
+      "id": "m4bal-021",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.8243,
+      "correct": true
+    },
+    {
+      "id": "m4bal-022",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0001,
+      "correct": true
+    },
+    {
+      "id": "m4bal-023",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9855,
+      "correct": false
+    },
+    {
+      "id": "m4bal-024",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0001,
+      "correct": true
+    },
+    {
+      "id": "m4bal-025",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0,
+      "correct": true
+    },
+    {
+      "id": "m4bal-026",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.5615,
+      "correct": true
+    },
+    {
+      "id": "m4bal-027",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0001,
+      "correct": true
+    },
+    {
+      "id": "m4bal-028",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9855,
+      "correct": false
+    },
+    {
+      "id": "m4bal-029",
+      "expected": "after_sales",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.1666,
+      "correct": true
+    },
+    {
+      "id": "m4bal-030",
+      "expected": "after_sales",
+      "predicted": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9811,
+      "correct": false
+    },
+    {
+      "id": "m4bal-031",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.0555,
+      "correct": true
+    },
+    {
+      "id": "m4bal-032",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.98,
+      "method": "model",
+      "error": null,
+      "seconds": 1.3333,
+      "correct": true
+    },
+    {
+      "id": "m4bal-033",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4688,
+      "correct": true
+    },
+    {
+      "id": "m4bal-034",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.98,
+      "method": "model",
+      "error": null,
+      "seconds": 1.3084,
+      "correct": true
+    },
+    {
+      "id": "m4bal-035",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.98,
+      "method": "model",
+      "error": null,
+      "seconds": 1.1208,
+      "correct": true
+    },
+    {
+      "id": "m4bal-036",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.2829,
+      "correct": true
+    },
+    {
+      "id": "m4bal-037",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.2033,
+      "correct": true
+    },
+    {
+      "id": "m4bal-038",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 1.0,
+      "method": "model",
+      "error": null,
+      "seconds": 1.2083,
+      "correct": true
+    },
+    {
+      "id": "m4bal-039",
+      "expected": "product_inquiry",
+      "predicted": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.5712,
+      "correct": true
+    },
+    {
+      "id": "m4bal-040",
+      "expected": "product_inquiry",
+      "predicted": "after_sales",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0001,
+      "correct": false
+    }
+  ]
+}

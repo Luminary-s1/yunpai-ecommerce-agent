@@ -101,6 +101,10 @@ meta? → delta* → error → done
 |---|---:|---|
 | `model_unavailable` | `true` | 模型服务临时不可用或限流 |
 | `model_error` | `false` | 模型生成失败 |
+| `knowledge_unavailable` | `true` | 知识检索暂时不可用；非流式接口以 200 降级并转人工 |
+| `session_closed` | `false` | 会话已关闭；客户端应新建会话 |
+| `session_scope_conflict` | `false` | 会话 ID 已绑定另一认证主体；客户端应更换会话 ID |
+| `idempotency_key_conflict` | `false` | 幂等键已绑定另一请求体；客户端应更换幂等键 |
 | `internal_error` | `false` | 流式处理内部失败 |
 
 HTTP 鉴权和请求校验在流建立前完成，继续使用标准的 4xx/5xx JSON 响应，不转换为

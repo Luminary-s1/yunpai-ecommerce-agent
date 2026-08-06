@@ -246,6 +246,11 @@
       "expected": ["第一轮识别出商品候选（含 AF5）", "第二轮“它”从上文历史恢复出 AF5 商品候选而非无法解析", "第二轮上下文快照仍含 AF5 候选", "两轮共用同一会话，指代不依赖客户端额外传参"]
     },
     {
+      "id": "D18", "module": "customer_service", "title": "低置信度回答被人工兜底门拦截",
+      "input": {"operation": "LangGraph decision_gate + handoff", "message": "请帮我判断这个商品问题", "decision_mode": "answer", "decision_confidence": 0.59, "configured_threshold": 0.6},
+      "expected": ["低于配置阈值的 answer 不会直接回复", "路由原因明确为 low_confidence_handoff", "响应带 requires_human=true 和持久人工任务"]
+    },
+    {
       "id": "D14", "module": "marketing", "title": "识别无转化投放并保存待人工审核内容草稿",
       "input": {"operation": "MarketingService.diagnose + save_content_draft", "parameters": {"store_id": "qingchuan-flagship-001", "min_roas": "2.00", "draft_key": "virtual-d14-content"}},
       "expected": ["检测到 high_spend_no_orders 诊断", "活动数据可追溯为 virtual", "内容草稿只通过有限事实校验且禁止直接发布"]

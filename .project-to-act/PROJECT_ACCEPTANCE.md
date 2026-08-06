@@ -5,11 +5,12 @@
 
 ## 当前验收结论
 
+- 结论：2026-08-07 M4 智能客服后端通过本机独立验收，证据 ID 为 E-20260807-001。冻结 50 例同口径 mock 报告从修复中间态的 `answer_accuracy=0.820 / severe_failures=7 / gate failed` 恢复为 `0.940 / 3 / passed`；投诉与商品场景分别为 `6/8`、`14/15`。FIX-9 保持检索证据、共情答复和 `complaints / urgent` 人工标记并存；FIX-10 只对问题明确询问且检索证据支持的目录字段使用快答。F-122 场景契约扩展至 `18/18`，D18 有阈值反证；独立验收 `27 passed, 1 xfailed`，全量 `597 passed, 1 xfailed`。FIX-10 后四条已泄漏场景的真实模型延迟为 `p50=10.87s / p95=36.51s`，K3 商品咨询为 36.51s，旧的 1.45s 快路径口径已撤销。本结论不豁免该 P1 延迟、2 秒分类 deadline 的弃权波动、反方向投诉仲裁、mock 隐式投诉语义边界，也不替代真实客户、真实渠道、长稳、容量、安全或生产放行验收。
 - 结论：0.23.0 已完成营销与利润模块本机候选。schema v23 的营销日指标、内容草稿有限事实检查、来源费用、结算单和对账任务均带租户边界与来源/版本契约；营销只生成诊断和不可直接发布的草稿，利润仅为管理估算，对账只生成或人工流转差异任务。D14/D15 连同既有场景共 15/15 通过，两个 Agent 工具均按只读方式执行。2026-07-24 的隔离 SQLite 单机并发压测在 16 线程完成 818 次操作，验证来源幂等、任务乐观锁和租户隔离；完整输入输出可在网页与原始 JSON 中复核。该验证不替代真实广告平台、财务系统、总账、税务、结算资金、容量、长稳或生产放行验收。
 - 结论：0.22.6 已完成管理后台视觉与响应式布局优化；原后台“智能客服 -> 对话测试”继续保留 0.22.5 的真实 `glm-4.7` 本机验证能力。桌面和 390px 下的长列表、会话和操作控件均有受限尺寸与内部滚动。该验证不替代正式模型、真实渠道、真实客户数据、容量/长稳或生产放行验收。
 - 结论：0.22.4 原后台智能客服无客户端密钥顾客直测与 0.22.2 后台运营/模拟/评测数据隔离通过本地代码级候选验收；顾客测试默认关闭、仅回环可用，实际调用会话固定归入 simulation，原后台页面可显示实际回答、来源、风险、转人工、会话/追踪，默认运营范围不被污染；正式 `/v1/chat` 客户认证保持；真实客户脱敏标注集、真实模型/渠道、客服主管组织/周期班次/技能/队列/SLA 签收、真实授权竞品/口碑数据、24/72 小时长稳、容量、安全、异机灾备、业务验收和最终生产放行未验收
 - 验收范围：原后台智能客服本机顾客直测、回环拒绝、默认关闭、simulation 来源隔离，以及 schema v22 会话来源分类、后台 overview/conversations/handoffs/dispatch scope 过滤、智能客服决策详情、Mock 状态展示、场景验收真实输入输出和既有全量回归
-- 最后检查：2026-07-24
+- 最后检查：2026-08-07
 - 遗留问题：真实淘宝/ERP 权限、合法竞品/口碑数据源、客户同款标注集、脱敏客户多轮评测集、真实模型基线、数据字典和客服组织/班次/技能/队列/SLA 口径待提供；真实业务工具/读回补偿、语义 VOC、真实广告与财务数据接入、目标移动设备、渠道任务 24/72 小时长稳、容量、安全、异机介质、设备密钥托管和业务 RPO/RTO 待完成；虚拟数据不得替代上述证据
 
 ## 验收标准
@@ -333,12 +334,14 @@
 
 ## 证据索引
 
+- E-20260807-001：M4 智能客服后端本机独立验收。FIX-9 投诉链路同时返回检索证据、共情答复和人工标记；FIX-10 目录快答限定为问题所问且被检索证据支持的事实。冻结 50 例 mock A/B 为 `0.820 / severe 7 / failed → 0.940 / severe 3 / passed`，投诉 `6/8`、商品 `14/15`；真实 `deepseek-v4-flash` 为 `answer_accuracy=0.860 / hallucination_rate=0.060 / refusal_rate=0.067 / severe_failures=4 / gate passed`。D18 低置信度人工兜底及阈值反证使 `simulation-evidence-v1` 达 `18/18`；浏览器 console 0 error/warning；独立验收 `27 passed, 1 xfailed`、全量 `597 passed, 1 xfailed`、compileall 与 whitespace 检查通过。FIX-10 后四条已泄漏场景延迟为 `p50=10.87s / p95=36.51s`，作为非阻塞 P1 残留。证据：`evals/customer_service/runs/20260807-customer-service-{postfix-red-mock,mock,live}.json`、`evals/performance/runs/20260807-m4-latency-post-fix10.json`、`tests/test_m4_acceptance.py`、`tests/test_virtual_store_simulation.py`、`docs/works/13-feature-m4-customer-service/EVIDENCE.md`、`docs/works/13-feature-m4-customer-service/README.md`。没有新增依赖、schema、迁移或非流式 API 变化；生产放行不豁免。
 - E-20260731-002：F-124 SSE 流式客服接口。`stream_generate` 只产出 delta；`verify`/`persist` 抽为可复用步骤，图内节点与流式路径共用同一实现；两段式生成后 LangGraph 节点与边零变化；`POST /v1/chat/stream` 事件协议 meta/delta/citations/handoff/done/error，error 后紧跟 done 关流；同一 `Idempotency-Key` 断连重发返回同一 message_id 且不重新调模型；`MODEL_ENABLED=false` 时零外部请求。证据：`tests/test_chat_stream.py`、`tests/test_service_stream.py`、`tests/test_llm.py`、`docs/works/13-feature-m4-customer-service/SSE_EVENT_PROTOCOL.md`。生产放行不豁免。
 - E-20260731-001：F-125 会话 Token 预算与生命周期。超长历史截断后 token 不超阈值且保留最近一轮；截断元信息作为 `history_window` 证据进入上下文快照；会话 CRUD 四端点具备鉴权、409、422、404，55 条消息按 limit=20 翻页无重复无遗漏；空闲 121 分钟自动关闭且带未结人工任务的会话不被关闭。反证：`context_budget_ratio` 由 0.7 临时调至 0.99 后保留消息数由 7 升至 9，截断断言如期失败，还原后四项复验通过。定向 16 项、回归 40 项、全量 318 项通过。证据：`tests/test_tokens.py`、`tests/test_context_budget.py`、`tests/test_chat_sessions_api.py`、`tests/test_session_idle.py`、`docs/works/13-feature-m4-customer-service/SESSION_DATA_MODEL_AND_API.md`。生产放行不豁免。
 - E-20260730-001：F-311 运营辅助与文案生成模块。CSV/JSON/表单三条录入链路按租户、数据集、日期、渠道幂等写入；五风格小批量文案与确定性模板降级，生成方式显式标记；分析报告统计值由代码计算；501 行数据集报告合计正确不被列表上限截断。门禁双反证：移除注册表模块覆盖映射后 `report["passed"]` 由 True 变 False；将 fixture 坏日期改为合法日期后场景断言失败，两处均已还原。全量 313 项通过。证据：`tests/test_ops_assistant.py`、`tests/test_virtual_store_simulation.py`、`docs/works/12-feature-m5-operations-assistant/README.md` 及 11 张实跑截图。开发数据仅用于本地验收，不构成生产经营结论。
 
 | 证据 ID | 时间 | 方法或命令 | 退出状态 | 版本或文件哈希 | 结果摘要 | 证据位置 | 有效期 |
 |---|---|---|---|---|---|---|---|
+| E-20260807-001 | 2026-08-07 | 冻结 50 例 mock 单变量 A/B、同口径 live、真实延迟剖析、M4 独立验收、18 项场景契约与阈值反证、全量 pytest、compileall、whitespace、隔离浏览器实跑 | 0 | working tree；schema v27 不变 | mock `0.940 / 0.020 / severe 3 / passed`；live `0.860 / 0.060 / severe 4 / passed`；四场景延迟 `p50=10.87s / p95=36.51s`；18/18；27 passed + 1 xfailed；全量 597 passed + 1 xfailed；生产 Gate 不豁免 | `evals/customer_service/runs/20260807-customer-service-{mock,live}.json`；`evals/performance/runs/20260807-m4-latency-post-fix10.json`；`docs/works/13-feature-m4-customer-service/` | M4 代码、fixture、门禁、场景契约或证据变化前 |
 | E-20260721-001 | 2026-07-21 | 文档结构、围栏、引用和占位符检查 | 0 | 文件大小 28,911 字节 | 原客服产品技术路线文档交付通过；实施未完成 | `云湃电商AI客服产品技术路线_20260721.md` | 文档内容变化前 |
 | E-20260721-002 | 2026-07-21 | 功能表结构、ID、状态和证据路径检查 | 0 | 21 个唯一功能 ID | 功能台账汇总通过；规划功能未验收 | `PROJECT_FEATURES.md` | 功能台账变化前 |
 | E-20260721-003 | 2026-07-21 | 文档结构、链接、异常字符和项目一致性检查 | 0 | 文件大小 50,362 字节 | 后台接入与客服接管调研交付通过；真实权限和 PoC 未验收 | `云湃电商后台接入与客服接管执行调研报告_20260721.md` | 文档内容变化前 |

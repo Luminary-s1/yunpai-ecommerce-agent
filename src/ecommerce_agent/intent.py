@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import queue
 import re
+import threading
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -52,6 +54,32 @@ _NEGATION_PREFIX_MARKERS = ("不", "别", "无需", "无须", "取消", "停止"
 _NEGATION_SUFFIX_MARKERS = ("不用", "不要", "取消", "算了", "停止", "作罢")
 _NEGATION_WINDOW = 6
 _RULE_CLAUSE_BOUNDARY = re.compile(r"[,，。.!！？?；;\n]")
+_PROCESS_CONTEXT_PATTERN = re.compile(
+    r"(客服|售后|商家|店家|平台|工单|处理|答复|回复|承诺|安排|补送|补寄|"
+    r"发货|寄送|配送|仓库|核对|检查|检验|品控|质控|预约|跟进|转接|"
+    r"服务|包装|收到|收货|货品|赠品|出库|装箱|复核|核验|履约|返修|人工)"
+)
+_PROCESS_FAILURE_PATTERN = re.compile(
+    r"(无故|无人|没人|未能|没有|没能|还没|没发|不给|关闭|拒绝|坏|破|"
+    r"寄错|发错|漏发|少发|延期|延误|拖延|拖了|中断|失效|无效|"
+    r"不处理|不回复|没进展|没解决)"
+)
+_PROCESS_ACCOUNTABILITY_PATTERN = re.compile(
+    r"(谁.{0,6}(负责|说明|解释)|(?:为什么|为何|凭什么).{0,12}|"
+    r"给.{0,6}(说法|解释)|(?:怎么|如何).{0,8}(负责|解释|核对|检查|处理)|"
+    r"(?:怎么|如何).{0,8}的|到底.{0,6}(谁|怎么|为何|为什么|负责|说明|解释)|"
+    r"也敢|(?:申请|准备|要|会).{0,8}(反映|申诉|追究)|"
+    r"(?:结果|却|反而).{0,12}|这种.{0,12}也(?:能|敢).{0,6}[吗？?])"
+)
+_PROCESS_RECURRENCE_PATTERN = re.compile(
+    r"(一再|反复|多次|屡次|来回|再次|又|仍|始终|至今|"
+    r"第[二三四五六七八九十\d]+(?:次|回)|"
+    r"[两三四五六七八九十\d]+(?:次|回))"
+)
+_PROCESS_INCIDENT_PATTERN = re.compile(
+    r"(已经|曾经|之前|收到|收货|到货|签收|送来|寄来|发来|开箱|拆|被|"
+    r"之后|以后|过去)"
+)
 _TERSE_RULE_PREFIXES = (
     "麻烦",
     "帮我",
@@ -168,10 +196,14 @@ def routing_for_intent(intent: str) -> dict[str, str]:
 # 传达的是判据本身而非具体样例——把基准里的争议样例写成 few-shot 就成了对基准
 # 过拟合，那样分数会涨而能力不会。
 _LABELLING_POLICY = (
-    "分类时先判断是否存在已经发生、需要处理的具体商品或履约问题。"
-    "商品故障、破损、缺件等归 after_sales，即使消息同时抱怨质量或表达失望；"
-    "这类故障陈述在客服语境中本身就表示待处理问题，不要求用户明确说出退款或换货。"
-    "只有不存在上述待处理问题，且诉求本身是投诉、追责、索赔或维权时，才归 complaint。"
+    "分类时先判断主要诉求，再判断是否存在已经发生、需要处理的具体商品或履约问题。"
+    "商品故障、破损、缺件等消息，如果主要诉求是办理退换修或查询进度，归 after_sales，"
+    "即使消息同时抱怨质量或表达失望；这类故障陈述在客服语境中本身就表示待处理问题，"
+    "不要求用户明确说出退款或换货。"
+    "当主要诉求是要求商家对处理流程本身追责，例如反复无进展、承诺未兑现、"
+    "服务处理失当或要求解释责任时，才归 complaint；具体商品或履约事件只作为投诉背景，"
+    "不把这种流程追责降成 after_sales。"
+    "发票开具、抬头变更或重开属于订单服务，归 after_sales。"
     "售前询问退换货政策、保修条款、发货时效属 product_inquiry；"
     "after_sales 要求已存在一笔交易和一个待处理的问题。"
 )
@@ -193,7 +225,10 @@ _FEW_SHOT_EXAMPLES = (
     {"message": "这款还有哪些颜色", "intent": "product_inquiry"},
     {"message": "收到后怎么换货", "intent": "after_sales"},
     {"message": "刚收货的耳机就没声音，做工真让人失望", "intent": "after_sales"},
-    {"message": "客服态度太差了", "intent": "complaint"},
+    {
+        "message": "安装预约改了三次仍没人上门，之前的处理为什么一直无效",
+        "intent": "complaint",
+    },
     {"message": "你好呀", "intent": "chitchat"},
 )
 _RULE_REVIEW_EXAMPLES = (
@@ -205,11 +240,14 @@ def classify(message: str, *, model: IntentModel | None) -> IntentResult:
     normalized = message.strip()
     if not normalized or not any(character.isalnum() for character in normalized):
         return _default_result()
+    process_review = _matches_process_accountability(normalized)
     review_rule_match = False
     rule_match = _match_rule(normalized)
     if rule_match is not None:
         intent, keywords = rule_match
-        review_rule_match = _requires_model_review(normalized, keywords)
+        review_rule_match = _requires_model_review(normalized, keywords) or (
+            process_review and intent != "complaint"
+        )
         if not review_rule_match:
             return IntentResult(
                 intent=intent,
@@ -238,8 +276,40 @@ def classify(message: str, *, model: IntentModel | None) -> IntentResult:
             ),
         },
     ]
+    outcome: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+
+    def invoke_model() -> None:
+        try:
+            payload = model.generate_json(
+                messages,
+                timeout_seconds=timeout_seconds,
+            )
+            outcome.put(
+                (
+                    "result",
+                    payload,
+                )
+            )
+        except Exception as exc:
+            outcome.put(("error", exc))
+
+    worker = threading.Thread(
+        target=invoke_model,
+        name="intent-classifier-deadline",
+        daemon=True,
+    )
+    worker.start()
+    # Leave a small scheduling margin so returning the fallback itself remains
+    # inside the configured wall-clock budget, not merely the socket wait.
+    deadline_margin = min(0.02, timeout_seconds * 0.05)
+    worker.join(max(0.001, timeout_seconds - deadline_margin))
+    if worker.is_alive():
+        return _default_result("model_deadline_exceeded")
+    outcome_kind, outcome_value = outcome.get_nowait()
     try:
-        payload = model.generate_json(messages, timeout_seconds=timeout_seconds)
+        if outcome_kind == "error":
+            raise outcome_value
+        payload = outcome_value
     except Exception as exc:
         return _default_result(f"model_call_failed:{type(exc).__name__}")
     result = _coerce_model_payload(payload)
@@ -258,6 +328,33 @@ def _match_rule(
         if matches:
             return intent, matches
     return None
+
+
+def _matches_process_accountability(message: str) -> bool:
+    """Recognize a failed service process plus an accountability complaint.
+
+    Each signal is insufficient on its own: ordinary service questions have a
+    process noun, routine after-sales messages have a failure, and emphatic
+    questions may contain an accountability phrase. Requiring their composition
+    keeps normal remedies on the model path while making repeated process failure
+    a deterministic high-priority signal.
+    """
+
+    process_context = _PROCESS_CONTEXT_PATTERN.search(message)
+    failure = _PROCESS_FAILURE_PATTERN.search(message)
+    accountability = _PROCESS_ACCOUNTABILITY_PATTERN.search(message)
+    recurrence = _PROCESS_RECURRENCE_PATTERN.search(message)
+    incident = _PROCESS_INCIDENT_PATTERN.search(message)
+    generic_process_verb = bool(
+        process_context and process_context.group(0) == "处理"
+    )
+    return bool(
+        process_context
+        and (
+            (failure and (accountability or recurrence))
+            or (accountability and incident and not generic_process_verb)
+        )
+    )
 
 
 def _requires_model_review(message: str, keywords: tuple[str, ...]) -> bool:

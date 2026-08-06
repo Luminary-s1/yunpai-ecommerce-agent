@@ -521,6 +521,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         def events():
             metadata: dict = {}
             generated = False
+            stream_error = False
+
+            def audit_stream_failure(code: str, error_type: str) -> None:
+                service.db.audit(
+                    "chat.stream_failed",
+                    principal.client_id,
+                    metadata.get("trace_id"),
+                    {"code": code, "error_type": error_type},
+                    principal.tenant_id,
+                )
+
             try:
                 stream = service.chat_stream(
                     principal,
@@ -539,16 +550,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         generated = generated or not item.get("replay", False)
                         yield encode({"event": "delta", "text": item["text"]})
                         continue
+                    if event_name == "error":
+                        stream_error = True
+                        yield encode(item)
+                        continue
 
                     response = item["response"]
-                    if generated and response["sources"]:
+                    if generated and response["sources"] and not stream_error:
                         yield encode(
                             {
                                 "event": "citations",
                                 "sources": response["sources"],
                             }
                         )
-                    if response["requires_human"]:
+                    if response["requires_human"] and not stream_error:
                         yield encode(
                             {
                                 "event": "handoff",
@@ -567,7 +582,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                             "model_fallback": response["model_fallback"],
                         }
                     )
-            except ModelUnavailableError:
+            except SessionScopeError as exc:
+                audit_stream_failure(exc.code, type(exc).__name__)
+                yield encode(
+                    {
+                        "event": "error",
+                        "code": exc.code,
+                        "message": str(exc),
+                        "retry_advised": False,
+                    }
+                )
+                yield encode(
+                    {
+                        "event": "done",
+                        "message_id": metadata.get("message_id", ""),
+                        "intent": "unknown",
+                        "risk_level": "low",
+                        "model_fallback": True,
+                    }
+                )
+            except ModelUnavailableError as exc:
+                audit_stream_failure("model_unavailable", type(exc).__name__)
                 yield encode(
                     {
                         "event": "error",
@@ -585,7 +620,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "model_fallback": True,
                     }
                 )
-            except ModelError:
+            except ModelError as exc:
+                audit_stream_failure("model_error", type(exc).__name__)
                 yield encode(
                     {
                         "event": "error",
@@ -603,7 +639,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "model_fallback": True,
                     }
                 )
-            except Exception:
+            except Exception as exc:
+                audit_stream_failure("internal_error", type(exc).__name__)
                 yield encode(
                     {
                         "event": "error",

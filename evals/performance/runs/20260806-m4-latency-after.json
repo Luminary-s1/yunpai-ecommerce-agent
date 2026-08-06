@@ -1,0 +1,242 @@
+{
+  "run_at": "2026-08-06T12:55:02.820644+00:00",
+  "revision": "current",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "model_max_output_tokens": 1600,
+  "data_scope": "temporary isolated directory",
+  "messages": "leaked regression scenarios; omitted from report",
+  "summary": {
+    "count": 4,
+    "p50_ms": 1453.2,
+    "p95_ms": 1953.3
+  },
+  "records": [
+    {
+      "scenario": "injection",
+      "classification_ms": 0.0,
+      "classification_provider_ms": 0.0,
+      "retrieval_ms": 0.0,
+      "deliberate_provider_ms": [],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 2.8
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 0.5
+        },
+        {
+          "node": "refuse",
+          "elapsed_ms": 0.6
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 2.8
+        }
+      ],
+      "total_ms": 6.7,
+      "route_reason": null,
+      "trace": [
+        "intake",
+        "intent:default:chitchat:precheck_short_circuit",
+        "precheck:refuse",
+        "refuse",
+        "postcondition:blocked",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "complaint",
+      "classification_ms": 1539.4,
+      "classification_provider_ms": 1539.2,
+      "retrieval_ms": 0.0,
+      "deliberate_provider_ms": [],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 0.8
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 1541.2
+        },
+        {
+          "node": "handoff",
+          "elapsed_ms": 13.1
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 8.1
+        }
+      ],
+      "total_ms": 1563.1,
+      "route_reason": null,
+      "trace": [
+        "intake",
+        "intent:model:complaint",
+        "precheck:deliberate",
+        "human_handoff",
+        "postcondition:handoff_proposed",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "product",
+      "classification_ms": 1281.6,
+      "classification_provider_ms": 1281.4,
+      "retrieval_ms": 19.6,
+      "deliberate_provider_ms": [],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 1.9
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 1283.5
+        },
+        {
+          "node": "retrieve",
+          "elapsed_ms": 18.3
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 16.1
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 0.4
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 4.4
+        },
+        {
+          "node": "refine_retrieval",
+          "elapsed_ms": 6.7
+        },
+        {
+          "node": "build_generation_context",
+          "elapsed_ms": 7.1
+        },
+        {
+          "node": "generate",
+          "elapsed_ms": 0.2
+        },
+        {
+          "node": "verify",
+          "elapsed_ms": 1.1
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 3.6
+        }
+      ],
+      "total_ms": 1343.4,
+      "route_reason": null,
+      "trace": [
+        "intake",
+        "intent:model:product_inquiry",
+        "precheck:deliberate",
+        "retrieve:initial:3",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "deliberate:product_knowledge",
+        "decision_gate:answer",
+        "retrieve:refined:3",
+        "context:budget:kept0/dropped0",
+        "context:generation:ready",
+        "generate:catalog_fact",
+        "verify:passed",
+        "postcondition:answer",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "knowledge_gap",
+      "classification_ms": 1895.2,
+      "classification_provider_ms": 1894.9,
+      "retrieval_ms": 19.3,
+      "deliberate_provider_ms": [],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 1.0
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 1896.9
+        },
+        {
+          "node": "retrieve",
+          "elapsed_ms": 18.0
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 14.7
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 0.4
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 4.0
+        },
+        {
+          "node": "refine_retrieval",
+          "elapsed_ms": 6.6
+        },
+        {
+          "node": "build_generation_context",
+          "elapsed_ms": 7.3
+        },
+        {
+          "node": "generate",
+          "elapsed_ms": 0.2
+        },
+        {
+          "node": "verify",
+          "elapsed_ms": 0.7
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 3.5
+        }
+      ],
+      "total_ms": 1953.3,
+      "route_reason": null,
+      "trace": [
+        "intake",
+        "intent:model:product_inquiry",
+        "precheck:deliberate",
+        "retrieve:initial:3",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "deliberate:product_knowledge",
+        "decision_gate:answer",
+        "retrieve:refined:3",
+        "context:budget:kept0/dropped0",
+        "context:generation:ready",
+        "generate:catalog_fact",
+        "verify:passed",
+        "postcondition:answer",
+        "persist"
+      ]
+    }
+  ]
+}

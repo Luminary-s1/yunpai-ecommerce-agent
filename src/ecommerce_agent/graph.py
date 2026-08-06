@@ -44,6 +44,70 @@ LOW_QUALITY_ROUTE_REASONS = frozenset(
 )
 
 
+def catalog_fact_answer(state: AgentState) -> str | None:
+    """Render only catalog facts explicitly requested and backed by retrieval."""
+
+    advisor = (state.get("context_bundle") or {}).get("product_advisor") or {}
+    candidates = advisor.get("candidates") or []
+    if len(candidates) != 1:
+        return None
+    candidate = candidates[0]
+    title = str(candidate.get("title") or "").strip()
+    if not title:
+        return None
+    question = normalize_text(state.get("normalized_input") or "").casefold()
+    evidence = normalize_text(
+        " ".join(
+            f"{document.get('question', '')} {document.get('answer', '')}"
+            for document in state.get("retrieved", [])
+        )
+    ).casefold()
+    if not question or not evidence:
+        return None
+
+    facts: list[tuple[str, str]] = []
+    price = candidate.get("sale_price")
+    currency = str(candidate.get("currency") or "").strip()
+    if price is not None and any(
+        marker in question for marker in ("多少钱", "价格", "售价", "价位")
+    ):
+        rendered_price = str(price).strip()
+        if rendered_price:
+            facts.append(
+                (
+                    f"价格 {rendered_price}{f' {currency}' if currency else ''}",
+                    rendered_price,
+                )
+            )
+    attributes = candidate.get("attributes") or {}
+    if isinstance(attributes, dict):
+        compact_question = question.replace("_", "").replace("-", "")
+        for key, value in sorted(attributes.items()):
+            rendered_key = str(key).strip()
+            rendered_value = str(value).strip()
+            compact_key = (
+                normalize_text(rendered_key)
+                .casefold()
+                .replace("_", "")
+                .replace("-", "")
+            )
+            if (
+                rendered_key
+                and rendered_value
+                and compact_key
+                and compact_key in compact_question
+            ):
+                facts.append((f"{rendered_key} {rendered_value}", rendered_value))
+    if not facts:
+        return None
+    if any(normalize_text(value).casefold() not in evidence for _, value in facts):
+        return None
+    return (
+        f"目录中匹配到“{title}”。当前可核验的信息："
+        f"{'；'.join(rendered for rendered, _ in facts)}。"
+    )
+
+
 def verify_response(state: AgentState) -> dict[str, Any]:
     evidence = " ".join(document["answer"] for document in state["retrieved"])
     evidence += " " + json.dumps(state["context_bundle"], ensure_ascii=False)
@@ -287,6 +351,7 @@ def build_graph(
             "route": "deliberate",
             "route_reason": "pending",
             "retrieved": [],
+            "knowledge_error": None,
             "draft": "",
             "answer": "",
             "citations": [],
@@ -315,18 +380,39 @@ def build_graph(
         }
 
     def precheck(state: AgentState) -> dict[str, Any]:
+        decision = precheck_request(state["normalized_input"], state["context"])
+        if decision.route != "deliberate":
+            intent_routing = routing_for_intent("chitchat")
+            return {
+                "route": decision.route,
+                "route_reason": decision.reason,
+                "risk_level": "blocked" if decision.route == "refuse" else "medium",
+                "customer_intent": "chitchat",
+                "intent_confidence": 0.0,
+                "intent_method": "default",
+                "intent_error": "precheck_short_circuit",
+                "intent_routing": intent_routing,
+                "trace": [
+                    *state["trace"],
+                    "intent:default:chitchat:precheck_short_circuit",
+                    f"precheck:{decision.route}",
+                ],
+            }
         classifier_model = model if (settings.model_enabled or settings.model_mock_mode) else None
         classified = classify(state["normalized_input"], model=classifier_model)
         intent_routing = routing_for_intent(classified.intent)
-        decision = precheck_request(state["normalized_input"], state["context"])
-        route = "retrieve" if decision.route == "deliberate" else decision.route
-        risk_level = "blocked" if route == "refuse" else "medium" if route == "handoff" else "low"
+        complaint = classified.intent == "complaint"
+        route = "retrieve"
+        route_reason = (
+            "complaint_attention_required" if complaint else decision.reason
+        )
+        risk_level = "medium" if complaint else "low"
         intent_trace = f"intent:{classified.method}:{classified.intent}"
         if classified.error is not None:
             intent_trace += f":{classified.error}"
         return {
             "route": route,
-            "route_reason": decision.reason,
+            "route_reason": route_reason,
             "risk_level": risk_level,
             "customer_intent": classified.intent,
             "intent_confidence": classified.confidence,
@@ -347,16 +433,38 @@ def build_graph(
         intent_routing = state.get("intent_routing") or routing_for_intent(
             state.get("customer_intent") or "chitchat"
         )
-        documents = knowledge.retrieve(
-            state["normalized_input"],
-            top_k=settings.rag_top_k,
-            min_score=settings.rag_min_score,
-            intent=intent_routing["knowledge_intent"],
-            tenant_id=state["tenant_id"],
-            store_id=effective_context.get("store_id") or effective_context.get("shop_id"),
-            sku_id=effective_context.get("sku_id"),
-            rollout_unit=state["session_id"],
-        )
+        try:
+            documents = knowledge.retrieve(
+                state["normalized_input"],
+                top_k=settings.rag_top_k,
+                min_score=settings.rag_min_score,
+                intent=intent_routing["knowledge_intent"],
+                tenant_id=state["tenant_id"],
+                store_id=effective_context.get("store_id") or effective_context.get("shop_id"),
+                sku_id=effective_context.get("sku_id"),
+                rollout_unit=state["session_id"],
+            )
+        except Exception as exc:
+            # Retrieval is an external dependency boundary. Preserve only the
+            # exception type so the outage is observable without retaining the
+            # shopper message or upstream error text.
+            db.audit(
+                "knowledge.retrieval_failure",
+                "system",
+                state["trace_id"],
+                {"error_type": type(exc).__name__, "stage": "initial"},
+                state["tenant_id"],
+            )
+            return {
+                "context": effective_context,
+                "retrieved": [],
+                "citations": [],
+                "knowledge_error": f"retrieval_failed:{type(exc).__name__}",
+                "trace": [
+                    *state["trace"],
+                    f"retrieve:unavailable:{type(exc).__name__}",
+                ],
+            }
         return {
             "context": effective_context,
             "retrieved": documents,
@@ -412,6 +520,33 @@ def build_graph(
         }
 
     def deliberate(state: AgentState) -> dict[str, Any]:
+        if state.get("knowledge_error"):
+            decision = AgentDecision(
+                intent=state.get("customer_intent") or "general",
+                mode="handoff",
+                reason="knowledge_unavailable",
+                confidence=1,
+            )
+            return {
+                "decision": decision.model_dump(),
+                "model_fallback": True,
+                "trace": [*state["trace"], "deliberate:knowledge_unavailable"],
+            }
+        if state.get("customer_intent") == "complaint":
+            decision = AgentDecision(
+                intent="complaint",
+                mode="handoff",
+                reason="complaint_attention_required",
+                confidence=max(
+                    settings.handoff_confidence_threshold,
+                    float(state.get("intent_confidence") or 0),
+                ),
+            )
+            return {
+                "decision": decision.model_dump(),
+                "model_fallback": False,
+                "trace": [*state["trace"], "deliberate:complaint_evidence_ready"],
+            }
         top_document = state.get("retrieved", [{}])[0] if state.get("retrieved") else None
         if (
             state["react_step"] == 0
@@ -433,6 +568,29 @@ def build_graph(
                 "decision": decision.model_dump(),
                 "trace": [*state["trace"], "deliberate:approved_knowledge"],
             }
+
+        if (
+            state["react_step"] == 0
+            and top_document
+            and state.get("customer_intent") == "product_inquiry"
+        ):
+            score = float(top_document.get("score", 0))
+            if (
+                catalog_fact_answer(state) is not None
+                or score >= settings.rag_direct_approved_min_score
+            ):
+                decision = AgentDecision(
+                    intent=top_document.get("intent") or "product",
+                    mode="answer",
+                    reason="product_knowledge_available",
+                    confidence=max(settings.handoff_confidence_threshold, score),
+                )
+                trace_step = "deliberate:product_knowledge"
+                return {
+                    "decision": decision.model_dump(),
+                    "model_fallback": False,
+                    "trace": [*state["trace"], trace_step],
+                }
 
         history, history_meta, knowledge_budget = budgeted_history(
             state,
@@ -613,16 +771,34 @@ def build_graph(
         }
 
     def refine_retrieval(state: AgentState) -> dict[str, Any]:
-        documents = knowledge.retrieve(
-            state["normalized_input"],
-            top_k=settings.rag_top_k,
-            min_score=settings.rag_min_score,
-            intent=state["intent"],
-            tenant_id=state["tenant_id"],
-            store_id=state["context"].get("store_id") or state["context"].get("shop_id"),
-            sku_id=state["context"].get("sku_id"),
-            rollout_unit=state["session_id"],
-        )
+        try:
+            documents = knowledge.retrieve(
+                state["normalized_input"],
+                top_k=settings.rag_top_k,
+                min_score=settings.rag_min_score,
+                intent=state["intent"],
+                tenant_id=state["tenant_id"],
+                store_id=state["context"].get("store_id") or state["context"].get("shop_id"),
+                sku_id=state["context"].get("sku_id"),
+                rollout_unit=state["session_id"],
+            )
+        except Exception as exc:
+            db.audit(
+                "knowledge.retrieval_failure",
+                "system",
+                state["trace_id"],
+                {"error_type": type(exc).__name__, "stage": "refined"},
+                state["tenant_id"],
+            )
+            return {
+                "retrieved": [],
+                "citations": [],
+                "knowledge_error": f"retrieval_failed:{type(exc).__name__}",
+                "trace": [
+                    *state["trace"],
+                    f"retrieve:unavailable:{type(exc).__name__}",
+                ],
+            }
         return {
             "retrieved": documents,
             "citations": [document["id"] for document in documents],
@@ -804,13 +980,19 @@ def build_graph(
             tool_result=state.get("tool_result") or None,
             parent_snapshot_id=state.get("context_snapshot_id"),
         )
-        route = "handoff" if snapshot.readiness == "handoff_required" else "generate"
+        route = (
+            "handoff"
+            if snapshot.readiness == "handoff_required" or state.get("knowledge_error")
+            else "generate"
+        )
         history_meta = snapshot.bundle["recent_history_meta"]
         return {
             "route": route,
             "route_reason": (
                 "context_evidence_conflict"
                 if snapshot.readiness == "handoff_required"
+                else "knowledge_unavailable"
+                if state.get("knowledge_error")
                 else state["route_reason"]
             ),
             "context_bundle": snapshot.bundle,
@@ -834,6 +1016,13 @@ def build_graph(
             if state.get("tool_result", {}).get("postcondition_met")
             else None
         )
+        direct_catalog_answer = catalog_fact_answer(state)
+        if direct_catalog_answer is not None:
+            return {
+                "draft": direct_catalog_answer,
+                "model_fallback": False,
+                "trace": [*state["trace"], "generate:catalog_fact"],
+            }
         if not state["retrieved"] and not verified_result:
             return {
                 "draft": "当前知识库中没有足够信息，我会为您转人工客服进一步核对。",
@@ -940,7 +1129,21 @@ def build_graph(
 
     def handoff(state: AgentState) -> dict[str, Any]:
         reason = state["route_reason"]
-        if reason == "customer_requested_human":
+        if (
+            reason == "complaint_attention_required"
+            and state.get("customer_intent") == "complaint"
+        ):
+            retrieved = state.get("retrieved") or []
+            evidence_answer = (
+                normalize_text(str(retrieved[0].get("answer") or ""))[:280]
+                if retrieved
+                else ""
+            )
+            answer = "很抱歉给您带来困扰。"
+            if evidence_answer:
+                answer += f"根据当前可核验信息：{evidence_answer} "
+            answer += "我已将该问题标记为投诉，并转交人工客服优先跟进。"
+        elif reason == "customer_requested_human":
             answer = "好的，我会将当前问题和必要上下文转给人工客服。请勿发送密码、验证码或银行卡信息。"
         elif reason == "authorized_order_context_missing":
             answer = "这个问题需要核对您的订单信息。我会转人工处理，请只提供平台订单编号，不要发送密码或验证码。"
@@ -948,6 +1151,11 @@ def build_graph(
             answer = "我已经理解您要办理的业务，但当前环境尚未接入对应的执行工具，我会转人工继续处理。"
         elif reason.startswith("tool_policy_denied"):
             answer = "当前操作未通过已配置的权限或业务规则校验，我会转人工进一步核对。"
+        elif reason == "knowledge_unavailable":
+            answer = (
+                "知识检索服务暂时不可用，当前无法引用知识库；"
+                "我会把对话历史和已有信息转给人工客服继续核对。"
+            )
         elif reason in {"model_unavailable", "react_step_limit_reached"}:
             answer = MODEL_UNAVAILABLE_HANDOFF_ANSWER
         else:
@@ -989,12 +1197,21 @@ def build_graph(
         }
         if state.get("customer_intent") == "complaint":
             handoff_payload["priority_flag"] = "complaint"
+        unknown_intent = state.get("intent_method") == "default"
+        if unknown_intent:
+            # Abstention means the classifier could not decide, not that the
+            # shopper was chatting. Keep it below complaint/urgent while avoiding
+            # the catch-all queue's lowest SLA.
+            handoff_payload["priority_flag"] = "intent_unknown"
+            handoff_payload["intent_method"] = "default"
+            handoff_payload["intent_error"] = state.get("intent_error")
         task = handoffs.create(
             tenant_id=state["tenant_id"],
             session_id=state["session_id"],
             message_id=state["message_id"],
             reason=reason,
             payload=handoff_payload,
+            priority="high" if unknown_intent else None,
         )
         return {
             "answer": answer,

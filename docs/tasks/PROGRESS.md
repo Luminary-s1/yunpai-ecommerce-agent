@@ -81,8 +81,10 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 
 ### WP4 客服模块效果评测与调优（16h）
 
-> 最新一次运行：mock `0.940 / 0.020 / 0.000`、live `deepseek-v4-flash`
-> `0.800 / 0.040 / 0.067`，报告在 `evals/customer_service/runs/`。
+> 最新一次 mock 运行（2026-08-07）：`answer_accuracy=0.940`、
+> `hallucination_rate=0.020`、`refusal_rate=0.000`、`severe_failures=3/5`，
+> gate passed；同口径 live `deepseek-v4-flash` 为 `0.860 / 0.060 / 0.067`、
+> `severe_failures=4/5`，同样 gate passed。报告见 `evals/customer_service/runs/`。
 
 - [x] 评测底座：标注集不可变版本、冻结、数据集 SHA-256 哈希
 - [x] 隔离数据库快照中运行真实多轮 Agent，主库零污染
@@ -110,17 +112,17 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 > 内容与 WP1 + WP2 重叠，勾选状态同上。本包按"端到端联调与交付证据"执行。
 
 - [x] 多轮对话可用，能基于知识库回答商品咨询
-- [x] 虚拟店铺跨模块场景验收框架（simulation-evidence-v1，当前 17 项）
+- [x] 虚拟店铺跨模块场景验收框架（simulation-evidence-v1，当前 18 项）
 - [x] 本机顾客直测入口（`/admin` 智能客服页，无需客户端密钥）
 - [x] 客服管理后台（会话回放、人工任务、评测、场景验收、审计）
 - [x] **流式输出端到端实跑证据**（`docs/works/13-feature-m4-customer-service/EVIDENCE.md`）
 - [x] **新增场景 D17 多轮指代**（含反证 `test_d17_counterexample_*`）
-- [ ] **新增场景 D18 意图路由与低置信度转人工**（胡磊承接）
+- [x] **新增场景 D18 意图路由与低置信度转人工**（含把阈值降到 `0` 后断言
+      必须失败的反证）
 - [x] **`docs/works/13-feature-m4-customer-service/README.md` 验证文档**（已覆盖
-      D1–D20，含红态反证与回归数）
-- [ ] **四份项目台账同步**（FEATURES / PROGRESS / VERSIONS / ACCEPTANCE）——
-      FEATURES 与本文件已同步到 D20；VERSIONS 版本条目与 ACCEPTANCE 验收条目
-      待 WP5 出口一并补
+      D1–D22，含红态反证、FIX-9/FIX-10 与回归数）
+- [x] **四份项目台账同步**（FEATURES / PROGRESS / VERSIONS / ACCEPTANCE；
+      E-20260807-001）
 
 ---
 

@@ -111,6 +111,111 @@ def test_chat_stream_error_is_immediately_followed_by_done(tmp_path) -> None:
         assert events[-1]["model_fallback"] is True
 
 
+def test_chat_stream_scope_and_idempotency_conflicts_have_distinct_codes(
+    tmp_path,
+) -> None:
+    app = create_app(make_settings(tmp_path))
+    other_subject = {**CLIENT_HEADERS, "X-Subject-Id": "stream-other-buyer"}
+    with TestClient(app) as client:
+        client.post(
+            "/v1/chat",
+            headers=CLIENT_HEADERS,
+            json={"session_id": "sse-closed-code", "message": "尺码怎么选", "context": {}},
+        )
+        client.delete(
+            "/v1/chat/sessions/sse-closed-code",
+            headers=CLIENT_HEADERS,
+        )
+        closed = stream_events(
+            client.post(
+                "/v1/chat/stream",
+                headers=CLIENT_HEADERS,
+                json={"session_id": "sse-closed-code", "message": "还有货吗", "context": {}},
+            )
+        )
+
+        client.post(
+            "/v1/chat",
+            headers=CLIENT_HEADERS,
+            json={"session_id": "sse-scope-code", "message": "尺码怎么选", "context": {}},
+        )
+        scope = stream_events(
+            client.post(
+                "/v1/chat/stream",
+                headers=other_subject,
+                json={"session_id": "sse-scope-code", "message": "还有货吗", "context": {}},
+            )
+        )
+
+        idem_headers = {**CLIENT_HEADERS, "Idempotency-Key": "sse-code-idem"}
+        client.post(
+            "/v1/chat/stream",
+            headers=idem_headers,
+            json={"session_id": "sse-idem-code", "message": "尺码怎么选", "context": {}},
+        )
+        idempotency = stream_events(
+            client.post(
+                "/v1/chat/stream",
+                headers=idem_headers,
+                json={"session_id": "sse-idem-code", "message": "退货怎么弄", "context": {}},
+            )
+        )
+
+    errors = [closed[-2], scope[-2], idempotency[-2]]
+    assert [event["code"] for event in errors] == [
+        "session_closed",
+        "session_scope_conflict",
+        "idempotency_key_conflict",
+    ]
+    assert all(event["event"] == "error" for event in errors)
+    assert all(event["retry_advised"] is False for event in errors)
+    assert all(events[-1]["event"] == "done" for events in (closed, scope, idempotency))
+
+
+def test_knowledge_outage_degradation_is_observable_without_user_text(tmp_path) -> None:
+    app = create_app(make_settings(tmp_path))
+
+    def offline(*_args, **_kwargs):
+        raise RuntimeError("sensitive upstream detail")
+
+    app.state.agent.knowledge.retrieve = offline
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/v1/chat",
+            headers=CLIENT_HEADERS,
+            json={
+                "session_id": "knowledge-outage-observable",
+                "message": "请查询只有顾客知道的内容",
+                "context": {},
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["reason"] == "knowledge_unavailable"
+    with app.state.agent.db.connect() as conn:
+        audit = conn.execute(
+            """
+            SELECT detail_json FROM audit_log
+            WHERE event_type='knowledge.retrieval_failure'
+            ORDER BY created_at DESC LIMIT 1
+            """
+        ).fetchone()
+        metric = conn.execute(
+            """
+            SELECT route_reason, success, model_fallback FROM request_metrics
+            ORDER BY created_at DESC LIMIT 1
+            """
+        ).fetchone()
+
+    assert audit is not None
+    assert json.loads(audit["detail_json"]) == {
+        "error_type": "RuntimeError",
+        "stage": "initial",
+    }
+    assert "sensitive upstream detail" not in audit["detail_json"]
+    assert tuple(metric) == ("knowledge_unavailable", 1, 1)
+
+
 def test_chat_stream_requires_auth_and_uses_sse_media_type(tmp_path) -> None:
     app = create_app(make_settings(tmp_path))
     with TestClient(app) as client:

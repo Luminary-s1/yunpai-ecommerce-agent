@@ -1,14 +1,14 @@
 # M4 ① 流式输出端到端实跑证据
 
 > 对应：M4_HANDOFF 第 2 节第 1 项「流式输出端到端实跑证据」
-> 日期：2026-08-05
+> 首次实跑：2026-08-05；浏览器证据更新：2026-08-07
 
 ## 证据文件
 
 | 文件 | 内容 | 性质 |
 |---|---|---|
 | `m4-stream-evidence.txt` | 74 事件完整流式输出 | **成功实跑证据**（真实模型） |
-| `m4-browser-evidence.png` | 浏览器实测画面 | 补充佐证（降级转人工场景） |
+| `m4-browser-evidence.png` | 浏览器实测画面 | **FIX-9 回归证据**（有来源共情答复 + 人工标记） |
 
 ## ① 成功实跑证据（m4-stream-evidence.txt）
 
@@ -26,8 +26,16 @@
 ## ② 浏览器佐证（m4-browser-evidence.png）
 
 - **页面**：`/customer-test`（F-123 本机顾客直测入口）
-- **内容**：输入保修问题后，系统安全降级转人工（`model_unavailable`）
-- **意义**：同时佐证了模型不可用时的**安全转人工降级**（对应 D18 低置信度转人工的降级路径）
+- **环境**：2026-08-07，隔离临时数据目录，`MODEL_MOCK_MODE=true`，不出网
+- **输入**：在晴川 AF5 非敏感店铺 / SKU 上下文中提交一条显式投诉回归消息
+- **实际画面**：回答先给出共情说明，显示 `complaint_attention_required`、
+  `已转人工`、`风险 medium`，并列出投诉 / 赔付 / 安全 3 条知识来源
+- **原始响应复核**：`intent=complaint`、`requires_human=true`、
+  `context_readiness=ready`、`model_fallback=false`，同时返回 `handoff_id` 与 3 条
+  `sources`；浏览器 console `0 error / 0 warning`
+- **意义**：证明 FIX-9 不再以无来源通用转人工话术替代答复；页面展示的是
+  “检索证据 + 共情回复 + 人工标记”并存。`complaints / urgent` 队列由同链路集成测试
+  `test_chat_complaint_answers_with_evidence_and_marks_urgent_handoff` 复核。
 
 ## 复现方式
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import math
+import re
 import sqlite3
 import threading
 import uuid
@@ -32,7 +35,9 @@ def utc_now() -> str:
 
 
 class SessionScopeError(ValueError):
-    pass
+    def __init__(self, message: str, *, code: str = "session_scope_error"):
+        super().__init__(message)
+        self.code = code
 
 
 class Database:
@@ -2686,11 +2691,27 @@ class Database:
         decoded_cursor: tuple[str, str] | None = None
         if cursor:
             try:
-                created_at, message_id = cursor.rsplit("|", 1)
+                if "|" in cursor:
+                    # Legacy composite cursors remain readable. Recover the UTC
+                    # offset from clients that naively placed the old '+' form in
+                    # a query string, where form decoding changed it to a space.
+                    raw_cursor = cursor
+                    if "T" in raw_cursor and "+" not in raw_cursor:
+                        raw_cursor = re.sub(
+                            r" (?=\d{2}:\d{2}\|)", "+", raw_cursor, count=1
+                        )
+                else:
+                    padding = "=" * (-len(cursor) % 4)
+                    raw_cursor = base64.b64decode(
+                        cursor + padding,
+                        altchars=b"-_",
+                        validate=True,
+                    ).decode("utf-8")
+                created_at, message_id = raw_cursor.rsplit("|", 1)
                 datetime.fromisoformat(created_at)
                 if created_at and message_id:
                     decoded_cursor = (created_at, message_id)
-            except (TypeError, ValueError):
+            except (binascii.Error, TypeError, UnicodeDecodeError, ValueError):
                 decoded_cursor = None
 
         page_limit = max(1, min(100, limit))
@@ -2733,7 +2754,10 @@ class Database:
         items = [dict(row) for row in page_rows]
         next_cursor = None
         if has_more and page_rows:
-            next_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
+            raw_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
+            next_cursor = base64.urlsafe_b64encode(raw_cursor.encode("utf-8")).decode(
+                "ascii"
+            ).rstrip("=")
         return {
             "items": items,
             "next_cursor": next_cursor,
@@ -2775,9 +2799,13 @@ class Database:
         source_reference: str | None = None,
     ) -> str:
         if source_type not in SESSION_SOURCE_TYPES:
-            raise SessionScopeError("invalid session source type")
+            raise SessionScopeError(
+                "invalid session source type", code="invalid_session_source"
+            )
         if source_reference is not None and len(source_reference) > 128:
-            raise SessionScopeError("session source reference is too long")
+            raise SessionScopeError(
+                "session source reference is too long", code="invalid_session_source"
+            )
         with self._write_lock, self.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM sessions WHERE tenant_id=? AND external_session_id=?",
@@ -2785,13 +2813,24 @@ class Database:
             ).fetchone()
             if row is not None:
                 if row["subject_hash"] != subject_hash or row["client_id"] != client_id:
-                    raise SessionScopeError("session id is already bound to another authenticated scope")
+                    raise SessionScopeError(
+                        "session id is already bound to another authenticated scope",
+                        code="session_scope_conflict",
+                    )
                 if row["source_type"] != source_type:
-                    raise SessionScopeError("session id is already bound to another source type")
+                    raise SessionScopeError(
+                        "session id is already bound to another source type",
+                        code="session_source_conflict",
+                    )
                 if row["source_reference"] != source_reference:
-                    raise SessionScopeError("session id is already bound to another source reference")
+                    raise SessionScopeError(
+                        "session id is already bound to another source reference",
+                        code="session_source_conflict",
+                    )
                 if row["status"] != "active":
-                    raise SessionScopeError("session is closed")
+                    raise SessionScopeError(
+                        "session is closed", code="session_closed"
+                    )
                 conn.execute("UPDATE sessions SET last_seen_at=? WHERE id=?", (utc_now(), row["id"]))
                 return str(row["id"])
 

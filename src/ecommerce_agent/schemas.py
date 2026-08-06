@@ -42,6 +42,7 @@ class AgentState(TypedDict, total=False):
     route: str
     route_reason: str
     retrieved: list[RetrievedDocument]
+    knowledge_error: str | None
     draft: str
     answer: str
     citations: list[str]

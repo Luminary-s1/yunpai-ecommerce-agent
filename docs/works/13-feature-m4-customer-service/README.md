@@ -675,3 +675,307 @@ WP4 只使用既有评测表和隔离快照，没有新增字段、迁移或 sch
   对抗集覆盖提示注入、跨租户 / 他人订单、虚构商品事实、凭据索取和绕过核验
 - 工作台原估算 `16h` 与计划 D16–D20 的 `20h` 不一致，已显式校正为 `20h`；D20
   保留 4h 用于脚本、隔离运行、调优复测和最终报告
+
+## D21 · M4 独立验收缺口修复（2026-08-06）
+
+### 验收结论与红态
+
+独立验收基线为 `17 passed / 11 xfailed`。本轮没有修改任何断言、阈值、`reason`、
+`INTENT_HOLDOUT` 消息或 expected；修好的 A–E、G 仅删除对应的
+`xfail(strict=True)` 装饰器。当前结果为 `27 passed / 1 xfailed`，唯一保留项是
+FIX-8 所述的无模型四分类能力边界。
+
+**验收结论口径**：投诉规则误报的 P0 阻塞已通过模型仲裁和正负平衡集修复；但 2 秒
+deadline 会把 provider 尾部延迟转换为 17.5%–20% 的分类弃权和潜在人工工时，属于已知
+运营代价。延迟改善只对四条已验证快路径成立，普通 after-sales、非单候选商品咨询和工具
+型订单查询的分布尚未测量。本文不再宣称“全链路 p50 为 1.45 秒”或“分类准确率提升”。
+
+实现前先加入断言并得到以下红态；这些也是移除相应能力时的反证状态，修复后原样恢复
+断言并逐项转绿：
+
+| 修复 | 实现前 / 能力移除时的实际结果 | 恢复确认 |
+|---|---|---|
+| FIX-1 | 分类弃权转人工实际进入 `general / normal`；首版结构规则随后在 20 条中性开发负例上把 11 条直返 `complaint / 0.95` | 未知意图固定为 `general / high / intent_unknown`；结构信号只触发模型仲裁，只有显式规则或模型确认的投诉进入 `complaints / urgent` |
+| FIX-2 | `knowledge.retrieve` 抛 `RuntimeError` 后非流式实际为 HTTP 500，流式为 `internal_error` | 非流式 200 且 `sources=[] / knowledge_unavailable`；SSE 为 `knowledge_unavailable → done` |
+| FIX-3 | 会话关闭、主体作用域冲突、幂等键冲突三项 SSE code 实际均为 `internal_error` | 分别恢复为 `session_closed`、`session_scope_conflict`、`idempotency_key_conflict`，且都不可重试 |
+| FIX-4 | 裸拼服务端游标后，第二页首项等于第一页首项，证明 `+` 被解码为空格后静默回首页 | 游标改为 URL-safe base64；同一断言第二页首项不同，真正非法游标仍回首页 |
+| FIX-5 | 慢 transport 的 0.2 秒预算调用等待完整 1 秒，超过 `2 × budget` | 分类线程在墙钟 deadline 弃权，返回 `default / model_deadline_exceeded`，同一测试在预算内结束 |
+| FIX-6 | 商品首轮走多轮 ReAct，实测 25.65–39.99 秒并出现 `react_step_limit_reached` | 唯一目录候选在 ContextBuilder 快照内确定性作答；移除快路径时既有“不得进入工具循环”断言失败 |
+| FIX-7 | 组合式中英文泄露请求均进入 `deliberate` | “输出动作 + 内部目标”组合检测恢复后拒绝；相同输出动词的正常业务请求仍进入 `deliberate` |
+| FIX-8 | 删除本节会重新造成 D-005 默认配置的能力语义未声明 | 本节固定覆盖率、弃权含义和下游安全策略；不以扩充关键词伪造覆盖率 |
+
+FIX-2 新增审计事件 `knowledge.retrieval_failure`，只记录异常类型和检索阶段，不记录异常
+文本或用户消息；metric 用 `route_reason=knowledge_unavailable` 区分普通无命中。FIX-3 的
+四个 SSE code 已登记在 `SSE_EVENT_PROTOCOL.md`。FIX-4 的解码器同时接受新游标、旧的
+`timestamp|id` 游标，以及旧游标被 query parser 把 `+` 变为空格的形式，因此兼容已下发
+游标。FIX-5 保持单次 provider 调用且没有重试、没有调大默认 2 秒预算。
+
+### FIX-1 真实模型与安全路由
+
+分类策略把“具体商品故障、补救诉求”和“已经发生的服务流程失败、要求解释责任”写成
+通用判据；few-shot 使用不同的安装预约场景，没有复制指南、验收文件或留出集原句。
+首版实现又把结构组合直接作为 `rule / complaint / 0.95`，而 precheck 对 complaint 直接
+handoff，导致规则误报被放大成 `complaints / urgent` 且跳过自动答复。
+
+复核后新增两层反证并修正：
+
+- 两条已泄漏复现先得到 `4 failed`：模型调用数均为 0，且无模型时均为
+  `rule / complaint`。修复后同一组为 `4 passed`；模型确认 after-sales 时 route 为
+  `retrieve`，无模型时为 `default / model_not_configured`，不再触发
+  `complaint_attention_required`。
+- 新建 `m4_complaint_negative_dev_v1.jsonl`，包含 10 条中性售后和 10 条商品咨询，且不复用
+  复核方两条原句。首次规则层运行误报 `11/20 = 55%`；该文件随后标记为 leaked 开发集。
+  把结构组合改为“需模型仲裁”的候选后，规则层 complaint 误报为 `0/20`。生产代码没有
+  新增反例词；`_RULE_KEYWORDS["complaint"]` 的四个显式高精度关键词仍可规则直返，其余
+  结构候选不能生成 0.95 结论。
+
+最终泛化证据是修复后才创建的
+`evals/intent/m4_complaint_balanced_holdout_v1.jsonl`，包含 20 条全新投诉正例与 20 条全新
+中性负例，和指南、验收文件、v2/v3、开发负例均不重句。首次 live 运行后未再修改语料、
+规则或 prompt；逐条报告为
+`evals/intent/runs/20260806-m4-complaint-balanced-holdout-v1-live.json`：
+
+| 指标 | 结果 |
+|---|---:|
+| complaint precision | `15/15 = 100%` |
+| complaint recall | `15/20 = 75%` |
+| 负例 complaint 误报率 | `0/20 = 0%` |
+| 总覆盖率 | `33/40 = 82.5%` |
+| 作答子集准确率 | `31/33 = 93.9%` |
+| 超 2 秒预算 | `0` |
+
+4 条投诉和 3 条 after-sales 因 `model_deadline_exceeded` 弃权，另有 1 条已作答投诉误判；
+这些失败原样保留。旧 v2 首跑 `70%` 失败、旧 v3 正例集 `20/20` 的报告继续留档，但 v3
+没有负例且成绩来自已撤销的规则直返，只能算历史回归，**不再作为当前实现的签署依据**。
+
+分类弃权仍保留 `chitchat / 0.0 / default` 的接口形状，但只表示“不知道”。若决策层要求
+转人工，则进入 `general / high` 并携带 `priority_flag=intent_unknown`、method 和脱敏
+error；只有显式规则或模型确认的投诉进入 `complaints / urgent`。
+
+### FIX-5 墙钟 deadline 的运营代价
+
+2 秒墙钟 deadline 符合 WP3 原文，但没有提升原 40 条泄漏集的端到端正确数。首次修复后
+报告 `20260806-m4-acceptance-holdout-postfix-live.json` 为：覆盖率
+`40/40 → 33/40 = 82.5%`，after-sales 覆盖率 `100% → 7/11 = 63.6%`，端到端仍为
+`32/40 = 80%`；7 条 default 全部在 `1.98s` 左右返回
+`model_deadline_exceeded`。复核对照记录其中 6 条在修改前有正确结论（4 条 after-sales、
+2 条 complaint）。变化是把 provider 尾部等待转换成弃权，以及可能的
+`general / high` 人工任务，不是分类能力提升。
+
+结构候选改为模型仲裁后，第二次泄漏回归报告
+`20260806-m4-acceptance-holdout-postfix-v2-live.json` 为：覆盖率 `32/40 = 80%`、端到端
+`31/40 = 77.5%`、after-sales 覆盖率 `9/11 = 81.8%`、complaint 覆盖率
+`4/9 = 44.4%`；8 条 default 仍全部为约 `1.98s` 的 deadline 弃权。两次运行覆盖构成受
+provider 尾部波动影响，不能拿作答子集准确率 `97%` 掩盖总体覆盖率和人工工时。曾单变量
+尝试把分类输出预算调为 96，覆盖率从 `83.3%` 降到 `66.7%`，候选已丢弃；默认 2 秒预算和
+`MODEL_MAX_OUTPUT_TOKENS=1600` 均未改动。
+
+### FIX-6 四条快路径场景的延迟分解
+
+先在隔离数据目录以 `deepseek-v4-flash` 对四个已泄漏场景剖析；profiling runner 按图节点
+计时，并另包裹分类、检索、每轮 decision provider、工具和生成调用。修改前报告从未改代码的
+`HEAD` 归档运行，修改后报告从当前源码运行；二者都使用临时数据库、同一目录商品和
+`MODEL_MAX_OUTPUT_TOKENS=1600`。逐节点 trace 和时长分别保存在
+`evals/performance/runs/20260806-m4-latency-before.json`、
+`evals/performance/runs/20260806-m4-latency-after.json`，报告不含消息原文和密钥。
+
+| 场景 | 修改前阶段分解 | 修改前总耗时 | 修改后阶段分解 | 修改后总耗时 |
+|---|---|---:|---|---:|
+| 注入拒答 | 分类 2279.7ms；其余模型/检索/工具 0 | 2295.8ms | precheck 0.5ms；分类/检索/deliberate/工具/生成 0 | 6.7ms |
+| 投诉转人工 | 分类 1163.6ms；检索 11.6ms；deliberate 3559.9ms；工具/生成 0 | 4792.3ms | 分类 1539.4ms；检索/deliberate/工具/生成 0 | 1563.1ms |
+| K3 首轮商品咨询 | 分类 1231.4ms；检索 14.8ms；deliberate 16913.8ms；工具/生成 0 | 18223.4ms | 分类 1281.6ms；两次检索合计 19.6ms；deliberate 0.4ms；工具/模型生成 0 | 1343.4ms |
+| 目录无 CE 认证信息 | 分类 1168.6ms；检索 27.9ms；两轮 deliberate 10552.7/15778.8ms；工具 1 次 3.5ms；生成 3272.3ms | 30901.3ms | 分类 1895.2ms；两次检索合计 19.3ms；deliberate 0.4ms；工具/模型生成 0 | 1953.3ms |
+
+**口径限制**：`11.508s → 1.453s` 的 p50 和 `30.901s → 1.953s` 的 p95 只描述表中
+四条已泄漏场景，不是全量客服请求的延迟分布。修复后的四条恰好分别命中安全预检前置、
+模型确认投诉后的 handoff、唯一目录候选模板作答等快路径；after 报告的
+`deliberate_provider_ms=[]`、`generation_provider_ms=0` 正说明改善来自免去模型往返，
+不是 provider 本身变快。
+
+该报告没有覆盖普通 after-sales、非单候选 product-inquiry、需要工具的订单查询；这些
+路径仍可能进入完整 ReAct，当前 p50/p95 **未知**，不得从四条快路径外推。可以确认的只有：
+这四条场景不再支付 decision/generation model 延迟，K3 首轮不再出现
+`react_step_limit_reached`。实现没有增加 `max_react_steps`、降低模型输出预算或绕过
+ContextBuilder；目录回答会明确“目录未列出的其他属性不能确认”，CE 信息没有被补写成
+目录事实。
+
+### FIX-7 注入深防御
+
+规则实现为中英文“披露/打印/复述动作 + system/developer/hidden/internal 指令目标”的
+组合判断，没有收录指南中的三条原句。新建
+`evals/security/m4_injection_holdout_v1.json`：24 条中英文注入和 20 条使用相似动词的
+正常业务反例，均为代码完成前未出现过的新造消息。逐条结果保存在
+`evals/security/runs/20260806-m4-injection-holdout-v1.json`：规则拦截
+`22/24 = 91.7%`（门槛 70%），业务保留 `20/20 = 100%`；两条漏检原样保留，没有为了
+100% 再枚举。该项仍按深度防御改进表述：修复前的三条 live 探针已被决策层 3/3 拦截，
+不存在已证实的提示词泄露。
+
+### FIX-8 无模型分类能力边界
+
+D-005 保持 `MODEL_ENABLED=false` 且 mock 关闭为默认值，此时分类器只覆盖高频、明确、
+可精确匹配的规则意图；其余消息返回 `chitchat / 0.0 / default / model_not_configured`，
+这里的 `chitchat` 是兼容返回值，不是可靠的四分类结论。独立 40 条留出集的原始规则覆盖率
+只有 `2/40 = 5%`，无模型端到端为 `27.5%`，其中 9 条只是弃权碰巧与 chitchat 标签相同；
+仓库 52 条基准的规则覆盖率为 `15/52 ≈ 28.8%`，差异来自自建基准对显式规则关键词的
+过采样，不能外推为真实覆盖率。
+
+因此，无模型配置不是完整的四分类服务：运营侧必须把 method/default 与真正的 chitchat
+分开统计；下游若仍因安全网进入人工，按 FIX-1 使用 `general / high / intent_unknown`，
+不会降为最低 SLA。结构化流程追责信号只触发模型仲裁，不扩充 `_RULE_KEYWORDS`，也不把
+本轮留出成绩宣传为无模型已达到 75%。验收中的该门槛继续保留 strict xfail，修复范围没有
+被文档措辞伪装成已通过。
+
+### 独立复核签署意见与非阻塞残留（2026-08-06）
+
+**签署状态**：P0 complaint 误报阻塞关闭。独立复核方使用另一份未提交到仓库的 20 条
+中性售后/商品咨询控制集，规则层 complaint 误报为 `0/20`（修复前 `2/20`）。两条已泄漏
+端到端复现分别检索命中 5 条后正常回答、要求补充订单号，均无 handoff。该外部控制集没有
+仓库内逐条 artifact；仓库可复核的独立证据仍是
+`evals/intent/runs/20260806-m4-complaint-balanced-holdout-v1-live.json` 及两份 40 条回归报告。
+
+以下四项保留为**非阻塞风险**，不得在后续签署摘要中省略：
+
+1. **Recall 75% 是压线通过。** 平衡集 5 条漏报中，4 条在 `1.98s` 左右返回
+   `model_deadline_exceeded`，1 条以 `rule / after_sales` 作答。作答的 16 条投诉中 15 条
+   正确，条件 recall 为 `15/16 = 93.75%`；模型作答能力足够，端到端 recall 被 2 秒预算
+   压到 `15/20 = 75%`。
+2. **弃权率存在 run-to-run 波动。** 同一 40 条泄漏集的两次报告中，complaint 覆盖率从
+   `7/9 = 77.8%` 变为 `4/9 = 44.4%`，全量 default 数分别为 7 和 8。约 20% 的总体弃权
+   会让投诉 SLA 分档依赖 provider 尾部时延；这是 2 秒墙钟约束的结构性结果。是否放宽
+   预算是产品决策，当前实现继续遵守 WP3 写死的 2 秒。
+3. **反方向仲裁没有完全覆盖。** 投诉消息若先命中 `换货 / 退款 / 物流` 等 after-sales
+   关键词，而结构检测又没有产生 review 信号，仍可能规则直返 after-sales。平衡集唯一的
+   已作答投诉漏报 `m4bal-018` 即为 `rule / after_sales`。本轮不继续扩大结构词表，避免
+   重新引入 R1 过拟合。
+4. **Mock 网关不识别隐式投诉。** 当前离线配置复现“同一个问题被踢来踢去三次了”为
+   `chitchat / 0.82 / model`；端到端命中 5 条无关知识，返回补货说明，且
+   `requires_human=false`。因此离线套件只能保护显式关键词投诉路由，不能保护模型仲裁
+   语义。下次修改投诉路由前，必须先让 mock 模拟真实依赖在该场景下的行为，不能把离线
+   全绿当作仲裁路径证据（R5）。
+
+本次分析使用 `run_m4_intent_precision.py`、`run_m4_acceptance_regression.py` 和一次隔离
+mock 诊断；live 密钥仍只由 `env.md` 子进程加载。下一步不是立即改代码，而是由产品决定
+是否用更高人工量换取 2 秒首包预算；若未来调整投诉分类，优先补齐反方向仲裁和 mock 语义
+保护，再重跑新的未泄漏正负平衡集。
+
+### 硬约束与回归
+
+- LangGraph 修改前后均为 **20 个节点、35 条边**，节点名与边集合检查原样通过。
+- `POST /v1/chat` 请求/响应字段与既有 409 语义未改；SSE 只细化错误 code。
+- 没有新增依赖、schema 字段或迁移；D-005、D-010、D-023 保持不变。
+- 独立验收 `27 passed, 1 xfailed`；M4 意图、流式、会话、策略、图、人工与迁移联合回归
+  `205 passed`；全量回归 `592 passed, 1 xfailed in 199.95s`，没有失败或 XPASS。
+- 相对指南的 `540 passed, 11 xfailed`，10 个已修 strict xfail 转为 pass；本轮新增的
+  M4 测试按参数展开为 36 项（错误降级 2、未知意图 1、分类策略正反例 25、图路由 6、
+  注入策略 2）。全工作区总收集数净增 42，余下净增来自开始时已存在且本轮未改动的并行
+  M5 测试变更；没有删除 M4 用例。
+
+## D22 · FIX-9 / FIX-10 与 M4 最终独立验收（2026-08-07）
+
+### 先固定回归，再修两条快路径
+
+没有改 `customer_service_eval_v1.json` 的 expected、任何门禁阈值或评测排除范围。以
+和 08-05 相同的 fixture、mock 模式、`--env-file env.md` 先保存红态报告：
+
+```bash
+.venv/bin/python scripts/run_customer_eval.py --mode mock --env-file env.md \
+  --out evals/customer_service/runs/20260807-customer-service-postfix-red-mock.json
+```
+
+红态准确复现 `answer_accuracy=0.820`、`hallucination_rate=0.100`、
+`severe_failures=7 > 5`、gate failed。新增四条聚焦断言首次为 `4 failed`：投诉直接
+handoff 时没有来源和共情答复；目录模板在问题没有明确询问价格/属性，或该字段没有检索
+证据支持时仍抢答。实现后原样断言为 `4 passed`：
+
+- FIX-9：投诉先检索，返回共情说明与最高相关知识片段，同时保留
+  `requires_human=true`、`complaint_attention_required` 和
+  `complaints / urgent` 人工任务。投诉标记不再替代回答。
+- FIX-10：目录快答只选取问题明确询问的价格或属性，且字段值必须出现在本轮检索证据中；
+  无可安全覆盖的字段时返回 `None`，由生成模型基于完整知识片段作答。
+
+同口径复跑结果：
+
+| 证据 | answer_accuracy | hallucination_rate | pass_rate | severe_failures | gate | complaint | product |
+|---|---:|---:|---:|---:|---|---:|---:|
+| FIX-9/10 前红态 mock | 0.820 | 0.100 | 0.820 | 7 | failed | 4/8 | 10/15 |
+| FIX-9/10 后 mock | 0.940 | 0.020 | 0.940 | 3 | passed | 6/8 | 14/15 |
+| FIX-9/10 后 live `deepseek-v4-flash` | 0.860 | 0.060 | 0.860 | 4 | passed | 8/8 | 14/15 |
+
+报告分别为：
+
+- `evals/customer_service/runs/20260807-customer-service-postfix-red-mock.json`
+- `evals/customer_service/runs/20260807-customer-service-mock.json`
+- `evals/customer_service/runs/20260807-customer-service-live.json`
+
+live 的 `refusal_rate=0.067`、`handoff_recall=0.900`、`evidence_coverage=1.000`；仍失败
+7 条，其中 after-sales 6 条、product 1 条，`severe_failures=4` 没有越线。该结果是虚拟
+冻结集的真实 provider 复跑，不冒充真实客户数据基线。
+
+### D18、场景契约与浏览器证据
+
+复核 14 条标准与 WP5 交付物时发现 D18 此前只在进度表登记，实际
+`simulation-evidence-v1` 仍只有 17 项。先给测试加入 D18 后得到两项
+`StopIteration` 红态；随后新增一个 `confidence=0.59 < threshold=0.60` 的
+`decision_gate → handoff` 场景，断言 `low_confidence_handoff`、
+`requires_human=true` 与持久人工任务。把配置阈值改为 `0` 时该场景明确失败，恢复后
+通过。最终 `tests/test_virtual_store_simulation.py` 为 `6 passed`，场景报告为 `18/18`。
+
+`m4-browser-evidence.png` 已在隔离 mock 数据目录重跑：页面显示投诉共情答复、3 条知识
+来源、`complaint_attention_required`、`已转人工`；console 0 error / 0 warning。
+真实模型的 74 个 SSE 事件证据 `m4-stream-evidence.txt` 保留不变。
+
+### 延迟口径重新打开
+
+D21 的 `20260806-m4-latency-after.json` 发生在 FIX-9 / FIX-10 之前，投诉当时不检索，
+商品问题又被目录模板无条件抢答；因此其中 complaint 1563ms、K3 1343ms 和四场景
+p50=1.453s 均只算历史中间态，**不再作为当前实现的延迟结论**。当前非这四场景的
+after-sales、非单候选商品和工具型订单查询 p50/p95 仍未知。
+
+FIX-10 后用同一真实 provider、隔离数据目录和四条已泄漏回归场景重跑，报告为
+`evals/performance/runs/20260807-m4-latency-post-fix10.json`：
+
+| 场景 | 分类 | 检索 | deliberate provider | 工具 | generation provider | 总耗时 |
+|---|---:|---:|---:|---:|---:|---:|
+| 注入拒答 | 0 | 0 | 0 | 0 | 0 | 6.8ms |
+| 投诉答复 + 人工标记 | 1602.0ms | 42.9ms | 0 | 0 | 0 | 1674.0ms |
+| K3 泛化商品咨询 | 1293.8ms | 30.4ms | 8474.0 / 10173.9ms | 13.6ms | 16428.5ms | 36513.3ms |
+| 目录无 CE 信息 | 1019.2ms | 23.0ms | 7248.5 / 8720.9ms | 3.5ms | 2961.5ms | 20066.3ms |
+
+四条场景当前 `p50=10870.1ms`、`p95=36513.3ms`。这确认 FIX-10 用正确性换回了商品
+泛化问题的完整 ReAct 与生成链路：旧的“延迟降 8 倍”结论已经撤销，K3 本轮重新达到
+36.5 秒。投诉仍只付分类与检索成本并保持来源答复。由于该剖析只含四条已泄漏场景，
+既不能外推为全量分布，也不能掩盖商品链路的实际尾延迟；它作为非阻塞 P1 运营残留保留。
+
+### 回到 M4 14 条标准
+
+| # | 状态 | 当前证据 |
+|---:|---|---|
+| 1 | 通过 | HTTP 多轮指代黑盒、D17 和目录事实回答均通过 |
+| 2 | 通过 | SSE delta / citations / handoff / done、同幂等键重放零新增；真实 74 事件留档 |
+| 3 | 通过 | 20 轮历史不超 70%，预算收紧反证会失败 |
+| 4 | 通过 | 空闲关闭与未结人工任务保护回归通过 |
+| 5 | 通过，带残留 | 四分类独立实跑达到 80%；平衡集 complaint recall 75% 压线；低置信度 D18、投诉队列和派单消费通过；2 秒 deadline 弃权波动见 D21 |
+| 6 | 通过 | 冻结 50 例 mock 与 live 四项指标均量化且 gate passed；FIX-9/10 前 failed 报告保留 |
+| 7 | 通过 | 对抗 10/10；组合注入留出规则 22/24、业务反例 20/20，决策层既有探针未泄露 |
+| 8 | 通过 | 模型不可用和检索异常均有可区分降级，非流式与 SSE 契约一致 |
+| 9 | 通过 | 全量 `597 passed, 1 xfailed`；新增数来自 FIX 用例和 D18，未删 M4 用例 |
+| 10 | 通过 | strict xfail、预算、门禁、D17/D18、FIX-9/10 均有红态或能力移除反证 |
+| 11 | 通过 | LangGraph 仍为 20 节点 / 35 边 |
+| 12 | 通过 | v25→v27 迁移及历史意图保留测试在全量回归通过；本轮无新迁移 |
+| 13 | 通过 | `ChatResponse` 与既有非流式字段、409 语义零变化 |
+| 14 | 通过 | F-121 / F-122 `simulation-evidence-v1` 扩展到 18 项并全部通过 |
+
+### WP5 六条交付要求
+
+| # | 状态 | 当前证据 |
+|---:|---|---|
+| 1 全量测试及归因 | 通过 | `597 passed, 1 xfailed in 198.15s`；保留 xfail 是已声明的无模型能力边界 |
+| 2 反证记录 | 通过 | D1–D22 记录 strict xfail、红态报告、快路径断言和 D18 阈值反证 |
+| 3 F-122 场景契约 | 通过 | `18/18`，定向 `6 passed` |
+| 4 流式与多轮实跑证据 | 通过 | `EVIDENCE.md`、74 事件 SSE 文本、更新后的浏览器 PNG 与 D17 |
+| 5 静态检查 | 通过 | `compileall` 与 `git diff --check`；仓库环境未安装 ruff / mypy，不虚报 |
+| 6 四份台账 | 通过 | FEATURES / PROGRESS / VERSIONS / ACCEPTANCE 已同步 E-20260807-001 |
+
+结论：M4 达到工作台 14 条验收标准与 WP5 六条交付要求，签署为**本机独立验收通过**。
+生产放行继续受真实客户脱敏数据、真实渠道、长稳、容量与安全 Gate 约束；D21 已列四条
+非阻塞残留继续有效。

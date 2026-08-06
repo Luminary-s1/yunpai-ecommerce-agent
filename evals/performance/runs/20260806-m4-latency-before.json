@@ -1,0 +1,290 @@
+{
+  "run_at": "2026-08-06T12:56:35.596141+00:00",
+  "revision": "HEAD-baseline",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "model_max_output_tokens": 1600,
+  "data_scope": "temporary isolated directory",
+  "messages": "leaked regression scenarios; omitted from report",
+  "summary": {
+    "count": 4,
+    "p50_ms": 11507.9,
+    "p95_ms": 30901.3
+  },
+  "records": [
+    {
+      "scenario": "injection",
+      "classification_ms": 2279.7,
+      "classification_provider_ms": 2279.6,
+      "retrieval_ms": 0.0,
+      "deliberate_provider_ms": [],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 2.6
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 2282.6
+        },
+        {
+          "node": "refuse",
+          "elapsed_ms": 0.7
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 10.0
+        }
+      ],
+      "total_ms": 2295.8,
+      "route_reason": null,
+      "trace": [
+        "intake",
+        "intent:default:chitchat:model_call_failed:ModelUnavailableError",
+        "precheck:refuse",
+        "refuse",
+        "postcondition:blocked",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "complaint",
+      "classification_ms": 1163.6,
+      "classification_provider_ms": 1163.5,
+      "retrieval_ms": 11.6,
+      "deliberate_provider_ms": [
+        3559.9
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 3.0
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 1165.7
+        },
+        {
+          "node": "retrieve",
+          "elapsed_ms": 16.0
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 14.4
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 3566.4
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 7.0
+        },
+        {
+          "node": "handoff",
+          "elapsed_ms": 13.1
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 6.6
+        }
+      ],
+      "total_ms": 4792.3,
+      "route_reason": null,
+      "trace": [
+        "intake",
+        "intent:model:complaint",
+        "precheck:deliberate",
+        "retrieve:initial:3",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "context:budget:kept0/dropped0",
+        "deliberate:model:handoff",
+        "decision_gate:handoff",
+        "human_handoff",
+        "postcondition:handoff_proposed",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "product",
+      "classification_ms": 1231.4,
+      "classification_provider_ms": 1231.3,
+      "retrieval_ms": 14.8,
+      "deliberate_provider_ms": [
+        16913.8
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 1.7
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 1232.8
+        },
+        {
+          "node": "retrieve",
+          "elapsed_ms": 20.5
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 15.4
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 16927.9
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 6.0
+        },
+        {
+          "node": "handoff",
+          "elapsed_ms": 13.1
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 6.0
+        }
+      ],
+      "total_ms": 18223.4,
+      "route_reason": null,
+      "trace": [
+        "intake",
+        "intent:model:product_inquiry",
+        "precheck:deliberate",
+        "retrieve:initial:3",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "context:budget:kept0/dropped0",
+        "deliberate:fallback",
+        "decision_gate:handoff",
+        "human_handoff",
+        "postcondition:handoff_proposed",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "knowledge_gap",
+      "classification_ms": 1168.6,
+      "classification_provider_ms": 1168.5,
+      "retrieval_ms": 27.9,
+      "deliberate_provider_ms": [
+        10552.7,
+        15778.8
+      ],
+      "tool_ms": 3.5,
+      "tool_calls": 1,
+      "generation_provider_ms": 3272.3,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 1.5
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 1170.2
+        },
+        {
+          "node": "retrieve",
+          "elapsed_ms": 24.6
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 14.5
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 10558.4
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 8.0
+        },
+        {
+          "node": "tool_gate",
+          "elapsed_ms": 0.8
+        },
+        {
+          "node": "execute_tool",
+          "elapsed_ms": 8.2
+        },
+        {
+          "node": "verify_tool",
+          "elapsed_ms": 0.6
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 15.6
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 15784.2
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 6.4
+        },
+        {
+          "node": "refine_retrieval",
+          "elapsed_ms": 9.0
+        },
+        {
+          "node": "build_generation_context",
+          "elapsed_ms": 9.8
+        },
+        {
+          "node": "generate",
+          "elapsed_ms": 3274.9
+        },
+        {
+          "node": "verify",
+          "elapsed_ms": 2.3
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 12.0
+        }
+      ],
+      "total_ms": 30901.3,
+      "route_reason": null,
+      "trace": [
+        "intake",
+        "intent:model:product_inquiry",
+        "precheck:deliberate",
+        "retrieve:initial:3",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "context:budget:kept0/dropped0",
+        "deliberate:model:observe",
+        "decision_gate:observe",
+        "tool_gate:execute",
+        "tool_execute:get_product_facts:success",
+        "postcondition:deliberate",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "context:budget:kept0/dropped0",
+        "deliberate:model:answer",
+        "decision_gate:answer",
+        "retrieve:refined:3",
+        "context:budget:kept0/dropped0",
+        "context:generation:ready",
+        "context:budget:kept0/dropped0",
+        "generate:model",
+        "verify:passed",
+        "postcondition:answer",
+        "persist"
+      ]
+    }
+  ]
+}

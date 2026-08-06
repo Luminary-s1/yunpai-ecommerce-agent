@@ -205,3 +205,47 @@ def test_complaint_is_urgent_and_can_be_automatically_dispatched(tmp_path) -> No
         assert assigned.assigned_to == service.settings.bootstrap_admin_id
     finally:
         service.close()
+
+
+def test_default_intent_handoff_uses_conservative_high_priority(tmp_path) -> None:
+    """分类弃权不是闲聊结论；需要转人工时不能落到最低 SLA。"""
+
+    service = AgentService(make_settings(tmp_path))
+    try:
+        principal = principal_for(service)
+        session_id = service.db.resolve_session(
+            tenant_id=principal.tenant_id,
+            client_id=principal.client_id,
+            external_session_id="unknown-intent-priority",
+            subject_hash=principal.subject_hash,
+        )
+        state = {
+            **_decision_state(
+                session_id=session_id,
+                mode="handoff",
+                customer_intent="chitchat",
+            ),
+            "tenant_id": principal.tenant_id,
+            "client_id": principal.client_id,
+            "execution_mode": "live",
+            "intent_method": "default",
+            "intent_error": "model_call_failed:TimeoutError",
+            "message_id": "unknown-intent-priority-message",
+            "trace_id": "unknown-intent-priority-trace",
+            "route_reason": "low_confidence_handoff",
+            "risk_level": "medium",
+        }
+
+        handed_off = _node(service, "handoff").invoke(state)
+        task = service.handoffs.get(
+            tenant_id=principal.tenant_id,
+            handoff_id=handed_off["handoff_id"],
+        )
+
+        assert task.queue_key == "general"
+        assert task.priority == "high"
+        assert task.payload["priority_flag"] == "intent_unknown"
+        assert task.payload["intent_method"] == "default"
+        assert task.payload["intent_error"] == "model_call_failed:TimeoutError"
+    finally:
+        service.close()
