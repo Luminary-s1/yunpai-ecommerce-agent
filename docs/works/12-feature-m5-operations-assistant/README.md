@@ -14,7 +14,8 @@
 | CSV / JSON 上传解析 | 运营辅助 → 文件导入 | `POST /v1/ops-assistant/datasets/import` | 支持中英文表头、UTF-8 BOM、逐行拒绝原因、2,000 行单次上限 |
 | 表单录入 | 运营辅助 → 表单录入 | `POST /v1/ops-assistant/records` | 按租户、数据集、日期和渠道幂等写入并版本化 |
 | 结构化数据返回 | 运营辅助 → 结构化运营记录 | `GET /v1/ops-assistant/records` | 返回销售、投放、转化率、来源格式和版本 |
-| 多风格小批量文案 | 运营辅助 → 多风格候选文案 | `POST /v1/ops-assistant/copywriting/generate` | 5 种风格、每种 1–3 条、单批最多 9 条 |
+| 多风格小批量文案 | 运营辅助 → 多风格候选文案 | `POST /v1/ops-assistant/copywriting/generate` | 5 种语气风格 + 4 种投放场景、短中长三档、每批最多 9 条 |
+| 编辑后重新生成 | 运营辅助 → 候选文案编辑区 | `POST /v1/ops-assistant/copywriting/regenerate` | 基于修改稿重生成，保留逐条生成方式与人工审核边界 |
 | 趋势分析与优化建议 | 运营辅助 → 数据解读 | `POST /v1/ops-assistant/reports/analysis` | 代码计算总量/趋势/渠道表现，模型只负责文字解读 |
 | 模块登记与场景覆盖 | 功能模块 / 场景验收 | `GET /v1/simulations/virtual-store` | 登记为 `available` 业务模块，并由 D16 虚拟店铺场景实测覆盖 |
 
@@ -22,24 +23,26 @@
 
 - `src/ecommerce_agent/business/ops_assistant.py`
   - `OpsOperationRecordUpsert`：约束日期、渠道、访客、订单、销售额和推广花费，拒绝订单数大于访客数。
-  - `CopywritingRequest`：支持 `formal`、`playful`、`urgent`、`premium`、`concise`，强制小批量上限。
+  - `CopywritingRequest`：保留 5 种语气风格，新增 `xiaohongshu`、`livestream`、`product_detail`、`wechat_moments` 四种投放场景，强制小批量与长度区间。
+  - `CopywritingRegenerateRequest`：接收用户修改稿，确保重新生成链路使用修改内容。
   - `OpsAssistantService`：完成 CSV / JSON 解析、表单写入、模型文案、确定性模板降级、风险词标记和分析报告。
   - 报告读取不复用列表接口的 500 条展示上限，避免大数据集被静默截断。
 - `src/ecommerce_agent/ops_assistant_api.py`
-  - 接入管理员鉴权、UTF-8 BOM 解码、导入/写入/文案/报告审计。
+  - 接入管理员鉴权、UTF-8 BOM 解码、导入/写入/文案/重生成/报告审计。
 - `src/ecommerce_agent/database.py`
   - schema 升级为 v25，新增 `ops_operation_records` 及租户/店铺/日期索引。
 - `docs/admin-console.html`
   - 新增“运营辅助”导航与文件上传、表单、文案、报告和结构化记录界面。
   - 文件直接在浏览器读取并上传；JSON 扩展名会自动切换格式。
   - 每条文案显示 `model`、`template` 或 `template_fallback`，混合结果不会被误标为纯模型生成。
+  - 支持短 / 中 / 长长度选择，候选正文可直接编辑并按修改内容重新生成。
 - `src/ecommerce_agent/business/registry.py`
   - 登记 `ops_assistant` 业务模块，状态 `available`，后台“功能模块”页与自检的 `business_modules` 从此包含运营辅助。
 - `src/ecommerce_agent/fixtures/virtual_store_v1.json` 与 `src/ecommerce_agent/simulation.py`
   - 新增 D16 虚拟店铺场景与 `_verify_ops_assistant`，把 `simulation-evidence-v1` 契约从 15 项扩展到 16 项。
   - 场景数据固定为 6 天单渠道运营数据加 2 行坏数据，报告合计和建议码可确定性断言。
 - `tests/test_ops_assistant.py`
-  - 覆盖 CSV、JSON、BOM、表单、幂等/版本、租户隔离、模型成功/失败、风险词、小批量限制、完整报告、500 条以上报告和 API 鉴权/审计。
+  - 覆盖 CSV、JSON、BOM、表单、幂等/版本、租户隔离、四种投放场景、三档长度、独立 Prompt、编辑后重生成、模型成功/失败/混合/越界降级、风险词、小批量限制、完整报告、500 条以上报告和 API 鉴权/审计。
 - `tests/test_virtual_store_simulation.py`
   - 场景总数与 available 模块覆盖数同步为 16 项与 10 个，并断言 D16 的拒绝行数、幂等重放、禁止发布和报告合计。
 
@@ -48,6 +51,7 @@
 - 所有销售、投放、转化率、客单价和 ROI 数值均由代码计算，模型不能修改统计值。
 - 模型不可用或单次调用失败时逐条降级为确定性模板；返回值显式标记生成方式。
 - 所有候选文案 `publication_allowed=false`，发布前必须人工审核卖点、价格和促销主张。
+- 当前商品名称、卖点和价格仍由文案请求传入；F-305 尚未提供规范化营销卖点字段，按 SKU 强绑定版本化商品事实仍是 WP4 的待办，不能把“Prompt 禁止编造”视为事实校验。
 - 报告仅给出数据解读与建议，不执行预算、价格、库存或发布操作。
 - `env.md` 已加入 `.gitignore`；本文和截图不记录管理员密钥或模型密钥。
 - D16 虚拟店铺场景使用独立的 `virtual-ops-week-29` 与 `virtual-ops-live-week-29` 数据集键，虚拟验收数据不与真实运营数据集混算。
@@ -65,6 +69,9 @@
 4. 第一次全量测试为 `310 passed, 3 failed in 276.89s`。失败原因是把 M5 登记为虚拟店铺 available 模块，却没有扩展既有 15 场景 `simulation-evidence-v1` 契约。该缺口已正式修复：新增 D16 场景与 `_verify_ops_assistant`，契约扩展为 16 项，`ops_assistant` 以 `available` 状态登记并具备实测覆盖，不再靠“移除登记”规避门禁。
 5. D16 门禁反证一：临时删除 `_module_coverage` 中的 `"ops_assistant": ["D16"]` 映射后，`report["passed"]` 由 `True` 变为 `False`，证明“登记为 available 就必须具备场景覆盖”的门禁真实生效，而非摆设。
 6. D16 门禁反证二：临时把 fixture CSV 中的 `bad-date` 行改为合法日期 `2026-07-09` 后，`tests/test_virtual_store_simulation.py` 两个用例均失败，证明 D16 确实在校验逐行拒绝行为而不是空跑。两处反证均已还原，还原后定向复验为 `20 passed in 15.47s`。
+7. WP4 优化先加入四项聚焦验收，修改前得到 `4 failed`：候选缺少发布边界、四种投放场景与长度参数不被接受、独立 Prompt 不存在、重生成路由返回 404。实现后定向回归为 `24 passed`；再在一次性进程中把四套 Prompt 合并为同一模板，风格特征用例按预期失败（`4 != 1`），恢复后单项复验通过。
+8. 复核发现短档按字符硬截断会产生 `到手价 4。`、丢失详情页提示，默认短档还会影响未传 `length` 的 D16 调用；编辑降级路径会把内部“修改稿”说明写进正文，管理台可勾选第六种风格后才被 API 拒绝。新增四项红态测试后，短档改为只拼接完整句单元并固定以详情页提示收尾，默认改为中档，编辑内容作为顾客可见文案使用，管理台同步限制为五种。
+9. 二次复核发现短档模板曾固定使用首个卖点，导致批量候选同文、未渲染的输入风险词漏审，以及超长修改稿被静默丢弃却返回成功。先新增两项红态测试（`2 failed`），再使短档携带变体索引并轮换卖点；风险信号分别返回 `rendered_risk_terms` 和 `source_risk_terms`，任一来源命中都要求人工复核；修改稿与强制合规收尾无法完整放入所选长度时 API 返回 422。另补充卖点本身过长时的边界红态，确保无法完整容纳的卖点不被截断、批量正文仍通过风格化安全提示保持可区分。管理台在选择第六种风格时立即撤销该勾选，并保留提交前校验。定向 WP4 回归为 `30 passed in 17.27s`；最终已跟踪测试全集为 `534 passed in 170.03s`。
 
 ### 最终结果
 

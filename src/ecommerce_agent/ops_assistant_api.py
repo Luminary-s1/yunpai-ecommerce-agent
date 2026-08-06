@@ -7,7 +7,12 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from .auth import AdminPrincipal
-from .business import CopywritingRequest, OpsOperationRecordUpsert, OpsReportQuery
+from .business import (
+    CopywritingRegenerateRequest,
+    CopywritingRequest,
+    OpsOperationRecordUpsert,
+    OpsReportQuery,
+)
 from .service import AgentService
 
 
@@ -109,6 +114,28 @@ def build_ops_assistant_router(
             {
                 "store_id": payload.store_id,
                 "styles": list(payload.styles),
+                "length": payload.length,
+                "batch_size": result["batch_size"],
+                "needs_review": any(item["needs_review"] for item in result["variants"]),
+            },
+            admin.tenant_id,
+        )
+        return result
+
+    @router.post("/copywriting/regenerate")
+    def regenerate_marketing_copy(
+        payload: CopywritingRegenerateRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        result = service.operations.ops_assistant.regenerate_copy(admin.tenant_id, payload)
+        service.db.audit(
+            "ops.copywriting.regenerated",
+            admin.admin_id,
+            payload.product_name,
+            {
+                "store_id": payload.store_id,
+                "styles": list(payload.styles),
+                "length": payload.length,
                 "batch_size": result["batch_size"],
                 "needs_review": any(item["needs_review"] for item in result["variants"]),
             },

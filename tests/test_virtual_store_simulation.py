@@ -99,6 +99,11 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert evidence["D16"]["csv_import"]["rejected_rows"] == 2
         assert evidence["D16"]["csv_replay"] == {"applied": 0, "idempotent": 6}
         assert evidence["D16"]["copywriting"]["publication_allowed"] is False
+        assert evidence["D16"]["copywriting"]["length"] == "medium"
+        assert all(
+            61 <= item["char_count"] <= 120
+            for item in evidence["D16"]["copywriting"]["variants"]
+        )
         assert evidence["D16"]["report"]["totals"]["sales_amount"] == "44800.00"
         assert evidence["D16"]["report"]["data_quality"][
             "numbers_computed_by_code"

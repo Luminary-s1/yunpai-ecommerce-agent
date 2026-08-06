@@ -430,8 +430,9 @@
 可视化烹饪窗口</textarea></div>
                 <div class="field"><label for="opsPrice">价格</label><input class="input" id="opsPrice" type="number" min="0" step="0.01" value="499.00"></div>
                 <div class="field"><label for="opsAudience">目标人群</label><input class="input" id="opsAudience" value="租房青年"></div>
+                <div class="field"><label for="opsCopyLength">文案长度</label><select class="input" id="opsCopyLength"><option value="short">短（20–60 字）</option><option value="medium" selected>中（61–120 字）</option><option value="long">长（121–200 字）</option></select></div>
                 <div class="field"><label for="opsVariantsPerStyle">每种风格数量</label><select class="input" id="opsVariantsPerStyle"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></div>
-                <div class="field wide"><label>文案风格（总量最多 9 条）</label><div class="ops-style-options"><label><input class="ops-copy-style" type="checkbox" value="formal" checked>专业详实</label><label><input class="ops-copy-style" type="checkbox" value="playful" checked>活泼种草</label><label><input class="ops-copy-style" type="checkbox" value="urgent" checked>促销紧迫</label><label><input class="ops-copy-style" type="checkbox" value="premium">高端质感</label><label><input class="ops-copy-style" type="checkbox" value="concise">简洁卖点</label></div></div>
+                <div class="field wide"><label>文案风格（每次最多 5 种，总量最多 9 条）</label><div class="ops-style-options"><label><input class="ops-copy-style" type="checkbox" value="formal" checked>专业详实</label><label><input class="ops-copy-style" type="checkbox" value="playful" checked>活泼种草</label><label><input class="ops-copy-style" type="checkbox" value="urgent" checked>促销紧迫</label><label><input class="ops-copy-style" type="checkbox" value="premium">高端质感</label><label><input class="ops-copy-style" type="checkbox" value="concise">简洁卖点</label><label><input class="ops-copy-style" type="checkbox" value="xiaohongshu">小红书种草</label><label><input class="ops-copy-style" type="checkbox" value="livestream">直播话术</label><label><input class="ops-copy-style" type="checkbox" value="product_detail">详情页文案</label><label><input class="ops-copy-style" type="checkbox" value="wechat_moments">朋友圈推广</label></div></div>
                 <div class="wide"><button class="button primary" type="submit" id="generateOpsCopy">生成候选文案</button></div>
               </form>
             </article>
@@ -831,6 +832,7 @@
       opsRecords: [],
       opsReport: null,
       opsCopy: null,
+      opsCopyRequest: null,
       selectedSimulationScenario: 'D01',
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
@@ -2172,33 +2174,65 @@
         await loadOpsAssistant();
       } catch (error) { toast(error.message); }
     });
+    function renderOpsCopyResults(result) {
+      const generators = new Set(result.variants.map((item) => item.generator));
+      const generationMode = generators.size > 1 ? '模型 / 模板混合' : generators.has('model') ? '模型生成' : '模板安全降级';
+      $('opsCopyMeta').textContent = `${result.batch_size} 条 · ${generationMode} · ${result.length_range[0]}–${result.length_range[1]} 字`;
+      $('opsCopyResults').innerHTML = result.variants.map((item, index) => { const riskLabel = item.rendered_risk_terms?.length ? '文案命中风险词，需复核' : item.source_risk_terms?.length ? '商品输入命中风险词，需复核' : '未命中绝对化风险词'; return `<article class="copy-result-card"><h4>${escapeHtml(item.title)}</h4><textarea class="input" id="opsCopyEdit-${index}" aria-label="编辑 ${escapeHtml(item.style_label)} 文案">${escapeHtml(item.body)}</textarea><div class="copy-result-meta"><span class="status info">${escapeHtml(item.style_label)}</span><span class="status ${item.needs_review ? 'warn' : 'ok'}">${riskLabel}</span><span class="muted">${escapeHtml(item.generator)} · ${item.char_count} 字</span></div><button class="button small" type="button" data-regenerate-copy="${index}">按修改内容重新生成</button></article>`; }).join('');
+      document.querySelectorAll('[data-regenerate-copy]').forEach((node) => node.addEventListener('click', async () => {
+        const index = Number(node.dataset.regenerateCopy);
+        const current = state.opsCopy.variants[index];
+        const editedCopy = $(`opsCopyEdit-${index}`).value.trim();
+        if (!editedCopy) return toast('修改后的文案不能为空');
+        node.disabled = true;
+        try {
+          const regenerated = await api('/v1/ops-assistant/copywriting/regenerate', {
+            method:'POST',
+            body:JSON.stringify({ ...state.opsCopyRequest, styles:[current.style], variants_per_style:1, edited_copy:editedCopy })
+          });
+          state.opsCopy.variants[index] = regenerated.variants[0];
+          renderOpsCopyResults(state.opsCopy);
+          toast('已基于修改内容重新生成');
+        } catch (error) { toast(error.message); }
+        finally { node.disabled = false; }
+      }));
+    }
+    function selectedOpsCopyStyles() {
+      return Array.from(document.querySelectorAll('.ops-copy-style:checked')).map((node) => node.value);
+    }
+    document.querySelectorAll('.ops-copy-style').forEach((node) => node.addEventListener('change', () => {
+      if (selectedOpsCopyStyles().length > 5) {
+        node.checked = false;
+        toast('一次最多选择 5 种文案风格');
+      }
+    }));
     $('opsCopyForm').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const styles = Array.from(document.querySelectorAll('.ops-copy-style:checked')).map((node) => node.value);
+      const styles = selectedOpsCopyStyles();
       const variantsPerStyle = Number($('opsVariantsPerStyle').value);
       if (!styles.length) return toast('至少选择一种文案风格');
+      if (styles.length > 5) return toast('一次最多选择 5 种文案风格');
       if (styles.length * variantsPerStyle > 9) return toast('小批量生成最多 9 条候选文案');
       const button = $('generateOpsCopy');
       button.disabled = true;
       try {
         const sellingPoints = $('opsSellingPoints').value.split('\n').map((item) => item.trim()).filter(Boolean);
+        state.opsCopyRequest = {
+          store_id:$('opsStore').value.trim(),
+          product_name:$('opsProductName').value.trim(),
+          selling_points:sellingPoints,
+          price:$('opsPrice').value || null,
+          target_audience:$('opsAudience').value.trim() || null,
+          styles,
+          variants_per_style:variantsPerStyle,
+          length:$('opsCopyLength').value
+        };
         const result = await api('/v1/ops-assistant/copywriting/generate', {
           method:'POST',
-          body:JSON.stringify({
-            store_id:$('opsStore').value.trim(),
-            product_name:$('opsProductName').value.trim(),
-            selling_points:sellingPoints,
-            price:$('opsPrice').value || null,
-            target_audience:$('opsAudience').value.trim() || null,
-            styles,
-            variants_per_style:variantsPerStyle
-          })
+          body:JSON.stringify(state.opsCopyRequest)
         });
         state.opsCopy = result;
-        const generators = new Set(result.variants.map((item) => item.generator));
-        const generationMode = generators.size > 1 ? '模型 / 模板混合' : generators.has('model') ? '模型生成' : '模板安全降级';
-        $('opsCopyMeta').textContent = `${result.batch_size} 条 · ${generationMode}`;
-        $('opsCopyResults').innerHTML = result.variants.map((item) => `<article class="copy-result-card"><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.body)}</p><div class="copy-result-meta"><span class="status info">${escapeHtml(item.style_label)}</span><span class="status ${item.needs_review ? 'warn' : 'ok'}">${item.needs_review ? '命中风险词，需复核' : '未命中绝对化风险词'}</span><span class="muted">${escapeHtml(item.generator)} · ${item.char_count} 字</span></div></article>`).join('');
+        renderOpsCopyResults(result);
         toast(`已生成 ${result.batch_size} 条候选文案`);
       } catch (error) { toast(error.message); }
       finally { button.disabled = false; }

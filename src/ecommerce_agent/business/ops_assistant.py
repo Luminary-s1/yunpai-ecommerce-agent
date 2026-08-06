@@ -15,7 +15,18 @@ from .source_versioning import payload_digest
 
 
 OpsSourceFormat = Literal["csv", "json", "form"]
-CopyStyle = Literal["formal", "playful", "urgent", "premium", "concise"]
+CopyStyle = Literal[
+    "formal",
+    "playful",
+    "urgent",
+    "premium",
+    "concise",
+    "xiaohongshu",
+    "livestream",
+    "product_detail",
+    "wechat_moments",
+]
+CopyLength = Literal["short", "medium", "long"]
 
 MAX_IMPORT_ROWS = 2000
 
@@ -25,6 +36,30 @@ COPY_STYLE_LABELS: dict[str, str] = {
     "urgent": "促销紧迫",
     "premium": "高端质感",
     "concise": "简洁卖点",
+    "xiaohongshu": "小红书种草",
+    "livestream": "直播话术",
+    "product_detail": "详情页文案",
+    "wechat_moments": "朋友圈推广",
+}
+
+COPY_LENGTH_RANGES: dict[CopyLength, tuple[int, int]] = {
+    "short": (20, 60),
+    "medium": (61, 120),
+    "long": (121, 200),
+}
+COPY_SAFETY_CLOSER = "商品规格、价格与活动以详情页为准。"
+
+# 每个场景都有独立结构约束，避免只替换一个风格名称却生成同构文案。
+COPY_STYLE_PROMPTS: dict[str, str] = {
+    "formal": "采用专业说明结构：先给事实结论，再展开卖点，最后给出核对提示。",
+    "playful": "采用轻松种草结构：口语化开场、生活化感受、轻量行动提示。",
+    "urgent": "采用活动提醒结构：先说明活动主题，再列核心卖点和活动边界。",
+    "premium": "采用质感叙事结构：突出设计取向、使用体验与克制的选购建议。",
+    "concise": "采用极简信息结构：一行核心卖点、一行补充事实、一行核对提示。",
+    "xiaohongshu": "采用体验分享式种草笔记：场景痛点、亲历口吻、分点感受和话题收束。",
+    "livestream": "采用直播口播节奏：抓注意力、逐点讲解、互动承接和合规下单提醒。",
+    "product_detail": "采用详情页卖点分层：核心卖点、使用场景、适用人群和参数核对提示。",
+    "wechat_moments": "采用朋友圈熟人分享结构：自然推荐理由、生活场景和克制的行动邀请。",
 }
 
 # 广告法高风险绝对化用语；命中的文案必须人工复核后才能进入任何发布流程。
@@ -96,6 +131,7 @@ class CopywritingRequest(BaseModel):
     target_audience: str | None = Field(default=None, max_length=64)
     styles: list[CopyStyle] = Field(min_length=1, max_length=5)
     variants_per_style: int = Field(default=1, ge=1, le=3)
+    length: CopyLength = "medium"
 
     @field_validator("selling_points")
     @classmethod
@@ -118,6 +154,30 @@ class CopywritingRequest(BaseModel):
     def small_batch_only(self) -> "CopywritingRequest":
         if len(self.styles) * self.variants_per_style > 9:
             raise ValueError("copy_batch_too_large")
+        return self
+
+
+class CopywritingRegenerateRequest(CopywritingRequest):
+    edited_copy: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("edited_copy")
+    @classmethod
+    def normalize_edited_copy(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("edited_copy_empty")
+        return normalized
+
+    @model_validator(mode="after")
+    def edited_copy_fits_requested_length(self) -> "CopywritingRegenerateRequest":
+        revision = (
+            self.edited_copy
+            if self.edited_copy.endswith(("。", "！", "？", "!", "?"))
+            else f"{self.edited_copy}。"
+        )
+        maximum = COPY_LENGTH_RANGES[self.length][1]
+        if len(revision) + len(COPY_SAFETY_CLOSER) > maximum:
+            raise ValueError("copy_revision_too_long_for_length")
         return self
 
 
@@ -302,17 +362,45 @@ class OpsAssistantService:
     # ------------------------------------------------------------------
 
     def generate_copy(self, tenant_id: str, request: CopywritingRequest) -> dict[str, Any]:
+        return self._generate_copy(request)
+
+    def regenerate_copy(
+        self, tenant_id: str, request: CopywritingRegenerateRequest
+    ) -> dict[str, Any]:
+        return self._generate_copy(request, revision_text=request.edited_copy)
+
+    def _generate_copy(
+        self,
+        request: CopywritingRequest,
+        *,
+        revision_text: str | None = None,
+    ) -> dict[str, Any]:
         variants: list[dict[str, Any]] = []
+        source_text = " ".join(
+            item
+            for item in (
+                request.product_name,
+                *request.selling_points,
+                _money(request.price) if request.price is not None else None,
+            )
+            if item
+        )
+        source_risk_terms = sorted({term for term in RISK_TERMS if term in source_text})
         for style in request.styles:
             for index in range(request.variants_per_style):
-                generated = self._model_copy_variant(request, style, index)
+                generated = self._model_copy_variant(
+                    request, style, index, revision_text=revision_text
+                )
                 generator = "model"
                 if generated is None:
-                    generated = self._template_copy_variant(request, style, index)
+                    generated = self._template_copy_variant(
+                        request, style, index, revision_text=revision_text
+                    )
                     generator = "template_fallback" if self._model else "template"
                 title, body = generated
                 text = f"{title}{body}"
-                risk_terms = sorted({term for term in RISK_TERMS if term in text})
+                rendered_risk_terms = sorted({term for term in RISK_TERMS if term in text})
+                risk_terms = sorted(set(rendered_risk_terms) | set(source_risk_terms))
                 variants.append(
                     {
                         "variant_id": f"copy-{style}-{index + 1}",
@@ -322,8 +410,11 @@ class OpsAssistantService:
                         "body": body,
                         "char_count": len(body),
                         "risk_terms": risk_terms,
+                        "rendered_risk_terms": rendered_risk_terms,
+                        "source_risk_terms": source_risk_terms,
                         "needs_review": bool(risk_terms),
                         "generator": generator,
+                        "publication_allowed": False,
                     }
                 )
         return {
@@ -334,8 +425,12 @@ class OpsAssistantService:
             "target_audience": request.target_audience,
             "requested_styles": list(request.styles),
             "variants_per_style": request.variants_per_style,
+            "length": request.length,
+            "length_range": list(COPY_LENGTH_RANGES[request.length]),
             "batch_size": len(variants),
             "variants": variants,
+            "revision_applied": revision_text is not None,
+            "revision_source": revision_text,
             "publication_allowed": False,
             "action_boundary": "仅生成候选文案；发布前必须人工审核卖点与价格主张。",
         }
@@ -474,7 +569,12 @@ class OpsAssistantService:
     # ------------------------------------------------------------------
 
     def _template_copy_variant(
-        self, request: CopywritingRequest, style: str, index: int
+        self,
+        request: CopywritingRequest,
+        style: str,
+        index: int,
+        *,
+        revision_text: str | None = None,
     ) -> tuple[str, str]:
         points = request.selling_points
         lead = points[index % len(points)]
@@ -507,23 +607,166 @@ class OpsAssistantService:
                 f"以{lead}为核心，辅以{rest}，为{audience}提供更从容的体验。"
                 f"{price_line}细节以实物与详情页信息为准。"
             )
-        else:  # concise
+        elif style == "concise":
             title = f"{name} | {lead}"
             body = f"{lead}；{rest}。{price_line}详情页可查完整参数。"
-        return title, body
+        elif style == "xiaohongshu":
+            title = f"种草笔记｜{name}的{lead}体验"
+            body = (
+                f"最近给{audience}挖到一个实用选择：{lead}很贴近日常场景，"
+                f"{rest}也值得留意。{price_line}入手前记得核对详情页规格。"
+            )
+        elif style == "livestream":
+            title = f"直播口播｜{name}重点看{lead}"
+            body = (
+                f"朋友们看这里，{name}先看{lead}，再看{rest}。"
+                f"{price_line}需要的朋友先对照详情页参数和活动规则，再决定是否下单。"
+            )
+        elif style == "product_detail":
+            title = f"核心卖点｜{name}"
+            body = (
+                f"【核心卖点】{lead}。【补充亮点】{rest}。"
+                f"【适用人群】{audience}。【购买提示】{price_line}完整规格以详情页为准。"
+            )
+        else:  # wechat_moments
+            title = f"朋友圈分享｜最近留意到{name}"
+            body = (
+                f"今天想把{name}分享给{audience}：{lead}是我首先留意的点，"
+                f"{rest}也很实用。{price_line}感兴趣可以先去详情页看看完整信息。"
+            )
+        return title, self._fit_copy_length(
+            body, request, style=style, index=index, revision_text=revision_text
+        )
+
+    @staticmethod
+    def _fit_copy_length(
+        body: str,
+        request: CopywritingRequest,
+        *,
+        style: str,
+        index: int,
+        revision_text: str | None = None,
+    ) -> str:
+        minimum, maximum = COPY_LENGTH_RANGES[request.length]
+        revision = OpsAssistantService._revision_sentence(revision_text)
+        if request.length == "short":
+            return OpsAssistantService._compact_copy_body(
+                request, style, index, revision, minimum=minimum, maximum=maximum
+            )
+        fitted = f"{revision}{body}" if revision else body
+        if len(fitted) > maximum:
+            return OpsAssistantService._compact_copy_body(
+                request, style, index, revision, minimum=minimum, maximum=maximum
+            )
+        audience = request.target_audience or "有相关需要的人"
+        points = "、".join(request.selling_points)
+        additions = (
+            f"可以结合{audience}的实际使用场景，重点比较{points}。",
+            "文案只呈现已提供的商品信息，不替代页面中的完整参数、库存和活动说明。",
+            "选购前建议再次核对商品详情页，确认规格、价格与适用条件符合当前需要。",
+        )
+        for addition in additions:
+            if len(fitted) >= minimum:
+                break
+            if len(fitted) + len(addition) <= maximum:
+                fitted += addition
+        if len(fitted) < minimum:
+            return OpsAssistantService._compact_copy_body(
+                request, style, index, revision, minimum=minimum, maximum=maximum
+            )
+        return fitted
+
+    @staticmethod
+    def _revision_sentence(revision_text: str | None) -> str:
+        if not revision_text:
+            return ""
+        normalized = revision_text.strip()
+        if not normalized:
+            return ""
+        return normalized if normalized.endswith(("。", "！", "？", "!", "?")) else f"{normalized}。"
+
+    @staticmethod
+    def _compact_copy_body(
+        request: CopywritingRequest,
+        style: str,
+        index: int,
+        revision: str,
+        *,
+        minimum: int,
+        maximum: int,
+    ) -> str:
+        audience = request.target_audience or "有相关需要的人"
+        lead = request.selling_points[index % len(request.selling_points)]
+        style_lead_prefixes = {
+            "formal": ("围绕", "重点看", "优先了解"),
+            "playful": ("种草点是", "心动点是", "加分点是"),
+            "urgent": ("活动重点看", "下单前先看", "限时关注"),
+            "premium": ("质感亮点是", "从容体验来自", "进阶感来自"),
+            "concise": ("核心卖点：", "重点亮点：", "产品亮点："),
+            "xiaohongshu": ("种草点是", "心动点是", "笔记重点是"),
+            "livestream": ("直播重点讲", "镜头先看", "上播先讲"),
+            "product_detail": ("【核心卖点】", "【重点亮点】", "【产品亮点】"),
+            "wechat_moments": ("想分享的点是", "今天推荐的点是", "值得说的点是"),
+        }
+        style_lead = f"{style_lead_prefixes[style][index % 3]}{lead}。"
+        # 卖点本身允许最长 60 字，无法在短档完整容纳时绝不截断它；
+        # 改用可区分且不新增商品主张的风格化提示，避免批量正文退化为同一条。
+        compact_style_markers = {
+            "formal": ("专业选购参考。", "重点信息提示。", "使用前先核对。"),
+            "playful": ("先看这条小提示。", "换个角度看看。", "下单前多核对。"),
+            "urgent": ("活动信息请核对。", "下单前再确认。", "限时信息看详情。"),
+            "premium": ("细节值得留意。", "从容做个比较。", "选择前看看参数。"),
+            "concise": ("选购重点提示。", "参数核对提示。", "页面信息提示。"),
+            "xiaohongshu": ("这条先记下来。", "换个角度看。", "入手前先核对。"),
+            "livestream": ("镜头前先提示。", "下单前先确认。", "直播信息看详情。"),
+            "product_detail": ("【选购提示】。", "【参数说明】。", "【页面信息】。"),
+            "wechat_moments": ("今天先说个提示。", "下单前先看看。", "分享前先核对。"),
+        }
+        if len(style_lead) + len(COPY_SAFETY_CLOSER) > maximum:
+            style_lead = compact_style_markers[style][index % 3]
+        price = _money(request.price) if request.price is not None else None
+        units = [
+            revision,
+            style_lead,
+            f"商品：{request.product_name}。",
+            f"到手价 {price} 元。" if price else "",
+            f"适合{audience}的日常使用场景。",
+            "下单前请核对商品参数和活动规则。",
+            "完整卖点、规格与服务承诺以商品详情页展示为准。",
+            "文案仅供参考，实际库存与价格请以页面实时信息为准。",
+            "如需进一步比较，请结合自身使用场景查看详情页完整说明。",
+        ]
+        fitted = ""
+        for unit in units:
+            if not unit:
+                continue
+            if len(fitted) + len(unit) + len(COPY_SAFETY_CLOSER) <= maximum:
+                fitted += unit
+        fitted += COPY_SAFETY_CLOSER
+        if len(fitted) < minimum:
+            raise ValueError("copy_length_range_unreachable")
+        return fitted
 
     def _model_copy_variant(
-        self, request: CopywritingRequest, style: str, index: int
+        self,
+        request: CopywritingRequest,
+        style: str,
+        index: int,
+        *,
+        revision_text: str | None = None,
     ) -> tuple[str, str] | None:
         if self._model is None:
             return None
+        minimum, maximum = COPY_LENGTH_RANGES[request.length]
         prompt = [
             {
                 "role": "system",
                 "content": (
                     "你是电商运营文案助手。基于给定商品信息生成一条中文营销文案，"
                     "禁止编造未提供的卖点、价格或功效，禁止使用绝对化用语。"
-                    '只返回 JSON：{"title": "...", "body": "..."}，body 不超过 120 字。'
+                    f"{COPY_STYLE_PROMPTS[style]}"
+                    f"正文必须为 {minimum}–{maximum} 个字符。"
+                    '只返回 JSON：{"title": "...", "body": "..."}。'
                 ),
             },
             {
@@ -537,6 +780,8 @@ class OpsAssistantService:
                         "target_audience": request.target_audience,
                         "style": COPY_STYLE_LABELS[style],
                         "variant_index": index + 1,
+                        "length": request.length,
+                        "edited_copy": revision_text,
                     },
                     ensure_ascii=False,
                 ),
@@ -550,7 +795,9 @@ class OpsAssistantService:
         body = str(payload.get("body") or "").strip()
         if not title or not body:
             return None
-        return title[:60], body[:400]
+        if not minimum <= len(body) <= maximum:
+            return None
+        return title[:60], body
 
     # ------------------------------------------------------------------
     # 报告计算（全部数值由固化代码产出）

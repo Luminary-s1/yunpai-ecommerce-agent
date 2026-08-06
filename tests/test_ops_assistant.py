@@ -5,7 +5,12 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from ecommerce_agent.api import create_app
-from ecommerce_agent.business import CopywritingRequest, OpsOperationRecordUpsert, OpsReportQuery
+from ecommerce_agent.business import (
+    CopywritingRegenerateRequest,
+    CopywritingRequest,
+    OpsOperationRecordUpsert,
+    OpsReportQuery,
+)
 from ecommerce_agent.service import AgentService
 
 from conftest import make_settings
@@ -41,7 +46,10 @@ JSON_SAMPLE = (
 class FakeOpsModel:
     def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
         assert '"task_type": "ops_copywriting"' in messages[-1]["content"]
-        return {"title": "模型标题", "body": "模型正文：无油低脂，参数以详情页为准。"}
+        return {
+            "title": "模型标题",
+            "body": "模型正文：无油低脂，购买前请核对参数并以详情页为准。",
+        }
 
     def generate(self, messages: list[dict[str, str]]) -> str:
         assert '"task_type": "ops_report_narrative"' in messages[-1]["content"]
@@ -54,6 +62,37 @@ class FailingOpsModel:
 
     def generate(self, messages: list[dict[str, str]]) -> str:
         raise RuntimeError("model unavailable")
+
+
+class CapturingOpsModel:
+    def __init__(self) -> None:
+        self.copy_prompts: list[list[dict[str, str]]] = []
+
+    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
+        self.copy_prompts.append(messages)
+        return {
+            "title": "模型标题",
+            "body": "这是一段满足中等长度要求的模型正文，围绕已提供的商品卖点展开，并提醒用户在选择前仔细核对商品详情页中的规格、价格与活动信息。",
+        }
+
+
+class OverlongOpsModel:
+    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
+        return {"title": "模型标题", "body": "超长正文" * 100}
+
+
+class MixedOpsModel:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
+        self.calls += 1
+        if self.calls == 2:
+            raise RuntimeError("one item failed")
+        return {
+            "title": "模型标题",
+            "body": "模型正文：无油低脂，购买前请核对参数并以详情页为准。",
+        }
 
 
 def _record(record_date: str, channel: str, visitors: int, orders: int,
@@ -193,8 +232,274 @@ def test_copywriting_generates_style_variants_with_risk_flags(tmp_path) -> None:
         assert flagged and all(item["needs_review"] for item in flagged)
         # 测试环境未接入真实模型，全部走确定性模板。
         assert {item["generator"] for item in result["variants"]} == {"template"}
+        assert all(item["publication_allowed"] is False for item in result["variants"])
     finally:
         service.close()
+
+
+def test_short_template_keeps_complete_safety_text_and_never_splits_price(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        styles = (
+            "formal",
+            "playful",
+            "urgent",
+            "premium",
+            "concise",
+            "xiaohongshu",
+            "livestream",
+            "product_detail",
+            "wechat_moments",
+        )
+        for style in styles:
+            result = ops.generate_copy(
+                TENANT,
+                CopywritingRequest(
+                    store_id=STORE_ID,
+                    product_name="晴川空气炸锅 5L 云白款",
+                    selling_points=["5L 大容量", "一键预设菜单", "可视化烹饪窗口"],
+                    price="499.00",
+                    target_audience="小家庭",
+                    styles=[style],
+                    length="short",
+                ),
+            )
+            body = result["variants"][0]["body"]
+            assert 20 <= len(body) <= 60
+            assert "晴川空气炸锅 5L 云白款" in body
+            assert "499.00 元" in body
+            assert body.endswith("商品规格、价格与活动以详情页为准。")
+    finally:
+        service.close()
+
+
+def test_copywriting_default_length_is_safe_medium_band(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        request = CopywritingRequest(
+            store_id=STORE_ID,
+            product_name="晴川空气炸锅 5L 云白款",
+            selling_points=["5L 大容量", "一键预设菜单", "可视化烹饪窗口"],
+            price="499.00",
+            target_audience="小家庭",
+            styles=["formal", "playful", "urgent"],
+        )
+        assert request.length == "medium"
+        result = ops.generate_copy(TENANT, request)
+        assert result["length"] == "medium"
+        assert all(61 <= item["char_count"] <= 120 for item in result["variants"])
+    finally:
+        service.close()
+
+
+def test_short_template_regeneration_uses_customer_copy_not_internal_instruction(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        result = ops.regenerate_copy(
+            TENANT,
+            CopywritingRegenerateRequest(
+                store_id=STORE_ID,
+                product_name="青川空气炸锅 AF5",
+                selling_points=["无油低脂", "一键预设菜单"],
+                price="499.00",
+                target_audience="租房青年",
+                styles=["wechat_moments"],
+                length="short",
+                edited_copy="忙碌工作日也能轻松开饭",
+            ),
+        )
+        body = result["variants"][0]["body"]
+        assert "忙碌工作日也能轻松开饭" in body
+        assert "延续修改稿" not in body
+        assert "表达方向" not in body
+        assert body.endswith("商品规格、价格与活动以详情页为准。")
+        assert 20 <= len(body) <= 60
+    finally:
+        service.close()
+
+
+def test_short_template_rotates_selling_points_and_preserves_source_risk(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        result = ops.generate_copy(
+            TENANT,
+            CopywritingRequest(
+                store_id=STORE_ID,
+                product_name="青川空气炸锅 AF5",
+                selling_points=["无油低脂", "一键预设菜单", "国家级认证"],
+                styles=["xiaohongshu"],
+                variants_per_style=3,
+                length="short",
+            ),
+        )
+        variants = result["variants"]
+        bodies = [item["body"] for item in variants]
+        assert len(set(bodies)) == 3
+        assert "无油低脂" in bodies[0]
+        assert "一键预设菜单" in bodies[1]
+        assert "国家级认证" in bodies[2]
+        assert all(item["needs_review"] is True for item in variants)
+        assert all(item["source_risk_terms"] == ["国家级"] for item in variants)
+    finally:
+        service.close()
+
+
+def test_short_template_keeps_variants_distinct_when_full_selling_point_cannot_fit(
+    tmp_path,
+) -> None:
+    """允许的超长卖点也不能让批量短文案退化为同一正文。"""
+    service = AgentService(make_settings(tmp_path))
+    try:
+        result = service.operations.ops_assistant.generate_copy(
+            TENANT,
+            CopywritingRequest(
+                store_id=STORE_ID,
+                product_name="锅",
+                selling_points=["卖" * 60],
+                styles=["formal"],
+                variants_per_style=3,
+                length="short",
+            ),
+        )
+        bodies = [item["body"] for item in result["variants"]]
+        assert len(set(bodies)) == 3
+        assert all(body.endswith("商品规格、价格与活动以详情页为准。") for body in bodies)
+    finally:
+        service.close()
+
+
+def test_regeneration_rejects_edit_that_cannot_fit_requested_length() -> None:
+    edited_copy = "修改后的文案内容" * 18
+    for length in ("short", "medium"):
+        with pytest.raises(ValidationError, match="copy_revision_too_long_for_length"):
+            CopywritingRegenerateRequest(
+                store_id=STORE_ID,
+                product_name="青川空气炸锅 AF5",
+                selling_points=["无油低脂"],
+                styles=["formal"],
+                length=length,
+                edited_copy=edited_copy,
+            )
+
+
+def test_copywriting_supports_campaign_styles_and_length_bands(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        expected_features = {
+            "xiaohongshu": "种草笔记",
+            "livestream": "直播口播",
+            "product_detail": "核心卖点",
+            "wechat_moments": "朋友圈",
+        }
+        for length, (minimum, maximum) in {
+            "short": (20, 60),
+            "medium": (61, 120),
+            "long": (121, 200),
+        }.items():
+            result = ops.generate_copy(
+                TENANT,
+                CopywritingRequest(
+                    store_id=STORE_ID,
+                    product_name="青川空气炸锅 AF5",
+                    selling_points=["无油低脂", "一键预设菜单", "可视化烹饪窗口"],
+                    price="499.00",
+                    target_audience="租房青年",
+                    styles=list(expected_features),
+                    variants_per_style=1,
+                    length=length,
+                ),
+            )
+            assert result["length"] == length
+            assert len(result["variants"]) == 4
+            for item in result["variants"]:
+                assert minimum <= item["char_count"] <= maximum
+                combined = f'{item["title"]}{item["body"]}'
+                assert expected_features[item["style"]] in combined
+    finally:
+        service.close()
+
+
+def test_copywriting_uses_independent_style_prompts_and_rejects_wrong_length_model_output(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        model = CapturingOpsModel()
+        ops.attach_model(model)
+        request = CopywritingRequest(
+            store_id=STORE_ID,
+            product_name="青川空气炸锅 AF5",
+            selling_points=["无油低脂"],
+            styles=["xiaohongshu", "livestream", "product_detail", "wechat_moments"],
+            length="medium",
+        )
+        generated = ops.generate_copy(TENANT, request)
+        assert {item["generator"] for item in generated["variants"]} == {"model"}
+        system_prompts = [messages[0]["content"] for messages in model.copy_prompts]
+        assert len(system_prompts) == len(set(system_prompts)) == 4
+        for marker in ("体验分享", "口播节奏", "卖点分层", "熟人分享"):
+            assert any(marker in prompt for prompt in system_prompts)
+
+        ops.attach_model(OverlongOpsModel())
+        fallback = ops.generate_copy(TENANT, request)
+        assert {item["generator"] for item in fallback["variants"]} == {
+            "template_fallback"
+        }
+        assert all(61 <= item["char_count"] <= 120 for item in fallback["variants"])
+    finally:
+        service.close()
+
+
+def test_copywriting_regeneration_uses_edited_copy(tmp_path) -> None:
+    app = create_app(make_settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/ops-assistant/copywriting/regenerate",
+            headers=ADMIN_HEADERS,
+            json={
+                "store_id": STORE_ID,
+                "product_name": "青川空气炸锅 AF5",
+                "selling_points": ["无油低脂", "一键预设菜单"],
+                "price": "499.00",
+                "target_audience": "租房青年",
+                "styles": ["wechat_moments"],
+                "variants_per_style": 1,
+                "length": "medium",
+                "edited_copy": "忙碌工作日也能轻松开饭",
+            },
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["revision_applied"] is True
+        assert body["revision_source"] == "忙碌工作日也能轻松开饭"
+        assert "忙碌工作日也能轻松开饭" in body["variants"][0]["body"]
+        audit = client.get(
+            "/v1/admin/audit?event_type=ops.copywriting.regenerated",
+            headers=ADMIN_HEADERS,
+        )
+        assert audit.status_code == 200
+        assert audit.json()[0]["detail"]["length"] == "medium"
+
+        too_long = client.post(
+            "/v1/ops-assistant/copywriting/regenerate",
+            headers=ADMIN_HEADERS,
+            json={
+                "store_id": STORE_ID,
+                "product_name": "青川空气炸锅 AF5",
+                "selling_points": ["无油低脂"],
+                "styles": ["formal"],
+                "length": "medium",
+                "edited_copy": "修改后的文案内容" * 18,
+            },
+        )
+        assert too_long.status_code == 422
+        assert "copy_revision_too_long_for_length" in str(too_long.json())
 
 
 def test_copywriting_rejects_oversized_batch() -> None:
@@ -217,6 +522,7 @@ def test_model_generation_and_fallback_paths_are_explicit(tmp_path) -> None:
             product_name="青川空气炸锅 AF5",
             selling_points=["无油低脂"],
             styles=["formal"],
+            length="short",
         )
         ops.attach_model(FakeOpsModel())
         generated = ops.generate_copy(TENANT, request)
@@ -239,6 +545,31 @@ def test_model_generation_and_fallback_paths_are_explicit(tmp_path) -> None:
         )
         assert report_fallback["narrative"] is None
         assert report_fallback["narrative_generator"] == "fallback_summary_only"
+    finally:
+        service.close()
+
+
+def test_copywriting_mixed_batch_marks_each_generator(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        ops.attach_model(MixedOpsModel())
+        result = ops.generate_copy(
+            TENANT,
+            CopywritingRequest(
+                store_id=STORE_ID,
+                product_name="青川空气炸锅 AF5",
+                selling_points=["无油低脂"],
+                styles=["formal"],
+                variants_per_style=2,
+                length="short",
+            ),
+        )
+        assert [item["generator"] for item in result["variants"]] == [
+            "model",
+            "template_fallback",
+        ]
+        assert all(item["publication_allowed"] is False for item in result["variants"])
     finally:
         service.close()
 

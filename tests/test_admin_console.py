@@ -158,6 +158,17 @@ def test_admin_console_page_and_audit_api(tmp_path) -> None:
         assert 'id="opsReportFindings"' in page.text
         assert "/v1/ops-assistant/datasets/import" in page.text
         assert "/v1/ops-assistant/copywriting/generate" in page.text
+        assert "/v1/ops-assistant/copywriting/regenerate" in page.text
+        assert 'id="opsCopyLength"' in page.text
+        assert 'value="xiaohongshu"' in page.text
+        assert 'value="livestream"' in page.text
+        assert 'value="product_detail"' in page.text
+        assert 'value="wechat_moments"' in page.text
+        assert "按修改内容重新生成" in page.text
+        assert "styles.length > 5" in page.text
+        assert "一次最多选择 5 种文案风格" in page.text
+        assert "selectedOpsCopyStyles" in page.text
+        assert "node.checked = false" in page.text
         assert "/v1/ops-assistant/reports/analysis" in page.text
         assert "模型 / 模板混合" in page.text
         assert "客服 Agent 评测" in page.text

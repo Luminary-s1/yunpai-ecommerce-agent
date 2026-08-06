@@ -26,6 +26,7 @@ from .marketing import (
 )
 from .metrics import MetricQuery, MetricsService
 from .ops_assistant import (
+    CopywritingRegenerateRequest,
     CopywritingRequest,
     OpsAssistantService,
     OpsOperationRecordUpsert,
@@ -47,6 +48,7 @@ __all__ = [
     "CompetitiveSignalCreate",
     "CompetitorObservationCreate",
     "ContentDraftUpsert",
+    "CopywritingRegenerateRequest",
     "CopywritingRequest",
     "FinanceReportQuery",
     "FinanceService",
