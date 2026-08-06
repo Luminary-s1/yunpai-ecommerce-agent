@@ -448,6 +448,41 @@ class ContextBuilder:
             raise RuntimeError("context snapshot checksum mismatch")
         return snapshot
 
+    def latest_subject(self, tenant_id: str, session_id: str) -> dict[str, Any]:
+        """Return the last tenant-scoped subject recorded for a session."""
+
+        with self.db.connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM context_snapshots "
+                "WHERE tenant_id=? AND session_id=? "
+                "ORDER BY created_at DESC, sequence DESC LIMIT 1",
+                (tenant_id, session_id),
+            ).fetchone()
+        if row is None:
+            return {}
+        try:
+            snapshot = self.get(tenant_id, row["id"])
+        except (RuntimeError, TypeError, ValueError):
+            return {}
+        if snapshot is None:
+            return {}
+        bundle = snapshot.bundle
+        subject = bundle.get("current_subject", {})
+        if not isinstance(subject, dict):
+            return {}
+        allowed = {
+            "product_name",
+            "sku_id",
+            "sku",
+            "order_id",
+            "order_status",
+            "logistics_status",
+            "carrier",
+            "tracking_last_event",
+            "shop_policy",
+        }
+        return {key: value for key, value in subject.items() if key in allowed}
+
     @staticmethod
     def _from_row(row: dict[str, Any]) -> ContextSnapshot:
         return ContextSnapshot(

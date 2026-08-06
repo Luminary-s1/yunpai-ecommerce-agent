@@ -57,6 +57,51 @@ def test_agent_persists_generation_snapshot_and_message_link(tmp_path) -> None:
         service.close()
 
 
+def test_pronoun_turn_reuses_previous_context_builder_subject_for_retrieval(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        principal = principal_for(service)
+        service.chat(
+            principal,
+            "context-pronoun",
+            "我在看晴川空气炸锅 5L 云白款",
+            {"shop_id": "qingchuan-flagship-001", "sku_id": "QC-AF5-WHITE"},
+        )
+        response = service.chat(
+            principal,
+            "context-pronoun",
+            "它多少钱？",
+            {"shop_id": "qingchuan-flagship-001"},
+        )
+
+        snapshot = service.contexts.get("tenant-test", response.context_snapshot_id or "")
+        assert snapshot is not None
+        assert snapshot.bundle["current_subject"]["sku_id"] == "QC-AF5-WHITE"
+    finally:
+        service.close()
+
+
+def test_latest_subject_ignores_a_tampered_snapshot(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        principal = principal_for(service)
+        response = service.chat(
+            principal,
+            "context-tamper",
+            "我在看晴川空气炸锅 5L 云白款",
+            {"shop_id": "qingchuan-flagship-001", "sku_id": "QC-AF5-WHITE"},
+        )
+        with service.db._write_lock, service.db.connect() as conn:
+            conn.execute(
+                "UPDATE context_snapshots SET bundle_json=? WHERE id=?",
+                ('{"current_subject":{"sku_id":"QC-UNTRUSTED"}}', response.context_snapshot_id),
+            )
+
+        assert service.contexts.latest_subject("tenant-test", "context-tamper") == {}
+    finally:
+        service.close()
+
+
 def test_conflicting_store_identity_handoffs_before_model_execution(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     model_called = False

@@ -75,8 +75,17 @@ class ModelGateway:
         payload = self._chat_payload(messages, json_mode=False, stream=True)
         yield from self._stream_deltas(payload)
 
-    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
-        content = self._generate_content(messages, json_mode=True)
+    def generate_json(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        content = self._generate_content(
+            messages,
+            json_mode=True,
+            timeout_seconds=timeout_seconds,
+        )
         try:
             return extract_json_object(content)
         except ValueError as exc:
@@ -87,6 +96,7 @@ class ModelGateway:
         messages: list[dict[str, str]],
         *,
         json_mode: bool,
+        timeout_seconds: float | None = None,
     ) -> str:
         if self.settings.model_mock_mode:
             return self._mock_generate(messages)
@@ -99,8 +109,41 @@ class ModelGateway:
             stream=self._uses_streaming,
         )
         if self._uses_streaming:
-            return self._stream_request(payload)
-        data = self._request(payload)
+            try:
+                return self._stream_request(payload, timeout_seconds=timeout_seconds)
+            except ModelError as exc:
+                # Retry only reasoning-only streams; other failures may follow output.
+                if "empty content" not in str(exc).lower():
+                    raise
+                fallback_payload = {**payload, "stream": False}
+                return self._content_from_response(
+                    self._request(fallback_payload, timeout_seconds=timeout_seconds)
+                )
+        data = self._request(payload, timeout_seconds=timeout_seconds)
+        try:
+            return self._content_from_response(data)
+        except ModelError as exc:
+            if (
+                "empty content" not in str(exc).lower()
+                or self.settings.model_retry_attempts <= 0
+            ):
+                raise
+            # Use the configured retry budget for transient empty responses.
+            last_error = exc
+            for attempt in range(self.settings.model_retry_attempts):
+                time.sleep(min(0.2 * (attempt + 1), 0.5))
+                try:
+                    return self._content_from_response(
+                        self._request(payload, timeout_seconds=timeout_seconds)
+                    )
+                except ModelError as retry_error:
+                    last_error = retry_error
+                    if "empty content" not in str(retry_error).lower():
+                        raise
+            raise last_error
+
+    @staticmethod
+    def _content_from_response(data: dict[str, Any]) -> str:
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
@@ -166,8 +209,17 @@ class ModelGateway:
             "usage": data.get("usage", {}),
         }
 
-    def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        attempts = self.settings.model_retry_attempts + 1
+    def _request(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        attempts = (
+            1
+            if timeout_seconds is not None
+            else self.settings.model_retry_attempts + 1
+        )
         last_error: Exception | None = None
         for attempt in range(attempts):
             try:
@@ -175,6 +227,11 @@ class ModelGateway:
                     f"{self.settings.model_base_url}/chat/completions",
                     headers=self._headers(),
                     json=payload,
+                    timeout=(
+                        timeout_seconds
+                        if timeout_seconds is not None
+                        else self.settings.model_timeout_seconds
+                    ),
                 )
                 if self._is_retryable(response) and attempt + 1 < attempts:
                     time.sleep(min(0.2 * (attempt + 1), 0.5))
@@ -201,11 +258,27 @@ class ModelGateway:
             ) from last_error
         raise error_class(f"model request failed: {type(last_error).__name__}") from last_error
 
-    def _stream_request(self, payload: dict[str, Any]) -> str:
-        return "".join(self._stream_deltas(payload)).strip()
+    def _stream_request(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> str:
+        return "".join(
+            self._stream_deltas(payload, timeout_seconds=timeout_seconds)
+        ).strip()
 
-    def _stream_deltas(self, payload: dict[str, Any]) -> Iterator[str]:
-        attempts = self.settings.model_retry_attempts + 1
+    def _stream_deltas(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Iterator[str]:
+        attempts = (
+            1
+            if timeout_seconds is not None
+            else self.settings.model_retry_attempts + 1
+        )
         last_error: Exception | None = None
         for attempt in range(attempts):
             emitted = False
@@ -215,6 +288,11 @@ class ModelGateway:
                     f"{self.settings.model_base_url}/chat/completions",
                     headers=self._headers(),
                     json=payload,
+                    timeout=(
+                        timeout_seconds
+                        if timeout_seconds is not None
+                        else self.settings.model_timeout_seconds
+                    ),
                 ) as response:
                     if response.status_code >= 400:
                         # Error responses arrive as a regular JSON body instead of SSE.
@@ -312,6 +390,51 @@ class ModelGateway:
     @staticmethod
     def _mock_generate(messages: list[dict[str, str]]) -> str:
         context = messages[-1]["content"]
+        try:
+            task = json.loads(context)
+        except (TypeError, json.JSONDecodeError):
+            task = {}
+        if task.get("task_type") == "intent_classification":
+            message = str(task.get("message", ""))
+            intent = "chitchat"
+            mappings = (
+                (
+                    "complaint",
+                    ("态度", "不满意", "欺骗", "糟糕", "太差", "失望", "恶劣"),
+                ),
+                (
+                    "after_sales",
+                    (
+                        "坏了",
+                        "破损",
+                        "没收到",
+                        "退钱",
+                        "退款",
+                        "退货",
+                        "换货",
+                        "保修",
+                        "物流",
+                        "包裹",
+                        "补发",
+                        "维修",
+                        "少件",
+                    ),
+                ),
+                (
+                    "product_inquiry",
+                    ("颜色", "款式", "功能", "适合", "有货", "库存", "介绍", "重量", "容量"),
+                ),
+            )
+            for candidate, keywords in mappings:
+                if any(keyword in message for keyword in keywords):
+                    intent = candidate
+                    break
+            # 刻意套上信封：真实的 glm-4.7-flash 就是这么返回的。mock 若只吐出
+            # 解析代码期望的完美形状，它验证的就只是作者的假设，而不是依赖的行为。
+            return json.dumps(
+                {"answer": {"intent": intent, "confidence": 0.82}},
+                ensure_ascii=False,
+            )
         if '"task_type": "agent_decision"' in context:
             payload = json.loads(context)
             question = str(payload.get("user_question", ""))
@@ -346,6 +469,52 @@ class ModelGateway:
                     "arguments": {}, "missing_fields": ["平台订单编号"],
                     "expected_outcome": None, "response": None,
                     "reason": "order_identity_required", "confidence": 0.9,
+                }
+            elif any(
+                marker in question
+                for marker in (
+                    "投诉",
+                    "举报",
+                    "差评",
+                    "曝光",
+                    "破损",
+                    "漏水",
+                    "发错",
+                    "服务太差",
+                    "服务态度",
+                    "没有回复",
+                    "没人处理",
+                    "弄丢",
+                    "不一致",
+                    "给个说法",
+                    "一直不更新",
+                )
+            ) or ("重复" in question and "退" in question):
+                decision = {
+                    "intent": "complaint",
+                    "mode": "handoff",
+                    "tool_name": None,
+                    "arguments": {},
+                    "missing_fields": [],
+                    "expected_outcome": None,
+                    "response": None,
+                    "reason": "complaint_requires_human",
+                    "confidence": 0.9,
+                }
+            elif any(
+                marker in question
+                for marker in ("天气", "谢谢", "笑话", "吃饭", "旅行", "你好", "再见")
+            ):
+                decision = {
+                    "intent": "chitchat",
+                    "mode": "answer",
+                    "tool_name": None,
+                    "arguments": {},
+                    "missing_fields": [],
+                    "expected_outcome": None,
+                    "response": None,
+                    "reason": "chitchat",
+                    "confidence": 0.9,
                 }
             elif is_business_action_request(question):
                 intent = (

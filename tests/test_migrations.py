@@ -56,7 +56,15 @@ def test_legacy_v1_database_upgrades_without_rebuild(tmp_path) -> None:
         "agent_invocations",
         "channel_agent_jobs",
     } <= tables
-    assert {"tenant_id", "client_id", "redacted", "context_snapshot_id"} <= message_columns
+    assert {
+        "tenant_id",
+        "client_id",
+        "redacted",
+        "context_snapshot_id",
+        "customer_intent",
+        "intent_confidence",
+        "intent_method",
+    } <= message_columns
     assert {"source_type", "source_reference"} <= session_columns
     with db.connect() as conn:
         handoff_columns = {row[1] for row in conn.execute("PRAGMA table_info(handoff_tasks)")}
@@ -99,6 +107,64 @@ def test_legacy_v1_database_upgrades_without_rebuild(tmp_path) -> None:
         "record_version",
     } <= outbox_columns
     assert {"knowledge_key", "layer", "review_status", "record_version"} <= knowledge_columns
+
+
+def test_v25_database_upgrades_to_v27_and_preserves_intent_history(tmp_path) -> None:
+    db = Database(tmp_path / "v25-intent.sqlite3")
+    with db.connect() as conn:
+        conn.execute(
+            "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        for version in range(1, 26):
+            getattr(Database, f"_apply_v{version}")(conn)
+            conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (version, "2026-08-17T00:00:00+00:00"),
+            )
+        conn.execute(
+            """
+            INSERT INTO messages(
+                id, trace_id, session_id, role, content, intent, risk_level,
+                route_reason, sources_json, model_fallback, created_at,
+                tenant_id, client_id, redacted, context_snapshot_id
+            ) VALUES (?, ?, ?, 'user', ?, ?, ?, ?, '[]', 0, ?, ?, ?, 0, NULL)
+            """,
+            (
+                "legacy-intent-message",
+                "legacy-intent-trace",
+                "legacy-intent-session",
+                "历史消息不应丢失",
+                "general",
+                "pending",
+                "legacy",
+                "2026-08-17T00:00:00+00:00",
+                "tenant-intent",
+                "client-intent",
+            ),
+        )
+
+    db.initialize()
+    db.initialize()
+
+    assert db.schema_version() == 27
+    with db.connect() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
+        row = conn.execute(
+            "SELECT id, content, customer_intent, intent_confidence, intent_method "
+            "FROM messages WHERE id='legacy-intent-message'"
+        ).fetchone()
+        migrations = {
+            item[0] for item in conn.execute("SELECT version FROM schema_migrations")
+        }
+    assert {"customer_intent", "intent_confidence", "intent_method"} <= columns
+    assert dict(row) == {
+        "id": "legacy-intent-message",
+        "content": "历史消息不应丢失",
+        "customer_intent": None,
+        "intent_confidence": None,
+        "intent_method": None,
+    }
+    assert {26, 27} <= migrations
 
 
 def test_v7_database_upgrades_to_v8_without_losing_competitor_data(tmp_path) -> None:
@@ -1039,7 +1105,7 @@ def test_v24_release_policies_gain_night_watch_and_sop_allowlist(tmp_path) -> No
     } <= columns
 
 
-def test_v26_competitor_observations_gain_rating_and_rank_columns(tmp_path) -> None:
+def test_v25_database_applies_v26_competitor_observation_columns(tmp_path) -> None:
     db = Database(tmp_path / "v26-competitive-observations.sqlite3")
     db.path.parent.mkdir(parents=True, exist_ok=True)
     with db.connect() as conn:
@@ -1070,7 +1136,7 @@ def test_v26_competitor_observations_gain_rating_and_rank_columns(tmp_path) -> N
     db.initialize()
     db.initialize()
 
-    assert db.schema_version() == 26
+    assert db.schema_version() == 27
     with db.connect() as conn:
         columns = {
             row[1] for row in conn.execute("PRAGMA table_info(competitor_observations)")
@@ -1081,9 +1147,12 @@ def test_v26_competitor_observations_gain_rating_and_rank_columns(tmp_path) -> N
             FROM competitor_observations WHERE id='observation-v25'
             """
         ).fetchone()
-        migration_count = conn.execute(
-            "SELECT COUNT(*) FROM schema_migrations WHERE version=26"
-        ).fetchone()[0]
+        migration_counts = dict(
+            conn.execute(
+                "SELECT version, COUNT(*) FROM schema_migrations "
+                "WHERE version IN (26, 27) GROUP BY version"
+            ).fetchall()
+        )
 
     assert {"rating_value", "rating_scale", "sales_rank", "rank_scope"} <= columns
     assert dict(legacy) == {
@@ -1092,4 +1161,4 @@ def test_v26_competitor_observations_gain_rating_and_rank_columns(tmp_path) -> N
         "sales_rank": None,
         "rank_scope": None,
     }
-    assert migration_count == 1
+    assert migration_counts == {26: 1, 27: 1}
