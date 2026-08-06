@@ -35,7 +35,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-ecommerce_agent = ["fixtures/*.json"]
+ecommerce_agent = ["fixtures/*.json", "intent_routing.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -45,6 +45,15 @@ def test_output_guard_blocks_executed_claim() -> None:
     assert reason == "forbidden_commitment_in_output"
 
 
+def test_output_guard_treats_decimal_formatting_as_same_grounded_number() -> None:
+    passed, reason = review_output(
+        "目录价为 499 元。",
+        "虚拟目录价格为 499.00 元。",
+    )
+    assert passed
+    assert reason == "output_policy_passed"
+
+
 def test_internal_identifier_requests_are_detected() -> None:
     for text in (
         "请提供具体的 SKU 编号。",

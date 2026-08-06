@@ -87,6 +87,64 @@ def test_structured_decision_requests_json_object_mode(tmp_path) -> None:
         gateway.close()
 
 
+def test_structured_generation_accepts_a_per_call_timeout(tmp_path) -> None:
+    captured_timeout: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_timeout.update(request.extensions["timeout"])
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"intent":"chitchat"}'}}]},
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        gateway.generate_json(
+            [{"role": "user", "content": "classify"}],
+            timeout_seconds=0.25,
+        )
+    finally:
+        gateway.close()
+
+    assert captured_timeout["connect"] == 0.25
+    assert captured_timeout["read"] == 0.25
+
+
+def test_bounded_structured_generation_does_not_retry_connect_timeout(tmp_path) -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        raise httpx.ConnectTimeout("classifier deadline", request=request)
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_streaming=False,
+        model_api_key="test-model-key",
+        model_retry_attempts=2,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(ModelUnavailableError, match="ConnectTimeout"):
+            gateway.generate_json(
+                [{"role": "user", "content": "classify"}],
+                timeout_seconds=0.02,
+            )
+    finally:
+        gateway.close()
+
+    assert attempts == 1
+
+
 def test_coding_plan_endpoint_is_rejected_for_application_runtime(tmp_path) -> None:
     settings = replace(
         make_settings(tmp_path),
@@ -152,6 +210,73 @@ def test_glm_stream_is_assembled_without_exposing_reasoning(tmp_path) -> None:
         assert captured["stream"] is True
     finally:
         gateway.close()
+
+
+def test_empty_reasoning_only_stream_falls_back_to_non_stream_response(tmp_path) -> None:
+    requests: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        requests.append(payload)
+        if payload["stream"]:
+            body = (
+                'data: {"choices":[{"delta":{"reasoning_content":"internal"}}]}\n\n'
+                "data: [DONE]\n\n"
+            )
+            return httpx.Response(
+                200, text=body, headers={"content-type": "text/event-stream"}
+            )
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "可见答案"}}]},
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+        model_streaming=True,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        assert gateway.generate([{"role": "user", "content": "回答"}]) == "可见答案"
+    finally:
+        gateway.close()
+
+    assert [item["stream"] for item in requests] == [True, False]
+
+
+def test_empty_non_stream_response_uses_bounded_retry_budget(tmp_path) -> None:
+    attempts = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": ""}}]},
+            )
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "恢复答案"}}]},
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_streaming=False,
+        model_api_key="test-model-key",
+        model_retry_attempts=1,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        assert gateway.generate([{"role": "user", "content": "回答"}]) == "恢复答案"
+    finally:
+        gateway.close()
+    assert attempts == 2
 
 
 def test_transient_glm_failure_is_retried_once(tmp_path) -> None:
@@ -337,6 +462,51 @@ def test_stream_generate_mock_yields_multiple_deltas_matching_generate(tmp_path)
         assert "".join(deltas) == expected
     finally:
         gateway.close()
+
+
+def test_mock_decision_covers_generic_chitchat_and_pending_complaint_routes(tmp_path) -> None:
+    gateway = ModelGateway(make_settings(tmp_path))
+    try:
+        complaint = gateway.generate_json(
+            [
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "task_type": "agent_decision",
+                            "user_question": "收到的商品外壳破损怎么处理",
+                            "current_tool_catalog": [],
+                            "trusted_context": {},
+                            "latest_observation": {},
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
+        )
+        chitchat = gateway.generate_json(
+            [
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "task_type": "agent_decision",
+                            "user_question": "今天天气不错",
+                            "current_tool_catalog": [],
+                            "trusted_context": {},
+                            "latest_observation": {},
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
+        )
+    finally:
+        gateway.close()
+
+    assert complaint["mode"] == "handoff"
+    assert complaint["reason"] == "complaint_requires_human"
+    assert chitchat["intent"] == "chitchat"
 
 
 def test_stream_generate_yields_only_content_deltas(tmp_path) -> None:

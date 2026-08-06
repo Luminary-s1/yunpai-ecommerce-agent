@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from .text_utils import extract_numbers, normalize_text, redact_sensitive
+from .text_utils import normalize_text, redact_sensitive
 
 
 PROMPT_INJECTION_PATTERNS = (
@@ -148,7 +149,21 @@ def review_output(answer: str, evidence: str) -> tuple[bool, str]:
     for pattern in FORBIDDEN_OUTPUT_PATTERNS:
         if re.search(pattern, answer) and not verified_business_result:
             return False, "forbidden_commitment_in_output"
-    unsupported_numbers = extract_numbers(answer) - extract_numbers(evidence)
+    # Treat 499 and 499.00 as equal; keep percentages distinct.
+    unsupported_numbers = _normalized_numbers(answer) - _normalized_numbers(evidence)
     if unsupported_numbers:
         return False, "numeric_claim_without_evidence"
     return True, "output_policy_passed"
+
+
+def _normalized_numbers(text: str) -> set[str]:
+    values: set[str] = set()
+    for raw in re.findall(r"\d+(?:\.\d+)?%?", text):
+        percent = raw.endswith("%")
+        number_text = raw[:-1] if percent else raw
+        try:
+            number = Decimal(number_text)
+        except InvalidOperation:
+            continue
+        values.add(("%" if percent else "") + format(number.normalize(), "f"))
+    return values

@@ -12,6 +12,7 @@ from .context_builder import ContextBuilder
 from .database import Database, utc_now
 from .decision import AgentDecision
 from .handoff import HandoffService
+from .intent import classify, routing_for_intent
 from .llm import ModelError, ModelGateway, ModelUnavailableError
 from .policy import (
     asks_for_internal_identifier,
@@ -37,6 +38,9 @@ from .tools import ToolExecutionContext, ToolRegistry, ToolResult
 
 MODEL_UNAVAILABLE_HANDOFF_ANSWER = (
     "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。"
+)
+LOW_QUALITY_ROUTE_REASONS = frozenset(
+    {"model_unavailable", "low_confidence_handoff", "no_evidence"}
 )
 
 
@@ -96,8 +100,9 @@ def persist_response(
             INSERT OR IGNORE INTO messages(
                 id, trace_id, session_id, role, content, intent, risk_level,
                 route_reason, sources_json, model_fallback, created_at,
-                tenant_id, client_id, redacted, context_snapshot_id
-            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL)
+                tenant_id, client_id, redacted, context_snapshot_id,
+                customer_intent, intent_confidence, intent_method
+            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL, ?, ?, ?)
             """,
             (
                 user_message_id,
@@ -108,6 +113,9 @@ def persist_response(
                 state["tenant_id"],
                 state["client_id"],
                 int(user_redacted),
+                state.get("customer_intent"),
+                state.get("intent_confidence"),
+                state.get("intent_method"),
             ),
         )
         conn.execute(
@@ -115,8 +123,9 @@ def persist_response(
             INSERT OR IGNORE INTO messages(
                 id, trace_id, session_id, role, content, intent, risk_level,
                 route_reason, sources_json, model_fallback, created_at,
-                tenant_id, client_id, redacted, context_snapshot_id
-            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tenant_id, client_id, redacted, context_snapshot_id,
+                customer_intent, intent_confidence, intent_method
+            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 state["message_id"],
@@ -133,6 +142,9 @@ def persist_response(
                 state["client_id"],
                 int(answer_redacted),
                 state.get("context_snapshot_id"),
+                state.get("customer_intent"),
+                state.get("intent_confidence"),
+                state.get("intent_method"),
             ),
         )
         invocation_id = state.get("invocation_id")
@@ -266,6 +278,11 @@ def build_graph(
             "context": sanitize_context(state.get("context", {})),
             "execution_mode": state.get("execution_mode") or "live",
             "intent": "general",
+            "customer_intent": None,
+            "intent_confidence": None,
+            "intent_method": None,
+            "intent_error": None,
+            "intent_routing": {},
             "risk_level": "low",
             "route": "deliberate",
             "route_reason": "pending",
@@ -298,28 +315,50 @@ def build_graph(
         }
 
     def precheck(state: AgentState) -> dict[str, Any]:
+        classifier_model = model if (settings.model_enabled or settings.model_mock_mode) else None
+        classified = classify(state["normalized_input"], model=classifier_model)
+        intent_routing = routing_for_intent(classified.intent)
         decision = precheck_request(state["normalized_input"], state["context"])
         route = "retrieve" if decision.route == "deliberate" else decision.route
         risk_level = "blocked" if route == "refuse" else "medium" if route == "handoff" else "low"
+        intent_trace = f"intent:{classified.method}:{classified.intent}"
+        if classified.error is not None:
+            intent_trace += f":{classified.error}"
         return {
             "route": route,
             "route_reason": decision.reason,
             "risk_level": risk_level,
-            "trace": [*state["trace"], f"precheck:{decision.route}"],
+            "customer_intent": classified.intent,
+            "intent_confidence": classified.confidence,
+            "intent_method": classified.method,
+            "intent_error": classified.error,
+            "intent_routing": intent_routing,
+            "trace": [*state["trace"], intent_trace, f"precheck:{decision.route}"],
         }
 
     def retrieve(state: AgentState) -> dict[str, Any]:
+        # Reuse ContextBuilder's trusted subject when a pronoun turn omits it.
+        effective_context = dict(state.get("context") or {})
+        previous_subject = contexts.latest_subject(
+            state["tenant_id"], state["session_id"]
+        )
+        for key, value in previous_subject.items():
+            effective_context.setdefault(key, value)
+        intent_routing = state.get("intent_routing") or routing_for_intent(
+            state.get("customer_intent") or "chitchat"
+        )
         documents = knowledge.retrieve(
             state["normalized_input"],
             top_k=settings.rag_top_k,
             min_score=settings.rag_min_score,
-            intent=None,
+            intent=intent_routing["knowledge_intent"],
             tenant_id=state["tenant_id"],
-            store_id=state["context"].get("store_id") or state["context"].get("shop_id"),
-            sku_id=state["context"].get("sku_id"),
+            store_id=effective_context.get("store_id") or effective_context.get("shop_id"),
+            sku_id=effective_context.get("sku_id"),
             rollout_unit=state["session_id"],
         )
         return {
+            "context": effective_context,
             "retrieved": documents,
             "citations": [document["id"] for document in documents],
             "trace": [*state["trace"], f"retrieve:initial:{len(documents)}"],
@@ -409,6 +448,9 @@ def build_graph(
             step_count=state["react_step"],
             max_steps=settings.max_react_steps,
             knowledge_budget_tokens=knowledge_budget,
+            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
+            sop_intent=(state.get("intent_routing") or {}).get("sop_intent"),
+            knowledge_intent=(state.get("intent_routing") or {}).get("knowledge_intent"),
         )
         budget_trace = (
             f"context:budget:kept{history_meta['kept']}"
@@ -499,6 +541,27 @@ def build_graph(
         if business_action and route not in {"act", "handoff", "refuse", "finish"}:
             route = "handoff"
             reason = "business_action_requires_verified_execution"
+        if (
+            decision.confidence < settings.handoff_confidence_threshold
+            and route in {"answer", "finish"}
+            and decision.reason != "approved_knowledge_reuse"
+        ):
+            route = "handoff"
+            reason = "low_confidence_handoff"
+        customer_intent = state.get("customer_intent")
+        if customer_intent == "complaint":
+            if risk_level == "low":
+                risk_level = "medium"
+            if route not in {"handoff", "refuse"}:
+                route = "handoff"
+                reason = "complaint_attention_required"
+        if route not in {"handoff", "refuse"}:
+            recent_reasons = db.recent_assistant_route_reasons(state["session_id"], 2)
+            if len(recent_reasons) == 2 and all(
+                item in LOW_QUALITY_ROUTE_REASONS for item in recent_reasons
+            ):
+                route = "handoff"
+                reason = "consecutive_low_quality"
         shadow = state.get("execution_mode") == "shadow"
         active_sop = None
         if not shadow:
@@ -804,6 +867,7 @@ def build_graph(
             history=history,
             verified_tool_result=verified_result,
             knowledge_budget_tokens=knowledge_budget,
+            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
         )
         budget_trace = (
             f"context:budget:kept{history_meta['kept']}"
@@ -911,23 +975,26 @@ def build_graph(
             business_context["order_id"] = normalize_text(str(order_id))[:128]
         if isinstance(store_id, (str, int)) and not isinstance(store_id, bool):
             business_context["store_id"] = normalize_text(str(store_id))[:128]
+        handoff_payload = {
+            "trace_id": state["trace_id"],
+            "intent": state.get("customer_intent") or state["intent"],
+            "risk_level": state["risk_level"],
+            "question": safe_question,
+            "selected_tool": state.get("selected_tool"),
+            "react_step": state.get("react_step", 0),
+            "context_snapshot_id": state.get("context_snapshot_id"),
+            "context_readiness": state.get("context_readiness"),
+            "context_conflicts": state.get("context_conflicts", []),
+            "business_context": business_context,
+        }
+        if state.get("customer_intent") == "complaint":
+            handoff_payload["priority_flag"] = "complaint"
         task = handoffs.create(
             tenant_id=state["tenant_id"],
             session_id=state["session_id"],
             message_id=state["message_id"],
             reason=reason,
-            payload={
-                "trace_id": state["trace_id"],
-                "intent": state["intent"],
-                "risk_level": state["risk_level"],
-                "question": safe_question,
-                "selected_tool": state.get("selected_tool"),
-                "react_step": state.get("react_step", 0),
-                "context_snapshot_id": state.get("context_snapshot_id"),
-                "context_readiness": state.get("context_readiness"),
-                "context_conflicts": state.get("context_conflicts", []),
-                "business_context": business_context,
-            },
+            payload=handoff_payload,
         )
         return {
             "answer": answer,
