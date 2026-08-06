@@ -149,6 +149,9 @@ class Database:
             if 25 not in applied:
                 self._apply_v25(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (25, ?)", (utc_now(),))
+            if 26 not in applied:
+                self._apply_v26(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (26, ?)", (utc_now(),))
             if 27 not in applied:
                 self._apply_v27(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (27, ?)", (utc_now(),))
@@ -2175,6 +2178,19 @@ class Database:
         )
 
     @classmethod
+    def _apply_v26(cls, conn: sqlite3.Connection) -> None:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type='table' AND name='competitor_observations'"
+        ).fetchone()
+        if exists is None:
+            return
+        cls._ensure_column(conn, "competitor_observations", "rating_value", "TEXT")
+        cls._ensure_column(conn, "competitor_observations", "rating_scale", "TEXT")
+        cls._ensure_column(conn, "competitor_observations", "sales_rank", "INTEGER")
+        cls._ensure_column(conn, "competitor_observations", "rank_scope", "TEXT")
+
+    @classmethod
     def _apply_v27(cls, conn: sqlite3.Connection) -> None:
         exists = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'"
@@ -2236,6 +2252,10 @@ class Database:
                 "competitor_sku",
                 "payload_hash",
                 "entity_match_id",
+                "rating_value",
+                "rating_scale",
+                "sales_rank",
+                "rank_scope",
             },
             "sop_definitions": {"tenant_id", "sop_key", "current_active_version"},
             "sop_versions": {"definition_id", "version", "dsl_json", "status"},

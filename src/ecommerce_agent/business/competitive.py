@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from ..database import Database, utc_now
 from ..text_utils import redact_sensitive
-from .source_versioning import canonical_source_time, payload_digest
+from .source_versioning import canonical_source_time, decide_write, payload_digest
 
 
 CompetitorSource = Literal[
@@ -22,6 +22,75 @@ CompetitorSource = Literal[
 CompetitiveAlertStatus = Literal["open", "acknowledged", "resolved"]
 CompetitiveMatchStatus = Literal["pending", "approved", "rejected"]
 CompetitiveSignalType = Literal["product_claim", "review_summary"]
+
+_OBSERVATION_V26_PAYLOAD_FIELDS = frozenset(
+    {"rating_value", "rating_scale", "sales_rank", "rank_scope"}
+)
+
+
+def _observation_payload_hash_candidates(payload: dict[str, Any]) -> set[str]:
+    omission_sets: list[frozenset[str]] = [frozenset()]
+    entity_match_omission = frozenset({"entity_match_id"})
+    if payload.get("entity_match_id") is None:
+        omission_sets.append(entity_match_omission)
+    if all(payload.get(field) is None for field in _OBSERVATION_V26_PAYLOAD_FIELDS):
+        omission_sets.append(_OBSERVATION_V26_PAYLOAD_FIELDS)
+        if payload.get("entity_match_id") is None:
+            omission_sets.append(
+                _OBSERVATION_V26_PAYLOAD_FIELDS | entity_match_omission
+            )
+    return {
+        payload_digest(
+            {key: value for key, value in payload.items() if key not in omitted_fields}
+        )
+        for omitted_fields in omission_sets
+    }
+
+
+class CompetitiveCustomDimension(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=64)
+    label: str = Field(min_length=1, max_length=64)
+    value_type: Literal["text", "number", "boolean"]
+    value_text: str | None = Field(default=None, max_length=200)
+    value_number: Decimal | None = None
+    value_boolean: bool | None = None
+    unit: str | None = Field(default=None, max_length=32)
+
+    @field_validator("key", "label", "value_text", "unit")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("custom dimension text cannot be blank")
+        return normalized
+
+    @field_validator("key")
+    @classmethod
+    def reject_control_characters(cls, value: str) -> str:
+        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+            raise ValueError("custom dimension key cannot contain control characters")
+        return value
+
+    @model_validator(mode="after")
+    def validate_typed_value(self) -> "CompetitiveCustomDimension":
+        fields = {
+            "text": self.value_text,
+            "number": self.value_number,
+            "boolean": self.value_boolean,
+        }
+        if fields[self.value_type] is None or any(
+            value is not None
+            for value_type, value in fields.items()
+            if value_type != self.value_type
+        ):
+            raise ValueError("custom dimension must provide exactly its typed value")
+        if self.value_type != "number" and self.unit is not None:
+            raise ValueError("custom dimension unit is only valid for number values")
+        return self
 
 
 class CompetitiveProductIdentity(BaseModel):
@@ -33,6 +102,10 @@ class CompetitiveProductIdentity(BaseModel):
     category: str | None = Field(default=None, max_length=200)
     gtin: str | None = Field(default=None, max_length=64)
     attributes: dict[str, str] = Field(default_factory=dict)
+    custom_dimensions: list[CompetitiveCustomDimension] = Field(
+        default_factory=list,
+        max_length=32,
+    )
 
     @field_validator("gtin")
     @classmethod
@@ -59,6 +132,17 @@ class CompetitiveProductIdentity(BaseModel):
                 raise ValueError("identity attribute exceeds length limit")
             cleaned[normalized_key] = normalized_value
         return cleaned
+
+    @field_validator("custom_dimensions")
+    @classmethod
+    def validate_custom_dimensions(
+        cls,
+        value: list[CompetitiveCustomDimension],
+    ) -> list[CompetitiveCustomDimension]:
+        keys = [dimension.key.casefold() for dimension in value]
+        if len(keys) != len(set(keys)):
+            raise ValueError("custom dimension keys must be unique")
+        return value
 
 
 class CompetitiveEntityMatchCreate(BaseModel):
@@ -168,6 +252,10 @@ class CompetitorObservationCreate(BaseModel):
     subject_price: Decimal = Field(gt=0)
     competitor_price: Decimal = Field(gt=0)
     currency: str = Field(default="CNY", min_length=3, max_length=3)
+    rating_value: Decimal | None = Field(default=None, ge=0)
+    rating_scale: Decimal | None = Field(default=None, gt=0)
+    sales_rank: int | None = Field(default=None, ge=1)
+    rank_scope: str | None = Field(default=None, min_length=1, max_length=200)
     source_type: CompetitorSource
     source_ref: str = Field(min_length=4, max_length=500)
     is_estimate: bool = True
@@ -181,10 +269,30 @@ class CompetitorObservationCreate(BaseModel):
         canonical_source_time(value)
         return value
 
+    @field_validator("rank_scope")
+    @classmethod
+    def normalize_rank_scope(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("rank_scope cannot be blank")
+        return normalized
+
     @model_validator(mode="after")
     def protect_virtual_provenance(self) -> "CompetitorObservationCreate":
         if self.source_type == "virtual" and not self.is_estimate:
             raise ValueError("virtual competitor observations must be marked as estimates")
+        if (self.rating_value is None) != (self.rating_scale is None):
+            raise ValueError("rating_value and rating_scale must be provided together")
+        if (
+            self.rating_value is not None
+            and self.rating_scale is not None
+            and self.rating_value > self.rating_scale
+        ):
+            raise ValueError("rating_value cannot exceed rating_scale")
+        if (self.sales_rank is None) != (self.rank_scope is None):
+            raise ValueError("sales_rank and rank_scope must be provided together")
         return self
 
 
@@ -649,17 +757,28 @@ class CompetitiveIntelligenceService:
                     )
                 ):
                     raise ValueError("competitive_match_scope_mismatch")
-            existing = conn.execute(
-                """
-                SELECT * FROM competitor_observations
-                WHERE tenant_id=? AND connector_id=? AND store_id=?
-                  AND subject_sku=? AND competitor_sku=? AND observed_at=?
-                """,
-                (
-                    tenant_id, value.connector_id, value.store_id, value.subject_sku,
-                    value.competitor_sku, observed_at,
-                ),
-            ).fetchone()
+            if value.source_id:
+                existing = conn.execute(
+                    """
+                    SELECT * FROM competitor_observations
+                    WHERE tenant_id=? AND connector_id=? AND source_id=?
+                    ORDER BY observed_at DESC, created_at DESC
+                    LIMIT 1
+                    """,
+                    (tenant_id, value.connector_id, value.source_id),
+                ).fetchone()
+            else:
+                existing = conn.execute(
+                    """
+                    SELECT * FROM competitor_observations
+                    WHERE tenant_id=? AND connector_id=? AND store_id=?
+                      AND subject_sku=? AND competitor_sku=? AND observed_at=?
+                    """,
+                    (
+                        tenant_id, value.connector_id, value.store_id,
+                        value.subject_sku, value.competitor_sku, observed_at,
+                    ),
+                ).fetchone()
             if existing is not None:
                 existing_hash = str(existing["payload_hash"] or "")
                 if not existing_hash:
@@ -678,37 +797,49 @@ class CompetitiveIntelligenceService:
                         observed_at=existing["observed_at"],
                         source_id=existing["source_id"],
                     ).model_dump(mode="json")
-                    legacy["observed_at"] = observed_at
+                    legacy["observed_at"] = str(existing["observed_at"])
                     existing_hash = payload_digest(legacy)
-                legacy_payload = dict(payload)
-                legacy_payload.pop("entity_match_id", None)
-                legacy_hash = payload_digest(legacy_payload)
-                if existing_hash not in {payload_hash, legacy_hash}:
-                    raise ValueError("observation_version_conflict")
-                write_status = "idempotent"
-                observation_id = str(existing["id"])
-                if not existing["payload_hash"]:
-                    conn.execute(
-                        "UPDATE competitor_observations SET payload_hash=? WHERE id=?",
-                        (payload_hash, observation_id),
-                    )
-            else:
+                compatible_hashes = _observation_payload_hash_candidates(payload)
+                comparable_hash = (
+                    existing_hash if existing_hash in compatible_hashes else payload_hash
+                )
+                write_decision = decide_write(
+                    existing_source_time=str(existing["observed_at"]),
+                    existing_payload_hash=existing_hash,
+                    incoming_source_time=observed_at,
+                    incoming_payload_hash=comparable_hash,
+                )
+                if write_decision == "idempotent":
+                    write_status = "idempotent"
+                    observation_id = str(existing["id"])
+                    if not existing["payload_hash"]:
+                        conn.execute(
+                            "UPDATE competitor_observations SET payload_hash=? WHERE id=?",
+                            (payload_hash, observation_id),
+                        )
+                else:
+                    existing = None
+            if existing is None:
                 conn.execute(
                     """
                     INSERT INTO competitor_observations(
                         id, tenant_id, connector_id, store_id, subject_sku,
                         competitor_name, competitor_sku, subject_price, competitor_price,
-                        currency, source_type, source_ref, is_estimate, observed_at,
-                        source_id, created_at, payload_hash, entity_match_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        currency, rating_value, rating_scale, sales_rank, rank_scope,
+                        source_type, source_ref, is_estimate, observed_at, source_id,
+                        created_at, payload_hash, entity_match_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         observation_id, tenant_id, value.connector_id, value.store_id,
                         value.subject_sku, value.competitor_name, value.competitor_sku,
                         str(value.subject_price), str(value.competitor_price),
-                        value.currency.upper(), value.source_type, value.source_ref,
-                        int(value.is_estimate), observed_at, value.source_id, now, payload_hash,
-                        value.entity_match_id,
+                        value.currency.upper(),
+                        str(value.rating_value) if value.rating_value is not None else None,
+                        str(value.rating_scale) if value.rating_scale is not None else None,
+                        value.sales_rank, value.rank_scope, value.source_type, value.source_ref,
+                        int(value.is_estimate), observed_at, value.source_id, now,
+                        payload_hash, value.entity_match_id,
                     ),
                 )
             row = conn.execute(
@@ -2030,6 +2161,13 @@ class CompetitiveIntelligenceService:
             if "entity_match_status" in row
             else self._match_brief(row["tenant_id"], row.get("entity_match_id"))
         )
+        rating_value = row.get("rating_value")
+        rating_scale = row.get("rating_scale")
+        normalized_rating = None
+        if rating_value is not None and rating_scale is not None:
+            normalized_rating = self._decimal(
+                Decimal(str(rating_value)) / Decimal(str(rating_scale)) * Decimal("5")
+            )
         return {
             "id": row["id"],
             "connector_id": row["connector_id"],
@@ -2040,6 +2178,11 @@ class CompetitiveIntelligenceService:
             "subject_price": row["subject_price"],
             "competitor_price": row["competitor_price"],
             "currency": row["currency"],
+            "rating_value": rating_value,
+            "rating_scale": rating_scale,
+            "normalized_rating": normalized_rating,
+            "sales_rank": row.get("sales_rank"),
+            "rank_scope": row.get("rank_scope"),
             "source_type": row["source_type"],
             "source_ref": row["source_ref"],
             "is_estimate": bool(row["is_estimate"]),
