@@ -28,6 +28,12 @@ commerce_orders + commerce_order_lines
 
 目标不是“必须使用 AI 模型”，而是预测决策不能比可靠的简单 baseline 更差。
 
+对应原始诉求的映射：「历史销售数据」= 订单行重建的日需求事实（§3、§4.1）；
+「当前仓库数量」= 库存快照聚合的 `available = on_hand - reserved`（V1 多仓汇总，§7）；
+「预测未来卖货数量」= 未来 7/14/30 天逐日 P50/P80/P95 需求（§4.5、§7）。
+**WP1 + WP2 构成对应原始诉求的最小可交付**；WP3 库存计划是其自然延伸，可在预测
+链路验收后再进入。
+
 ## 2. 范围与边界
 
 ### 范围内
@@ -77,7 +83,11 @@ rebuild_lookback_days
 
 ## 4. 数据模型
 
-### 4.1 `demand_daily_facts`（schema v29）
+§4.1–§4.6 属需求预测迁移（占号表当前为 v29），§4.7–§4.8 属库存计划迁移（当前为
+v30）。Schema 版本号以 `CONTRIBUTING.md`「Schema 版本号占用登记」表为单一来源
+（D-035），本文各小节不再重复标注版本号。
+
+### 4.1 `demand_daily_facts`
 
 ```text
 id
@@ -108,7 +118,7 @@ created_at
 - `stockout_flag` 支持 `true / false / unknown`，不能把未知静默当作未缺货。
 - 无订单日需补零还是标缺失由 policy 固定；数据源中断不能被当作真实零需求。
 
-### 4.2 `forecast_policies`（schema v29）
+### 4.2 `forecast_policies`
 
 ```text
 policy_id
@@ -128,7 +138,7 @@ created_at
 
 店铺默认策略可被 SKU 策略覆盖；解析优先级由代码固定并返回最终 policy evidence。
 
-### 4.3 `forecast_runs`（schema v29）
+### 4.3 `forecast_runs`
 
 ```text
 run_id
@@ -153,12 +163,12 @@ status
 created_at
 ```
 
-### 4.4 `forecast_backtests`（schema v29）
+### 4.4 `forecast_backtests`
 
 每个候选模型、每个 rolling origin 窗口都保存训练截止日、预测区间、actual、forecast、
 误差和失败原因。模型选择必须能追溯到这些结果。
 
-### 4.5 `forecast_points`（schema v29）
+### 4.5 `forecast_points`
 
 ```text
 point_id
@@ -173,12 +183,12 @@ created_at
 
 分位数必须满足 `P50 <= P80 <= P95`；非法输出使 run 失败，不能排序后伪装修复。
 
-### 4.6 `forecast_anomalies`（schema v29）
+### 4.6 `forecast_anomalies`
 
 记录数据缺口、异常峰值、持续偏差、模型失败、区间非法、冷启动和受截断需求过多等问题，
 并包含 evidence 与处置状态。
 
-### 4.7 `inventory_planning_policies`（schema v30）
+### 4.7 `inventory_planning_policies`
 
 ```text
 policy_id
@@ -201,7 +211,7 @@ created_at
 V1 即使保存 `warehouse_id` 可选覆盖，也只把仓库库存作为 supply location；需求预测仍是
 store + SKU 粒度。不得把同一店铺的总预测复制到每个仓库。
 
-### 4.8 `inventory_plans`（schema v30）
+### 4.8 `inventory_plans`
 
 保存 forecast run、policy version、库存快照、在途、reorder point、target stock、建议数量、
 预计缺货日期、风险等级、舍入过程和 created_at。历史计划不可因库存更新而原地变化。
@@ -336,7 +346,8 @@ get_inventory_plan
 - 无订单、数据缺失和真实零需求可区分。
 - 缺货明确、未缺货和未知三种状态可区分。
 - 任何 forecast 输入都能追溯到订单事实、水位和 policy version。
-- v28 → v29 前向迁移与租户隔离通过。
+- 从 `main` 当前最高已合并版本前向迁移与租户隔离通过。若 M5-R（v28）尚未合入，
+  允许 v27 → v29 跳号迁移，不得为凑号实现空的 `_apply_v28`（跳号先例见 v24 → v26）。
 
 依赖：现有 orders/catalog/inventory 公开领域服务，不直接绕过服务写表。
 
@@ -382,6 +393,7 @@ get_inventory_plan
 
 - 后台展示历史需求、预测区间、库存线、预计缺货日期、建议量和 backtest。
 - Agent 回答引用 forecast run、库存快照、policy 和数据质量证据。
+- Agent 工具经动态目录由模型选择，客服链路不为 forecasting 新增关键词路由（D-034）。
 - 模型不可用时预测和补货仍完全可用；AI 只做解释。
 - 冷启动、受截断过多或输入过期时显式降级，不伪报高置信度。
 - 租户隔离、审计和 API 错误契约完整。
@@ -411,7 +423,39 @@ get_inventory_plan
 
 依赖：WP1、WP2；库存决策场景需 WP3。
 
-## 10. Definition of Done
+## 10. 实现纪律（执行者必读）
+
+本任务书晚于 2026-08-07 的决策权边界与可演进性规范定稿，实现必须遵守
+`CONTRIBUTING.md` 第 10、11 节（D-034、D-035），审计背景见
+`docs/AUDIT_ROUTING_EVOLVABILITY_20260807.md`。落到本模块：
+
+**决策权边界（D-034）**
+
+- 需求重建、模型训练、backtest、champion 选择、库存公式全部是确定性计算，由代码
+  固化——这正是 D-034 允许写死的一侧，本模块没有任何环节需要关键词/正则做语义判断。
+- AI 的唯一角色是读取结构化结果做解释（趋势成因、风险陈述、建议理由）；不得让 AI
+  改预测数字、champion 选择或补货量（§7 已定，此处升格为规范约束）。
+- 冷启动、数据质量降级等状态判定按数值规则，不按文本关键词。
+
+**测试与 mock 纪律**
+
+- backtest/公式的数值断言属于「自身增量」，放开写；但不新增全局计数全等断言
+  （场景总数、模块总数、拓扑快照），需要动既有全等断言时按第 11 节改下界/成员断言。
+- mock 模型不得内置任何预测逻辑；「模型不得被调用」断言仅限 D-005 契约——本模块
+  预测链路本来就不依赖 LLM，天然满足。
+- Eval ground truth 与生产输入物理隔离（WP5 已定）；Eval 判定使用数值断言。
+
+**Schema 与注册纪律（D-035）**
+
+- 迁移按 `CONTRIBUTING.md` 第 9 节占号规则执行；v29 与 v30 拆成两个独立迁移，写
+  `_apply_vNN` 前先全分支搜同名。
+- 迁移加表时同步在 `_validate_schema` 的 required 清单加条目，并**确认没有制造重复
+  字典键**（该函数曾因重复键静默吞掉 v25 校验）。
+- 灾备 manifest 精确比对 schema 版本：v29/v30 合入后历史备份不可恢复，迁移 PR 必须
+  写明备份策略（升级后立即全量新备份，见 CONTRIBUTING 第 11 节）。
+- `forecasting` 模块登记为 `available` 前须按 D-030 补虚拟店铺场景；未实现不登记。
+
+## 11. Definition of Done
 
 M6-R 只有在以下条件全部满足后才能从设计/开发状态进入本机候选：
 

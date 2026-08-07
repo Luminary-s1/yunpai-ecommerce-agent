@@ -102,6 +102,9 @@ v28 预留给旧 M5 的 `ops_operation_records.sku_id`；截至 2026-08-07，对
 | v30 | Inventory planning：planning policy、inventory plan | 已预留，未实现 |
 | v31+ | 后续真实需求 | 未分配，按开发时的协调表认领 |
 
+本表是 `CONTRIBUTING.md`「Schema 版本号占用登记」的快照，**以 CONTRIBUTING 为单一
+来源**（D-035）；两表不一致时以 CONTRIBUTING 为准并回改本表。
+
 任何在外部未同步分支上继续使用旧 v28 用途的改动都不得直接合入；应先停止旧 M5 工作并
 与模块负责人核对。迁移实现仍需遵守 `CONTRIBUTING.md` 的占号、命名、向前兼容和全量回归规则。
 
