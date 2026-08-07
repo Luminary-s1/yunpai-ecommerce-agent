@@ -7,7 +7,7 @@
 > [路线重置说明](../../ROADMAP_RESET_20260807.md)。
 
 > 供粘贴到团队任务管理网页。本文件只写待办与需求，不写完成状态；
-> 真实完成情况见 `docs/tasks/PROGRESS.md`。
+> 归档时的历史快照见 `docs/tasks/archive/PROGRESS_20260807.md`。
 
 ---
 
@@ -149,12 +149,12 @@ ROI 等所有数值由代码计算，模型只负责文字解读与文案撰写�
 | 5 | 运营分析与报告生成开发     | F-307 / F-308 → F-311         |      4 | 开发     | 谢良璇     |
 
 本模块依赖的前置基础工作（利润费用截断修复、macOS 快速启动文档）明细见
-`docs/tasks/PLATFORM_WORKBENCH.md`。
+`docs/tasks/archive/PLATFORM_WORKBENCH.md`。
 
 ### 本次划分说明
 
 模块主体已实现（F-311，代码在 `main`），上表各包对应的是**任务书验收标准里尚未
-覆盖的缺口**，不是从零开发。逐项对照见 `docs/tasks/PROGRESS.md` 的 M5 一节。
+覆盖的缺口**，不是从零开发。历史对照见 `docs/tasks/archive/PROGRESS_20260807.md` 的 M5 一节。
 
 - **工作包 5 整包交给谢良璇**，报告层。它是叶子节点：只消费已入库的运营
   数据，不阻塞其余三个包，也不被它们阻塞；六项内容全部是确定性计算、配置抽取与
@@ -479,7 +479,7 @@ ROI 等所有数值由代码计算，模型只负责文字解读与文案撰写�
   "inputs": [
     "main 分支既有实现：src/ecommerce_agent/business/ops_assistant.py 的 parse_dataset、_rows_from_csv、_rows_from_json、_normalize_row",
     "工作包 3 定稿的字段级错误结构（前置依赖）",
-    "docs/tasks/PROGRESS.md 的 M5 一节：勾选项为已实现，不重复建设"
+    "docs/tasks/archive/PROGRESS_20260807.md 的 M5 一节：归档时的实现快照"
   ],
   "steps": [
     "1. 解析结果缓存（6h）：按文件内容哈希命中缓存，缓存键必须含租户维度",
@@ -711,7 +711,7 @@ ROI 等所有数值由代码计算，模型只负责文字解读与文案撰写�
     "main 分支既有实现：src/ecommerce_agent/business/ops_assistant.py 的 COLUMN_ALIASES、_normalize_row、_row_error、validate_funnel、list_records",
     "三种平台（淘宝 / 京东 / 抖音）商家后台的真实导出模板文件",
     "F-305 商品与渠道 SKU 事实模块的 SKU 口径定义",
-    "docs/tasks/PROGRESS.md 的 M5 一节：勾选项为已实现，不重复建设"
+    "docs/tasks/archive/PROGRESS_20260807.md 的 M5 一节：归档时的实现快照"
   ],
   "steps": [
     "1. 平台适配器（8h）：把 COLUMN_ALIASES 单张映射表拆成三套平台适配器，通用中英文映射保留为兜底；每套含列名映射与数值清洗",
@@ -1252,7 +1252,7 @@ template_fallback，混合结果不得被误标为纯模型生成；
     "main 分支既有实现：src/ecommerce_agent/business/ops_assistant.py 的 analysis_report、_trends、_split_halves、_findings、_model_narrative",
     "已入库的运营日记录 ops_operation_records——不需要等待工作包 3 的平台适配器",
     "docs/tasks/archive/M5_HANDOFF.md：交接说明，含每项改动的代码落点行号",
-    "docs/tasks/PROGRESS.md 的 M5 一节：勾选项为已实现，不重复建设",
+    "docs/tasks/archive/PROGRESS_20260807.md 的 M5 一节：归档时的实现快照",
     "CONTRIBUTING.md：分支与 PR 流程、反证要求、schema 占号规则"
   ],
   "steps": [

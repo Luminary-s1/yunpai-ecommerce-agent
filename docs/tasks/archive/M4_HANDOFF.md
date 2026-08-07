@@ -1,5 +1,9 @@
 # M4 智能客服后端模块 — 交接说明
 
+> **ARCHIVED（2026-08-07）**：旧分工与旧进度只作历史记录。当前 M4 五个工作包统一由
+> 闫睿涵负责；实际状态只在负责人工作台网页维护，当前任务书见
+> [M4_WORKBENCH.md](../M4_WORKBENCH.md)。
+
 面向胡磊，承接**工作包「客服对话引擎端到端联调与交付」**。读完这一份加根目录的
 `CONTRIBUTING.md` 就能开工。
 
@@ -129,7 +133,7 @@ D17 已由模块负责人完成（`simulation.py` + `test_virtual_store_simulati
 | `CONTRIBUTING.md` | 开发规范、PR 流程、项目决策、常见的坑 |
 | `docs/tasks/M4_WORKBENCH.md` | 五个工作包的完整需求与验收标准 |
 | `docs/tasks/archive/M6_HANDOFF.md` | 第 4/5/6 节：仓库、环境、反证（本文档不重复） |
-| `docs/tasks/PROGRESS.md` | 已实现 / 待实现清单 + 分工进度总览，先看这个 |
+| `docs/tasks/archive/PROGRESS_20260807.md` | 归档时的历史进度快照，不作为当前依据 |
 | `docs/works/archive/12-feature-m5-operations-assistant/README.md` | 历史交付文档的格式参考 |
 | `.project-to-act/PROJECT_OVERVIEW.md` | 完整的项目决策记录（D-001 起） |
 

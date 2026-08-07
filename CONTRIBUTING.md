@@ -224,10 +224,10 @@ verified all four context budget tests pass.
 |---|---|
 | `docs/ROADMAP_RESET_20260807.md` | 2026-08-07 路线重置、新旧里程碑边界与实施顺序 |
 | `docs/tasks/README.md` | 当前任务文档入口与历史归档索引 |
-| `docs/tasks/M5R_TRAFFIC_LAB_WORKBENCH.md` | M5-R 流量实验模块的工作包、数据模型与验收 |
-| `docs/tasks/M6R_DEMAND_FORECAST_WORKBENCH.md` | M6-R 需求预测模块的工作包、数据模型与验收 |
+| `docs/tasks/M5R_TRAFFIC_LAB_WORKBENCH.md` | M5-R 流量实验任务书、数据模型与验收 |
+| `docs/tasks/M6R_DEMAND_FORECAST_WORKBENCH.md` | M6-R 需求预测任务书、数据模型与验收 |
 | `docs/tasks/archive/` | 已冻结的旧 M5/M6 工作台与交接说明，只保留历史上下文 |
-| `docs/tasks/PROGRESS.md` | 各模块已实现与待实现项的复选框清单 |
+| `docs/tasks/PROGRESS.md` | 进度记录规则；实际状态只在负责人工作台网页维护 |
 | `.project-to-act/PROJECT_FEATURES.md` | 功能台账，F-xxx 编号与状态 |
 | `docs/works/` | 交付文档；已冻结里程碑的证据归入 `docs/works/archive/` |
 
@@ -320,16 +320,16 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 2026-08-05 一次合并撞出 24 个冲突块，**全部在协调文档里，代码零冲突**，其中
 23 个是「同一张表被两个人从不同分支改了数字或名字」。所以有下面四条：
 
-**1. 可变状态不进 git。** 工时、剩余、进度百分比一律不写进文档，进度以飞书
-机器人为唯一源。`*_WORKBENCH.md` 的表只留任务名、关联子功能、优先级、
-工作类型、承接人——这些不会天天变。已按此清理，别再加回来。
+**1. 可变状态不进 git。** 工时、剩余、进度百分比、状态、日期、优先级、派发、日报
+和周报一律不写进文档，负责人工作台网页是唯一源。`*_WORKBENCH.md` 只保留任务范围、
+需求、验收、交付、依赖与负责人。已按此清理，别再加回来。
 
 **2. 文档有主，功能分支不碰别人的。**
 
 | 文档 | 谁能改 |
 |---|---|
-| `docs/tasks/M*_WORKBENCH.md`、`M*_HANDOFF.md` | 该模块承接人 |
-| `docs/tasks/PROGRESS.md`、`CONTRIBUTING.md`、一切分工调整 | 模块负责人，且只在 `main` 上改 |
+| `docs/tasks/*WORKBENCH.md` | 闫睿涵 |
+| `docs/tasks/PROGRESS.md`、`CONTRIBUTING.md`、一切分工调整 | 闫睿涵，且只在 `main` 上改 |
 
 功能分支只改自己模块的文档和代码。要动别人的文档，在群里说，由对应的人改。
 

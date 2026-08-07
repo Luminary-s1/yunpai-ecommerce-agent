@@ -68,7 +68,7 @@ M5 主体实现已经在 `main` 上（功能台账 F-311，
 - 报告读取不复用列表接口的 500 条上限，大数据集不被静默截断
 - 按租户、数据集、日期、渠道幂等写入并版本化
 
-**动手前先读 `docs/tasks/PROGRESS.md` 的 M5 一节**，勾上的是已实现，
+历史实现范围见 `docs/tasks/archive/PROGRESS_20260807.md` 的 M5 一节，
 没勾的才是你要写的。
 
 ### 你要补的六项
@@ -278,7 +278,7 @@ verified all four context budget tests pass.
 |---|---|
 | `CONTRIBUTING.md` | 开发规范、PR 流程、项目决策、常见的坑 |
 | `docs/tasks/archive/M5_WORKBENCH.md` | 五个历史工作包的完整需求与验收标准 |
-| `docs/tasks/PROGRESS.md` | 已实现 / 待实现的复选框清单，先看这个 |
+| `docs/tasks/archive/PROGRESS_20260807.md` | 归档时的历史进度快照 |
 | `src/ecommerce_agent/business/ops_assistant.py` | 本模块主实现，你改的基本都在这里 |
 | `src/ecommerce_agent/ops_assistant_api.py` | 路由层，导出端点加在这里 |
 | `tests/test_ops_assistant.py` | 既有测试，新测试跟着加 |

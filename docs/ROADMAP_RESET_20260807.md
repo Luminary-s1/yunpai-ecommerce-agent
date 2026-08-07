@@ -1,19 +1,19 @@
 # 云湃经营 Agent 路线重置（2026-08-07）
 
-> 状态：路线重置生效，领域设计待负责人评审冻结。
-> 本文定义新的产品主线、工程边界和实施顺序；不表示对应业务能力已经实现。
+> 文档性质：路线决策、产品边界和任务书入口。
+> 实施进度、工时、状态与日期仅在负责人工作台网页记录。
 
 ## 1. 决策摘要
 
 从 2026-08-07 起，项目按以下口径推进：
 
-| 里程碑 | 状态 | 处理方式 |
+| 里程碑 | 定位 | 处理方式 |
 |---|---|---|
-| M4 智能客服 | 已收口 | 保持现有能力与验收基线，后续仅处理缺陷和生产 Gate |
-| 旧 M5 运营辅助与文案生成 | `FROZEN / SUPERSEDED` | 保留代码、API、schema v25 和历史台账，不再补旧 checklist |
-| 旧 M6 竞品分析 | `FROZEN / SUPERSEDED` | 保留代码、API、schema v14/v17/v26 和历史台账，不再补旧 checklist |
-| M5-R 商品流量实验与推流机制分析 | 新主线 | 业务代码统一使用 `traffic_lab`，建设可追溯的受控实验与黑盒统计分析 |
-| M6-R 需求预测与智能补货 | 新主线 | 业务代码统一使用 `forecasting`，从订单事实生成需求时序和补货建议 |
+| M4 智能客服 | 现有客服基线 | 保持现有能力与验收基线，后续仅处理缺陷和生产 Gate |
+| 旧 M5 运营辅助与文案生成 | 历史路线 | 保留代码、API、schema v25 和历史资料，不再补旧 checklist |
+| 旧 M6 竞品分析 | 历史路线 | 保留代码、API、schema v14/v17/v26 和历史资料，不再补旧 checklist |
+| M5-R 商品流量实验与推流机制分析 | 当前任务书 | 业务代码统一使用 `traffic_lab`，建设可追溯的受控实验与黑盒统计分析 |
+| M6-R 需求预测与智能补货 | 当前任务书 | 业务代码统一使用 `forecasting`，从订单事实生成需求时序和补货建议 |
 
 冻结不等于删除或弃用。旧 M5/M6 的数据库迁移、模块注册、API、测试和后台页面必须继续兼容；
 除非另有缺陷修复任务，不做重命名、迁移或清理。
@@ -132,17 +132,16 @@ Roadmap Reset
 
 进入业务代码开发前必须同时满足：
 
-- [ ] M5-R 的 revision 身份、窗口归属、metric bucket 时区和重复写入语义已冻结。
-- [ ] M5-R 的实验方法、最小样本、washout 和“无证据时拒绝结论”规则已冻结。
-- [ ] M6-R 的 `demand-v1` 订单状态口径、时区和回补策略已冻结。
-- [ ] M6-R 的 stockout/censored demand 标记来源已确认；无法可靠判断时显式未知。
-- [ ] v28/v29/v30 的表名、外键、索引、租户隔离和迁移拆分已评审。
-- [ ] 两条主线的 synthetic/virtual Eval ground truth 与分析模块物理隔离。
-- [ ] 第一批 GitHub Issues 已按工作包拆分，每个 Issue 有范围、依赖、验收和非目标。
+- M5-R 的 revision 身份、窗口归属、metric bucket 时区和重复写入语义已冻结。
+- M5-R 的实验方法、最小样本、washout 和“无证据时拒绝结论”规则已冻结。
+- M6-R 的 `demand-v1` 订单状态口径、时区和回补策略已冻结。
+- M6-R 的 stockout/censored demand 标记来源已确认；无法可靠判断时显式未知。
+- v28/v29/v30 的表名、外键、索引、租户隔离和迁移拆分已评审。
+- 两条主线的 synthetic/virtual Eval ground truth 与分析模块物理隔离。
+- 第一批 GitHub Issues 已按工作包拆分，每个 Issue 有范围、依赖、验收和非目标。
 
-设计冻结后，再同步 `.project-to-act/PROJECT_OVERVIEW.md`、`PROJECT_PROGRESS.md`、
-`PROJECT_FEATURES.md` 和 `PROJECT_VERSIONS.md`。本次路线文档提交不把未实现能力登记为
-available，也不修改项目版本号。
+设计冻结后，只同步稳定的项目边界、功能与版本事实，不在 `.project-to-act` 或任务书中
+复制网页进度。未实现能力不得登记为 available，也不得提前修改项目版本号。
 
 ## 8. 本次文档影响面
 
@@ -151,7 +150,7 @@ available，也不修改项目版本号。
 - 将旧 M5/M6 workbench 和 handoff 移入 `docs/tasks/archive/`，并标记
   `FROZEN / SUPERSEDED`。
 - 将旧 M6 专属设计稿移入 `docs/superpowers/specs/archive/`，将旧 M5 专属交付证据移入
-  `docs/works/archive/`；共享进度与跨版本测试报告继续保留在原位置。
-- 在 `docs/tasks/PROGRESS.md` 增加 Rebased Roadmap 区域；旧复选框只保留历史证据意义。
+  `docs/works/archive/`；跨版本测试报告继续保留在原位置。
+- `docs/tasks/PROGRESS.md` 只保留网页单一进度源规则；旧快照移入 `docs/tasks/archive/`。
 - 更新 `CONTRIBUTING.md` 的任务索引与 schema 预留。
 - 不改业务代码、数据库、API、依赖、功能状态或版本号。

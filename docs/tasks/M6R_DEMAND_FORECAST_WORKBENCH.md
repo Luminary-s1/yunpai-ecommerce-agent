@@ -1,7 +1,8 @@
-# M6-R 需求预测与智能补货 — 工作台
+# M6-R 需求预测与智能补货 — 任务书
 
 > 代码域：`forecasting`。
-> 状态：设计基线，待负责人评审冻结；所有实现项默认未开始。
+> 文档性质：任务书；实施进度、工时与日期仅在负责人工作台网页记录。
+> 全部工作包统一负责人：**闫睿涵**。
 > 路线依据：[ROADMAP_RESET_20260807.md](../ROADMAP_RESET_20260807.md)。
 
 ## 1. 目标
@@ -324,62 +325,72 @@ get_inventory_plan
 
 ### WP1 Demand Fact 数据层
 
+负责人：**闫睿涵**。
+
 交付：`demand-v1`、schema v29 的 daily facts、全量/增量 builder、水位、回补与质量标记。
 
 验收：
 
-- [ ] 同一订单重放不重复计数，取消/状态更正可追溯回补。
-- [ ] 业务日期严格按策略时区归日，跨日边界有测试。
-- [ ] 无订单、数据缺失和真实零需求可区分。
-- [ ] 缺货明确、未缺货和未知三种状态可区分。
-- [ ] 任何 forecast 输入都能追溯到订单事实、水位和 policy version。
-- [ ] v28 → v29 前向迁移与租户隔离通过。
+- 同一订单重放不重复计数，取消/状态更正可追溯回补。
+- 业务日期严格按策略时区归日，跨日边界有测试。
+- 无订单、数据缺失和真实零需求可区分。
+- 缺货明确、未缺货和未知三种状态可区分。
+- 任何 forecast 输入都能追溯到订单事实、水位和 policy version。
+- v28 → v29 前向迁移与租户隔离通过。
 
 依赖：现有 orders/catalog/inventory 公开领域服务，不直接绕过服务写表。
 
 ### WP2 Forecast Engine
 
+负责人：**闫睿涵**。
+
 交付：baseline、EWMA/WMA、Croston/TSB、需求类型识别、rolling backtest、champion 和区间预测。
 
 验收：
 
-- [ ] 时序切分没有未来泄漏，至少一个反证能证明泄漏门禁有效。
-- [ ] 每个新模型都与 baseline 同窗比较，劣于 baseline 时自动回退。
-- [ ] 平稳、趋势、周季节、间歇、大量零值和冷启动序列有确定结果。
-- [ ] P50/P80/P95 单调且结果可复现。
-- [ ] 失败模型不会阻断仍可用的候选，最终选择理由可解释。
+- 时序切分没有未来泄漏，至少一个反证能证明泄漏门禁有效。
+- 每个新模型都与 baseline 同窗比较，劣于 baseline 时自动回退。
+- 平稳、趋势、周季节、间歇、大量零值和冷启动序列有确定结果。
+- P50/P80/P95 单调且结果可复现。
+- 失败模型不会阻断仍可用的候选，最终选择理由可解释。
 
 依赖：WP1。
 
 ### WP3 Inventory Planning
 
+负责人：**闫睿涵**。
+
 交付：schema v30 planning policy/plan、库存聚合、lead time 分位需求、MOQ/倍数/上限计算。
 
 验收：
 
-- [ ] 同一 forecast、policy 和库存快照产生相同补货结果。
-- [ ] `on_hand - reserved + inbound`、lead/review period 和分位数均有数值断言。
-- [ ] MOQ、order multiple、minimum safety stock 和 maximum stock days 的应用顺序固定。
-- [ ] 多仓不重复计算店铺总需求，V1 仓间分配边界在结果中明确。
-- [ ] 不存在自动采购或付款动作。
+- 同一 forecast、policy 和库存快照产生相同补货结果。
+- `on_hand - reserved + inbound`、lead/review period 和分位数均有数值断言。
+- MOQ、order multiple、minimum safety stock 和 maximum stock days 的应用顺序固定。
+- 多仓不重复计算店铺总需求，V1 仓间分配边界在结果中明确。
+- 不存在自动采购或付款动作。
 
 依赖：WP1、WP2 和现有 inventory service。
 
 ### WP4 API / Agent / Admin
 
+负责人：**闫睿涵**。
+
 交付：forecasting API、两个只读 tools、预测/库存风险后台和完整解释链。
 
 验收：
 
-- [ ] 后台展示历史需求、预测区间、库存线、预计缺货日期、建议量和 backtest。
-- [ ] Agent 回答引用 forecast run、库存快照、policy 和数据质量证据。
-- [ ] 模型不可用时预测和补货仍完全可用；AI 只做解释。
-- [ ] 冷启动、受截断过多或输入过期时显式降级，不伪报高置信度。
-- [ ] 租户隔离、审计和 API 错误契约完整。
+- 后台展示历史需求、预测区间、库存线、预计缺货日期、建议量和 backtest。
+- Agent 回答引用 forecast run、库存快照、policy 和数据质量证据。
+- 模型不可用时预测和补货仍完全可用；AI 只做解释。
+- 冷启动、受截断过多或输入过期时显式降级，不伪报高置信度。
+- 租户隔离、审计和 API 错误契约完整。
 
 依赖：WP1–WP3。
 
 ### WP5 Forecast Eval
+
+负责人：**闫睿涵**。
 
 交付：`evals/forecasting/` synthetic fixtures、独立 ground truth、门禁报告和反证记录。
 
@@ -392,11 +403,11 @@ get_inventory_plan
 
 验收：
 
-- [ ] 所有序列使用 rolling-origin backtest。
-- [ ] champion 从候选中按固定规则选出，结果不优于 baseline 时自动 fallback。
-- [ ] 方向性 bias、WAPE 可比性和区间覆盖均有门禁。
-- [ ] Eval ground truth 不进入生产 forecast 输入。
-- [ ] 临时破坏关键算法后对应测试如期失败，恢复后复验通过。
+- 所有序列使用 rolling-origin backtest。
+- champion 从候选中按固定规则选出，结果不优于 baseline 时自动 fallback。
+- 方向性 bias、WAPE 可比性和区间覆盖均有门禁。
+- Eval ground truth 不进入生产 forecast 输入。
+- 临时破坏关键算法后对应测试如期失败，恢复后复验通过。
 
 依赖：WP1、WP2；库存决策场景需 WP3。
 
@@ -404,10 +415,10 @@ get_inventory_plan
 
 M6-R 只有在以下条件全部满足后才能从设计/开发状态进入本机候选：
 
-- [ ] `demand-v1` 和 business date 口径冻结且可重放。
-- [ ] 缺货/未知/数据缺失不会被静默当成真实低需求或零需求。
-- [ ] 每个 SKU 的 champion 经过无泄漏 rolling backtest，并保留 baseline fallback。
-- [ ] 输出逐日 P50/P80/P95、质量等级、backtest 指标和选择理由。
-- [ ] 库存计划为确定性可测计算，仓库级边界和所有舍入过程可解释。
-- [ ] 两个 Agent tools 只读，后台与 Eval 有完整证据。
-- [ ] 全量回归通过，旧 M5/M6 API、迁移与模块行为无回归。
+- `demand-v1` 和 business date 口径冻结且可重放。
+- 缺货/未知/数据缺失不会被静默当成真实低需求或零需求。
+- 每个 SKU 的 champion 经过无泄漏 rolling backtest，并保留 baseline fallback。
+- 输出逐日 P50/P80/P95、质量等级、backtest 指标和选择理由。
+- 库存计划为确定性可测计算，仓库级边界和所有舍入过程可解释。
+- 两个 Agent tools 只读，后台与 Eval 有完整证据。
+- 全量回归通过，旧 M5/M6 API、迁移与模块行为无回归。

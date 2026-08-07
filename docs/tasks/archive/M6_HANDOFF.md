@@ -64,7 +64,7 @@ M5 两个包的顺序与依赖见 `docs/tasks/archive/M5_WORKBENCH.md` 各包的
 3. 等缪海南的数据模型包定稿后，做「竞品数据采集与结构化管理」取数适配层
 4. M5 验收测试最后做，要等缪海南、模块负责人和谢良璇都交付
 
-M4 那个包是 M4 的独立验收出口，说明见 `docs/tasks/M4_HANDOFF.md`。
+M4 那个包是 M4 的旧独立验收出口，历史说明见 `docs/tasks/archive/M4_HANDOFF.md`。
 注意：接了它就**不能再接 M4 的开发包**。
 
 ---
@@ -81,7 +81,7 @@ M4 那个包是 M4 的独立验收出口，说明见 `docs/tasks/M4_HANDOFF.md`�
   `/monitors`、`/alerts`、`/overview`、`/analysis`
 - 来源版本 + 载荷哈希的去重与冲突拒绝
 
-**动手前先读 `docs/tasks/PROGRESS.md` 的 M6 一节**，勾上的是已实现，
+历史实现范围见 `docs/tasks/archive/PROGRESS_20260807.md` 的 M6 一节，
 没勾的才是你们要写的。
 
 ### 实际要补的部分
@@ -251,7 +251,7 @@ verified all four context budget tests pass.
 |---|---|
 | `CONTRIBUTING.md` | 开发规范、PR 流程、项目决策、常见的坑 |
 | `docs/tasks/archive/M6_WORKBENCH.md` | 五个历史工作包的完整需求与验收标准 |
-| `docs/tasks/PROGRESS.md` | 已实现 / 待实现的复选框清单，先看这个 |
+| `docs/tasks/archive/PROGRESS_20260807.md` | 归档时的历史进度快照 |
 | `.project-to-act/PROJECT_FEATURES.md` | 功能台账，F-304 是竞品模块既有部分 |
 | `.project-to-act/PROJECT_OVERVIEW.md` | 完整的项目决策记录（D-001 起） |
 | `src/ecommerce_agent/business/competitive.py` | 竞品模块主实现 |

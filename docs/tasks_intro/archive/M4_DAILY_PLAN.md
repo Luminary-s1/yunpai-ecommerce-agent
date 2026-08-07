@@ -1,8 +1,11 @@
 # M4 智能客服后端 — 逐日执行计划
 
-> 本文件是 M4 执行的唯一技术依据，自包含，不依赖其他文档。
+> **ARCHIVED（2026-08-07）**：旧逐日计划只读保留，不再更新，也不再创建新的
+> DAILY PLAN。实际进度、工时和排期只在负责人工作台网页维护。
+
+> 本文件是历史执行计划，不再作为技术依据。
 > 工作台填写口径见 `docs/tasks/M4_WORKBENCH.md`；
-> 真实完成状态见 `docs/tasks/PROGRESS.md`。
+> 归档时的历史快照见 `docs/tasks/archive/PROGRESS_20260807.md`。
 
 ## 排期
 
@@ -162,7 +165,7 @@ conventional commits，不加 AI 署名；只 commit 不 push。
   已有的「跳过未结人工任务」约束
 - 写数据模型文档：Session / Message 字段说明 + 四个端点的接口契约
 - 全量回归；按子任务分 commit（tokens / 接入 / API / TTL 各一个）
-- 更新 `docs/tasks/PROGRESS.md` 复选框，工作台剩余工时改 0
+- 历史记录曾要求更新 `docs/tasks/archive/PROGRESS_20260807.md`；当前不再执行
 
 **产出**：WP1 完整交付
 **判据**：空闲 121 分钟会话自动关闭且带 handoff 的不被关；全量测试通过
@@ -593,7 +596,7 @@ M4 目前在 `docs/works/` 下尚无交付文档。
 
 1. 当日代码单独 commit，英文 conventional commits，不加 AI 署名
 2. 跑当日涉及的定向测试，不必每天跑全量
-3. 更新 `docs/tasks/PROGRESS.md` 复选框
+3. 历史记录曾要求更新 `docs/tasks/archive/PROGRESS_20260807.md`；当前不再执行
 4. 工作台更新剩余工时；有延期当天就填「阻塞或延期原因」，不要事后补
 
 ## 需要停下来找人的情况

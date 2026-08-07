@@ -618,7 +618,8 @@ live 的意图准确率、证据覆盖率、转人工 recall 均为 `1.000`；�
 
 WP4 只使用既有评测表和隔离快照，没有新增字段、迁移或 schema 版本。根据
 `CONTRIBUTING.md`，schema v26 已由 `feature/m6-competitor-import` 占用；本分支未
-抢占 v26。随后 D13 已按登记占用 v27，WP4 的评测表仍未依赖该迁移。`docs/tasks/PROGRESS.md` 与
+抢占 v26。随后 D13 已按登记占用 v27，WP4 的评测表仍未依赖该迁移。归档时的
+`docs/tasks/archive/PROGRESS_20260807.md` 与
 `docs/tasks/M4_WORKBENCH.md`
 已同步为 WP4 `20h / 剩余 0 / 100%`，判定标准和报告索引见
 `docs/customer-service-evaluation.md`。
