@@ -873,6 +873,10 @@ mock 诊断；live 密钥仍只由 `env.md` 子进程加载。下一步不是立
 
 ## D22 · FIX-9 / FIX-10 与 M4 最终独立验收（2026-08-07）
 
+> 历史快照：本节记录 FIX-9 / FIX-10 当时的实现和签署。随后 D-034 审计与胡磊独立
+> 测试触发 D23 改造；涉及投诉强制路由、目录快答、live 指标和最终签署状态时，以
+> D23 为准。
+
 ### 先固定回归，再修两条快路径
 
 没有改 `customer_service_eval_v1.json` 的 expected、任何门禁阈值或评测排除范围。以
@@ -980,3 +984,78 @@ FIX-10 后用同一真实 provider、隔离数据目录和四条已泄漏回归�
 结论：M4 达到工作台 14 条验收标准与 WP5 六条交付要求，签署为**本机独立验收通过**。
 生产放行继续受真实客户脱敏数据、真实渠道、长稳、容量与安全 Gate 约束；D21 已列四条
 非阻塞残留继续有效。
+
+## D23 · 独立测试报告复核与 D-034 语义边界修正（2026-08-07）
+
+### 报告复核结论
+
+复核输入是胡磊基于 `7077b17` 的独立测试报告。报告中的三类现象可复现：中性进度问法
+可能被投诉信号吸收；含退货/保修词的复合消息可能不进入分类模型；投诉标签和商品目录
+候选会在规划模型之前直接决定 handoff 或回答。报告把第三项归因于空元组 `all(())`，与
+当前源码不完全一致；实际根因是规则直返后又被图内投诉/商品快路径放大。修复采纳现象与
+下游后果，不照抄该机制判断，也不按报告建议继续枚举语料关键词或调低门槛。
+
+根据 D-034，本轮明确选择如下行为：
+
+- **投诉采用模型语义权威。** 分类规则和四分类结果只作为检索、Prompt 与风险信号；
+  `precheck` 不再写入 `complaint_attention_required`，`deliberate` 和
+  `decision_gate` 不再因分类标签强制 handoff。只有规划模型输出
+  `intent=complaint / mode=handoff` 时，才使用固定共情话术并建立
+  `complaints / urgent` 任务。分类器误报 complaint 时，规划模型的 answer 决策必须存活。
+- **商品采用“精确批准问法”边界。** 删除按目录属性、唯一候选或高检索分数直接作答的
+  快路径。普通商品问题始终进入规划与生成；只有人工批准的 `evolution:` 知识且标准化
+  question 与本轮输入完全相等时，才允许复用固定答案。高分但不同问法仍调用模型。
+- **分类规则仅是 advisory signal。** 模型可用时，所有可分类消息都在 2 秒墙钟预算内
+  调用分类模型；规则候选、命中词和流程追责信号进入
+  `advisory_signals`，并显式携带 `semantic_authority=false`。模型关闭时仍保留原规则信号
+  和可观测 default 降级，不产生外部请求。
+- **流式与非流式共用生成计划。** `prepare_generation` 统一无证据、精确批准问法、
+  Prompt 变体、上下文预算和模型消息构造；`service.py` 不再复制商品/知识快答逻辑。
+
+### 失败证据与回归
+
+实现前新增反例后，意图、图、人工与流式聚焦集为 `22 failed / 137 passed`。失败覆盖：
+规则命中压过模型、投诉标签压过模型 answer、商品知识绕过 deliberation，以及 SSE 丢失
+Prompt 变体。修复后聚焦回归为 `199 passed / 1 xfailed`；另外增加高分 `evolution:`
+非精确问法必须调用模型的反证。全量回归为 `603 passed / 1 xfailed`，compileall 与
+whitespace 检查通过。没有修改冻结客服 fixture、门禁阈值或评测排除范围。
+
+同口径客服评测报告继续使用隔离数据目录，baseline 与 tuned 在同一运行中完全一致：
+
+| 模式 | answer_accuracy | hallucination_rate | pass_rate | severe_failures | gate | complaint | product | after-sales |
+|---|---:|---:|---:|---:|---|---:|---:|---:|
+| mock | 0.940 | 0.020 | 0.940 | 3 | passed | 6/8 | 14/15 | 12/12 |
+| live `deepseek-v4-flash` | 0.900 | 0.020 | 0.900 | 1 | passed | 7/8 | 15/15 | 8/12 |
+
+live 的 `handoff_recall=1.000`、`evidence_coverage=1.000`、主库
+`sessions/messages/handoff_tasks` 新增均为 0。5 条失败分别归因于 Prompt/回答契约 3、
+检索/来源覆盖 1、意图/转人工路由 1；不能只报总分。证据仍写入：
+
+- `evals/customer_service/runs/20260807-customer-service-mock.json`
+- `evals/customer_service/runs/20260807-customer-service-live.json`
+
+### 分类 live 回归与签署状态
+
+所有既有意图语料均已泄漏，因此以下结果只作回归，不作为新泛化成绩：
+
+- 40 条投诉正负平衡集：覆盖率 `20/40=50%`，complaint precision `9/9=100%`、recall
+  `9/20=45%`、负例误报 `0/20`；20 条 default 全为约 1.98 秒的
+  `model_deadline_exceeded`。该文件自己的 recall gate 为 failed。
+- 原 M4 40 条留出回归：覆盖率 `33/40=82.5%`，总体正确 `29/40=72.5%`，低于 75%；
+  作答子集准确率 `29/33=87.9%`。分类为 product `11/11`、after-sales `8/11`、
+  complaint `2/9`、chitchat `8/9`。不能用作答子集分母掩盖弃权。
+
+逐条结果在
+`evals/intent/runs/20260807-m4-complaint-balanced-post-d034-live.json` 与
+`evals/intent/runs/20260807-m4-acceptance-post-d034-live.json`。这两次运行没有据其原句继续
+调 prompt 或规则，避免用泄漏答案修分。
+
+因此当前结论是：**WP4 客服评测门禁已经恢复并优于 D22 live，但 M4 整体暂不重新签署**。
+阻塞项是当前代码下意图 live 回归总体 `72.5% < 75%`，以及投诉平衡集 recall gate failed；
+这不是 FIX-9/FIX-10 回退，也不能通过放宽 2 秒预算、降低门槛或挑选较好一次运行关闭。
+下一轮必须使用本文件、测试和既有报告中均未出现的新留出集，在不泄漏语料的前提下验证
+分类和 provider 容量方案。
+
+D22 的四场景延迟报告也被本轮语义路径变更失效：投诉重新进入模型 deliberation，商品
+不再有目录模板快答。当前全量 p50/p95 **未知**；完整 50 例 baseline/tuned live 运行耗时
+不能替代单轮延迟分布。P1 性能问题继续保留，必须按阶段耗时另行测量。

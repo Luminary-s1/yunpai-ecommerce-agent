@@ -32,9 +32,8 @@ from .database import Database, SessionScopeError, utc_now
 from .disaster_recovery import DataDirectoryLock
 from .evaluation import EvaluationRunRequest, EvaluationService
 from .graph import (
-    MODEL_UNAVAILABLE_HANDOFF_ANSWER,
     build_graph,
-    catalog_fact_answer,
+    prepare_generation,
     verify_response,
 )
 from .handoff import HandoffService
@@ -45,15 +44,13 @@ from .knowledge_seed import seed_records
 from .llm import ModelGateway
 from .maintenance import MaintenanceService
 from .policy import sanitize_context
-from .prompts import SYSTEM_PROMPT, build_messages
 from .rag import KnowledgeBase
 from .quality import QualityService
 from .releases import ReleaseReplayRequest, ReleaseService
 from .schemas import ChatResponse, SourceItem
-from .text_utils import normalize_text, redact_sensitive
+from .text_utils import redact_sensitive
 from .taobao import TaobaoIntegrationService
 from .sops import SopService
-from .tokens import count_tokens
 from .tools import ToolRegistry
 
 
@@ -455,59 +452,16 @@ class AgentService:
         self,
         state: dict[str, Any],
     ) -> tuple[Iterator[str], bool, str]:
-        verified_result = (
-            state.get("tool_result")
-            if state.get("tool_result", {}).get("postcondition_met")
-            else None
-        )
-        direct_catalog_answer = catalog_fact_answer(state)
-        if direct_catalog_answer is not None:
+        plan = prepare_generation(state, self.settings)
+        if plan.direct_answer is not None:
             return (
-                iter((direct_catalog_answer,)),
-                False,
-                "generate:catalog_fact",
+                iter((plan.direct_answer,)),
+                plan.model_fallback,
+                plan.trace_step,
             )
-        if not state.get("retrieved") and not verified_result:
-            return (
-                iter((MODEL_UNAVAILABLE_HANDOFF_ANSWER,)),
-                True,
-                "generate:no_evidence",
-            )
-
-        top_document = state["retrieved"][0] if state.get("retrieved") else None
-        if (
-            top_document
-            and state["decision"].get("reason") == "approved_knowledge_reuse"
-            and self.settings.rag_direct_approved_answer
-            and top_document["source"].startswith("evolution:")
-            and (
-                top_document["score"]
-                >= self.settings.rag_direct_approved_min_score
-                or normalize_text(top_document["question"])
-                == state["normalized_input"]
-            )
-        ):
-            return iter((top_document["answer"],)), False, "generate:approved_knowledge"
-
-        total = int(
-            self.settings.model_context_limit_tokens
-            * self.settings.context_budget_ratio
-        )
-        available = max(
-            0,
-            total
-            - count_tokens(SYSTEM_PROMPT)
-            - count_tokens(state["normalized_input"]),
-        )
-        messages = build_messages(
-            question=state["normalized_input"],
-            documents=state["retrieved"],
-            context=state["context_bundle"],
-            history=state["context_bundle"].get("recent_history", []),
-            verified_tool_result=verified_result,
-            knowledge_budget_tokens=available * 6 // 10,
-        )
-        return self.model.stream_generate(messages), False, "generate:stream"
+        if plan.messages is None:
+            raise RuntimeError("generation plan has neither direct answer nor messages")
+        return self.model.stream_generate(plan.messages), False, "generate:stream"
 
     @staticmethod
     def _response_from_state(

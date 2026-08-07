@@ -49,7 +49,7 @@
         "zero_new_sessions_messages_handoffs": true
       },
       "baseline": {
-        "run_id": "eval-run-9f8327d537e74fc685baeff9aa13c43d",
+        "run_id": "eval-run-dc9980485fd14bb1945aee8c8777de18",
         "run_key": "wp4-d20-mock-baseline",
         "status": "passed",
         "metrics": {
@@ -254,7 +254,7 @@
                 "context_readiness": "ready",
                 "is_refusal": false,
                 "hallucinated": true,
-                "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY。",
+                "answer_excerpt": "晴川恒温电热水壶 1.7L 当前目录价格为 159.00 CNY，实际支付金额请以结算页实时展示为准。",
                 "violations": [
                   "unsupported_grounded_claim"
                 ]
@@ -268,7 +268,7 @@
         }
       },
       "tuned": {
-        "run_id": "eval-run-9f8327d537e74fc685baeff9aa13c43d",
+        "run_id": "eval-run-dc9980485fd14bb1945aee8c8777de18",
         "run_key": "wp4-d20-mock-baseline",
         "status": "passed",
         "metrics": {
@@ -473,7 +473,7 @@
                 "context_readiness": "ready",
                 "is_refusal": false,
                 "hallucinated": true,
-                "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY。",
+                "answer_excerpt": "晴川恒温电热水壶 1.7L 当前目录价格为 159.00 CNY，实际支付金额请以结算页实时展示为准。",
                 "violations": [
                   "unsupported_grounded_claim"
                 ]
@@ -504,7 +504,7 @@
               "rag_min_score": 0.05
             },
             "run": {
-              "run_id": "eval-run-32a1ceb31e104d33ae7f88c88b1262e1",
+              "run_id": "eval-run-a68004abb40c44a6ad7a6969cb0e05b5",
               "run_key": "wp4-d20-mock-tuned-1",
               "status": "passed",
               "metrics": {
@@ -709,7 +709,7 @@
                       "context_readiness": "ready",
                       "is_refusal": false,
                       "hallucinated": true,
-                      "answer_excerpt": "目录中匹配到“晴川恒温电热水壶 1.7L”。当前可核验的信息：价格 159.00 CNY。",
+                      "answer_excerpt": "晴川恒温电热水壶 1.7L 当前目录价格为 159.00 CNY，实际支付金额请以结算页实时展示为准。",
                       "violations": [
                         "unsupported_grounded_claim"
                       ]

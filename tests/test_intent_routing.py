@@ -198,11 +198,17 @@ TERSE_POLICY_QUESTIONS = [
 
 @pytest.mark.parametrize(("message", "expected"), SAMPLES)
 def test_customer_intent_samples(message: str, expected: str) -> None:
-    assert classify(message, model=ChitchatModel()).intent == expected
+    model = CapturingModel({"intent": expected, "confidence": 0.84})
+
+    result = classify(message, model=model)
+
+    assert result.intent == expected
+    assert result.method == "model"
+    assert len(model.calls) == 1
 
 
-def test_rule_result_is_high_confidence_without_model_call() -> None:
-    result = classify("请推荐一款保温杯", model=UnexpectedModel())
+def test_rule_result_is_high_confidence_when_model_is_not_configured() -> None:
+    result = classify("请推荐一款保温杯", model=None)
 
     assert result.intent == "product_inquiry"
     assert result.confidence == intent_module._RULE_CONFIDENCE == 0.95
@@ -218,7 +224,7 @@ def test_rule_result_is_high_confidence_without_model_call() -> None:
     ],
 )
 def test_rule_priority(message: str, expected: str) -> None:
-    assert classify(message, model=UnexpectedModel()).intent == expected
+    assert classify(message, model=None).intent == expected
 
 
 def test_rule_priority_is_explicit_and_mapping_order_independent(monkeypatch) -> None:
@@ -234,7 +240,7 @@ def test_rule_priority_is_explicit_and_mapping_order_independent(monkeypatch) ->
     }
     monkeypatch.setattr(intent_module, "_RULE_KEYWORDS", reordered)
 
-    result = classify("我要投诉退款商品多少钱", model=UnexpectedModel())
+    result = classify("我要投诉退款商品多少钱", model=None)
 
     assert result.intent == "complaint"
 
@@ -269,7 +275,7 @@ def test_business_evidence_from_another_clause_does_not_short_circuit(
 def test_business_evidence_keeps_ambiguous_keyword_on_rule_fast_path(
     message: str, expected: str
 ) -> None:
-    result = classify(message, model=UnexpectedModel())
+    result = classify(message, model=None)
 
     assert result.intent == expected
     assert result.confidence == intent_module._RULE_CONFIDENCE
@@ -281,7 +287,7 @@ def test_business_evidence_keeps_ambiguous_keyword_on_rule_fast_path(
 def test_terse_business_message_stays_on_rule_fast_path(
     message: str, expected: str
 ) -> None:
-    result = classify(message, model=UnexpectedModel())
+    result = classify(message, model=None)
 
     assert result.intent == expected
     assert result.confidence == intent_module._RULE_CONFIDENCE
@@ -434,11 +440,44 @@ def test_empty_or_symbol_only_message_uses_safe_default(message: str) -> None:
     assert result.method == "default"
 
 
-def test_very_long_message_is_classified_without_model_call() -> None:
-    result = classify("投诉" + "服务体验很差" * 2000, model=UnexpectedModel())
+def test_very_long_message_is_classified_without_model_when_disabled() -> None:
+    result = classify("投诉" + "服务体验很差" * 2000, model=None)
 
     assert result.intent == "complaint"
     assert result.method == "rule"
+
+
+@pytest.mark.parametrize(
+    ("message", "model_intent"),
+    (
+        ("还没下单，想先了解保修条件", "product_inquiry"),
+        ("尚未购买，想先看看退货条件", "product_inquiry"),
+        ("不用换货了，只想确认维修进度", "after_sales"),
+        ("东西有划痕，但我现在只是咨询清洁方法", "product_inquiry"),
+    ),
+)
+def test_rule_signal_never_overrides_model_semantics(
+    message: str,
+    model_intent: str,
+) -> None:
+    model = CapturingModel({"intent": model_intent, "confidence": 0.86})
+
+    result = classify(message, model=model)
+
+    assert result.intent == model_intent
+    assert result.method == "model"
+    assert len(model.calls) == 1
+
+
+def test_rule_and_process_matches_are_advisory_signals_in_model_request() -> None:
+    model = CapturingModel({"intent": "after_sales", "confidence": 0.88})
+
+    classify("返修进度一直没更新，但先别投诉", model=model)
+
+    task = json.loads(model.calls[0][0][1]["content"])
+    assert task["advisory_signals"]["rule_candidate"] == "complaint"
+    assert task["advisory_signals"]["matched_keywords"] == ["投诉"]
+    assert task["advisory_signals"]["semantic_authority"] is False
 
 
 def test_rule_miss_uses_bounded_short_few_shot_model_prompt() -> None:
@@ -752,7 +791,7 @@ def test_model_call_failure_records_the_exception_type() -> None:
 
 
 def test_rule_and_model_hits_carry_no_error() -> None:
-    assert classify("我要投诉", model=UnexpectedModel()).error is None
+    assert classify("我要投诉", model=None).error is None
     assert classify("我想看看有哪些颜色", model=CapturingModel()).error is None
 
 

@@ -14,6 +14,7 @@ def _decision_state(
     mode: str = "answer",
     confidence: float = 0.9,
     customer_intent: str = "product_inquiry",
+    decision_intent: str = "general",
 ) -> dict:
     return {
         "session_id": session_id,
@@ -22,7 +23,7 @@ def _decision_state(
         "execution_mode": "shadow",
         "customer_intent": customer_intent,
         "decision": {
-            "intent": "general",
+            "intent": decision_intent,
             "mode": mode,
             "reason": "model_decision",
             "confidence": confidence,
@@ -153,7 +154,9 @@ def test_low_quality_detection_requires_both_most_recent_assistant_rows(tmp_path
         service.close()
 
 
-def test_complaint_is_urgent_and_can_be_automatically_dispatched(tmp_path) -> None:
+def test_model_confirmed_complaint_is_urgent_and_can_be_automatically_dispatched(
+    tmp_path,
+) -> None:
     service = AgentService(make_settings(tmp_path))
     try:
         principal = principal_for(service)
@@ -168,6 +171,8 @@ def test_complaint_is_urgent_and_can_be_automatically_dispatched(tmp_path) -> No
                 session_id=session_id,
                 confidence=0.9,
                 customer_intent="complaint",
+                decision_intent="complaint",
+                mode="handoff",
             ),
             "tenant_id": principal.tenant_id,
             "client_id": principal.client_id,
@@ -179,7 +184,7 @@ def test_complaint_is_urgent_and_can_be_automatically_dispatched(tmp_path) -> No
         gated = _node(service, "decision_gate").invoke(state)
 
         assert gated["route"] == "handoff"
-        assert gated["route_reason"] == "complaint_attention_required"
+        assert gated["route_reason"] == "model_decision"
         assert gated["risk_level"] == "medium"
 
         handed_off = _node(service, "handoff").invoke({**state, **gated})
@@ -203,6 +208,24 @@ def test_complaint_is_urgent_and_can_be_automatically_dispatched(tmp_path) -> No
             handoff_id=task.id,
         )
         assert assigned.assigned_to == service.settings.bootstrap_admin_id
+    finally:
+        service.close()
+
+
+def test_classifier_complaint_signal_cannot_override_model_answer(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        result = _node(service, "decision_gate").invoke(
+            _decision_state(
+                session_id="classifier-false-positive",
+                customer_intent="complaint",
+                decision_intent="after_sales",
+                mode="answer",
+            )
+        )
+
+        assert result["route"] == "answer"
+        assert result["intent"] == "after_sales"
     finally:
         service.close()
 

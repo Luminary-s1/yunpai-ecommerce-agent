@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any
+from typing import Any, NamedTuple
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
@@ -44,68 +44,62 @@ LOW_QUALITY_ROUTE_REASONS = frozenset(
 )
 
 
-def catalog_fact_answer(state: AgentState) -> str | None:
-    """Render only catalog facts explicitly requested and backed by retrieval."""
+class GenerationPlan(NamedTuple):
+    direct_answer: str | None
+    messages: list[dict[str, str]] | None
+    model_fallback: bool
+    trace_step: str
 
-    advisor = (state.get("context_bundle") or {}).get("product_advisor") or {}
-    candidates = advisor.get("candidates") or []
-    if len(candidates) != 1:
-        return None
-    candidate = candidates[0]
-    title = str(candidate.get("title") or "").strip()
-    if not title:
-        return None
-    question = normalize_text(state.get("normalized_input") or "").casefold()
-    evidence = normalize_text(
-        " ".join(
-            f"{document.get('question', '')} {document.get('answer', '')}"
-            for document in state.get("retrieved", [])
-        )
-    ).casefold()
-    if not question or not evidence:
-        return None
 
-    facts: list[tuple[str, str]] = []
-    price = candidate.get("sale_price")
-    currency = str(candidate.get("currency") or "").strip()
-    if price is not None and any(
-        marker in question for marker in ("多少钱", "价格", "售价", "价位")
-    ):
-        rendered_price = str(price).strip()
-        if rendered_price:
-            facts.append(
-                (
-                    f"价格 {rendered_price}{f' {currency}' if currency else ''}",
-                    rendered_price,
-                )
-            )
-    attributes = candidate.get("attributes") or {}
-    if isinstance(attributes, dict):
-        compact_question = question.replace("_", "").replace("-", "")
-        for key, value in sorted(attributes.items()):
-            rendered_key = str(key).strip()
-            rendered_value = str(value).strip()
-            compact_key = (
-                normalize_text(rendered_key)
-                .casefold()
-                .replace("_", "")
-                .replace("-", "")
-            )
-            if (
-                rendered_key
-                and rendered_value
-                and compact_key
-                and compact_key in compact_question
-            ):
-                facts.append((f"{rendered_key} {rendered_value}", rendered_value))
-    if not facts:
-        return None
-    if any(normalize_text(value).casefold() not in evidence for _, value in facts):
-        return None
-    return (
-        f"目录中匹配到“{title}”。当前可核验的信息："
-        f"{'；'.join(rendered for rendered, _ in facts)}。"
+def prepare_generation(state: AgentState, settings: Settings) -> GenerationPlan:
+    """Build the one generation plan shared by streaming and non-streaming chat."""
+
+    verified_result = (
+        state.get("tool_result")
+        if state.get("tool_result", {}).get("postcondition_met")
+        else None
     )
+    if not state.get("retrieved") and not verified_result:
+        return GenerationPlan(
+            MODEL_UNAVAILABLE_HANDOFF_ANSWER,
+            None,
+            True,
+            "generate:no_evidence",
+        )
+    top_document = state["retrieved"][0] if state.get("retrieved") else None
+    if (
+        top_document
+        and state.get("decision", {}).get("reason") == "approved_knowledge_reuse"
+        and settings.rag_direct_approved_answer
+        and top_document["source"].startswith("evolution:")
+        and normalize_text(top_document["question"])
+        == normalize_text(state["normalized_input"])
+    ):
+        return GenerationPlan(
+            top_document["answer"],
+            None,
+            False,
+            "generate:approved_knowledge",
+        )
+    total = int(
+        settings.model_context_limit_tokens * settings.context_budget_ratio
+    )
+    available = max(
+        0,
+        total
+        - count_tokens(SYSTEM_PROMPT)
+        - count_tokens(state["normalized_input"]),
+    )
+    messages = build_messages(
+        question=state["normalized_input"],
+        documents=state.get("retrieved", []),
+        context=state.get("context_bundle") or {},
+        history=(state.get("context_bundle") or {}).get("recent_history", []),
+        verified_tool_result=verified_result,
+        knowledge_budget_tokens=available * 6 // 10,
+        prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
+    )
+    return GenerationPlan(None, messages, False, "generate:model")
 
 
 def verify_response(state: AgentState) -> dict[str, Any]:
@@ -403,16 +397,13 @@ def build_graph(
         intent_routing = routing_for_intent(classified.intent)
         complaint = classified.intent == "complaint"
         route = "retrieve"
-        route_reason = (
-            "complaint_attention_required" if complaint else decision.reason
-        )
         risk_level = "medium" if complaint else "low"
         intent_trace = f"intent:{classified.method}:{classified.intent}"
         if classified.error is not None:
             intent_trace += f":{classified.error}"
         return {
             "route": route,
-            "route_reason": route_reason,
+            "route_reason": decision.reason,
             "risk_level": risk_level,
             "customer_intent": classified.intent,
             "intent_confidence": classified.confidence,
@@ -532,31 +523,14 @@ def build_graph(
                 "model_fallback": True,
                 "trace": [*state["trace"], "deliberate:knowledge_unavailable"],
             }
-        if state.get("customer_intent") == "complaint":
-            decision = AgentDecision(
-                intent="complaint",
-                mode="handoff",
-                reason="complaint_attention_required",
-                confidence=max(
-                    settings.handoff_confidence_threshold,
-                    float(state.get("intent_confidence") or 0),
-                ),
-            )
-            return {
-                "decision": decision.model_dump(),
-                "model_fallback": False,
-                "trace": [*state["trace"], "deliberate:complaint_evidence_ready"],
-            }
         top_document = state.get("retrieved", [{}])[0] if state.get("retrieved") else None
         if (
             state["react_step"] == 0
             and top_document
             and settings.rag_direct_approved_answer
             and top_document["source"].startswith("evolution:")
-            and (
-                top_document["score"] >= settings.rag_direct_approved_min_score
-                or normalize_text(top_document["question"]) == state["normalized_input"]
-            )
+            and normalize_text(top_document["question"])
+            == normalize_text(state["normalized_input"])
         ):
             decision = AgentDecision(
                 intent=top_document["intent"],
@@ -568,29 +542,6 @@ def build_graph(
                 "decision": decision.model_dump(),
                 "trace": [*state["trace"], "deliberate:approved_knowledge"],
             }
-
-        if (
-            state["react_step"] == 0
-            and top_document
-            and state.get("customer_intent") == "product_inquiry"
-        ):
-            score = float(top_document.get("score", 0))
-            if (
-                catalog_fact_answer(state) is not None
-                or score >= settings.rag_direct_approved_min_score
-            ):
-                decision = AgentDecision(
-                    intent=top_document.get("intent") or "product",
-                    mode="answer",
-                    reason="product_knowledge_available",
-                    confidence=max(settings.handoff_confidence_threshold, score),
-                )
-                trace_step = "deliberate:product_knowledge"
-                return {
-                    "decision": decision.model_dump(),
-                    "model_fallback": False,
-                    "trace": [*state["trace"], trace_step],
-                }
 
         history, history_meta, knowledge_budget = budgeted_history(
             state,
@@ -706,13 +657,6 @@ def build_graph(
         ):
             route = "handoff"
             reason = "low_confidence_handoff"
-        customer_intent = state.get("customer_intent")
-        if customer_intent == "complaint":
-            if risk_level == "low":
-                risk_level = "medium"
-            if route not in {"handoff", "refuse"}:
-                route = "handoff"
-                reason = "complaint_attention_required"
         if route not in {"handoff", "refuse"}:
             recent_reasons = db.recent_assistant_route_reasons(state["session_id"], 2)
             if len(recent_reasons) == 2 and all(
@@ -1016,52 +960,16 @@ def build_graph(
             if state.get("tool_result", {}).get("postcondition_met")
             else None
         )
-        direct_catalog_answer = catalog_fact_answer(state)
-        if direct_catalog_answer is not None:
+        plan = prepare_generation(state, settings)
+        if plan.direct_answer is not None:
             return {
-                "draft": direct_catalog_answer,
-                "model_fallback": False,
-                "trace": [*state["trace"], "generate:catalog_fact"],
+                "draft": plan.direct_answer,
+                "model_fallback": plan.model_fallback,
+                "trace": [*state["trace"], plan.trace_step],
             }
-        if not state["retrieved"] and not verified_result:
-            return {
-                "draft": "当前知识库中没有足够信息，我会为您转人工客服进一步核对。",
-                "model_fallback": True,
-                "trace": [*state["trace"], "generate:no_evidence"],
-            }
-        top_document = state["retrieved"][0] if state["retrieved"] else None
-        if (
-            top_document
-            and state["decision"].get("reason") == "approved_knowledge_reuse"
-            and settings.rag_direct_approved_answer
-            and top_document["source"].startswith("evolution:")
-            and (
-                top_document["score"] >= settings.rag_direct_approved_min_score
-                or normalize_text(top_document["question"]) == state["normalized_input"]
-            )
-        ):
-            return {
-                "draft": top_document["answer"],
-                "model_fallback": False,
-                "trace": [*state["trace"], "generate:approved_knowledge"],
-            }
-        history, history_meta, knowledge_budget = budgeted_history(
-            state,
-            SYSTEM_PROMPT,
-        )
-        messages = build_messages(
-            question=state["normalized_input"],
-            documents=state["retrieved"],
-            context=state["context_bundle"],
-            history=history,
-            verified_tool_result=verified_result,
-            knowledge_budget_tokens=knowledge_budget,
-            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
-        )
-        budget_trace = (
-            f"context:budget:kept{history_meta['kept']}"
-            f"/dropped{history_meta['dropped']}"
-        )
+        messages = plan.messages
+        if messages is None:
+            raise RuntimeError("generation plan has neither direct answer nor messages")
         try:
             draft = model.generate(messages)
             fallback = False
@@ -1091,7 +999,7 @@ def build_graph(
             "draft": draft,
             "model_fallback": fallback,
             "model_retry_advised": retry_advised,
-            "trace": [*state["trace"], budget_trace, trace_step],
+            "trace": [*state["trace"], trace_step],
         }
 
     def verify(state: AgentState) -> dict[str, Any]:
@@ -1129,20 +1037,17 @@ def build_graph(
 
     def handoff(state: AgentState) -> dict[str, Any]:
         reason = state["route_reason"]
-        if (
-            reason == "complaint_attention_required"
-            and state.get("customer_intent") == "complaint"
-        ):
-            retrieved = state.get("retrieved") or []
-            evidence_answer = (
-                normalize_text(str(retrieved[0].get("answer") or ""))[:280]
-                if retrieved
-                else ""
+        decision_intent = str(
+            state.get("decision", {}).get("intent")
+            or state.get("intent")
+            or "general"
+        )
+        model_confirmed_complaint = decision_intent == "complaint"
+        if model_confirmed_complaint:
+            answer = state.get("decision", {}).get("response") or (
+                "很抱歉给您带来困扰。我已将当前问题和必要上下文标记为投诉，"
+                "并转交人工客服优先跟进。"
             )
-            answer = "很抱歉给您带来困扰。"
-            if evidence_answer:
-                answer += f"根据当前可核验信息：{evidence_answer} "
-            answer += "我已将该问题标记为投诉，并转交人工客服优先跟进。"
         elif reason == "customer_requested_human":
             answer = "好的，我会将当前问题和必要上下文转给人工客服。请勿发送密码、验证码或银行卡信息。"
         elif reason == "authorized_order_context_missing":
@@ -1185,7 +1090,7 @@ def build_graph(
             business_context["store_id"] = normalize_text(str(store_id))[:128]
         handoff_payload = {
             "trace_id": state["trace_id"],
-            "intent": state.get("customer_intent") or state["intent"],
+            "intent": decision_intent,
             "risk_level": state["risk_level"],
             "question": safe_question,
             "selected_tool": state.get("selected_tool"),
@@ -1195,9 +1100,11 @@ def build_graph(
             "context_conflicts": state.get("context_conflicts", []),
             "business_context": business_context,
         }
-        if state.get("customer_intent") == "complaint":
+        if model_confirmed_complaint:
             handoff_payload["priority_flag"] = "complaint"
-        unknown_intent = state.get("intent_method") == "default"
+        unknown_intent = (
+            state.get("intent_method") == "default" and not model_confirmed_complaint
+        )
         if unknown_intent:
             # Abstention means the classifier could not decide, not that the
             # shopper was chatting. Keep it below complaint/urgent while avoiding

@@ -214,6 +214,8 @@ _MODEL_SYSTEM_PROMPT = (
     "你是客服消息意图分类器。intent 只能取 product_inquiry、after_sales、"
     "complaint、chitchat 之一，confidence 取 0 到 1 的小数。"
     + _LABELLING_POLICY
+    + "输入中的 advisory_signals 只是召回提示，可能误报；必须按完整消息独立判断，"
+    "不得把规则候选直接当作结论。"
     + "严格返回下面这一个 JSON 对象，不要嵌套、不要包装、不要额外字段："
     '{"intent": "chitchat", "confidence": 0.5}'
 )
@@ -243,14 +245,16 @@ def classify(message: str, *, model: IntentModel | None) -> IntentResult:
     process_review = _matches_process_accountability(normalized)
     review_rule_match = False
     rule_match = _match_rule(normalized)
+    rule_intent: CustomerIntent | None = None
+    rule_keywords: tuple[str, ...] = ()
     if rule_match is not None:
-        intent, keywords = rule_match
-        review_rule_match = _requires_model_review(normalized, keywords) or (
-            process_review and intent != "complaint"
+        rule_intent, rule_keywords = rule_match
+        review_rule_match = _requires_model_review(normalized, rule_keywords) or (
+            process_review and rule_intent != "complaint"
         )
-        if not review_rule_match:
+        if model is None and not review_rule_match:
             return IntentResult(
-                intent=intent,
+                intent=rule_intent,
                 confidence=_RULE_CONFIDENCE,
                 method="rule",
             )
@@ -271,6 +275,12 @@ def classify(message: str, *, model: IntentModel | None) -> IntentResult:
                     "task_type": "intent_classification",
                     "examples": examples,
                     "message": normalized[:4000],
+                    "advisory_signals": {
+                        "rule_candidate": rule_intent,
+                        "matched_keywords": list(rule_keywords),
+                        "process_accountability": process_review,
+                        "semantic_authority": False,
+                    },
                 },
                 ensure_ascii=False,
             ),

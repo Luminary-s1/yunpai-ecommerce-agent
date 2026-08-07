@@ -1,14 +1,14 @@
 # M4 ① 流式输出端到端实跑证据
 
 > 对应：M4_HANDOFF 第 2 节第 1 项「流式输出端到端实跑证据」
-> 首次实跑：2026-08-05；浏览器证据更新：2026-08-07
+> 首次实跑：2026-08-05；D22 浏览器证据：2026-08-07；D23 状态见下文
 
 ## 证据文件
 
 | 文件 | 内容 | 性质 |
 |---|---|---|
 | `m4-stream-evidence.txt` | 74 事件完整流式输出 | **成功实跑证据**（真实模型） |
-| `m4-browser-evidence.png` | 浏览器实测画面 | **FIX-9 回归证据**（有来源共情答复 + 人工标记） |
+| `m4-browser-evidence.png` | 浏览器实测画面 | **D22 历史证据**；D23 已删除图中的旧路由语义，不作当前签署依据 |
 
 ## ① 成功实跑证据（m4-stream-evidence.txt）
 
@@ -23,7 +23,7 @@
   - `citations` 3 个知识来源（RAG 检索生效）
 - **服务日志佐证**：`POST /v1/chat/stream 200 OK`
 
-## ② 浏览器佐证（m4-browser-evidence.png）
+## ② D22 历史浏览器佐证（m4-browser-evidence.png）
 
 - **页面**：`/customer-test`（F-123 本机顾客直测入口）
 - **环境**：2026-08-07，隔离临时数据目录，`MODEL_MOCK_MODE=true`，不出网
@@ -36,6 +36,15 @@
 - **意义**：证明 FIX-9 不再以无来源通用转人工话术替代答复；页面展示的是
   “检索证据 + 共情回复 + 人工标记”并存。`complaints / urgent` 队列由同链路集成测试
   `test_chat_complaint_answers_with_evidence_and_marks_urgent_handoff` 复核。
+
+### D23 当前状态
+
+D23 已删除分类标签强制写入的 `complaint_attention_required`，投诉是否 handoff 以及
+`complaints / urgent` 优先级改由规划模型确认。所以上述 PNG 只能证明 D22，不再证明
+当前路由语义。2026-08-07 尝试在隔离 mock 数据目录重新启动 `/customer-test`；服务正常
+启动，但 Codex 内置浏览器与 Chrome 两个受支持表面均被客户端 localhost 策略拦截，未能
+形成可核验新截图。当前浏览器证据标记为**未更新**，不计入 D23 签署；代码行为由聚焦
+HTTP/Graph/queue 集成测试覆盖，仍不能替代 UI 实跑。
 
 ## 复现方式
 

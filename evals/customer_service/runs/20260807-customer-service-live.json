@@ -49,35 +49,35 @@
         "zero_new_sessions_messages_handoffs": true
       },
       "baseline": {
-        "run_id": "eval-run-0d24817dadb64c208a59d578c5d15b6c",
+        "run_id": "eval-run-6946e52376f24eeabe35488bbb88903c",
         "run_key": "wp4-d20-live-baseline",
         "status": "passed",
         "metrics": {
-          "accurate_answer_turns": 43,
-          "answer_accuracy": 0.86,
+          "accurate_answer_turns": 45,
+          "answer_accuracy": 0.9,
           "baseline_changed_cases": [],
           "comparable_baseline_cases": 0,
           "evidence_coverage": 1.0,
           "evidence_required_turns": 25,
-          "failed_cases": 7,
-          "hallucinated_turns": 3,
-          "hallucination_rate": 0.06,
+          "failed_cases": 5,
+          "hallucinated_turns": 1,
+          "hallucination_rate": 0.02,
           "handoff_confusion": {
-            "false_negative": 1,
-            "false_positive": 2,
-            "true_negative": 38,
-            "true_positive": 9
+            "false_negative": 0,
+            "false_positive": 1,
+            "true_negative": 39,
+            "true_positive": 10
           },
-          "handoff_precision": 0.8181818181818182,
-          "handoff_recall": 0.9,
+          "handoff_precision": 0.9090909090909091,
+          "handoff_recall": 1.0,
           "intent_accuracy": 1.0,
           "intent_labeled_turns": 5,
           "labeled_turns": 50,
-          "model_fallback_rate": 0.0,
-          "pass_rate": 0.86,
-          "passed_cases": 43,
+          "model_fallback_rate": 0.04,
+          "pass_rate": 0.9,
+          "passed_cases": 45,
           "refusal_opportunities": 30,
-          "refusal_rate": 0.06666666666666667,
+          "refusal_rate": 0.03333333333333333,
           "regression_cases": [],
           "regression_rate": 0.0,
           "scenarios": {
@@ -89,10 +89,10 @@
               "total": 10
             },
             "after_sales": {
-              "failed": 6,
-              "pass_rate": 0.5,
-              "passed": 6,
-              "severe": 4,
+              "failed": 4,
+              "pass_rate": 0.6666666666666666,
+              "passed": 8,
+              "severe": 1,
               "total": 12
             },
             "chitchat": {
@@ -103,36 +103,35 @@
               "total": 5
             },
             "complaint": {
-              "failed": 0,
-              "pass_rate": 1.0,
-              "passed": 8,
+              "failed": 1,
+              "pass_rate": 0.875,
+              "passed": 7,
               "severe": 0,
               "total": 8
             },
             "product": {
-              "failed": 1,
-              "pass_rate": 0.9333333333333333,
-              "passed": 14,
+              "failed": 0,
+              "pass_rate": 1.0,
+              "passed": 15,
               "severe": 0,
               "total": 15
             }
           },
-          "severe_failures": 4,
+          "severe_failures": 1,
           "total_cases": 50,
-          "unnecessary_refusals": 2,
+          "unnecessary_refusals": 1,
           "violations": {
-            "missed_handoff": 1,
-            "missed_refusal": 1,
-            "required_answer_term_missing": 6,
-            "unexpected_handoff": 2,
-            "unexpected_refusal": 2,
-            "unsupported_grounded_claim": 3
+            "model_fallback_mismatch": 2,
+            "required_answer_term_missing": 3,
+            "unexpected_handoff": 1,
+            "unexpected_refusal": 1,
+            "unsupported_grounded_claim": 1
           }
         },
         "gate": {
           "checks": {
             "answer_accuracy": {
-              "actual": 0.86,
+              "actual": 0.9,
               "passed": true,
               "threshold": 0.75
             },
@@ -142,12 +141,12 @@
               "threshold": 0.75
             },
             "hallucination_rate": {
-              "actual": 0.06,
+              "actual": 0.02,
               "passed": true,
               "threshold": 0.1
             },
             "handoff_recall": {
-              "actual": 0.9,
+              "actual": 1.0,
               "passed": true,
               "threshold": 0.75
             },
@@ -162,12 +161,12 @@
               "threshold": 50
             },
             "pass_rate": {
-              "actual": 0.86,
+              "actual": 0.9,
               "passed": true,
               "threshold": 0.7
             },
             "refusal_rate": {
-              "actual": 0.06666666666666667,
+              "actual": 0.03333333333333333,
               "passed": true,
               "threshold": 0.2
             },
@@ -177,7 +176,7 @@
               "threshold": 0.0
             },
             "severe_failures": {
-              "actual": 4,
+              "actual": 1,
               "passed": true,
               "threshold": 5
             }
@@ -185,31 +184,6 @@
           "passed": true
         },
         "failed_cases": [
-          {
-            "case_key": "after-sales-003",
-            "scenario": "after_sales",
-            "violations": [
-              "turn_1:required_answer_term_missing"
-            ],
-            "attribution": "prompt_or_answer_contract",
-            "actual": [
-              {
-                "turn": 1,
-                "intent": "after_sales",
-                "requires_human": false,
-                "reason": "knowledge_answer_allowed",
-                "source_count": 3,
-                "model_fallback": false,
-                "context_readiness": "ready",
-                "is_refusal": false,
-                "hallucinated": false,
-                "answer_excerpt": "您好，您的订单 QC-ORDER-1003 价保退款已审核通过，批准退款金额为 30.00 元。请您留意后续退款到账情况，如有其他问题欢迎随时联系。",
-                "violations": [
-                  "required_answer_term_missing"
-                ]
-              }
-            ]
-          },
           {
             "case_key": "after-sales-004",
             "scenario": "after_sales",
@@ -228,7 +202,7 @@
                 "context_readiness": "ready",
                 "is_refusal": false,
                 "hallucinated": false,
-                "answer_excerpt": "您好，这笔订单已经付款成功，目前状态为待发货，还没有物流信息哦。一旦发货，物流单号会第一时间更新，请您耐心等待～",
+                "answer_excerpt": "还没有发货哦～您的订单已经付款成功，目前状态是“待发货”，暂时还没有物流信息。等仓库发货后物流单号会自动更新，到时候就能看到啦。",
                 "violations": [
                   "required_answer_term_missing"
                 ]
@@ -239,10 +213,9 @@
             "case_key": "after-sales-005",
             "scenario": "after_sales",
             "violations": [
-              "turn_2:unsupported_grounded_claim",
               "turn_2:required_answer_term_missing"
             ],
-            "attribution": "retrieval_or_source_coverage",
+            "attribution": "prompt_or_answer_contract",
             "actual": [
               {
                 "turn": 2,
@@ -253,10 +226,9 @@
                 "model_fallback": false,
                 "context_readiness": "ready",
                 "is_refusal": false,
-                "hallucinated": true,
-                "answer_excerpt": "您好，您订单 QC-ORDER-1005 的物流状态显示为异常，最新节点是“派送地址待核实”（承运商：极兔，单号 JT****3105）。因为地址信息需要进一步确认，我们会为您转人工联系承运商核查，暂时无法承诺具体送达时间。请您耐心等待，有更新我们会及时同步。",
+                "hallucinated": false,
+                "answer_excerpt": "您好，您订单 QC-ORDER-1005 的物流状态目前是异常的，最新节点为“派送地址待核实”。建议您先核对一下收货地址是否准确，确认无误后我可以帮您登记反馈给物流处理。同时我们也会关注物流更新，有进展会及时同步给您，暂时无法承诺具体送达时间，请您谅解。",
                 "violations": [
-                  "unsupported_grounded_claim",
                   "required_answer_term_missing"
                 ]
               }
@@ -268,8 +240,8 @@
             "violations": [
               "turn_2:unexpected_handoff",
               "turn_2:unexpected_refusal",
-              "turn_2:unsupported_grounded_claim",
-              "turn_2:required_answer_term_missing"
+              "turn_2:required_answer_term_missing",
+              "turn_2:model_fallback_mismatch"
             ],
             "attribution": "intent_or_handoff_routing",
             "actual": [
@@ -277,18 +249,18 @@
                 "turn": 2,
                 "intent": "after_sales",
                 "requires_human": true,
-                "reason": "用户报告商品已损坏，属于待处理的质量投诉，需人工核验保修并跟进售后。",
+                "reason": "model_unavailable",
                 "source_count": 3,
-                "model_fallback": false,
+                "model_fallback": true,
                 "context_readiness": "ready",
                 "is_refusal": true,
-                "hallucinated": true,
-                "answer_excerpt": "您购买的晴川 AF5 空气炸锅整机保修 12 个月，不过商品损坏需要为您核实保修情况并安排后续售后处理，我马上为您转接人工客服跟进，请您稍等。",
+                "hallucinated": false,
+                "answer_excerpt": "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。",
                 "violations": [
                   "unexpected_handoff",
                   "unexpected_refusal",
-                  "unsupported_grounded_claim",
-                  "required_answer_term_missing"
+                  "required_answer_term_missing",
+                  "model_fallback_mismatch"
                 ]
               }
             ]
@@ -297,122 +269,89 @@
             "case_key": "after-sales-010",
             "scenario": "after_sales",
             "violations": [
-              "turn_1:unexpected_handoff",
-              "turn_1:unexpected_refusal",
-              "turn_1:unsupported_grounded_claim",
-              "turn_1:required_answer_term_missing"
+              "turn_1:unsupported_grounded_claim"
             ],
-            "attribution": "intent_or_handoff_routing",
+            "attribution": "retrieval_or_source_coverage",
             "actual": [
               {
                 "turn": 1,
                 "intent": "after_sales",
-                "requires_human": true,
-                "reason": "存在已提交且仍在审核中的换货售后工单，属于待处理的质量售后事项，按规则转人工处理。",
-                "source_count": 3,
-                "model_fallback": false,
-                "context_readiness": "ready",
-                "is_refusal": true,
-                "hallucinated": true,
-                "answer_excerpt": "您好，晴川无线吸尘器 A1 整机保修 24 个月。您这笔订单已提交换货申请（QC-AS-1002），目前状态为审核中。由于涉及故障核实与换货处理，我为您转接售后专员进一步跟进，请稍候。",
-                "violations": [
-                  "unexpected_handoff",
-                  "unexpected_refusal",
-                  "unsupported_grounded_claim",
-                  "required_answer_term_missing"
-                ]
-              }
-            ]
-          },
-          {
-            "case_key": "after-sales-012",
-            "scenario": "after_sales",
-            "violations": [
-              "turn_1:missed_handoff",
-              "turn_1:missed_refusal"
-            ],
-            "attribution": "intent_or_handoff_routing",
-            "actual": [
-              {
-                "turn": 1,
-                "intent": "return_exchange",
                 "requires_human": false,
                 "reason": "knowledge_answer_allowed",
                 "source_count": 3,
                 "model_fallback": false,
                 "context_readiness": "ready",
                 "is_refusal": false,
-                "hallucinated": false,
-                "answer_excerpt": "未拆封的重复商品您是可以在售后页面先提交退货申请的。之后会有专人核对订单、商品状态以及运费责任，再给您具体的处理方案。需要提醒的是，退款到账时间以实际审核结果为准，这边无法直接保证哦。",
+                "hallucinated": true,
+                "answer_excerpt": "您放心，晴川无线吸尘器 A1 整机保修 24 个月，是在保修范围内的。我这边看到您订单 QC-ORDER-1002 对应的这台 A1 已经提交了换货申请（工单号 QC-AS-1002），目前正在审核中。具体保修资格还需要核验产品序列信息，审核结果请以售后通知为准。由于涉及具体检测和审核流程，建议您留意后续处理进展，也可以随时把审核结果发给我，我再帮您跟进。",
                 "violations": [
-                  "missed_handoff",
-                  "missed_refusal"
+                  "unsupported_grounded_claim"
                 ]
               }
             ]
           },
           {
-            "case_key": "product-014",
-            "scenario": "product",
+            "case_key": "complaint-004",
+            "scenario": "complaint",
             "violations": [
-              "turn_1:required_answer_term_missing"
+              "turn_1:model_fallback_mismatch"
             ],
             "attribution": "prompt_or_answer_contract",
             "actual": [
               {
                 "turn": 1,
-                "intent": "product",
-                "requires_human": false,
-                "reason": "knowledge_answer_allowed",
+                "intent": "general",
+                "requires_human": true,
+                "reason": "model_unavailable",
                 "source_count": 3,
-                "model_fallback": false,
+                "model_fallback": true,
                 "context_readiness": "ready",
-                "is_refusal": false,
+                "is_refusal": true,
                 "hallucinated": false,
-                "answer_excerpt": "小家庭的话，比较推荐晴川 AF5 空气炸锅云白款，容量 5L，日常烤制食材完全够用。它的目录价格是 499.00 元，实际支付金额以结算页为准。这款保修 12 个月，如果有需要也可以再看看同系列其他颜色～",
+                "answer_excerpt": "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。",
                 "violations": [
-                  "required_answer_term_missing"
+                  "model_fallback_mismatch"
                 ]
               }
             ]
           }
         ],
         "failure_attribution": {
-          "intent_or_handoff_routing": 3,
+          "intent_or_handoff_routing": 1,
           "prompt_or_answer_contract": 3,
           "retrieval_or_source_coverage": 1
         }
       },
       "tuned": {
-        "run_id": "eval-run-0d24817dadb64c208a59d578c5d15b6c",
+        "run_id": "eval-run-6946e52376f24eeabe35488bbb88903c",
         "run_key": "wp4-d20-live-baseline",
         "status": "passed",
         "metrics": {
-          "accurate_answer_turns": 43,
-          "answer_accuracy": 0.86,
+          "accurate_answer_turns": 45,
+          "answer_accuracy": 0.9,
           "baseline_changed_cases": [],
           "comparable_baseline_cases": 0,
           "evidence_coverage": 1.0,
           "evidence_required_turns": 25,
-          "failed_cases": 7,
-          "hallucinated_turns": 3,
-          "hallucination_rate": 0.06,
+          "failed_cases": 5,
+          "hallucinated_turns": 1,
+          "hallucination_rate": 0.02,
           "handoff_confusion": {
-            "false_negative": 1,
-            "false_positive": 2,
-            "true_negative": 38,
-            "true_positive": 9
+            "false_negative": 0,
+            "false_positive": 1,
+            "true_negative": 39,
+            "true_positive": 10
           },
-          "handoff_precision": 0.8181818181818182,
-          "handoff_recall": 0.9,
+          "handoff_precision": 0.9090909090909091,
+          "handoff_recall": 1.0,
           "intent_accuracy": 1.0,
           "intent_labeled_turns": 5,
           "labeled_turns": 50,
-          "model_fallback_rate": 0.0,
-          "pass_rate": 0.86,
-          "passed_cases": 43,
+          "model_fallback_rate": 0.04,
+          "pass_rate": 0.9,
+          "passed_cases": 45,
           "refusal_opportunities": 30,
-          "refusal_rate": 0.06666666666666667,
+          "refusal_rate": 0.03333333333333333,
           "regression_cases": [],
           "regression_rate": 0.0,
           "scenarios": {
@@ -424,10 +363,10 @@
               "total": 10
             },
             "after_sales": {
-              "failed": 6,
-              "pass_rate": 0.5,
-              "passed": 6,
-              "severe": 4,
+              "failed": 4,
+              "pass_rate": 0.6666666666666666,
+              "passed": 8,
+              "severe": 1,
               "total": 12
             },
             "chitchat": {
@@ -438,36 +377,35 @@
               "total": 5
             },
             "complaint": {
-              "failed": 0,
-              "pass_rate": 1.0,
-              "passed": 8,
+              "failed": 1,
+              "pass_rate": 0.875,
+              "passed": 7,
               "severe": 0,
               "total": 8
             },
             "product": {
-              "failed": 1,
-              "pass_rate": 0.9333333333333333,
-              "passed": 14,
+              "failed": 0,
+              "pass_rate": 1.0,
+              "passed": 15,
               "severe": 0,
               "total": 15
             }
           },
-          "severe_failures": 4,
+          "severe_failures": 1,
           "total_cases": 50,
-          "unnecessary_refusals": 2,
+          "unnecessary_refusals": 1,
           "violations": {
-            "missed_handoff": 1,
-            "missed_refusal": 1,
-            "required_answer_term_missing": 6,
-            "unexpected_handoff": 2,
-            "unexpected_refusal": 2,
-            "unsupported_grounded_claim": 3
+            "model_fallback_mismatch": 2,
+            "required_answer_term_missing": 3,
+            "unexpected_handoff": 1,
+            "unexpected_refusal": 1,
+            "unsupported_grounded_claim": 1
           }
         },
         "gate": {
           "checks": {
             "answer_accuracy": {
-              "actual": 0.86,
+              "actual": 0.9,
               "passed": true,
               "threshold": 0.75
             },
@@ -477,12 +415,12 @@
               "threshold": 0.75
             },
             "hallucination_rate": {
-              "actual": 0.06,
+              "actual": 0.02,
               "passed": true,
               "threshold": 0.1
             },
             "handoff_recall": {
-              "actual": 0.9,
+              "actual": 1.0,
               "passed": true,
               "threshold": 0.75
             },
@@ -497,12 +435,12 @@
               "threshold": 50
             },
             "pass_rate": {
-              "actual": 0.86,
+              "actual": 0.9,
               "passed": true,
               "threshold": 0.7
             },
             "refusal_rate": {
-              "actual": 0.06666666666666667,
+              "actual": 0.03333333333333333,
               "passed": true,
               "threshold": 0.2
             },
@@ -512,7 +450,7 @@
               "threshold": 0.0
             },
             "severe_failures": {
-              "actual": 4,
+              "actual": 1,
               "passed": true,
               "threshold": 5
             }
@@ -520,31 +458,6 @@
           "passed": true
         },
         "failed_cases": [
-          {
-            "case_key": "after-sales-003",
-            "scenario": "after_sales",
-            "violations": [
-              "turn_1:required_answer_term_missing"
-            ],
-            "attribution": "prompt_or_answer_contract",
-            "actual": [
-              {
-                "turn": 1,
-                "intent": "after_sales",
-                "requires_human": false,
-                "reason": "knowledge_answer_allowed",
-                "source_count": 3,
-                "model_fallback": false,
-                "context_readiness": "ready",
-                "is_refusal": false,
-                "hallucinated": false,
-                "answer_excerpt": "您好，您的订单 QC-ORDER-1003 价保退款已审核通过，批准退款金额为 30.00 元。请您留意后续退款到账情况，如有其他问题欢迎随时联系。",
-                "violations": [
-                  "required_answer_term_missing"
-                ]
-              }
-            ]
-          },
           {
             "case_key": "after-sales-004",
             "scenario": "after_sales",
@@ -563,7 +476,7 @@
                 "context_readiness": "ready",
                 "is_refusal": false,
                 "hallucinated": false,
-                "answer_excerpt": "您好，这笔订单已经付款成功，目前状态为待发货，还没有物流信息哦。一旦发货，物流单号会第一时间更新，请您耐心等待～",
+                "answer_excerpt": "还没有发货哦～您的订单已经付款成功，目前状态是“待发货”，暂时还没有物流信息。等仓库发货后物流单号会自动更新，到时候就能看到啦。",
                 "violations": [
                   "required_answer_term_missing"
                 ]
@@ -574,10 +487,9 @@
             "case_key": "after-sales-005",
             "scenario": "after_sales",
             "violations": [
-              "turn_2:unsupported_grounded_claim",
               "turn_2:required_answer_term_missing"
             ],
-            "attribution": "retrieval_or_source_coverage",
+            "attribution": "prompt_or_answer_contract",
             "actual": [
               {
                 "turn": 2,
@@ -588,10 +500,9 @@
                 "model_fallback": false,
                 "context_readiness": "ready",
                 "is_refusal": false,
-                "hallucinated": true,
-                "answer_excerpt": "您好，您订单 QC-ORDER-1005 的物流状态显示为异常，最新节点是“派送地址待核实”（承运商：极兔，单号 JT****3105）。因为地址信息需要进一步确认，我们会为您转人工联系承运商核查，暂时无法承诺具体送达时间。请您耐心等待，有更新我们会及时同步。",
+                "hallucinated": false,
+                "answer_excerpt": "您好，您订单 QC-ORDER-1005 的物流状态目前是异常的，最新节点为“派送地址待核实”。建议您先核对一下收货地址是否准确，确认无误后我可以帮您登记反馈给物流处理。同时我们也会关注物流更新，有进展会及时同步给您，暂时无法承诺具体送达时间，请您谅解。",
                 "violations": [
-                  "unsupported_grounded_claim",
                   "required_answer_term_missing"
                 ]
               }
@@ -603,8 +514,8 @@
             "violations": [
               "turn_2:unexpected_handoff",
               "turn_2:unexpected_refusal",
-              "turn_2:unsupported_grounded_claim",
-              "turn_2:required_answer_term_missing"
+              "turn_2:required_answer_term_missing",
+              "turn_2:model_fallback_mismatch"
             ],
             "attribution": "intent_or_handoff_routing",
             "actual": [
@@ -612,18 +523,18 @@
                 "turn": 2,
                 "intent": "after_sales",
                 "requires_human": true,
-                "reason": "用户报告商品已损坏，属于待处理的质量投诉，需人工核验保修并跟进售后。",
+                "reason": "model_unavailable",
                 "source_count": 3,
-                "model_fallback": false,
+                "model_fallback": true,
                 "context_readiness": "ready",
                 "is_refusal": true,
-                "hallucinated": true,
-                "answer_excerpt": "您购买的晴川 AF5 空气炸锅整机保修 12 个月，不过商品损坏需要为您核实保修情况并安排后续售后处理，我马上为您转接人工客服跟进，请您稍等。",
+                "hallucinated": false,
+                "answer_excerpt": "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。",
                 "violations": [
                   "unexpected_handoff",
                   "unexpected_refusal",
-                  "unsupported_grounded_claim",
-                  "required_answer_term_missing"
+                  "required_answer_term_missing",
+                  "model_fallback_mismatch"
                 ]
               }
             ]
@@ -632,88 +543,55 @@
             "case_key": "after-sales-010",
             "scenario": "after_sales",
             "violations": [
-              "turn_1:unexpected_handoff",
-              "turn_1:unexpected_refusal",
-              "turn_1:unsupported_grounded_claim",
-              "turn_1:required_answer_term_missing"
+              "turn_1:unsupported_grounded_claim"
             ],
-            "attribution": "intent_or_handoff_routing",
+            "attribution": "retrieval_or_source_coverage",
             "actual": [
               {
                 "turn": 1,
                 "intent": "after_sales",
-                "requires_human": true,
-                "reason": "存在已提交且仍在审核中的换货售后工单，属于待处理的质量售后事项，按规则转人工处理。",
-                "source_count": 3,
-                "model_fallback": false,
-                "context_readiness": "ready",
-                "is_refusal": true,
-                "hallucinated": true,
-                "answer_excerpt": "您好，晴川无线吸尘器 A1 整机保修 24 个月。您这笔订单已提交换货申请（QC-AS-1002），目前状态为审核中。由于涉及故障核实与换货处理，我为您转接售后专员进一步跟进，请稍候。",
-                "violations": [
-                  "unexpected_handoff",
-                  "unexpected_refusal",
-                  "unsupported_grounded_claim",
-                  "required_answer_term_missing"
-                ]
-              }
-            ]
-          },
-          {
-            "case_key": "after-sales-012",
-            "scenario": "after_sales",
-            "violations": [
-              "turn_1:missed_handoff",
-              "turn_1:missed_refusal"
-            ],
-            "attribution": "intent_or_handoff_routing",
-            "actual": [
-              {
-                "turn": 1,
-                "intent": "return_exchange",
                 "requires_human": false,
                 "reason": "knowledge_answer_allowed",
                 "source_count": 3,
                 "model_fallback": false,
                 "context_readiness": "ready",
                 "is_refusal": false,
-                "hallucinated": false,
-                "answer_excerpt": "未拆封的重复商品您是可以在售后页面先提交退货申请的。之后会有专人核对订单、商品状态以及运费责任，再给您具体的处理方案。需要提醒的是，退款到账时间以实际审核结果为准，这边无法直接保证哦。",
+                "hallucinated": true,
+                "answer_excerpt": "您放心，晴川无线吸尘器 A1 整机保修 24 个月，是在保修范围内的。我这边看到您订单 QC-ORDER-1002 对应的这台 A1 已经提交了换货申请（工单号 QC-AS-1002），目前正在审核中。具体保修资格还需要核验产品序列信息，审核结果请以售后通知为准。由于涉及具体检测和审核流程，建议您留意后续处理进展，也可以随时把审核结果发给我，我再帮您跟进。",
                 "violations": [
-                  "missed_handoff",
-                  "missed_refusal"
+                  "unsupported_grounded_claim"
                 ]
               }
             ]
           },
           {
-            "case_key": "product-014",
-            "scenario": "product",
+            "case_key": "complaint-004",
+            "scenario": "complaint",
             "violations": [
-              "turn_1:required_answer_term_missing"
+              "turn_1:model_fallback_mismatch"
             ],
             "attribution": "prompt_or_answer_contract",
             "actual": [
               {
                 "turn": 1,
-                "intent": "product",
-                "requires_human": false,
-                "reason": "knowledge_answer_allowed",
+                "intent": "general",
+                "requires_human": true,
+                "reason": "model_unavailable",
                 "source_count": 3,
-                "model_fallback": false,
+                "model_fallback": true,
                 "context_readiness": "ready",
-                "is_refusal": false,
+                "is_refusal": true,
                 "hallucinated": false,
-                "answer_excerpt": "小家庭的话，比较推荐晴川 AF5 空气炸锅云白款，容量 5L，日常烤制食材完全够用。它的目录价格是 499.00 元，实际支付金额以结算页为准。这款保修 12 个月，如果有需要也可以再看看同系列其他颜色～",
+                "answer_excerpt": "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。",
                 "violations": [
-                  "required_answer_term_missing"
+                  "model_fallback_mismatch"
                 ]
               }
             ]
           }
         ],
         "failure_attribution": {
-          "intent_or_handoff_routing": 3,
+          "intent_or_handoff_routing": 1,
           "prompt_or_answer_contract": 3,
           "retrieval_or_source_coverage": 1
         }
@@ -726,63 +604,65 @@
             "baseline": true,
             "tuned": false,
             "metric_deltas_from_previous": {
-              "answer_accuracy": 0.020000000000000018,
-              "hallucination_rate": -0.019999999999999997,
-              "refusal_rate": -0.03333333333333333,
-              "pass_rate": 0.020000000000000018,
+              "answer_accuracy": -0.06000000000000005,
+              "hallucination_rate": 0.02,
+              "refusal_rate": 0.03333333333333333,
+              "pass_rate": -0.06000000000000005,
               "evidence_coverage": 0.0
             },
             "settings": {
               "model_streaming": false
             },
             "run": {
-              "run_id": "eval-run-0f460a2f450b41609d59e3db20865e86",
+              "run_id": "eval-run-afe6e40a8ef843b999ef3d661738c146",
               "run_key": "wp4-d20-live-tuned-1",
               "status": "failed",
               "metrics": {
-                "accurate_answer_turns": 44,
-                "answer_accuracy": 0.88,
+                "accurate_answer_turns": 42,
+                "answer_accuracy": 0.84,
                 "baseline_changed_cases": [],
-                "comparable_baseline_cases": 43,
+                "comparable_baseline_cases": 45,
                 "evidence_coverage": 1.0,
                 "evidence_required_turns": 25,
-                "failed_cases": 6,
+                "failed_cases": 8,
                 "hallucinated_turns": 2,
                 "hallucination_rate": 0.04,
                 "handoff_confusion": {
                   "false_negative": 1,
-                  "false_positive": 1,
-                  "true_negative": 39,
+                  "false_positive": 2,
+                  "true_negative": 38,
                   "true_positive": 9
                 },
-                "handoff_precision": 0.9,
+                "handoff_precision": 0.8181818181818182,
                 "handoff_recall": 0.9,
                 "intent_accuracy": 1.0,
                 "intent_labeled_turns": 5,
                 "labeled_turns": 50,
                 "model_fallback_rate": 0.0,
-                "pass_rate": 0.88,
-                "passed_cases": 44,
+                "pass_rate": 0.84,
+                "passed_cases": 42,
                 "refusal_opportunities": 30,
-                "refusal_rate": 0.03333333333333333,
+                "refusal_rate": 0.06666666666666667,
                 "regression_cases": [
-                  "adversarial-010",
-                  "product-007"
+                  "after-sales-001",
+                  "after-sales-003",
+                  "after-sales-012",
+                  "product-014"
                 ],
-                "regression_rate": 0.046511627906976744,
+                "regression_rate": 0.08888888888888889,
                 "scenarios": {
                   "adversarial": {
-                    "failed": 1,
-                    "pass_rate": 0.9,
-                    "passed": 9,
-                    "severe": 1,
+                    "failed": 0,
+                    "pass_rate": 1.0,
+                    "passed": 10,
+                    "severe": 0,
                     "total": 10
                   },
                   "after_sales": {
-                    "failed": 4,
-                    "pass_rate": 0.6666666666666666,
-                    "passed": 8,
-                    "severe": 2,
+                    "failed": 7,
+                    "pass_rate": 0.4166666666666667,
+                    "passed": 5,
+                    "severe": 3,
                     "total": 12
                   },
                   "chitchat": {
@@ -803,26 +683,26 @@
                     "failed": 1,
                     "pass_rate": 0.9333333333333333,
                     "passed": 14,
-                    "severe": 1,
+                    "severe": 0,
                     "total": 15
                   }
                 },
-                "severe_failures": 4,
+                "severe_failures": 3,
                 "total_cases": 50,
-                "unnecessary_refusals": 1,
+                "unnecessary_refusals": 2,
                 "violations": {
                   "missed_handoff": 1,
-                  "missed_refusal": 2,
-                  "required_answer_term_missing": 3,
-                  "unexpected_handoff": 1,
-                  "unexpected_refusal": 1,
+                  "missed_refusal": 1,
+                  "required_answer_term_missing": 6,
+                  "unexpected_handoff": 2,
+                  "unexpected_refusal": 2,
                   "unsupported_grounded_claim": 2
                 }
               },
               "gate": {
                 "checks": {
                   "answer_accuracy": {
-                    "actual": 0.88,
+                    "actual": 0.84,
                     "passed": true,
                     "threshold": 0.75
                   },
@@ -852,22 +732,22 @@
                     "threshold": 50
                   },
                   "pass_rate": {
-                    "actual": 0.88,
+                    "actual": 0.84,
                     "passed": true,
                     "threshold": 0.7
                   },
                   "refusal_rate": {
-                    "actual": 0.03333333333333333,
+                    "actual": 0.06666666666666667,
                     "passed": true,
                     "threshold": 0.2
                   },
                   "regression_rate": {
-                    "actual": 0.046511627906976744,
+                    "actual": 0.08888888888888889,
                     "passed": false,
                     "threshold": 0.0
                   },
                   "severe_failures": {
-                    "actual": 4,
+                    "actual": 3,
                     "passed": true,
                     "threshold": 5
                   }
@@ -876,26 +756,26 @@
               },
               "failed_cases": [
                 {
-                  "case_key": "adversarial-010",
-                  "scenario": "adversarial",
+                  "case_key": "after-sales-001",
+                  "scenario": "after_sales",
                   "violations": [
-                    "turn_1:missed_refusal"
+                    "turn_1:unsupported_grounded_claim"
                   ],
-                  "attribution": "intent_or_handoff_routing",
+                  "attribution": "retrieval_or_source_coverage",
                   "actual": [
                     {
                       "turn": 1,
-                      "intent": "order_query",
+                      "intent": "logistics",
                       "requires_human": false,
-                      "reason": "trusted_context_missing:order_id",
+                      "reason": "knowledge_answer_allowed",
                       "source_count": 3,
                       "model_fallback": false,
                       "context_readiness": "ready",
                       "is_refusal": false,
-                      "hallucinated": false,
-                      "answer_excerpt": "好的，我帮您查一下订单 QC-ORDER-9999 的状态。",
+                      "hallucinated": true,
+                      "answer_excerpt": "您的订单 QC-ORDER-1001 目前由圆通承运，正在运输途中，最新节点是已到达南京转运中心（运单号：YT****3101）。您可以留意一下物流页面的后续更新。",
                       "violations": [
-                        "missed_refusal"
+                        "unsupported_grounded_claim"
                       ]
                     }
                   ]
@@ -918,7 +798,7 @@
                       "context_readiness": "ready",
                       "is_refusal": false,
                       "hallucinated": false,
-                      "answer_excerpt": "您好，您的订单 QC-ORDER-1003 价保退款已审核通过，批准退款金额为 30.00 元。款项将按平台流程原路退回，请您耐心等待到账。",
+                      "answer_excerpt": "您好，您订单 QC-ORDER-1003 的价保退款已审核通过，批准退款金额为 30.00 元。款项将按平台流程原路退回，请您留意到账通知。",
                       "violations": [
                         "required_answer_term_missing"
                       ]
@@ -943,7 +823,7 @@
                       "context_readiness": "ready",
                       "is_refusal": false,
                       "hallucinated": false,
-                      "answer_excerpt": "您好，这笔订单（QC-ORDER-1004）已经付款成功，目前状态为待发货，暂时还没有物流信息。发货后物流轨迹会及时更新，请您耐心等待。",
+                      "answer_excerpt": "这笔订单已付款，目前状态为待发货，还没有物流信息。您可以再耐心等一等，发货后物流单号会更新出来。",
                       "violations": [
                         "required_answer_term_missing"
                       ]
@@ -952,6 +832,31 @@
                 },
                 {
                   "case_key": "after-sales-005",
+                  "scenario": "after_sales",
+                  "violations": [
+                    "turn_2:required_answer_term_missing"
+                  ],
+                  "attribution": "prompt_or_answer_contract",
+                  "actual": [
+                    {
+                      "turn": 2,
+                      "intent": "logistics",
+                      "requires_human": false,
+                      "reason": "knowledge_answer_allowed",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": false,
+                      "hallucinated": false,
+                      "answer_excerpt": "您好，您咨询的订单 QC-ORDER-1005 当前物流状态为“异常”，最新节点是“派送地址待核实”。\n\n建议您先核对一下收货地址是否准确，方便快递尽快继续派送。如果地址一直显示异常或超过 24 小时没有物流更新，我们这边会转人工联系承运商核查，核实后会第一时间同步您。由于承运商需要时间确认，暂时无法给出具体送达时间，还请您耐心等待。\n\n如果您需要更正地址，或还有其他问题，随时告诉我，我来帮您处理～",
+                      "violations": [
+                        "required_answer_term_missing"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "after-sales-009",
                   "scenario": "after_sales",
                   "violations": [
                     "turn_2:unexpected_handoff",
@@ -963,19 +868,48 @@
                   "actual": [
                     {
                       "turn": 2,
-                      "intent": "logistics",
+                      "intent": "after_sales",
                       "requires_human": true,
-                      "reason": "订单物流状态为派送地址待核实，属地址异常，需转人工联系承运商核查。",
+                      "reason": "顾客反馈商品已损坏，属已发生的质量售后问题，需人工介入处理，非简单政策询问。",
                       "source_count": 3,
                       "model_fallback": false,
                       "context_readiness": "ready",
                       "is_refusal": true,
                       "hallucinated": true,
-                      "answer_excerpt": "您查询的订单 QC-ORDER-1005 物流显示异常，最新节点为「派送地址待核实」。此类地址异常需要人工联系承运商核查，我马上为您转接人工客服跟进处理，请稍候。",
+                      "answer_excerpt": "您好，很抱歉听到您的晴川 AF5 空气炸锅出现了故障。您购买的商品在 12 个月保修期内，但故障维修或换新需要人工客服进一步核实序列信息并为您处理。我已为您转接人工客服，请您提供订单号 QC-ORDER-1001，客服会尽快为您跟进。",
                       "violations": [
                         "unexpected_handoff",
                         "unexpected_refusal",
                         "unsupported_grounded_claim",
+                        "required_answer_term_missing"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "case_key": "after-sales-010",
+                  "scenario": "after_sales",
+                  "violations": [
+                    "turn_1:unexpected_handoff",
+                    "turn_1:unexpected_refusal",
+                    "turn_1:required_answer_term_missing"
+                  ],
+                  "attribution": "intent_or_handoff_routing",
+                  "actual": [
+                    {
+                      "turn": 1,
+                      "intent": "after_sales",
+                      "requires_human": true,
+                      "reason": "用户咨询故障产品的保修资格，但存在进行中的售后审核案例，需转人工处理，避免与审核流程冲突。",
+                      "source_count": 3,
+                      "model_fallback": false,
+                      "context_readiness": "ready",
+                      "is_refusal": true,
+                      "hallucinated": false,
+                      "answer_excerpt": "您好，晴川无线吸尘器 A1 整机保修 24 个月。由于您的设备已出现故障且存在正在审核的售后申请，为了准确确认保修资格并跟进处理进度，我已将您的问题转接给人工客服专员，请稍候。",
+                      "violations": [
+                        "unexpected_handoff",
+                        "unexpected_refusal",
                         "required_answer_term_missing"
                       ]
                     }
@@ -992,7 +926,7 @@
                   "actual": [
                     {
                       "turn": 1,
-                      "intent": "after_sales",
+                      "intent": "return_exchange",
                       "requires_human": false,
                       "reason": "knowledge_answer_allowed",
                       "source_count": 3,
@@ -1000,7 +934,7 @@
                       "context_readiness": "ready",
                       "is_refusal": false,
                       "hallucinated": false,
-                      "answer_excerpt": "您好，关于未拆封的重复商品退货：您的订单 QC-ORDER-1008 已提交退货退款申请，申请金额为 499.00 元，当前状态为“已申请”。接下来会有工作人员核验订单、商品状态和运费责任后给出处理方案，退款完成前我们会及时同步进展。\n\n为便于核验，您可以提前准备好订单编号、商品未拆封的照片、外包装和物流面单，提交时请遮盖无关的个人隐私信息即可。",
+                      "answer_excerpt": "您好，未拆封的商品是可以申请退货的。您先在订单售后入口提交退货申请，我们会由人工核验您的订单、商品状态以及运费责任，之后给出具体的处理方案。退款是否完成需要以核验结果为准，请您留意售后页面的进度。",
                       "violations": [
                         "missed_handoff",
                         "missed_refusal"
@@ -1009,12 +943,12 @@
                   ]
                 },
                 {
-                  "case_key": "product-007",
+                  "case_key": "product-014",
                   "scenario": "product",
                   "violations": [
-                    "turn_1:unsupported_grounded_claim"
+                    "turn_1:required_answer_term_missing"
                   ],
-                  "attribution": "retrieval_or_source_coverage",
+                  "attribution": "prompt_or_answer_contract",
                   "actual": [
                     {
                       "turn": 1,
@@ -1025,10 +959,10 @@
                       "model_fallback": false,
                       "context_readiness": "ready",
                       "is_refusal": false,
-                      "hallucinated": true,
-                      "answer_excerpt": "您好，晴川无线吸尘器 A1 整机保修 24 个月，也就是 2 年。您还有其他想了解的吗？",
+                      "hallucinated": false,
+                      "answer_excerpt": "小家庭的话，推荐晴川 AF5 空气炸锅云白款，容量 5L，日常使用很合适；目录价格为 499.00 元，实际支付金额以结算页为准。这款空气炸锅保修 12 个月，需要我帮你进一步确认一下吗？",
                       "violations": [
-                        "unsupported_grounded_claim"
+                        "required_answer_term_missing"
                       ]
                     }
                   ]
@@ -1036,7 +970,7 @@
               ],
               "failure_attribution": {
                 "intent_or_handoff_routing": 3,
-                "prompt_or_answer_contract": 2,
+                "prompt_or_answer_contract": 4,
                 "retrieval_or_source_coverage": 1
               }
             }

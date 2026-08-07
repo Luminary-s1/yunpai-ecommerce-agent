@@ -524,8 +524,8 @@ def test_history_api_exposes_intent_confidence_and_method(tmp_path) -> None:
         assert len(items) == 2
         for item in items:
             assert item["customer_intent"] == "after_sales"
-            assert item["intent_method"] == "rule"
-            assert item["intent_confidence"] == pytest.approx(0.95)
+            assert item["intent_method"] == "model"
+            assert item["intent_confidence"] == pytest.approx(0.82)
 
 
 def test_history_pages_are_ordered_unique_and_complete(tmp_path) -> None:

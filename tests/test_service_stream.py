@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from ecommerce_agent.service import AgentService
 
 from conftest import make_settings, principal_for
@@ -26,6 +28,44 @@ def test_chat_stream_mock_matches_non_stream_answer(tmp_path) -> None:
             event["text"] for event in events if event["event"] == "delta"
         ) == expected.answer
         assert events[-1]["response"]["answer"] == expected.answer
+    finally:
+        service.close()
+
+
+def test_stream_generation_preserves_the_selected_prompt_variant(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    captured: list[list[dict[str, str]]] = []
+    try:
+        def stream_generate(messages: list[dict[str, str]]) -> Iterator[str]:
+            captured.append(messages)
+            yield "已记录"
+
+        service.model.stream_generate = stream_generate  # type: ignore[method-assign]
+        deltas, fallback, _ = service._generation_deltas(
+            {
+                "normalized_input": "请查询售后进度",
+                "retrieved": [
+                    {
+                        "id": "kb-1",
+                        "intent": "after_sales",
+                        "category": "policy",
+                        "question": "售后进度如何查询",
+                        "answer": "可在订单售后页查看进度。",
+                        "source": "seed:test",
+                        "version": 1,
+                        "score": 0.8,
+                    }
+                ],
+                "context_bundle": {"recent_history": []},
+                "tool_result": {},
+                "decision": {"reason": "knowledge_is_relevant"},
+                "intent_routing": {"prompt_variant": "after_sales_support"},
+            }
+        )
+
+        assert list(deltas) == ["已记录"]
+        assert fallback is False
+        assert "after_sales_support" in captured[0][-1]["content"]
     finally:
         service.close()
 

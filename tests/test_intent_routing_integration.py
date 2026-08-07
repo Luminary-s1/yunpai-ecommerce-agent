@@ -4,7 +4,6 @@ from dataclasses import replace
 
 import pytest
 
-from ecommerce_agent.graph import catalog_fact_answer
 from ecommerce_agent.intent import load_intent_routing, routing_for_intent
 from ecommerce_agent.service import AgentService
 
@@ -102,13 +101,17 @@ def test_routing_file_declares_all_controlled_intents() -> None:
 def test_precheck_classifies_and_exposes_routing_metadata(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     try:
+        service.model.generate_json = lambda *_args, **_kwargs: {  # type: ignore[method-assign]
+            "intent": "product_inquiry",
+            "confidence": 0.88,
+        }
         result = _node(service, "precheck").invoke(
             {"normalized_input": "请问这款多少钱", "context": {}, "trace": []}
         )
 
         assert result["customer_intent"] == "product_inquiry"
-        assert result["intent_confidence"] == 0.95
-        assert result["intent_method"] == "rule"
+        assert result["intent_confidence"] == 0.88
+        assert result["intent_method"] == "model"
         assert result["intent_error"] is None
         assert result["intent_routing"] == routing_for_intent("product_inquiry")
     finally:
@@ -196,70 +199,10 @@ def test_precheck_model_confirmed_complaint_retrieves_before_handoff(tmp_path) -
         assert result["customer_intent"] == "complaint"
         assert result["intent_method"] == "model"
         assert result["route"] == "retrieve"
-        assert result["route_reason"] == "complaint_attention_required"
+        assert result["route_reason"] == "llm_deliberation_allowed"
         assert result["risk_level"] == "medium"
     finally:
         service.close()
-
-
-def test_catalog_fast_answer_requires_question_coverage() -> None:
-    state = {
-        "normalized_input": "这盏灯支持定时关闭吗",
-        "retrieved": [
-            {
-                "question": "星海阅读灯 L2 有哪些功能",
-                "answer": "知识库仅说明三档亮度，未确认定时关闭功能。",
-            }
-        ],
-        "context_bundle": {
-            "product_advisor": {
-                "candidates": [
-                    {
-                        "title": "星海阅读灯 L2",
-                        "sale_price": "89.00",
-                        "currency": "CNY",
-                        "attributes": {"亮度档位": "3 档"},
-                    }
-                ]
-            }
-        },
-    }
-
-    assert catalog_fact_answer(state) is None
-
-
-def test_catalog_fast_answer_only_renders_requested_supported_fact() -> None:
-    state = {
-        "normalized_input": "星海阅读灯 L2 多少钱",
-        "retrieved": [
-            {
-                "question": "星海阅读灯 L2 售价",
-                "answer": "星海阅读灯 L2 当前售价为 89.00 CNY。",
-            }
-        ],
-        "context_bundle": {
-            "product_advisor": {
-                "candidates": [
-                    {
-                        "title": "星海阅读灯 L2",
-                        "sale_price": "89.00",
-                        "currency": "CNY",
-                        "attributes": {
-                            "亮度档位": "3 档",
-                            "电池容量": "2400mAh",
-                        },
-                    }
-                ]
-            }
-        },
-    }
-
-    answer = catalog_fact_answer(state)
-
-    assert answer is not None
-    assert "89.00 CNY" in answer
-    assert "3 档" not in answer
-    assert "2400mAh" not in answer
 
 
 def test_chat_complaint_answers_with_evidence_and_marks_urgent_handoff(tmp_path) -> None:
@@ -274,7 +217,7 @@ def test_chat_complaint_answers_with_evidence_and_marks_urgent_handoff(tmp_path)
         )
 
         assert response.requires_human is True
-        assert response.reason == "complaint_attention_required"
+        assert response.reason == "complaint_requires_human"
         assert response.context_readiness == "ready"
         assert response.sources
         assert "抱歉" in response.answer
@@ -377,20 +320,32 @@ def test_prompt_and_sop_variants_are_forwarded_to_model_payload(tmp_path) -> Non
         service.model.generate_json = generate_json  # type: ignore[method-assign]
         _node(service, "deliberate").invoke(state)
 
-        assert captured[-1]["routing"] == routing_for_intent("product_inquiry")
+        assert captured[-1]["routing"] == {
+            **routing_for_intent("product_inquiry"),
+            "semantic_authority": False,
+        }
     finally:
         service.close()
 
 
-def test_product_knowledge_skips_deliberation_model_without_bypassing_graph(
+def test_product_knowledge_still_requires_model_deliberation(
     tmp_path,
 ) -> None:
     service = AgentService(make_settings(tmp_path))
     try:
-        def unexpected_call(*_args, **_kwargs):
-            raise AssertionError("retrieved product facts must not enter a tool loop")
+        calls = 0
 
-        service.model.generate_json = unexpected_call  # type: ignore[method-assign]
+        def decide_answer(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            return {
+                "intent": "product",
+                "mode": "answer",
+                "reason": "knowledge_is_relevant",
+                "confidence": 0.9,
+            }
+
+        service.model.generate_json = decide_answer  # type: ignore[method-assign]
         result = _node(service, "deliberate").invoke(
             {
                 "normalized_input": "介绍一下这款商品",
@@ -422,8 +377,59 @@ def test_product_knowledge_skips_deliberation_model_without_bypassing_graph(
         )
 
         assert result["decision"]["mode"] == "answer"
-        assert result["decision"]["reason"] == "product_knowledge_available"
+        assert result["decision"]["reason"] == "knowledge_is_relevant"
         assert result["model_fallback"] is False
+        assert calls == 1
+    finally:
+        service.close()
+
+
+def test_high_score_approved_answer_requires_an_exact_normalized_question(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    calls = 0
+    try:
+        def decide_answer(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            return {
+                "intent": "product",
+                "mode": "answer",
+                "reason": "model_checked_evidence",
+                "confidence": 0.9,
+            }
+
+        service.model.generate_json = decide_answer  # type: ignore[method-assign]
+        result = _node(service, "deliberate").invoke(
+            {
+                "normalized_input": "这款设备适合潮湿环境吗",
+                "context": {},
+                "context_bundle": {},
+                "retrieved": [
+                    {
+                        "id": "approved-1",
+                        "source": "evolution:approved-1",
+                        "intent": "product",
+                        "category": "approved_answer",
+                        "question": "这款设备支持哪些安装方式",
+                        "answer": "支持台面安装。",
+                        "score": 0.99,
+                        "version": 1,
+                    }
+                ],
+                "trace": [],
+                "session_id": "approved-not-exact",
+                "tenant_id": "tenant-test",
+                "react_step": 0,
+                "tool_result": {},
+                "customer_intent": "product_inquiry",
+                "intent_routing": routing_for_intent("product_inquiry"),
+            }
+        )
+
+        assert calls == 1
+        assert result["decision"]["reason"] == "model_checked_evidence"
     finally:
         service.close()
 
@@ -498,6 +504,17 @@ def test_graph_topology_has_no_d15_nodes_or_edges(tmp_path) -> None:
 def test_chat_persists_classification_pair(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     try:
+        import json
+
+        original_generate_json = service.model.generate_json
+
+        def product_classifier(messages, **kwargs):
+            payload = json.loads(messages[-1]["content"])
+            if payload.get("task_type") == "intent_classification":
+                return {"intent": "product_inquiry", "confidence": 0.88}
+            return original_generate_json(messages, **kwargs)
+
+        service.model.generate_json = product_classifier  # type: ignore[method-assign]
         principal = principal_for(service)
         response = service.chat(principal, "routing-persist-session", "这款多少钱")
         internal_session_id = service.db.resolve_session(
@@ -517,8 +534,8 @@ def test_chat_persists_classification_pair(tmp_path) -> None:
 
         assert response.message_id
         assert [(row["role"], row["customer_intent"], row["intent_method"]) for row in rows[-2:]] == [
-            ("user", "product_inquiry", "rule"),
-            ("assistant", "product_inquiry", "rule"),
+            ("user", "product_inquiry", "model"),
+            ("assistant", "product_inquiry", "model"),
         ]
     finally:
         service.close()

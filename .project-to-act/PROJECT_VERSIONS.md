@@ -11,11 +11,11 @@
 
 ## M4 验收补丁（未单独升版）
 
-- 状态：M4 本机独立验收候选通过；生产放行继续阻塞
+- 状态：D23 修复候选；WP4 客服门禁通过，但 M4 本机独立验收暂不签署，生产放行继续阻塞
 - 兼容性：沿用 schema v27；没有新增迁移、依赖或请求/响应字段；既有非流式 `POST /v1/chat` 契约与 LangGraph 20 节点 / 35 边不变
-- 行为修正：投诉在保留 `complaints / urgent` 人工标记的同时返回检索来源与共情答复；目录快答只覆盖问题明确询问且检索证据支持的字段，其余回落到模型生成
-- 验证：冻结 50 例 mock gate passed（`answer_accuracy=0.940`、`hallucination_rate=0.020`、`severe_failures=3`）；F-122 场景 `18/18`；全量 `597 passed, 1 xfailed`
-- 证据：E-20260807-001；`docs/works/13-feature-m4-customer-service/README.md`
+- 行为修正：分类与关键词只作为 advisory signal；投诉 handoff / SLA 由规划模型确认；普通商品回答取消目录/高分短路，仅保留标准化问法完全相等的人工批准知识复用；流式与非流式共用生成计划
+- 验证：聚焦 `199 passed / 1 xfailed`，全量 `603 passed / 1 xfailed`，compileall 与 whitespace 通过；冻结 50 例 mock/live gate 均 passed（mock `0.940 / severe 3`；live `0.900 / severe 1`）；但当前 40 条泄漏意图回归总体 `29/40=72.5%`，投诉平衡集 recall `45%`，均不足以重新签署
+- 证据：E-20260807-002；`docs/works/13-feature-m4-customer-service/README.md` D23
 
 ## 上一版本
 
