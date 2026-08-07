@@ -1,5 +1,11 @@
 # M6 竞品分析模块开发 — 工作台填写内容
 
+> **FROZEN / SUPERSEDED（2026-08-07）**：本工作台已冻结，未勾选项不再作为当前
+> 开发 backlog。既有代码、API、测试和 schema v14/v17/v26 保留且继续兼容，不删除、
+> 不重命名。本文已归档，只读保留。新主线见
+> [M6-R Demand Forecast 工作台](../M6R_DEMAND_FORECAST_WORKBENCH.md) 与
+> [路线重置说明](../../ROADMAP_RESET_20260807.md)。
+
 > 供粘贴到团队任务管理网页。本文件只写待办与需求，不写完成状态；
 > 真实完成情况见 `docs/tasks/PROGRESS.md`。
 

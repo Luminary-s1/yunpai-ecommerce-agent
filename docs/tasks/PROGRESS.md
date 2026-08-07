@@ -1,4 +1,4 @@
-# M4 / M5 / M6 实现状态清单
+# 里程碑实现状态清单
 
 > 团队共用。工作台（团队任务管理网页）里只写待办与需求，不写完成状态；
 > 代码层面的真实完成情况以本文件为准。
@@ -7,11 +7,37 @@
 
 代码证据：`.project-to-act/PROJECT_FEATURES.md`、`docs/works/`、`docs/TEST_REPORT_*.md`。
 
+## 2026-08-07 Rebased Roadmap
+
+路线重置见 [ROADMAP_RESET_20260807.md](../ROADMAP_RESET_20260807.md)。当前口径：
+
+| 里程碑 | 状态 | 当前事实 |
+|---|---|---|
+| M4 智能客服 | 已收口 | 保持现有实现与验收基线，后续仅处理缺陷和生产 Gate |
+| 旧 M5 运营辅助与文案生成 | `FROZEN / SUPERSEDED` | 代码与 schema v25 保留；下方未完成项只作历史记录，不再执行 |
+| 旧 M6 竞品分析 | `FROZEN / SUPERSEDED` | 代码与 schema v14/v17/v26 保留；下方未完成项只作历史记录，不再执行 |
+| M5-R Traffic Lab | 设计待冻结 | 工作台已建立，尚无业务实现或 available 登记 |
+| M6-R Demand Forecast | 设计待冻结 | 工作台已建立，尚无业务实现或 available 登记 |
+
+新路线进度：
+
+- [x] 建立路线重置文档并明确新旧里程碑边界。
+- [x] 建立 [M5-R Traffic Lab 工作台](M5R_TRAFFIC_LAB_WORKBENCH.md)。
+- [x] 建立 [M6-R Demand Forecast 工作台](M6R_DEMAND_FORECAST_WORKBENCH.md)。
+- [x] 预留 schema v28（Traffic Lab）、v29（Forecasting）和 v30（Inventory Planning）。
+- [ ] 负责人评审并冻结两份领域设计。
+- [ ] 按工作包拆分 GitHub Issues，明确依赖、验收和非目标。
+- [ ] 设计冻结后同步 `.project-to-act/*`，再开始业务代码实现。
+
+在设计冻结之前，不得把 M5-R/M6-R 标记为 implemented/available，也不得用旧 M5/M6 的
+已完成项替代新路线验收。
+
 ## 分工与开发测试隔离
 
-各工作包的承接人见 `M4_WORKBENCH.md` / `M5_WORKBENCH.md` / `M6_WORKBENCH.md`
-的任务表，交接说明见对应的 `*_HANDOFF.md`。进度以飞书机器人为准；本文件只记录
-代码层面的实现状态，也就是下面各节的复选框。
+当前工作包的承接人见 `M4_WORKBENCH.md`、`M5R_TRAFFIC_LAB_WORKBENCH.md` 和
+`M6R_DEMAND_FORECAST_WORKBENCH.md`。旧 M5/M6 的任务表与交接说明已移入 `archive/`，
+只用于解释历史实现。进度以飞书机器人为准；本文件只记录代码层面的实现状态，也就是
+下面各节的复选框。
 
 **开发与测试必须由不同成员承担**，三个模块的当前分工都满足这条：
 胡磊在 M5 只做验收测试不做开发；缪海南在 M5 只做开发，测试由胡磊执行；
@@ -128,10 +154,14 @@ M4 的开发全部由模块负责人承接，验收出口由胡磊承接——�
 
 ## M5 运营辅助与文案生成开发
 
+> **历史冻结区**：自 2026-08-07 起不再补本节未完成项；保留复选框用于说明既有代码
+> 覆盖范围，不能据此继续派发旧 M5 任务。
+
 模块任务书共 5 个工作包，116 小时。代码已在 `main`（F-311，
 `src/ecommerce_agent/business/ops_assistant.py`）。
 
-工作包划分见 `docs/tasks/M5_WORKBENCH.md`，交接说明 `docs/tasks/M5_HANDOFF.md`：
+历史工作包划分见 `docs/tasks/archive/M5_WORKBENCH.md`，交接说明见
+`docs/tasks/archive/M5_HANDOFF.md`：
 数据层两包（WP2 接口与解析、WP3 解析与上传服务）由缪海南承接，
 WP4 营销文案生成引擎由模块负责人承接，WP5 运营分析与报告生成由谢良璇承接，
 WP1 验收测试由胡磊承接。
@@ -202,6 +232,9 @@ WP1 验收测试由胡磊承接。
 ---
 
 ## M6 竞品分析模块开发
+
+> **历史冻结区**：自 2026-08-07 起不再补本节未完成项；保留复选框用于说明既有代码
+> 覆盖范围，不能据此继续派发旧 M6 任务。
 
 模块任务书共 5 个工作包，116 小时。代码已在 `main`（F-304，
 `src/ecommerce_agent/business/competitive.py`，2097 行）。
@@ -280,10 +313,13 @@ WP1 验收测试由胡磊承接。
 | 模块 | 工作包 | 已实现项 | 待实现项 |
 |---|---:|---:|---:|
 | M4 | 5 | 37 | 20 |
-| M5 | 5 | 26 | 20 |
-| M6 | 5 | 22 | 22 |
+| 旧 M5（冻结） | 5 | 26 | 20（历史，不再执行） |
+| 旧 M6（冻结） | 5 | 22 | 22（历史，不再执行） |
+| M5-R | 5 | 0 | 设计待冻结 |
+| M6-R | 5 | 0 | 设计待冻结 |
 
-M4 的 37 项里有 3 项（标 ✎）在 `feature/m4-customer-service` 分支上，未合入 main。
+新路线的工作包与验收定义分别见 M5-R/M6-R 工作台；表中的 0 仅表示尚未实现业务能力，
+不否定本次已完成的路线与工作台文档。
 
 ### 待补的交付文档
 
@@ -292,5 +328,5 @@ M4 的 37 项里有 3 项（标 ✎）在 `feature/m4-customer-service` 分支�
 | `docs/works/13-feature-m4-customer-service/README.md` | 模块负责人 |
 | `docs/works/14-feature-m6-competitive-analysis/README.md`（尚无） | 模块负责人 |
 | M4 效果评测报告与判定标准定义 | 模块负责人 |
-| M5 / M6 的模块交付说明与实跑截图 | 模块负责人 |
-| `.project-to-act` 四份台账同步（三个模块各一次） | 模块负责人 |
+| M5-R / M6-R 设计评审与 Issue 拆分 | 模块负责人 |
+| 设计冻结后的 `.project-to-act` 四份台账同步 | 模块负责人 |

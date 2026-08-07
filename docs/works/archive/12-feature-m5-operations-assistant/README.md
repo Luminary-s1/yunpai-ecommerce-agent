@@ -1,5 +1,9 @@
 # M5 运营辅助与文案生成
 
+> **FROZEN / SUPERSEDED（2026-08-07）**：本文及同目录附件是旧 M5 的历史交付证据，
+> 已归档、只读保留。新路线见 [路线重置说明](../../../ROADMAP_RESET_20260807.md) 和
+> [M5-R Traffic Lab 工作台](../../../tasks/M5R_TRAFFIC_LAB_WORKBENCH.md)。
+
 - 类型：feature
 - 分支：`feature/m5-operations-assistant`
 - 基线：`f205f16`

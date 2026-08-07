@@ -1,5 +1,9 @@
 # M6 竞品分析模块 — 交接说明
 
+> **FROZEN / SUPERSEDED（2026-08-07）**：停止按本文继续开发旧 M6 缺口；本文仅保留
+> 历史交接上下文。本文已归档，只读保留；既有实现继续兼容。新任务以
+> [M6-R Demand Forecast 工作台](../M6R_DEMAND_FORECAST_WORKBENCH.md) 为准。
+
 面向承接本模块开发的两位同学。读完这一份加根目录的 `CONTRIBUTING.md` 就能开工。
 
 ---
@@ -49,7 +53,7 @@
    M5 另一个包的前提，也在关键路径上
 3. M5「运营数据接口与解析模块开发」排第三，它要等上一条定稿
 
-M5 两个包的顺序与依赖见 `docs/tasks/M5_WORKBENCH.md` 各包的
+M5 两个包的顺序与依赖见 `docs/tasks/archive/M5_WORKBENCH.md` 各包的
 「子任务交付契约」，`dependencies` 字段里写死了。
 
 **胡磊**
@@ -246,13 +250,13 @@ verified all four context budget tests pass.
 | 路径 | 内容 |
 |---|---|
 | `CONTRIBUTING.md` | 开发规范、PR 流程、项目决策、常见的坑 |
-| `docs/tasks/M6_WORKBENCH.md` | 五个工作包的完整需求与验收标准 |
+| `docs/tasks/archive/M6_WORKBENCH.md` | 五个历史工作包的完整需求与验收标准 |
 | `docs/tasks/PROGRESS.md` | 已实现 / 待实现的复选框清单，先看这个 |
 | `.project-to-act/PROJECT_FEATURES.md` | 功能台账，F-304 是竞品模块既有部分 |
 | `.project-to-act/PROJECT_OVERVIEW.md` | 完整的项目决策记录（D-001 起） |
 | `src/ecommerce_agent/business/competitive.py` | 竞品模块主实现 |
 | `src/ecommerce_agent/operations_api.py` | 竞品相关 API 路由 |
-| `docs/works/12-feature-m5-operations-assistant/README.md` | 交付文档的格式参考 |
+| `docs/works/archive/12-feature-m5-operations-assistant/README.md` | 历史交付文档的格式参考 |
 
 ---
 

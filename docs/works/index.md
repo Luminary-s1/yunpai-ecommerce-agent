@@ -26,7 +26,7 @@
 
 | 类型 | 来源 | 状态 | 验证与操作文档 |
 |---|---|---|---|
-| feature | `feature/m5-operations-assistant` | 开发与验收完成，未提交 | [M5 运营辅助与文案生成](12-feature-m5-operations-assistant/README.md) |
+| feature | `feature/m5-operations-assistant` | 已冻结并归档 | [M5 运营辅助与文案生成](archive/12-feature-m5-operations-assistant/README.md) |
 
 ## 本次统一验收
 

@@ -106,7 +106,7 @@ D17 已由模块负责人完成（`simulation.py` + `test_virtual_store_simulati
 
 ## 4. 代码提到哪里 / 环境 / 反证
 
-这三节和 M6 完全一样，不重复写，直接看 `docs/tasks/M6_HANDOFF.md` 的
+这三节沿用旧 M6 交接规范，不重复写，直接看 `docs/tasks/archive/M6_HANDOFF.md` 的
 第 4、5、6 节：
 
 - **第 4 节**：fork 关系、分支命名、PR 提到哪里、schema 占号那个真实事故
@@ -128,9 +128,9 @@ D17 已由模块负责人完成（`simulation.py` + `test_virtual_store_simulati
 |---|---|
 | `CONTRIBUTING.md` | 开发规范、PR 流程、项目决策、常见的坑 |
 | `docs/tasks/M4_WORKBENCH.md` | 五个工作包的完整需求与验收标准 |
-| `docs/tasks/M6_HANDOFF.md` | 第 4/5/6 节：仓库、环境、反证（本文档不重复） |
+| `docs/tasks/archive/M6_HANDOFF.md` | 第 4/5/6 节：仓库、环境、反证（本文档不重复） |
 | `docs/tasks/PROGRESS.md` | 已实现 / 待实现清单 + 分工进度总览，先看这个 |
-| `docs/works/12-feature-m5-operations-assistant/README.md` | 交付文档的格式参考 |
+| `docs/works/archive/12-feature-m5-operations-assistant/README.md` | 历史交付文档的格式参考 |
 | `.project-to-act/PROJECT_OVERVIEW.md` | 完整的项目决策记录（D-001 起） |
 
 ---

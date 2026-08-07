@@ -11,7 +11,8 @@
 - **技术栈**：Python 3.11+ / FastAPI / LangGraph / SQLite / Pydantic v2
 - **架构原则**：**模型负责理解和建议，代码负责权限、幂等、业务规则和成功判定。**
   模型可以选择做什么，但不能自己放行权限、不能自己判定操作成功
-- **业务模块**：商品、订单、仓储、竞品、营销、财务、指标、客服、运营辅助
+- **业务模块**：商品、订单、仓储、竞品、营销、财务、指标、客服、运营辅助；新路线
+  增加 `traffic_lab`（商品流量实验）和 `forecasting`（需求预测与智能补货）
 - **当前阶段**：本机候选，生产放行仍阻塞于真实平台权限
 
 代码在 `src/ecommerce_agent/`，测试在 `tests/`，文档在 `docs/`。
@@ -221,15 +222,18 @@ verified all four context budget tests pass.
 
 | 文档 | 内容 |
 |---|---|
-| `docs/tasks/M6_WORKBENCH.md` | M6 模块的工作包拆解、需求、验收标准 |
+| `docs/ROADMAP_RESET_20260807.md` | 2026-08-07 路线重置、新旧里程碑边界与实施顺序 |
+| `docs/tasks/README.md` | 当前任务文档入口与历史归档索引 |
+| `docs/tasks/M5R_TRAFFIC_LAB_WORKBENCH.md` | M5-R 流量实验模块的工作包、数据模型与验收 |
+| `docs/tasks/M6R_DEMAND_FORECAST_WORKBENCH.md` | M6-R 需求预测模块的工作包、数据模型与验收 |
+| `docs/tasks/archive/` | 已冻结的旧 M5/M6 工作台与交接说明，只保留历史上下文 |
 | `docs/tasks/PROGRESS.md` | 各模块已实现与待实现项的复选框清单 |
 | `.project-to-act/PROJECT_FEATURES.md` | 功能台账，F-xxx 编号与状态 |
-| `docs/works/` | 历史交付文档，看格式参考 `12-feature-m5-operations-assistant/README.md` |
+| `docs/works/` | 交付文档；已冻结里程碑的证据归入 `docs/works/archive/` |
 
-M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开发者自测）。
-先读 `docs/tasks/M6_WORKBENCH.md`，再对照 `docs/tasks/PROGRESS.md` 看哪些已经
-有了、哪些要新写——竞品模块的实体匹配、人工裁决、监控告警已经存在，
-缺的主要是 CSV 批量导入、多维筛选、情感倾向分析和报告导出。
+旧 M5/M6 自 2026-08-07 起 `FROZEN / SUPERSEDED`，不得继续按其未完成 checklist 派发
+开发。新工作先读路线重置，再进入对应 M5-R/M6-R 工作台；设计冻结前不得把新模块登记为
+available。旧代码、API、数据库迁移和测试仍需保持兼容。
 
 ---
 
@@ -271,10 +275,16 @@ M6 目前分成 5 个工作包，其中工作包 1 是独立测试（不由开�
 | ≤ 25 | — | 已合并进 `main` | 历史迁移，`_apply_v1` ~ `_apply_v25` | 已合并 |
 | 26 | 缪海南 | M6 / 已合并进 `main` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已合并 |
 | 27 | 闫睿涵 | M4 / 已合并进 `main` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已合并 |
-| **28** | 缪海南 | M5 工作包 3 / 待建分支 | `ops_operation_records` 新增 `sku_id`，唯一约束改为 `(tenant_id, dataset_key, record_date, channel, sku_id)` | 已分配，未合并 |
-| 29 | *（空闲）* | | | |
+| **28** | M5-R | Traffic Lab / 待建实现分支 | creative asset、listing revision、metric bucket、experiment/window/analysis run | 已预留，未实现 |
+| **29** | M6-R | Forecasting / 待建实现分支 | demand fact、forecast policy/run/backtest/point/anomaly | 已预留，未实现 |
+| **30** | M6-R | Inventory Planning / 待建实现分支 | planning policy、inventory plan | 已预留，未实现 |
+| 31+ | *（空闲）* | | | |
 
-26 和 27 已合并，28 在途。**并行占号的分支合并时，`database.py` 必然在三处
+旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；截至 2026-08-07，对本地和已知远端
+分支的检查未发现 `_apply_v28` 实现。若存在尚未同步的旧 v28 分支，不得直接合入，先与
+模块负责人核对。26 和 27 已合并，28–30 仅预留、尚未实现。
+
+**并行占号的分支合并时，`database.py` 必然在三处
 冲突**（2026-08-06 实测：26 对 27 就是这三处，已按下面的解法合入）：
 
 1. `SCHEMA_VERSION` 那一行 —— 取两者较大值

@@ -1,5 +1,9 @@
 # M6 竞品数据 Schema 与字段字典
 
+> **FROZEN / SUPERSEDED（2026-08-07）**：本文是旧 M6 竞品分析的历史设计稿，已归档、
+> 只读保留。新路线见 [路线重置说明](../../../ROADMAP_RESET_20260807.md) 和
+> [M6-R Demand Forecast 工作台](../../../tasks/M6R_DEMAND_FORECAST_WORKBENCH.md)。
+
 > 文档版本：`M6-DD-1.2`
 > 日期：2026-08-05
 > 状态：接口口径已冻结；Schema 26 数据基础已提交 PR #2，完整工作包验收尚未完成

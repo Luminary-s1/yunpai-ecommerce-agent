@@ -1,5 +1,9 @@
 # M5 运营辅助与文案生成模块 — 交接说明
 
+> **FROZEN / SUPERSEDED（2026-08-07）**：停止按本文继续开发旧 M5 缺口；本文仅保留
+> 历史交接上下文。本文已归档，只读保留；既有实现继续兼容。新任务以
+> [M5-R Traffic Lab 工作台](../M5R_TRAFFIC_LAB_WORKBENCH.md) 为准。
+
 面向谢良璇，承接**工作包 5「运营分析与报告生成开发」**。读完这一份加根目录的
 `CONTRIBUTING.md` 就能开工。
 
@@ -273,7 +277,7 @@ verified all four context budget tests pass.
 | 路径 | 内容 |
 |---|---|
 | `CONTRIBUTING.md` | 开发规范、PR 流程、项目决策、常见的坑 |
-| `docs/tasks/M5_WORKBENCH.md` | 五个工作包的完整需求与验收标准，你的是工作包 5 |
+| `docs/tasks/archive/M5_WORKBENCH.md` | 五个历史工作包的完整需求与验收标准 |
 | `docs/tasks/PROGRESS.md` | 已实现 / 待实现的复选框清单，先看这个 |
 | `src/ecommerce_agent/business/ops_assistant.py` | 本模块主实现，你改的基本都在这里 |
 | `src/ecommerce_agent/ops_assistant_api.py` | 路由层，导出端点加在这里 |
@@ -281,7 +285,7 @@ verified all four context budget tests pass.
 | `src/ecommerce_agent/config.py` | 环境变量配置的写法参考 |
 | `.project-to-act/PROJECT_FEATURES.md` | 功能台账，F-311 是本模块 |
 | `.project-to-act/PROJECT_OVERVIEW.md` | 完整的项目决策记录（D-001 起） |
-| `docs/works/12-feature-m5-operations-assistant/README.md` | 交付文档的格式参考 |
+| `docs/works/archive/12-feature-m5-operations-assistant/README.md` | 历史交付文档的格式参考 |
 
 ---
 

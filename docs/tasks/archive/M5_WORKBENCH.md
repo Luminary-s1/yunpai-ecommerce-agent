@@ -1,5 +1,11 @@
 # M5 运营辅助与文案生成开发 — 工作台填写内容
 
+> **FROZEN / SUPERSEDED（2026-08-07）**：本工作台已冻结，未勾选项不再作为当前
+> 开发 backlog。既有代码、API、测试和 schema v25 保留且继续兼容，不删除、不重命名。
+> 本文已归档，只读保留。新主线见
+> [M5-R Traffic Lab 工作台](../M5R_TRAFFIC_LAB_WORKBENCH.md) 与
+> [路线重置说明](../../ROADMAP_RESET_20260807.md)。
+
 > 供粘贴到团队任务管理网页。本文件只写待办与需求，不写完成状态；
 > 真实完成情况见 `docs/tasks/PROGRESS.md`。
 
@@ -152,7 +158,7 @@ ROI 等所有数值由代码计算，模型只负责文字解读与文案撰写�
 
 - **工作包 5 整包交给谢良璇**，报告层。它是叶子节点：只消费已入库的运营
   数据，不阻塞其余三个包，也不被它们阻塞；六项内容全部是确定性计算、配置抽取与
-  文本输出，可以写成数字断言。交接说明见 `docs/tasks/M5_HANDOFF.md`
+  文本输出，可以写成数字断言。交接说明见 `docs/tasks/archive/M5_HANDOFF.md`
 - **数据层两包（2 与 3）交给缪海南**。两包放同一人是刻意的：
   工作包 3 定稿的字段级错误结构是工作包 2 契约固化的前提，跨人交接会多一轮同步
 - **工作包 4 营销文案生成引擎由模块负责人承接**。它与其余三包几乎无耦合，
@@ -1162,7 +1168,7 @@ template_fallback，混合结果不得被误标为纯模型生成；
 · 承 F-310 本地经营与客服管理后台——报告在后台可直接生成与查看
 · 出 F-311 运营辅助与文案生成模块
 
-具体工作（本包整包交给谢良璇承接，交接说明见 `docs/tasks/M5_HANDOFF.md`）：
+具体工作（本包整包交给谢良璇承接，交接说明见 `docs/tasks/archive/M5_HANDOFF.md`）：
 1. 环比计算（本周 vs 上周，4h）——现有 `_trends` 算的是区间对半切的前后半段，
    不是环比。需按自然周分组；跨月边界按日期不按月切；数据不足两个完整周时
    明确标注不可比，不返回 0 也不抛异常
@@ -1245,7 +1251,7 @@ template_fallback，混合结果不得被误标为纯模型生成；
   "inputs": [
     "main 分支既有实现：src/ecommerce_agent/business/ops_assistant.py 的 analysis_report、_trends、_split_halves、_findings、_model_narrative",
     "已入库的运营日记录 ops_operation_records——不需要等待工作包 3 的平台适配器",
-    "docs/tasks/M5_HANDOFF.md：交接说明，含每项改动的代码落点行号",
+    "docs/tasks/archive/M5_HANDOFF.md：交接说明，含每项改动的代码落点行号",
     "docs/tasks/PROGRESS.md 的 M5 一节：勾选项为已实现，不重复建设",
     "CONTRIBUTING.md：分支与 PR 流程、反证要求、schema 占号规则"
   ],
