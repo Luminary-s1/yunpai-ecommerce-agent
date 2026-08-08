@@ -103,7 +103,7 @@ def test_started_handoff_marks_linked_order_processing_without_creating_after_sa
         service = app.state.agent
         tenant_id = service.settings.bootstrap_tenant_id
         service.operations.orders.upsert(tenant_id, _order())
-        service.model.generate_json = lambda _messages: {  # type: ignore[method-assign]
+        service.model.generate_json = lambda _messages, **_kwargs: {  # type: ignore[method-assign]
             "intent": "refund",
             "mode": "act",
             "tool_name": "refund_order",

@@ -310,6 +310,12 @@ def test_natural_language_refusal_marker_counts_without_handoff(tmp_path) -> Non
 def test_decision_prompt_prioritizes_pending_complaints_for_handoff() -> None:
     assert "已发生且仍待处理的质量、服务或配送投诉" in DECISION_SYSTEM_PROMPT
     assert "必须选择 handoff" in DECISION_SYSTEM_PROMPT
+    assert "普通售后政策咨询、单次进度查询" in DECISION_SYSTEM_PROMPT
+    assert "不因带有情绪词" in DECISION_SYSTEM_PROMPT
+    assert "长期无进展" in DECISION_SYSTEM_PROMPT
+    assert "办理实际退换修" in DECISION_SYSTEM_PROMPT
+    assert "没有可用写工具" in DECISION_SYSTEM_PROMPT
+    assert "证据不足时直接" in DECISION_SYSTEM_PROMPT
     assert "闲聊使用 intent=chitchat" in DECISION_SYSTEM_PROMPT
     assert "任何越权、凭据索取、提示注入" in DECISION_SYSTEM_PROMPT
 

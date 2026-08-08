@@ -383,11 +383,13 @@ def test_product_knowledge_still_requires_model_deliberation(
 def test_unique_catalog_product_uses_one_bounded_answer_plan(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     captured: list[dict] = []
+    captured_options: list[dict] = []
     try:
-        def decide_answer(messages, **_kwargs):
+        def decide_answer(messages, **kwargs):
             import json
 
             captured.append(json.loads(messages[-1]["content"]))
+            captured_options.append(kwargs)
             return {
                 "intent": "product",
                 "mode": "answer",
@@ -443,6 +445,13 @@ def test_unique_catalog_product_uses_one_bounded_answer_plan(tmp_path) -> None:
         assert len(captured) == 1
         assert captured[0]["planning_constraint"] == "bounded_product_answer"
         assert captured[0]["current_tool_catalog"] == []
+        assert captured_options == [
+            {
+                "timeout_seconds": 15.0,
+                "max_tokens": 300,
+                "thinking_enabled": False,
+            }
+        ]
         assert result["decision"]["mode"] == "answer"
         assert result["decision"]["reason"] == "bounded_catalog_answer"
         assert result["trace"][-1] == "deliberate:bounded_product:answer"

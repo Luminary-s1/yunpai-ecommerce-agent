@@ -116,6 +116,79 @@ def test_structured_generation_accepts_a_per_call_timeout(tmp_path) -> None:
     assert captured_timeout["read"] == 0.25
 
 
+def test_deepseek_decision_can_disable_thinking_and_bound_output(tmp_path) -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"intent":"after_sales","mode":"answer","reason":"enough evidence"}'
+                        }
+                    }
+                ]
+            },
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_provider="deepseek",
+        model_name="deepseek-v4-flash",
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+        model_max_output_tokens=1600,
+        model_thinking_enabled=True,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        decision = gateway.generate_json(
+            [{"role": "user", "content": "decide"}],
+            timeout_seconds=15.0,
+            max_tokens=300,
+            thinking_enabled=False,
+        )
+    finally:
+        gateway.close()
+
+    assert decision["mode"] == "answer"
+    assert captured["thinking"] == {"type": "disabled"}
+    assert captured["max_tokens"] == 300
+    assert captured["response_format"] == {"type": "json_object"}
+
+
+def test_deepseek_text_generation_keeps_provider_thinking_default(tmp_path) -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "已按证据回复。"}}]},
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_provider="deepseek",
+        model_name="deepseek-v4-flash",
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="test-model-key",
+        model_thinking_enabled=False,
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        assert gateway.generate([{"role": "user", "content": "answer"}]) == "已按证据回复。"
+    finally:
+        gateway.close()
+
+    assert "thinking" not in captured
+
+
 def test_structured_generation_retries_malformed_json(tmp_path) -> None:
     attempts = 0
 
@@ -515,6 +588,7 @@ def test_mock_decision_covers_generic_chitchat_and_pending_complaint_routes(tmp_
                             "latest_observation": {},
                         },
                         ensure_ascii=False,
+                        separators=(",", ":"),
                     ),
                 }
             ]

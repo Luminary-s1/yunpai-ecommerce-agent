@@ -580,7 +580,14 @@ def build_graph(
             f"/dropped{history_meta['dropped']}"
         )
         try:
-            decision = AgentDecision.model_validate(model.generate_json(messages))
+            decision = AgentDecision.model_validate(
+                model.generate_json(
+                    messages,
+                    timeout_seconds=settings.model_decision_timeout_seconds,
+                    max_tokens=settings.model_decision_max_output_tokens,
+                    thinking_enabled=settings.model_decision_thinking_enabled,
+                )
+            )
             if bounded_product and decision.mode in {"observe", "act"}:
                 decision = AgentDecision(
                     intent=decision.intent,

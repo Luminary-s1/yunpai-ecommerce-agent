@@ -94,8 +94,10 @@ def test_llm_drives_registered_tool_then_finishes_after_verified_observation(tmp
     activate_test_action_sop(service)
     decision_payloads: list[dict] = []
 
-    def decide(messages: list[dict[str, str]]) -> dict:
+    def decide(messages: list[dict[str, str]], **_kwargs) -> dict:
         payload = json.loads(messages[-1]["content"])
+        if payload.get("task_type") == "intent_classification":
+            return {"intent": "after_sales", "confidence": 0.9}
         decision_payloads.append(payload)
         if payload["latest_observation"]:
             return {
@@ -168,8 +170,11 @@ def test_transient_model_outage_after_verified_action_reports_completion(tmp_pat
     activate_test_action_sop(service)
     decision_calls = 0
 
-    def decide(_messages: list[dict[str, str]]) -> dict:
+    def decide(messages: list[dict[str, str]], **_kwargs) -> dict:
         nonlocal decision_calls
+        payload = json.loads(messages[-1]["content"])
+        if payload.get("task_type") == "intent_classification":
+            return {"intent": "after_sales", "confidence": 0.9}
         decision_calls += 1
         if decision_calls == 1:
             return {
@@ -213,7 +218,7 @@ def test_missing_tool_arguments_become_a_clarification_not_execution(tmp_path) -
     settings = replace(make_settings(tmp_path), bootstrap_client_can_supply_order_context=True)
     service = AgentService(settings, tool_registry=cancel_registry(calls))
     activate_test_action_sop(service)
-    service.model.generate_json = lambda _messages: {  # type: ignore[method-assign]
+    service.model.generate_json = lambda _messages, **_kwargs: {  # type: ignore[method-assign]
         "intent": "test_action",
         "mode": "act",
         "tool_name": "cancel_order",
@@ -244,7 +249,7 @@ def test_missing_tool_arguments_become_a_clarification_not_execution(tmp_path) -
 
 def test_sku_demanding_clarification_is_rewritten_for_customers(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
-    service.model.generate_json = lambda _messages: {  # type: ignore[method-assign]
+    service.model.generate_json = lambda _messages, **_kwargs: {  # type: ignore[method-assign]
         "intent": "product_info",
         "mode": "clarify",
         "missing_fields": ["sku_id"],

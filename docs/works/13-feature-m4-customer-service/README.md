@@ -1119,3 +1119,87 @@ after-sales `6/12`。live 与 D23 的 `0.900` 不同，说明 provider/run-to-ru
 裁定；FIX-15 的密封、全新留出集需由验收人建立并在运行时才解封；浏览器 PNG 仍是 D22
 历史证据，未形成新 UI 实跑。WP4 mock 门禁、规则短路和有界规划已具备回归证据，但不覆盖
 上述签署阻塞项。
+
+## D25 · 售后收敛、DeepSeek 决策预算与 FIX-14 决策包（2026-08-08）
+
+### 红态与实现边界
+
+本轮先固定六类失败：DeepSeek 决策请求没有实际下发 thinking 开关、决策输出与全局
+1600-token 生成预算耦合、售后回复改写来源关键条款、普通售后被过度 handoff、进度询问
+口径未进入分类 Prompt，以及 latency runner 没有真实 TTFT。新增用例先得到 `6 failed`，
+compact JSON 又独立触发 mock 无法识别 `agent_decision` 的 R5 红态；修复均未修改冻结 fixture、
+评测门槛或 strict xfail。
+
+实现结果：
+
+- deliberate 使用独立 `15s / 300 tokens / thinking disabled`，显式预算意味着网关不重试；
+  429 或连接故障仍按既有契约提示稍后重试，不为了基础设施故障制造人工队列 false positive。
+- DeepSeek 的最终客服生成不下发 thinking 覆盖，继续使用 provider 默认推理和全局 1600-token
+  预算；关闭仅限小 JSON 决策阶段，避免重演 D20 的 reasoning-only 截断。
+- 决策消息最多携带 3 条知识，去除 snapshot 中与独立知识、工具、历史和 observation 字段重复
+  的副本，并用紧凑 JSON 序列化；完整证据仍在持久 context snapshot 中。
+- after-sales 回复变体要求期限、金额、状态、条件和结论保持原文，不做数值单位换算，不主动
+  复述未被询问的订单号、运单号和交易日期，也不让 Markdown 拆开必答短语。
+- 决策边界将普通政策/单次进度查询留在 answer/observe；长期无进展、反复推诿和实际办理但
+  无可用写工具时才 handoff。分类 Prompt 同步加入“未出结果的进度查询默认 after_sales，
+  有流程追责信号才 complaint”的口径。
+- mock 改为解析 JSON 后读取 `task_type`，不再依赖带空格的字符串片段；紧凑 JSON 回归已锁定。
+
+### DeepSeek thinking 单变量 A/B 与真实 TTFT
+
+相同代码、相同 `15s / 300 tokens` 决策预算和四条已泄漏隔离场景，只切 deliberate 的
+thinking 开关：
+
+| deliberate thinking | 有效决策 | 四场景 p50 / p95 | 生成路径 TTFT | K3 |
+|---|---:|---:|---:|---:|
+| enabled | 0/3；三条均 `model_unavailable` | 8251.5 / 10538.8ms | 无 delta | 提前失败转人工 |
+| disabled | 3/3 | 7274.5 / 11201.2ms | p50 9951.8 / p95 10835.2ms | total 9780.5ms；TTFT 9068.4ms |
+
+thinking enabled 的数值更短来自失败提前结束，不能当作性能胜利。disabled 后 K3 deliberate
+为 2139.7ms、生成 6016.2ms、工具调用 0，没有 `react_step_limit_reached`；知识缺口场景总时长
+11201.2ms。该报告首次走真实 `service.chat_stream` 并量到首个 delta，而不是用总时长倒推
+TTFT。四条均为泄漏回归场景，不能外推全量分布；after-sales、非单候选商品和工具型订单
+查询的完整 p50/p95 仍待容量测试。
+
+证据：
+
+- `evals/performance/runs/20260808-m4-latency-fix13-thinking-{on,off}.json`
+- `tests/test_m4_latency_runner.py`
+- `tests/test_llm.py`
+
+### WP4 mock/live 与版本带宽
+
+最终代码的冻结 WP4 结果：
+
+| 模式 | answer_accuracy | hallucination | severe | gate | after-sales | complaint | product | handoff FP |
+|---|---:|---:|---:|---|---:|---:|---:|---:|
+| mock | 0.940 | 0.020 | 3 | passed | 12/12 | 6/8 | 14/15 | 0 |
+| live `deepseek-v4-flash` | 0.920 | 0.000 | 2 | passed | 9/12 | 8/8 | 15/15 | 0 |
+
+live 的 handoff precision=1.000、recall=0.900、主库零写入。中间红态 live
+`0.880 / severe 6 / failed` 也保留，没有挑掉。发布线三次既有 live 点为 0.820、0.900、
+0.920，范围 0.820–0.920、中位 0.900；它们跨实现版本，只能说明版本/provider 带宽，不能
+冒充同一提交的统计置信区间。
+
+证据：
+
+- `evals/customer_service/runs/20260808-m4-customer-eval-fix13-{mock,live-run1,live-run2}.json`
+- `evals/customer_service/runs/20260808-m4-customer-eval-post-fix12-live.json`
+- `evals/customer_service/runs/20260807-customer-service-live.json`
+
+### FIX-14 当前数据与签署状态
+
+现存意图语料继续标为 `leaked regression only; not generalization evidence`：
+
+- 平衡 20 正 + 20 负：coverage 82.5%，complaint precision 100%、recall 65%、负例误报
+  0/20；7 条弃权全部是约 1.98 秒 deadline，gate failed。
+- 原 40 条：`31/40=77.5%`，coverage 85%，作答子集 `31/34=91.2%`；complaint coverage
+  仅 5/9。共同作答子集未出现投诉能力倒退，但不能用该分母掩盖弃权。
+- 端到端 WP4 complaint 8/8、handoff recall 90%，说明 SLA 执法点和分类层数字已不等价。
+
+两种 gate 位置、代价和待签项已写入
+`FIX14_GATE_DECISION_20260808.md`；负责人裁定前不撤分类 gate。FIX-15 密封集和当前页面
+截图仍由外部验收人提供，本轮没有拿泄漏集冒充泛化，也没有声称 M4 已最终签署。
+
+全量回归为 `618 passed, 1 xfailed in 685.07s`。沿用 schema v27，无新依赖或迁移；
+LangGraph 20 节点 / 35 边、非流式 `ChatResponse` 和冻结判据均未改变。

@@ -1,0 +1,100 @@
+{
+  "run_at": "2026-08-08T03:01:07.288382+00:00",
+  "revision": "working-d25-thinking-off",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "model_max_output_tokens": 1600,
+  "model_decision_max_output_tokens": 300,
+  "model_decision_timeout_seconds": 15.0,
+  "model_decision_thinking_enabled": false,
+  "data_scope": "temporary isolated directory",
+  "messages": "leaked regression scenarios; omitted from report",
+  "summary": {
+    "count": 4,
+    "p50_ms": 7274.5,
+    "p95_ms": 11201.2,
+    "ttft_count": 2,
+    "ttft_p50_ms": 9951.8,
+    "ttft_p95_ms": 10835.2
+  },
+  "records": [
+    {
+      "scenario": "injection",
+      "measurement_path": "service.chat_stream",
+      "classification_ms": 0.0,
+      "classification_provider_ms": 0.0,
+      "retrieval_ms": 0.0,
+      "deliberate_provider_ms": [],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "generation_first_delta_provider_ms": null,
+      "ttft_ms": null,
+      "first_customer_output_ms": 10.2,
+      "total_ms": 10.2,
+      "route_reason": "prompt_injection_detected",
+      "intent": "general",
+      "risk_level": "blocked"
+    },
+    {
+      "scenario": "complaint",
+      "measurement_path": "service.chat_stream",
+      "classification_ms": 1727.2,
+      "classification_provider_ms": 1727.0,
+      "retrieval_ms": 35.4,
+      "deliberate_provider_ms": [
+        2962.2
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "generation_first_delta_provider_ms": null,
+      "ttft_ms": null,
+      "first_customer_output_ms": 4768.5,
+      "total_ms": 4768.5,
+      "route_reason": "用户明确表示问题被反复推诿三次，属于长期无进展的投诉，需人工介入。",
+      "intent": "complaint",
+      "risk_level": "medium"
+    },
+    {
+      "scenario": "product",
+      "measurement_path": "service.chat_stream",
+      "classification_ms": 1554.3,
+      "classification_provider_ms": 1554.0,
+      "retrieval_ms": 15.9,
+      "deliberate_provider_ms": [
+        2139.7
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 6016.2,
+      "generation_first_delta_provider_ms": 5317.8,
+      "ttft_ms": 9068.4,
+      "first_customer_output_ms": 9068.4,
+      "total_ms": 9780.5,
+      "route_reason": "knowledge_answer_allowed",
+      "intent": "product_inquiry",
+      "risk_level": "low"
+    },
+    {
+      "scenario": "knowledge_gap",
+      "measurement_path": "service.chat_stream",
+      "classification_ms": 1513.7,
+      "classification_provider_ms": 1513.5,
+      "retrieval_ms": 18.3,
+      "deliberate_provider_ms": [
+        2372.1
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 7242.1,
+      "generation_first_delta_provider_ms": 6889.1,
+      "ttft_ms": 10835.2,
+      "first_customer_output_ms": 10835.2,
+      "total_ms": 11201.2,
+      "route_reason": "knowledge_answer_allowed",
+      "intent": "product",
+      "risk_level": "low"
+    }
+  ]
+}

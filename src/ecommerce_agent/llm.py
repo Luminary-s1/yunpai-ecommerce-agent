@@ -80,6 +80,8 @@ class ModelGateway:
         messages: list[dict[str, str]],
         *,
         timeout_seconds: float | None = None,
+        max_tokens: int | None = None,
+        thinking_enabled: bool | None = None,
     ) -> dict[str, Any]:
         attempts = (
             1
@@ -93,6 +95,8 @@ class ModelGateway:
                     messages,
                     json_mode=True,
                     timeout_seconds=timeout_seconds,
+                    max_tokens=max_tokens,
+                    thinking_enabled=thinking_enabled,
                 )
                 return extract_json_object(content)
             except ValueError as exc:
@@ -128,6 +132,8 @@ class ModelGateway:
         *,
         json_mode: bool,
         timeout_seconds: float | None = None,
+        max_tokens: int | None = None,
+        thinking_enabled: bool | None = None,
     ) -> str:
         if self.settings.model_mock_mode:
             return self._mock_generate(messages)
@@ -138,6 +144,8 @@ class ModelGateway:
             messages,
             json_mode=json_mode,
             stream=self._uses_streaming,
+            max_tokens=max_tokens,
+            thinking_enabled=thinking_enabled,
         )
         if self._uses_streaming:
             try:
@@ -189,17 +197,32 @@ class ModelGateway:
         *,
         json_mode: bool,
         stream: bool,
+        max_tokens: int | None = None,
+        thinking_enabled: bool | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self.settings.model_name,
             "messages": messages,
             "temperature": self.settings.model_temperature,
-            "max_tokens": self.settings.model_max_output_tokens,
+            "max_tokens": (
+                self.settings.model_max_output_tokens
+                if max_tokens is None
+                else max(1, int(max_tokens))
+            ),
             "stream": stream,
         }
         if self.settings.model_provider == "glm":
+            effective_thinking = (
+                self.settings.model_thinking_enabled
+                if thinking_enabled is None
+                else thinking_enabled
+            )
             payload["thinking"] = {
-                "type": "enabled" if self.settings.model_thinking_enabled else "disabled"
+                "type": "enabled" if effective_thinking else "disabled"
+            }
+        elif self.settings.model_provider == "deepseek" and thinking_enabled is not None:
+            payload["thinking"] = {
+                "type": "enabled" if thinking_enabled else "disabled"
             }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
@@ -228,7 +251,7 @@ class ModelGateway:
             "max_tokens": 8,
             "stream": False,
         }
-        if self.settings.model_provider == "glm":
+        if self.settings.model_provider in {"glm", "deepseek"}:
             payload["thinking"] = {"type": "disabled"}
         data = self._request(payload)
         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -466,8 +489,8 @@ class ModelGateway:
                 {"answer": {"intent": intent, "confidence": 0.82}},
                 ensure_ascii=False,
             )
-        if '"task_type": "agent_decision"' in context:
-            payload = json.loads(context)
+        if task.get("task_type") == "agent_decision":
+            payload = task
             question = str(payload.get("user_question", ""))
             catalog = payload.get("current_tool_catalog", [])
             tool_names = {item.get("name") for item in catalog if isinstance(item, dict)}

@@ -118,6 +118,77 @@ def test_prompts_keep_upstream_history_and_at_least_highest_score_document() -> 
     assert payload["recent_history"] == history
 
 
+def test_after_sales_generation_requires_exact_terms_without_extra_promises() -> None:
+    messages = build_messages(
+        question="请说明这笔售后目前的处理依据",
+        documents=[],
+        context={},
+        history=[],
+        prompt_variant="after_sales",
+    )
+
+    prompt = messages[-1]["content"]
+    assert "期限、金额、状态、条件和结论" in prompt
+    assert "保持原文" in prompt
+    assert "不得补充" in prompt
+    assert "承诺" in prompt
+    assert "订单号、运单号、交易日期" in prompt
+    assert "没有直接询问" in prompt
+    assert "Markdown" in prompt
+    assert "不要换算单位" in messages[0]["content"]
+
+
+def test_decision_prompt_deduplicates_snapshot_payload_and_caps_evidence() -> None:
+    documents = [
+        {
+            "id": f"doc-{index}",
+            "category": "faq",
+            "intent": "after_sales",
+            "question": f"question-{index}",
+            "answer": f"answer-{index}",
+            "source": "test",
+            "version": 1,
+            "score": 1 - index / 10,
+            "layer": "global",
+            "store_id": None,
+            "sku_id": None,
+        }
+        for index in range(5)
+    ]
+    context = {
+        "context_version": "context.v1",
+        "trusted_session_state": {"tenant_scoped": True, "store_id": "store-a"},
+        "current_subject": {"order_id": "order-a"},
+        "product_advisor": {"candidates": [{"sku_id": "sku-a"}]},
+        "output_constraints": {"language": "zh-CN"},
+        "sop_evidence": [{"sop_key": "returns", "intent": "after_sales"}],
+        "knowledge_evidence": documents,
+        "available_tools": [{"name": "lookup_order"}],
+        "recent_history": [{"role": "user", "content": "duplicate"}],
+        "latest_tool_result": {"status": "duplicate"},
+    }
+
+    messages = build_decision_messages(
+        question="查询售后进度",
+        documents=documents,
+        context=context,
+        history=[{"role": "user", "content": "kept separately"}],
+        tool_catalog=[{"name": "lookup_order"}],
+        observation={"status": "kept separately"},
+        step_count=0,
+        max_steps=4,
+    )
+    payload = json.loads(messages[-1]["content"])
+
+    assert len(payload["knowledge_evidence"]) == 3
+    assert payload["recent_history"][0]["content"] == "kept separately"
+    assert payload["latest_observation"] == {"status": "kept separately"}
+    assert payload["context_package"]["product_advisor"] == context["product_advisor"]
+    assert set(payload["context_package"]).isdisjoint(
+        {"knowledge_evidence", "available_tools", "recent_history", "latest_tool_result"}
+    )
+
+
 def test_chat_snapshot_records_history_window_evidence(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     try:

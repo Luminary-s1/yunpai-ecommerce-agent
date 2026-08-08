@@ -116,3 +116,49 @@ after-sales `6/12`，`handoff_recall=1.000`、`evidence_coverage=1.000`。live �
 `m4-browser-evidence.png` 仍是 D22 历史截图，D24 未声称有新的浏览器实跑；FIX-14 gate
 位置与 FIX-15 密封集仍属待裁定/待提供项。因此本证据支持“修复行为与 WP4 mock 回归通过”，
 不支持 M4 整体签署。
+
+## D25 · FIX-13/14 代码与评测证据（2026-08-08）
+
+### 实现与反证
+
+- deliberate 独立预算为 15 秒、300 tokens、DeepSeek thinking disabled；最终生成仍保留
+  provider 默认 thinking 和全局 1600-token 预算。
+- HTTP MockTransport 已验证 DeepSeek 决策 payload 实际包含
+  `thinking={"type":"disabled"}` 与 `max_tokens=300`，普通文本生成不携带 thinking 覆盖。
+- after-sales 专用生成要求、普通咨询/长期追责 handoff 边界、进度询问分类口径、紧凑 JSON
+  mock 行为和真实 SSE TTFT 均有先红后绿的回归用例。
+- 全量 `.venv/bin/python -m pytest -q`：`618 passed, 1 xfailed in 685.07s`。
+
+### DeepSeek 决策 thinking A/B
+
+`evals/performance/runs/20260808-m4-latency-fix13-thinking-on.json` 与 `...-off.json` 只切换
+deliberate thinking：enabled 时三条需规划场景都未产出有效决策并提前降级；disabled 时三条
+全部完成语义路径，四场景 `p50=7274.5ms / p95=11201.2ms`。K3 为 total 9780.5ms、
+TTFT 9068.4ms、deliberate 2139.7ms、generation 6016.2ms、工具 0。runner 走
+`service.chat_stream`，TTFT 是首个真实 delta。
+
+### 冻结 WP4
+
+| 证据 | answer_accuracy | hallucination | severe | gate | after-sales | complaint | product |
+|---|---:|---:|---:|---|---:|---:|---:|
+| final mock | 0.940 | 0.020 | 3 | passed | 12/12 | 6/8 | 14/15 |
+| intermediate live | 0.880 | 0.080 | 6 | failed | 9/12 | 7/8 | 14/15 |
+| final live | 0.920 | 0.000 | 2 | passed | 9/12 | 8/8 | 15/15 |
+
+final live handoff TP=9、FN=1、FP=0、TN=40，precision=1.000、recall=0.900；隔离主库新增
+sessions/messages/handoff_tasks 均为 0。中间 failed 报告保留为反证。
+
+### FIX-14 分类与端到端对照
+
+- `evals/intent/runs/20260808-m4-complaint-balanced-fix13-live.json`：coverage 82.5%，
+  complaint precision 100%、recall 65%、负例误报 0/20，gate failed；7 条 deadline 弃权。
+- `evals/intent/runs/20260808-m4-acceptance-fix13-live.json`：`31/40=77.5%`、coverage 85%、
+  作答子集 91.2%，complaint coverage 5/9。
+- `FIX14_GATE_DECISION_20260808.md` 并列“分类 Gate 阻塞”和“端到端 SLA Gate 阻塞”两种
+  方案；负责人裁定前不改 gate、不改 2 秒预算。
+
+### 未覆盖边界
+
+FIX-15 密封新留出集和新浏览器截图由外部验收人负责；现有语料全部只作泄漏回归。四场景
+延迟不代表 after-sales、非单候选商品、工具型订单或生产容量分布，因此本证据支持代码侧
+交外测候选，不支持最终 M4 或生产放行签署。

@@ -94,7 +94,7 @@ def test_actual_agent_20_case_semantic_gate(tmp_path) -> None:
 def test_transient_model_outage_invites_retry_without_creating_handoff(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
 
-    def unavailable(_messages):
+    def unavailable(_messages, **_kwargs):
         raise ModelUnavailableError("model request failed with HTTP 429 (provider code 1302)")
 
     try:

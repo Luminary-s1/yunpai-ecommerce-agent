@@ -1,0 +1,101 @@
+{
+  "run_at": "2026-08-08T03:00:35.086787+00:00",
+  "revision": "working-d25-thinking-on",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "model_max_output_tokens": 1600,
+  "model_decision_max_output_tokens": 300,
+  "model_decision_timeout_seconds": 15.0,
+  "model_decision_thinking_enabled": true,
+  "data_scope": "temporary isolated directory",
+  "messages": "leaked regression scenarios; omitted from report",
+  "summary": {
+    "count": 4,
+    "p50_ms": 8251.5,
+    "p95_ms": 10538.8,
+    "ttft_count": 0,
+    "ttft_p50_ms": null,
+    "ttft_p95_ms": null
+  },
+  "records": [
+    {
+      "scenario": "injection",
+      "measurement_path": "service.chat_stream",
+      "classification_ms": 0.0,
+      "classification_provider_ms": 0.0,
+      "retrieval_ms": 0.0,
+      "deliberate_provider_ms": [],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "generation_first_delta_provider_ms": null,
+      "ttft_ms": null,
+      "first_customer_output_ms": 10.6,
+      "total_ms": 10.6,
+      "route_reason": "prompt_injection_detected",
+      "intent": "general",
+      "risk_level": "blocked"
+    },
+    {
+      "scenario": "complaint",
+      "measurement_path": "service.chat_stream",
+      "classification_ms": 1981.1,
+      "classification_provider_ms": 0.0,
+      "retrieval_ms": 35.9,
+      "deliberate_provider_ms": [
+        2179.7,
+        8474.3
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "generation_first_delta_provider_ms": null,
+      "ttft_ms": null,
+      "first_customer_output_ms": 10538.8,
+      "total_ms": 10538.8,
+      "route_reason": "model_unavailable",
+      "intent": "general",
+      "risk_level": "medium"
+    },
+    {
+      "scenario": "product",
+      "measurement_path": "service.chat_stream",
+      "classification_ms": 1587.8,
+      "classification_provider_ms": 1587.6,
+      "retrieval_ms": 9.1,
+      "deliberate_provider_ms": [
+        4707.2
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "generation_first_delta_provider_ms": null,
+      "ttft_ms": null,
+      "first_customer_output_ms": 6352.5,
+      "total_ms": 6352.5,
+      "route_reason": "model_unavailable",
+      "intent": "general",
+      "risk_level": "medium"
+    },
+    {
+      "scenario": "knowledge_gap",
+      "measurement_path": "service.chat_stream",
+      "classification_ms": 1697.8,
+      "classification_provider_ms": 1697.6,
+      "retrieval_ms": 9.2,
+      "deliberate_provider_ms": [
+        8396.3
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "generation_first_delta_provider_ms": null,
+      "ttft_ms": null,
+      "first_customer_output_ms": 10150.5,
+      "total_ms": 10150.5,
+      "route_reason": "model_unavailable",
+      "intent": "general",
+      "risk_level": "medium"
+    }
+  ]
+}

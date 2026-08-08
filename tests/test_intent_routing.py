@@ -624,6 +624,52 @@ def test_labelling_policy_keeps_order_invoice_service_in_after_sales() -> None:
     assert "订单服务" in system_prompt
 
 
+def test_labelling_policy_defaults_unresolved_progress_to_after_sales() -> None:
+    model = CapturingModel()
+
+    classify("我想看看有哪些颜色", model=model)
+
+    system_prompt = model.calls[0][0][0]["content"]
+    assert "尚未得到结果的审核、发货、物流、退款或售后进度询问" in system_prompt
+    assert "默认归 after_sales" in system_prompt
+    assert "反复推诿、承诺未履行、要求追责或翻旧账" in system_prompt
+
+
+def test_progress_labelling_policy_reaches_real_gateway_request(tmp_path) -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"intent":"after_sales","confidence":0.88}'
+                        }
+                    }
+                ]
+            },
+        )
+
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_streaming=False,
+        model_api_key="test-model-key",
+    )
+    gateway = ModelGateway(settings, transport=httpx.MockTransport(handler))
+    try:
+        result = classify("订单状态一直没更新", model=gateway)
+    finally:
+        gateway.close()
+
+    assert result.intent == "after_sales"
+    assert "默认归 after_sales" in captured["messages"][0]["content"]
+
+
 def test_mixed_after_sales_few_shot_is_paraphrased_in_model_request() -> None:
     model = CapturingModel()
 
@@ -868,3 +914,25 @@ def test_intent_classify_timeout_defaults_to_two_seconds(monkeypatch) -> None:
 
     monkeypatch.setenv("INTENT_CLASSIFY_TIMEOUT_SECONDS", "0.25")
     assert Settings.from_env().intent_classify_timeout_seconds == 0.25
+
+
+def test_decision_model_budget_has_safe_defaults_and_env_overrides(monkeypatch) -> None:
+    for name in (
+        "MODEL_DECISION_TIMEOUT_SECONDS",
+        "MODEL_DECISION_MAX_OUTPUT_TOKENS",
+        "MODEL_DECISION_THINKING_ENABLED",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    defaults = Settings.from_env()
+    assert defaults.model_decision_timeout_seconds == 15.0
+    assert defaults.model_decision_max_output_tokens == 300
+    assert defaults.model_decision_thinking_enabled is False
+
+    monkeypatch.setenv("MODEL_DECISION_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("MODEL_DECISION_MAX_OUTPUT_TOKENS", "256")
+    monkeypatch.setenv("MODEL_DECISION_THINKING_ENABLED", "true")
+    configured = Settings.from_env()
+    assert configured.model_decision_timeout_seconds == 12.5
+    assert configured.model_decision_max_output_tokens == 256
+    assert configured.model_decision_thinking_enabled is True

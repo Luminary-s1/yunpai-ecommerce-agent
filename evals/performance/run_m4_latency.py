@@ -57,7 +57,7 @@ def profile(service: AgentService, principal: Principal) -> list[dict[str, Any]]
     original_classify = graph_module.classify
     original_retrieve = service.knowledge.retrieve
     original_generate_json = service.model.generate_json
-    original_generate = service.model.generate
+    original_stream_generate = service.model.stream_generate
     original_execute = service.tools.execute
 
     def timed_classify(*args, **kwargs):
@@ -93,10 +93,18 @@ def profile(service: AgentService, principal: Principal) -> list[dict[str, Any]]
                 else:
                     active["deliberate_provider_ms"].append(elapsed)
 
-    def timed_generate(*args, **kwargs):
+    def timed_stream_generate(*args, **kwargs):
         started = time.perf_counter()
         try:
-            return original_generate(*args, **kwargs)
+            for delta in original_stream_generate(*args, **kwargs):
+                if (
+                    active is not None
+                    and active["generation_first_delta_provider_ms"] is None
+                ):
+                    active["generation_first_delta_provider_ms"] = (
+                        time.perf_counter() - started
+                    ) * 1000
+                yield delta
         finally:
             if active is not None:
                 active["generation_provider_ms"] += (
@@ -115,20 +123,16 @@ def profile(service: AgentService, principal: Principal) -> list[dict[str, Any]]
     graph_module.classify = timed_classify
     service.knowledge.retrieve = timed_retrieve
     service.model.generate_json = timed_generate_json
-    service.model.generate = timed_generate
+    service.model.stream_generate = timed_stream_generate
     service.tools.execute = timed_execute
 
     records: list[dict[str, Any]] = []
     try:
-        for index, (scenario, message) in enumerate(SCENARIOS):
-            internal_session_id = service.db.resolve_session(
-                tenant_id=principal.tenant_id,
-                client_id=principal.client_id,
-                external_session_id=f"m4-latency-{scenario}",
-                subject_hash=principal.subject_hash,
-            )
+        for scenario, message in SCENARIOS:
+            external_session_id = f"m4-latency-{scenario}"
             active = {
                 "scenario": scenario,
+                "measurement_path": "service.chat_stream",
                 "inside_classification": False,
                 "classification_ms": 0.0,
                 "classification_provider_ms": 0.0,
@@ -137,42 +141,30 @@ def profile(service: AgentService, principal: Principal) -> list[dict[str, Any]]
                 "tool_ms": 0.0,
                 "tool_calls": 0,
                 "generation_provider_ms": 0.0,
-                "node_ms": [],
+                "generation_first_delta_provider_ms": None,
+                "ttft_ms": None,
+                "first_customer_output_ms": None,
             }
             started = time.perf_counter()
-            previous = started
-            final_update: dict[str, Any] = {}
-            stream = service.graph.stream(
-                {
-                    "session_id": internal_session_id,
-                    "external_session_id": f"m4-latency-{scenario}",
-                    "tenant_id": principal.tenant_id,
-                    "client_id": principal.client_id,
-                    "execution_mode": "live",
-                    "invocation_id": None,
-                    "trace_id": None,
-                    "message_id": None,
-                    "user_message_id": None,
-                    "user_input": message,
-                    "input_redacted": False,
-                    "context": {"shop_id": STORE_ID},
-                },
-                config={
-                    "configurable": {
-                        "thread_id": internal_session_id,
-                        "profile_sequence": index,
-                    }
-                },
-                stream_mode="updates",
+            response_payload: dict[str, Any] | None = None
+            stream = service.chat_stream(
+                principal,
+                external_session_id,
+                message,
+                {"shop_id": STORE_ID},
+                idempotency_key=None,
             )
-            for update in stream:
-                now = time.perf_counter()
-                node = "+".join(update)
-                active["node_ms"].append(
-                    {"node": node, "elapsed_ms": round((now - previous) * 1000, 1)}
-                )
-                previous = now
-                final_update.update(update)
+            for event in stream:
+                elapsed_ms = (time.perf_counter() - started) * 1000
+                if event["event"] == "delta" and active["ttft_ms"] is None:
+                    active["ttft_ms"] = elapsed_ms
+                if (
+                    event["event"] in {"delta", "result"}
+                    and active["first_customer_output_ms"] is None
+                ):
+                    active["first_customer_output_ms"] = elapsed_ms
+                if event["event"] == "result":
+                    response_payload = event["response"]
             active["total_ms"] = round((time.perf_counter() - started) * 1000, 1)
             for key in (
                 "classification_ms",
@@ -185,28 +177,29 @@ def profile(service: AgentService, principal: Principal) -> list[dict[str, Any]]
             active["deliberate_provider_ms"] = [
                 round(value, 1) for value in active["deliberate_provider_ms"]
             ]
+            for key in (
+                "generation_first_delta_provider_ms",
+                "ttft_ms",
+                "first_customer_output_ms",
+            ):
+                if active[key] is not None:
+                    active[key] = round(active[key], 1)
             active.pop("inside_classification")
-            persist = final_update.get("persist") or {}
-            with service.db.connect() as conn:
-                row = conn.execute(
-                    """
-                    SELECT route_reason, intent, risk_level
-                    FROM messages
-                    WHERE session_id=? AND role='assistant'
-                    ORDER BY rowid DESC LIMIT 1
-                    """,
-                    (internal_session_id,),
-                ).fetchone()
-            active["route_reason"] = row["route_reason"] if row else None
-            active["intent"] = row["intent"] if row else None
-            active["risk_level"] = row["risk_level"] if row else None
-            active["trace"] = persist.get("trace", [])
+            active["route_reason"] = (
+                response_payload.get("reason") if response_payload else None
+            )
+            active["intent"] = (
+                response_payload.get("intent") if response_payload else None
+            )
+            active["risk_level"] = (
+                response_payload.get("risk_level") if response_payload else None
+            )
             records.append(active)
     finally:
         graph_module.classify = original_classify
         service.knowledge.retrieve = original_retrieve
         service.model.generate_json = original_generate_json
-        service.model.generate = original_generate
+        service.model.stream_generate = original_stream_generate
         service.tools.execute = original_execute
     return records
 
@@ -261,18 +254,35 @@ def main() -> int:
             service.close()
 
     totals = sorted(record["total_ms"] for record in records)
+    ttfts = sorted(
+        record["ttft_ms"] for record in records if record["ttft_ms"] is not None
+    )
+    ttft_p50 = None
+    if ttfts:
+        midpoint = len(ttfts) // 2
+        ttft_p50 = (
+            ttfts[midpoint]
+            if len(ttfts) % 2
+            else round((ttfts[midpoint - 1] + ttfts[midpoint]) / 2, 1)
+        )
     report = {
         "run_at": datetime.now(UTC).isoformat(),
         "revision": args.revision,
         "provider": settings.model_provider,
         "model": settings.model_name,
         "model_max_output_tokens": settings.model_max_output_tokens,
+        "model_decision_max_output_tokens": settings.model_decision_max_output_tokens,
+        "model_decision_timeout_seconds": settings.model_decision_timeout_seconds,
+        "model_decision_thinking_enabled": settings.model_decision_thinking_enabled,
         "data_scope": "temporary isolated directory",
         "messages": "leaked regression scenarios; omitted from report",
         "summary": {
             "count": len(totals),
             "p50_ms": round((totals[1] + totals[2]) / 2, 1),
             "p95_ms": totals[-1],
+            "ttft_count": len(ttfts),
+            "ttft_p50_ms": ttft_p50,
+            "ttft_p95_ms": ttfts[-1] if ttfts else None,
         },
         "records": records,
     }

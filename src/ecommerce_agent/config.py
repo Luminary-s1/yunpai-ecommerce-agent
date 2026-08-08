@@ -60,6 +60,9 @@ class Settings:
     max_request_body_bytes: int
     rate_limit_requests_per_minute: int
     min_free_disk_mb: int
+    model_decision_timeout_seconds: float = 15.0
+    model_decision_max_output_tokens: int = 300
+    model_decision_thinking_enabled: bool = False
     intent_classify_timeout_seconds: float = 2.0
     handoff_confidence_threshold: float = 0.6
     customer_test_enabled: bool = False
@@ -184,6 +187,15 @@ class Settings:
                 1, int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "120"))
             ),
             min_free_disk_mb=max(1, int(os.getenv("MIN_FREE_DISK_MB", "1024"))),
+            model_decision_timeout_seconds=max(
+                0.001, float(os.getenv("MODEL_DECISION_TIMEOUT_SECONDS", "15.0"))
+            ),
+            model_decision_max_output_tokens=max(
+                1, int(os.getenv("MODEL_DECISION_MAX_OUTPUT_TOKENS", "300"))
+            ),
+            model_decision_thinking_enabled=_as_bool(
+                os.getenv("MODEL_DECISION_THINKING_ENABLED"), default=False
+            ),
             intent_classify_timeout_seconds=max(
                 0.001, float(os.getenv("INTENT_CLASSIFY_TIMEOUT_SECONDS", "2.0"))
             ),

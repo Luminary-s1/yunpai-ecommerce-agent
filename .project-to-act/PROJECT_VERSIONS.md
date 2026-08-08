@@ -11,6 +11,15 @@
 
 ## M4 验收补丁（未单独升版）
 
+### D25（2026-08-08）
+
+- 状态：FIX-13/14 代码侧交外测候选；冻结 WP4 mock/live 门禁通过，M4 最终签署等待负责人 gate 裁定、外部密封集和新截图
+- 兼容性：沿用 schema v27；无新增迁移、依赖、请求/响应字段；LangGraph 20 节点 / 35 边与 `ChatResponse` 不变；新增三个均有默认值的 deliberate 专用环境变量
+- 行为修正：DeepSeek deliberate 显式 `thinking disabled`，独立使用 15 秒/300-token 预算且不重试；最终生成保留 provider 默认 thinking；决策上下文去重并最多携带 3 条知识；售后关键条款原样输出，普通咨询与长期追责/实际办理 handoff 边界收敛；compact JSON mock 按解析后的 `task_type` 分流
+- 验证：全量 `618 passed / 1 xfailed`；final mock `0.940 / severe 3 / passed`、final live `0.920 / severe 2 / passed`，after-sales `9/12`、complaint `8/8`、product `15/15`；thinking disabled 后 K3 total `9780.5ms` / TTFT `9068.4ms`，工具调用 0
+- 遗留：泄漏投诉平衡集 recall `65%`，分类 gate 保持 failed；FIX-14 待负责人选择 gate 位置，FIX-15 密封集与浏览器新截图待外部验收；四场景延迟不能外推生产容量
+- 证据：E-20260808-004；`docs/works/13-feature-m4-customer-service/FIX14_GATE_DECISION_20260808.md`
+
 ### D24（2026-08-08）
 
 - 状态：FIX-11/12 修复候选；WP4 mock 门禁复跑通过，M4 本机独立验收仍暂不签署
