@@ -162,3 +162,8 @@ sessions/messages/handoff_tasks 均为 0。中间 failed 报告保留为反证�
 FIX-15 密封新留出集和新浏览器截图由外部验收人负责；现有语料全部只作泄漏回归。四场景
 延迟不代表 after-sales、非单候选商品、工具型订单或生产容量分布，因此本证据支持代码侧
 交外测候选，不支持最终 M4 或生产放行签署。
+
+服务器外测交接以代码 revision `0fae3ba`、`92da05f` 和文档澄清 `ccd9290` 为基线；仓库外
+传递的 `env.md` 须增加 deliberate 的 15 秒、300-token、thinking-disabled 三项配置。部署人
+应把服务器 WP4 live、FIX-15 密封集和页面截图作为新证据追加，详细步骤见同目录 README 的
+“服务器外测交接”，不得用服务器结果覆盖本机原始 JSON。

@@ -1204,3 +1204,18 @@ live 的 handoff precision=1.000、recall=0.900、主库零写入。中间红态
 
 全量回归为 `618 passed, 1 xfailed in 685.07s`。沿用 schema v27，无新依赖或迁移；
 LangGraph 20 节点 / 35 边、非流式 `ChatResponse` 和冻结判据均未改变。
+
+### 服务器外测交接
+
+- 本轮代码 revision 为 `0fae3ba`（规则短路与 K3 有界规划）和 `92da05f`
+  （售后收敛、DeepSeek deliberate 独立预算、真实 TTFT）；`ccd9290` 澄清临时模型故障仍按
+  `model_unavailable + retry_advised` 返回，不创建人工任务。
+- 服务器使用的 `env.md` 继续由部署人通过仓库外安全通道传递，不进入 Git。除既有模型凭据外，
+  必须包含 `MODEL_DECISION_TIMEOUT_SECONDS=15`、`MODEL_DECISION_MAX_OUTPUT_TOKENS=300`、
+  `MODEL_DECISION_THINKING_ENABLED=false`；最终生成继续使用全局 1600-token 预算和 provider
+  默认 thinking。
+- 部署后先执行初始化和现有 `eval` / `simulate-store` 健康检查，再用
+  `scripts/run_customer_eval.py --mode live --env-file env.md` 复跑冻结 WP4；外部验收人另用未公开的
+  FIX-15 密封集核验泛化，并补当前页面截图。运行日志或报告不得回显模型密钥。
+- 交接目标是服务器测试候选，不是生产放行。分类层 complaint recall 65% 的 gate 仍为 failed，
+  FIX-14 的 gate 位置仍需负责人裁定；服务器结果必须作为新证据追加，不能覆盖本机 D25 报告。
