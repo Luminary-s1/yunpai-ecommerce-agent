@@ -1132,7 +1132,8 @@ compact JSON 又独立触发 mock 无法识别 `agent_decision` 的 R5 红态；
 
 实现结果：
 
-- deliberate 使用独立 `15s / 300 tokens / thinking disabled`，显式预算意味着网关不重试；
+- deliberate 使用独立 `15s / 300 tokens / thinking disabled`；每次带 deadline 的结构化请求
+  只做一次网关尝试，不消耗全局重试预算；
   429 或连接故障仍按既有契约提示稍后重试，不为了基础设施故障制造人工队列 false positive。
 - DeepSeek 的最终客服生成不下发 thinking 覆盖，继续使用 provider 默认推理和全局 1600-token
   预算；关闭仅限小 JSON 决策阶段，避免重演 D20 的 reasoning-only 截断。
@@ -1152,7 +1153,7 @@ thinking 开关：
 
 | deliberate thinking | 有效决策 | 四场景 p50 / p95 | 生成路径 TTFT | K3 |
 |---|---:|---:|---:|---:|
-| enabled | 0/3；三条均 `model_unavailable` | 8251.5 / 10538.8ms | 无 delta | 提前失败转人工 |
+| enabled | 0/3；三条均 `model_unavailable` | 8251.5 / 10538.8ms | 无 delta | 提前降级并建议重试；不建人工任务 |
 | disabled | 3/3 | 7274.5 / 11201.2ms | p50 9951.8 / p95 10835.2ms | total 9780.5ms；TTFT 9068.4ms |
 
 thinking enabled 的数值更短来自失败提前结束，不能当作性能胜利。disabled 后 K3 deliberate
