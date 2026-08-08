@@ -51,6 +51,18 @@ class GenerationPlan(NamedTuple):
     trace_step: str
 
 
+def _bounded_product_context_ready(state: AgentState) -> bool:
+    if state.get("react_step") != 0:
+        return False
+    if state.get("customer_intent") != "product_inquiry":
+        return False
+    if state.get("context_readiness") != "ready" or not state.get("retrieved"):
+        return False
+    advisor = (state.get("context_bundle") or {}).get("product_advisor") or {}
+    candidates = advisor.get("candidates") or []
+    return isinstance(candidates, list) and len(candidates) == 1 and bool(candidates[0])
+
+
 def prepare_generation(state: AgentState, settings: Settings) -> GenerationPlan:
     """Build the one generation plan shared by streaming and non-streaming chat."""
 
@@ -543,6 +555,7 @@ def build_graph(
                 "trace": [*state["trace"], "deliberate:approved_knowledge"],
             }
 
+        bounded_product = _bounded_product_context_ready(state)
         history, history_meta, knowledge_budget = budgeted_history(
             state,
             DECISION_SYSTEM_PROMPT,
@@ -552,14 +565,15 @@ def build_graph(
             documents=state.get("retrieved", []),
             context=state["context_bundle"],
             history=history,
-            tool_catalog=tools.catalog_for_model(),
+            tool_catalog=[] if bounded_product else tools.catalog_for_model(),
             observation=state.get("tool_result") or None,
             step_count=state["react_step"],
-            max_steps=settings.max_react_steps,
+            max_steps=1 if bounded_product else settings.max_react_steps,
             knowledge_budget_tokens=knowledge_budget,
             prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
             sop_intent=(state.get("intent_routing") or {}).get("sop_intent"),
             knowledge_intent=(state.get("intent_routing") or {}).get("knowledge_intent"),
+            planning_constraint=("bounded_product_answer" if bounded_product else None),
         )
         budget_trace = (
             f"context:budget:kept{history_meta['kept']}"
@@ -567,7 +581,18 @@ def build_graph(
         )
         try:
             decision = AgentDecision.model_validate(model.generate_json(messages))
-            trace_step = f"deliberate:model:{decision.mode}"
+            if bounded_product and decision.mode in {"observe", "act"}:
+                decision = AgentDecision(
+                    intent=decision.intent,
+                    mode="handoff",
+                    reason="bounded_product_answer_required",
+                    confidence=decision.confidence,
+                )
+                trace_step = "deliberate:bounded_product:handoff"
+            elif bounded_product:
+                trace_step = f"deliberate:bounded_product:{decision.mode}"
+            else:
+                trace_step = f"deliberate:model:{decision.mode}"
             fallback = False
         except (ModelError, ValidationError) as exc:
             db.audit(

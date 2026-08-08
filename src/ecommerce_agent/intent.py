@@ -158,6 +158,42 @@ _RULE_BUSINESS_EVIDENCE: dict[str, tuple[tuple[str, ...], ...]] = {
             "处理",
         ),
     ),
+    "退货": (
+        (
+            "订单",
+            "商品",
+            "产品",
+            "下单",
+            "购买",
+            "买了",
+            "收货",
+            "收到",
+            "签收",
+            "申请",
+            "办理",
+            "售后",
+            "进度",
+            "处理",
+        ),
+    ),
+    "保修": (
+        (
+            "订单",
+            "商品",
+            "产品",
+            "下单",
+            "购买",
+            "买了",
+            "收货",
+            "收到",
+            "签收",
+            "申请",
+            "办理",
+            "售后",
+            "进度",
+            "处理",
+        ),
+    ),
 }
 
 _INTENTS: frozenset[str] = frozenset(
@@ -252,7 +288,7 @@ def classify(message: str, *, model: IntentModel | None) -> IntentResult:
         review_rule_match = _requires_model_review(normalized, rule_keywords) or (
             process_review and rule_intent != "complaint"
         )
-        if model is None and not review_rule_match:
+        if not review_rule_match:
             return IntentResult(
                 intent=rule_intent,
                 confidence=_RULE_CONFIDENCE,
@@ -276,10 +312,16 @@ def classify(message: str, *, model: IntentModel | None) -> IntentResult:
                     "examples": examples,
                     "message": normalized[:4000],
                     "advisory_signals": {
-                        "rule_candidate": rule_intent,
-                        "matched_keywords": list(rule_keywords),
-                        "process_accountability": process_review,
                         "semantic_authority": False,
+                        **(
+                            {
+                                "rule_candidate": rule_intent,
+                                "matched_keywords": list(rule_keywords),
+                                "process_accountability": process_review,
+                            }
+                            if review_rule_match
+                            else {}
+                        ),
                     },
                 },
                 ensure_ascii=False,

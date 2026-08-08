@@ -11,6 +11,15 @@
 
 ## M4 验收补丁（未单独升版）
 
+### D24（2026-08-08）
+
+- 状态：FIX-11/12 修复候选；WP4 mock 门禁复跑通过，M4 本机独立验收仍暂不签署
+- 兼容性：沿用 schema v27；无新增迁移、依赖、请求/响应字段；LangGraph 20 节点 / 35 边与 `ChatResponse` 不变
+- 行为修正：非复核规则命中恢复 `rule / 0.95` 零模型短路；`退货/保修` 责任追问才触发窄口径模型仲裁；唯一目录候选且知识已装配时进入一次有界规划，模型生成 grounded answer，禁止工具循环
+- 验证：聚焦 `182 passed / 1 xfailed`，全量 `610 passed / 1 xfailed`；FIX-12 后 mock `0.940 / severe 3 / passed`、live `deepseek-v4-flash` `0.820 / severe 3 / passed`；泄漏回归 `31/40=77.5%`、投诉平衡回归 recall `75%`（均非泛化证据）；四场景延迟 `p50=16297.7ms / p95=33594.4ms`
+- 遗留：FIX-14 分类 gate 位置待负责人裁定，FIX-15 密封留出集待验收人提供，浏览器截图未更新；当前延迟仍只能作泄漏场景 P1 证据
+- 证据：E-20260808-003；`evals/performance/runs/20260808-m4-latency-post-fix12.json`；`evals/customer_service/runs/20260808-m4-customer-eval-post-fix12-{mock,live}.json`
+
 - 状态：D23 修复候选；WP4 客服门禁通过，但 M4 本机独立验收暂不签署，生产放行继续阻塞
 - 兼容性：沿用 schema v27；没有新增迁移、依赖或请求/响应字段；既有非流式 `POST /v1/chat` 契约与 LangGraph 20 节点 / 35 边不变
 - 行为修正：分类与关键词只作为 advisory signal；投诉 handoff / SLA 由规划模型确认；普通商品回答取消目录/高分短路，仅保留标准化问法完全相等的人工批准知识复用；流式与非流式共用生成计划

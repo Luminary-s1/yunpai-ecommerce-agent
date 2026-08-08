@@ -101,17 +101,13 @@ def test_routing_file_declares_all_controlled_intents() -> None:
 def test_precheck_classifies_and_exposes_routing_metadata(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     try:
-        service.model.generate_json = lambda *_args, **_kwargs: {  # type: ignore[method-assign]
-            "intent": "product_inquiry",
-            "confidence": 0.88,
-        }
         result = _node(service, "precheck").invoke(
             {"normalized_input": "请问这款多少钱", "context": {}, "trace": []}
         )
 
         assert result["customer_intent"] == "product_inquiry"
-        assert result["intent_confidence"] == 0.88
-        assert result["intent_method"] == "model"
+        assert result["intent_confidence"] == 0.95
+        assert result["intent_method"] == "rule"
         assert result["intent_error"] is None
         assert result["intent_routing"] == routing_for_intent("product_inquiry")
     finally:
@@ -384,6 +380,123 @@ def test_product_knowledge_still_requires_model_deliberation(
         service.close()
 
 
+def test_unique_catalog_product_uses_one_bounded_answer_plan(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    captured: list[dict] = []
+    try:
+        def decide_answer(messages, **_kwargs):
+            import json
+
+            captured.append(json.loads(messages[-1]["content"]))
+            return {
+                "intent": "product",
+                "mode": "answer",
+                "reason": "bounded_catalog_answer",
+                "confidence": 0.9,
+            }
+
+        service.model.generate_json = decide_answer  # type: ignore[method-assign]
+        result = _node(service, "deliberate").invoke(
+            {
+                "normalized_input": "云湃便携烧水壶 K3 怎么样",
+                "context": {},
+                "context_bundle": {
+                    "product_advisor": {
+                        "candidates": [
+                            {
+                                "evidence_id": "catalog:k3:v1",
+                                "title": "云湃便携烧水壶 K3",
+                                "sku_id": "K3",
+                                "sale_price": "159.00",
+                                "currency": "CNY",
+                                "attributes": {"容量": "400ml"},
+                                "score": 0.9,
+                                "version": 1,
+                            }
+                        ]
+                    },
+                    "recent_history": [],
+                },
+                "context_readiness": "ready",
+                "retrieved": [
+                    {
+                        "id": "kb-k3",
+                        "source": "seed:k3",
+                        "intent": "product",
+                        "category": "product",
+                        "question": "云湃便携烧水壶 K3 介绍",
+                        "answer": "云湃便携烧水壶 K3 容量为 400ml。",
+                        "score": 0.8,
+                        "version": 1,
+                    }
+                ],
+                "trace": [],
+                "session_id": "bounded-product",
+                "tenant_id": "tenant-test",
+                "react_step": 0,
+                "tool_result": {},
+                "customer_intent": "product_inquiry",
+                "intent_routing": routing_for_intent("product_inquiry"),
+            }
+        )
+
+        assert len(captured) == 1
+        assert captured[0]["planning_constraint"] == "bounded_product_answer"
+        assert captured[0]["current_tool_catalog"] == []
+        assert result["decision"]["mode"] == "answer"
+        assert result["decision"]["reason"] == "bounded_catalog_answer"
+        assert result["trace"][-1] == "deliberate:bounded_product:answer"
+    finally:
+        service.close()
+
+
+def test_bounded_product_plan_hands_off_without_entering_a_tool_loop(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        service.model.generate_json = lambda *_args, **_kwargs: {  # type: ignore[method-assign]
+            "intent": "product",
+            "mode": "observe",
+            "tool_name": "get_product_facts",
+            "reason": "unexpected_tool_request",
+            "confidence": 0.9,
+        }
+        result = _node(service, "deliberate").invoke(
+            {
+                "normalized_input": "云湃便携烧水壶 K3 怎么样",
+                "context": {},
+                "context_bundle": {
+                    "product_advisor": {"candidates": [{"sku_id": "K3"}]},
+                    "recent_history": [],
+                },
+                "context_readiness": "ready",
+                "retrieved": [
+                    {
+                        "id": "kb-k3",
+                        "source": "seed:k3",
+                        "intent": "product",
+                        "category": "product",
+                        "question": "云湃便携烧水壶 K3 介绍",
+                        "answer": "已核验资料",
+                        "score": 0.8,
+                    }
+                ],
+                "trace": [],
+                "session_id": "bounded-product-handoff",
+                "tenant_id": "tenant-test",
+                "react_step": 0,
+                "tool_result": {},
+                "customer_intent": "product_inquiry",
+                "intent_routing": routing_for_intent("product_inquiry"),
+            }
+        )
+
+        assert result["decision"]["mode"] == "handoff"
+        assert result["decision"]["reason"] == "bounded_product_answer_required"
+        assert result["trace"][-1] == "deliberate:bounded_product:handoff"
+    finally:
+        service.close()
+
+
 def test_high_score_approved_answer_requires_an_exact_normalized_question(
     tmp_path,
 ) -> None:
@@ -534,8 +647,9 @@ def test_chat_persists_classification_pair(tmp_path) -> None:
 
         assert response.message_id
         assert [(row["role"], row["customer_intent"], row["intent_method"]) for row in rows[-2:]] == [
-            ("user", "product_inquiry", "model"),
-            ("assistant", "product_inquiry", "model"),
+            ("user", "product_inquiry", "rule"),
+            ("assistant", "product_inquiry", "rule"),
         ]
+        assert all(row["intent_confidence"] == 0.95 for row in rows[-2:])
     finally:
         service.close()

@@ -1,0 +1,280 @@
+{
+  "run_at": "2026-08-07T17:23:34.866050+00:00",
+  "revision": "working-tree-20260808-fix12",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "model_max_output_tokens": 1600,
+  "data_scope": "temporary isolated directory",
+  "messages": "leaked regression scenarios; omitted from report",
+  "summary": {
+    "count": 4,
+    "p50_ms": 16297.7,
+    "p95_ms": 33594.4
+  },
+  "records": [
+    {
+      "scenario": "injection",
+      "classification_ms": 0.0,
+      "classification_provider_ms": 0.0,
+      "retrieval_ms": 0.0,
+      "deliberate_provider_ms": [],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 2.7
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 0.4
+        },
+        {
+          "node": "refuse",
+          "elapsed_ms": 0.6
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 2.8
+        }
+      ],
+      "total_ms": 6.6,
+      "route_reason": "prompt_injection_detected",
+      "intent": "general",
+      "risk_level": "blocked",
+      "trace": [
+        "intake",
+        "intent:default:chitchat:precheck_short_circuit",
+        "precheck:refuse",
+        "refuse",
+        "postcondition:blocked",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "complaint",
+      "classification_ms": 1559.3,
+      "classification_provider_ms": 1559.0,
+      "retrieval_ms": 37.2,
+      "deliberate_provider_ms": [
+        10556.0
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 0.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 0.7
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 1561.8
+        },
+        {
+          "node": "retrieve",
+          "elapsed_ms": 41.6
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 9.7
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 10561.0
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 8.0
+        },
+        {
+          "node": "handoff",
+          "elapsed_ms": 15.9
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 6.4
+        }
+      ],
+      "total_ms": 12205.1,
+      "route_reason": "用户明确投诉被多次转接，属于服务投诉，需转人工处理。",
+      "intent": "complaint",
+      "risk_level": "medium",
+      "trace": [
+        "intake",
+        "intent:model:complaint",
+        "precheck:deliberate",
+        "retrieve:initial:3",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "context:budget:kept0/dropped0",
+        "deliberate:model:handoff",
+        "decision_gate:handoff",
+        "human_handoff",
+        "postcondition:handoff_proposed",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "product",
+      "classification_ms": 1061.5,
+      "classification_provider_ms": 1061.2,
+      "retrieval_ms": 25.1,
+      "deliberate_provider_ms": [
+        15167.1
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 4074.0,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 1.8
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 1063.1
+        },
+        {
+          "node": "retrieve",
+          "elapsed_ms": 17.8
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 14.4
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 15170.9
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 8.9
+        },
+        {
+          "node": "refine_retrieval",
+          "elapsed_ms": 12.8
+        },
+        {
+          "node": "build_generation_context",
+          "elapsed_ms": 11.5
+        },
+        {
+          "node": "generate",
+          "elapsed_ms": 4075.7
+        },
+        {
+          "node": "verify",
+          "elapsed_ms": 3.1
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 10.0
+        }
+      ],
+      "total_ms": 20390.2,
+      "route_reason": "knowledge_answer_allowed",
+      "intent": "product",
+      "risk_level": "low",
+      "trace": [
+        "intake",
+        "intent:model:product_inquiry",
+        "precheck:deliberate",
+        "retrieve:initial:3",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "context:budget:kept0/dropped0",
+        "deliberate:bounded_product:answer",
+        "decision_gate:answer",
+        "retrieve:refined:3",
+        "context:budget:kept0/dropped0",
+        "context:generation:ready",
+        "generate:model",
+        "verify:passed",
+        "postcondition:answer",
+        "persist"
+      ]
+    },
+    {
+      "scenario": "knowledge_gap",
+      "classification_ms": 880.6,
+      "classification_provider_ms": 880.3,
+      "retrieval_ms": 24.6,
+      "deliberate_provider_ms": [
+        27970.0
+      ],
+      "tool_ms": 0.0,
+      "tool_calls": 0,
+      "generation_provider_ms": 4656.9,
+      "node_ms": [
+        {
+          "node": "intake",
+          "elapsed_ms": 2.3
+        },
+        {
+          "node": "precheck",
+          "elapsed_ms": 882.5
+        },
+        {
+          "node": "retrieve",
+          "elapsed_ms": 18.3
+        },
+        {
+          "node": "build_decision_context",
+          "elapsed_ms": 14.8
+        },
+        {
+          "node": "deliberate",
+          "elapsed_ms": 27974.4
+        },
+        {
+          "node": "decision_gate",
+          "elapsed_ms": 8.0
+        },
+        {
+          "node": "refine_retrieval",
+          "elapsed_ms": 12.2
+        },
+        {
+          "node": "build_generation_context",
+          "elapsed_ms": 12.6
+        },
+        {
+          "node": "generate",
+          "elapsed_ms": 4658.2
+        },
+        {
+          "node": "verify",
+          "elapsed_ms": 1.4
+        },
+        {
+          "node": "persist",
+          "elapsed_ms": 9.5
+        }
+      ],
+      "total_ms": 33594.4,
+      "route_reason": "knowledge_answer_allowed",
+      "intent": "product",
+      "risk_level": "low",
+      "trace": [
+        "intake",
+        "intent:model:product_inquiry",
+        "precheck:deliberate",
+        "retrieve:initial:3",
+        "context:budget:kept0/dropped0",
+        "context:decision:ready",
+        "context:budget:kept0/dropped0",
+        "deliberate:bounded_product:answer",
+        "decision_gate:answer",
+        "retrieve:refined:3",
+        "context:budget:kept0/dropped0",
+        "context:generation:ready",
+        "generate:model",
+        "verify:passed",
+        "postcondition:answer",
+        "persist"
+      ]
+    }
+  ]
+}

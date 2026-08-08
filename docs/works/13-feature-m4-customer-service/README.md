@@ -1059,3 +1059,63 @@ live 的 `handoff_recall=1.000`、`evidence_coverage=1.000`、主库
 D22 的四场景延迟报告也被本轮语义路径变更失效：投诉重新进入模型 deliberation，商品
 不再有目录模板快答。当前全量 p50/p95 **未知**；完整 50 例 baseline/tuned live 运行耗时
 不能替代单轮延迟分布。P1 性能问题继续保留，必须按阶段耗时另行测量。
+
+## D24 · 规则短路与商品有界规划复核（2026-08-08）
+
+### FIX-11：恢复规则零模型短路
+
+D23 的 `model is None and not review_rule_match` 被证明把所有规则候选都送进模型，造成
+高频消息额外延迟和 2 秒弃权面扩大。本轮恢复为：没有流程追责/业务证据冲突的规则命中直接
+返回 `rule / 0.95`，配置模型不会改变该结果；只有规则未命中或复核触发才调用分类模型。
+`退货`、`保修` 的业务证据组只用于识别责任追问，因此“我要退货怎么弄”保留规则快路径，
+“退货运费明明该你们承担”进入仲裁。规则候选继续以 `semantic_authority=false` 作为提示，
+不直接决定规划模型的 answer/handoff。
+
+反证与复核：配置模型下“我要退款”“我要投诉”“多少钱”均为零分类调用、`rule / 0.95`；
+责任追问各发生一次模型调用。全量回归为 `610 passed, 1 xfailed`，没有修改冻结 fixture、
+门禁阈值、schema、拓扑或 `ChatResponse`。
+
+### FIX-12：商品开放问句的一步有界规划
+
+唯一目录候选、检索结果非空且上下文 ready 时，规划请求携带
+`planning_constraint=bounded_product_answer`，只允许一次 `answer / clarify / refuse / handoff`；
+工具目录为空，模型仍负责生成 grounded answer，因此目录快路径不再以模板绕过知识证据，也
+不会进入无界 ReAct。模型若返回 `observe / act`，实现安全转人工并记录约束违反轨迹。
+
+K3 真实 provider 探针本轮 trace 为 `deliberate:bounded_product:answer`，工具调用 0，未出现
+`react_step_limit_reached`；回答仍经过检索、生成和 verify。阶段耗时已写入
+`evals/performance/runs/20260808-m4-latency-post-fix12.json`：
+
+| 场景 | 总耗时 | 分类 provider | 检索 | deliberate provider | 生成 provider | 工具调用 |
+|---|---:|---:|---:|---:|---:|---:|
+| 注入拒答 | 6.6ms | 0 | 0 | 0 | 0 | 0 |
+| 投诉答复 + 人工标记 | 12205.1ms | 1559.0ms | 37.2ms | 10556.0ms | 0 | 0 |
+| K3 商品开放问句 | 20390.2ms | 1061.2ms | 25.1ms | 15167.1ms | 4074.0ms | 0 |
+| 目录无 CE 信息 | 33594.4ms | 880.3ms | 24.6ms | 27970.0ms | 4656.9ms | 0 |
+
+四条已泄漏回归场景的 `p50=16297.7ms`、`p95=33594.4ms`，不代表全链路分布；provider 尾延迟
+仍是 P1，不能再宣称“端到端 p50 已降至 1.45 秒”。after-sales、非单候选商品和工具型
+订单查询的 p50/p95 仍未测全。
+
+### 评测与签署状态
+
+FIX-12 后同 fixture 的 WP4 报告均重新跑完。mock 为 `answer_accuracy=0.940`、
+`hallucination_rate=0.020`、`severe_failures=3`、gate passed；同口径 live
+`deepseek-v4-flash` 为 `answer_accuracy=0.820`、`hallucination_rate=0.060`、
+`severe_failures=3`、gate passed，场景为 complaint `7/8`、product `14/15`、
+after-sales `6/12`。live 与 D23 的 `0.900` 不同，说明 provider/run-to-run 波动，不能
+宣称本轮准确率提升。两份新报告分别为
+`evals/customer_service/runs/20260808-m4-customer-eval-post-fix12-{mock,live}.json`；
+该复跑仍不改变 fixture 的封存性质或 M4 整体签署结论。
+
+意图数据继续按 R2 标记为泄漏回归，不作为泛化成绩。当前复跑为：
+
+- 原 40 条：`31/40=77.5%`，覆盖率 `80%`，作答子集 `31/32=96.875%`；投诉仅 `3/9` 被回答，
+  弃权仍受 2 秒预算和 provider 尾部影响。
+- 平衡 20 正 + 20 负：precision `100%`、recall `75%`、负例误报 `0/20`、覆盖率 `80%`，
+  gate passed；`min_complaint_recall=0.75` 仍是压线门槛，不是新泛化证据。
+
+因此 D24 仍**不能签署 M4**：FIX-14 的分类 gate 应测分类层还是端到端投诉队列，需负责人
+裁定；FIX-15 的密封、全新留出集需由验收人建立并在运行时才解封；浏览器 PNG 仍是 D22
+历史证据，未形成新 UI 实跑。WP4 mock 门禁、规则短路和有界规划已具备回归证据，但不覆盖
+上述签署阻塞项。

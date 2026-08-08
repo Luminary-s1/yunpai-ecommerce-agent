@@ -187,7 +187,19 @@ def profile(service: AgentService, principal: Principal) -> list[dict[str, Any]]
             ]
             active.pop("inside_classification")
             persist = final_update.get("persist") or {}
-            active["route_reason"] = persist.get("route_reason")
+            with service.db.connect() as conn:
+                row = conn.execute(
+                    """
+                    SELECT route_reason, intent, risk_level
+                    FROM messages
+                    WHERE session_id=? AND role='assistant'
+                    ORDER BY rowid DESC LIMIT 1
+                    """,
+                    (internal_session_id,),
+                ).fetchone()
+            active["route_reason"] = row["route_reason"] if row else None
+            active["intent"] = row["intent"] if row else None
+            active["risk_level"] = row["risk_level"] if row else None
             active["trace"] = persist.get("trace", [])
             records.append(active)
     finally:

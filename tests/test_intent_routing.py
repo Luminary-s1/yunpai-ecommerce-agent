@@ -203,8 +203,24 @@ def test_customer_intent_samples(message: str, expected: str) -> None:
     result = classify(message, model=model)
 
     assert result.intent == expected
-    assert result.method == "model"
-    assert len(model.calls) == 1
+    rule_match = intent_module._match_rule(message)
+    review = bool(
+        rule_match
+        and (
+            intent_module._requires_model_review(message, rule_match[1])
+            or (
+                intent_module._matches_process_accountability(message)
+                and rule_match[0] != "complaint"
+            )
+        )
+    )
+    if rule_match and not review:
+        assert result.method == "rule"
+        assert result.confidence == intent_module._RULE_CONFIDENCE
+        assert model.calls == []
+    else:
+        assert result.method == "model"
+        assert len(model.calls) == 1
 
 
 def test_rule_result_is_high_confidence_when_model_is_not_configured() -> None:
@@ -213,6 +229,17 @@ def test_rule_result_is_high_confidence_when_model_is_not_configured() -> None:
     assert result.intent == "product_inquiry"
     assert result.confidence == intent_module._RULE_CONFIDENCE == 0.95
     assert result.method == "rule"
+
+
+def test_configured_model_does_not_replace_a_simple_rule_result() -> None:
+    model = CapturingModel({"intent": "chitchat", "confidence": 0.12})
+
+    result = classify("我要退款", model=model)
+
+    assert result.intent == "after_sales"
+    assert result.confidence == intent_module._RULE_CONFIDENCE == 0.95
+    assert result.method == "rule"
+    assert model.calls == []
 
 
 @pytest.mark.parametrize(
@@ -361,6 +388,35 @@ def test_neutral_progress_question_requires_model_arbitration(message: str) -> N
 @pytest.mark.parametrize(
     "message",
     (
+        "退货运费明明该你们承担",
+        "保修责任明明该商家负责",
+    ),
+)
+def test_return_and_warranty_accountability_questions_are_reviewed(
+    message: str,
+) -> None:
+    model = CapturingModel({"intent": "complaint", "confidence": 0.88})
+
+    result = classify(message, model=model)
+
+    assert len(model.calls) == 1
+    assert result.method == "model"
+
+
+def test_terse_return_request_stays_on_rule_fast_path() -> None:
+    model = CapturingModel({"intent": "complaint", "confidence": 0.12})
+
+    result = classify("我要退货怎么弄", model=model)
+
+    assert result.intent == "after_sales"
+    assert result.confidence == intent_module._RULE_CONFIDENCE
+    assert result.method == "rule"
+    assert model.calls == []
+
+
+@pytest.mark.parametrize(
+    "message",
+    (
         "售后审核为什么还没有通过",
         "为什么我的订单还没有发货提醒",
     ),
@@ -391,6 +447,8 @@ def test_cross_domain_gate_declares_positive_business_evidence() -> None:
         "推荐",
         "物流",
         "退款",
+        "退货",
+        "保修",
     }
     assert all(intent_module._RULE_BUSINESS_EVIDENCE.values())
 
@@ -478,6 +536,15 @@ def test_rule_and_process_matches_are_advisory_signals_in_model_request() -> Non
     assert task["advisory_signals"]["rule_candidate"] == "complaint"
     assert task["advisory_signals"]["matched_keywords"] == ["投诉"]
     assert task["advisory_signals"]["semantic_authority"] is False
+
+
+def test_rule_miss_keeps_the_classification_advisory_payload_minimal() -> None:
+    model = CapturingModel({"intent": "chitchat", "confidence": 0.88})
+
+    classify("今天心情不错", model=model)
+
+    task = json.loads(model.calls[0][0][1]["content"])
+    assert task["advisory_signals"] == {"semantic_authority": False}
 
 
 def test_rule_miss_uses_bounded_short_few_shot_model_prompt() -> None:

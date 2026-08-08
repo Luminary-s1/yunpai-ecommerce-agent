@@ -1,0 +1,471 @@
+{
+  "run_at": "2026-08-07T17:32:37.079763+00:00",
+  "dataset": "tests/test_m4_acceptance.py::INTENT_HOLDOUT",
+  "dataset_status": "leaked regression only; not generalization evidence",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "intent_budget_seconds": 2.0,
+  "metrics": {
+    "total": 40,
+    "answered": 32,
+    "coverage": 0.8,
+    "correct": 31,
+    "answered_accuracy": 0.96875,
+    "over_budget_count": 0,
+    "categories": {
+      "product_inquiry": {
+        "total": 11,
+        "answered": 11,
+        "correct": 11,
+        "coverage": 1.0,
+        "answered_accuracy": 1.0
+      },
+      "after_sales": {
+        "total": 11,
+        "answered": 10,
+        "correct": 9,
+        "coverage": 0.9090909090909091,
+        "answered_accuracy": 0.9
+      },
+      "complaint": {
+        "total": 9,
+        "answered": 3,
+        "correct": 3,
+        "coverage": 0.3333333333333333,
+        "answered_accuracy": 1.0
+      },
+      "chitchat": {
+        "total": 9,
+        "answered": 8,
+        "correct": 8,
+        "coverage": 0.8888888888888888,
+        "answered_accuracy": 1.0
+      }
+    },
+    "common_answered_subset": {
+      "product_inquiry": {
+        "count": 11,
+        "baseline_accuracy": 1.0,
+        "current_accuracy": 1.0
+      },
+      "after_sales": {
+        "count": 9,
+        "baseline_accuracy": 0.8888888888888888,
+        "current_accuracy": 0.8888888888888888
+      },
+      "complaint": {
+        "count": 2,
+        "baseline_accuracy": 1.0,
+        "current_accuracy": 1.0
+      },
+      "chitchat": {
+        "count": 8,
+        "baseline_accuracy": 1.0,
+        "current_accuracy": 1.0
+      }
+    }
+  },
+  "privacy": "messages omitted; records are joined to the leaked corpus by index",
+  "records": [
+    {
+      "index": 0,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.3971,
+      "correct": true
+    },
+    {
+      "index": 1,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 1.0,
+      "method": "model",
+      "error": null,
+      "seconds": 1.2884,
+      "correct": true
+    },
+    {
+      "index": 2,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.0486,
+      "correct": true
+    },
+    {
+      "index": 3,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.855,
+      "correct": true
+    },
+    {
+      "index": 4,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.2195,
+      "correct": true
+    },
+    {
+      "index": 5,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.0624,
+      "correct": true
+    },
+    {
+      "index": 6,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4187,
+      "correct": true
+    },
+    {
+      "index": 7,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.791,
+      "correct": true
+    },
+    {
+      "index": 8,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.324,
+      "correct": true
+    },
+    {
+      "index": 9,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.0584,
+      "correct": true
+    },
+    {
+      "index": 10,
+      "expected": "after_sales",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.2791,
+      "correct": false
+    },
+    {
+      "index": 11,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4559,
+      "correct": true
+    },
+    {
+      "index": 12,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4984,
+      "correct": true
+    },
+    {
+      "index": 13,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.3143,
+      "correct": true
+    },
+    {
+      "index": 14,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.5261,
+      "correct": true
+    },
+    {
+      "index": 15,
+      "expected": "after_sales",
+      "intent": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9859,
+      "correct": false
+    },
+    {
+      "index": 16,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.6963,
+      "correct": true
+    },
+    {
+      "index": 17,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4933,
+      "correct": true
+    },
+    {
+      "index": 18,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.6857,
+      "correct": true
+    },
+    {
+      "index": 19,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.8051,
+      "correct": true
+    },
+    {
+      "index": 20,
+      "expected": "complaint",
+      "intent": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9862,
+      "correct": false
+    },
+    {
+      "index": 21,
+      "expected": "complaint",
+      "intent": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9832,
+      "correct": false
+    },
+    {
+      "index": 22,
+      "expected": "complaint",
+      "intent": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9847,
+      "correct": false
+    },
+    {
+      "index": 23,
+      "expected": "complaint",
+      "intent": "complaint",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.8903,
+      "correct": true
+    },
+    {
+      "index": 24,
+      "expected": "complaint",
+      "intent": "complaint",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.8542,
+      "correct": true
+    },
+    {
+      "index": 25,
+      "expected": "complaint",
+      "intent": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9823,
+      "correct": false
+    },
+    {
+      "index": 26,
+      "expected": "complaint",
+      "intent": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.984,
+      "correct": false
+    },
+    {
+      "index": 27,
+      "expected": "complaint",
+      "intent": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9861,
+      "correct": false
+    },
+    {
+      "index": 28,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.1888,
+      "correct": true
+    },
+    {
+      "index": 29,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.1904,
+      "correct": true
+    },
+    {
+      "index": 30,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.1622,
+      "correct": true
+    },
+    {
+      "index": 31,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.0188,
+      "correct": true
+    },
+    {
+      "index": 32,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.0,
+      "method": "default",
+      "error": "model_deadline_exceeded",
+      "seconds": 1.9855,
+      "correct": false
+    },
+    {
+      "index": 33,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.0254,
+      "correct": true
+    },
+    {
+      "index": 34,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.3086,
+      "correct": true
+    },
+    {
+      "index": 35,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.041,
+      "correct": true
+    },
+    {
+      "index": 36,
+      "expected": "product_inquiry",
+      "intent": "product_inquiry",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.1459,
+      "correct": true
+    },
+    {
+      "index": 37,
+      "expected": "after_sales",
+      "intent": "after_sales",
+      "confidence": 0.95,
+      "method": "model",
+      "error": null,
+      "seconds": 1.4504,
+      "correct": true
+    },
+    {
+      "index": 38,
+      "expected": "complaint",
+      "intent": "complaint",
+      "confidence": 0.95,
+      "method": "rule",
+      "error": null,
+      "seconds": 0.0001,
+      "correct": true
+    },
+    {
+      "index": 39,
+      "expected": "chitchat",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "method": "model",
+      "error": null,
+      "seconds": 1.3364,
+      "correct": true
+    }
+  ]
+}
