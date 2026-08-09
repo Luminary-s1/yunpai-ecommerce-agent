@@ -5,9 +5,18 @@
 ## 当前版本
 
 - 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化、M5-R WP1 数据契约本机候选；生产放行阻塞
-- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移，既有 API 契约不变；后台页面仍为 0.33.0，Traffic Lab 尚无 API 或 available 登记
+- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP2 本机候选；生产放行阻塞
+- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执；后台页面仍为 0.33.0，Traffic Lab 尚无专用 API 或 available 登记
 - 最后更新：2026-08-09
+
+## M5-R WP2 数据接入与虚拟推流器（未单独升版）
+
+- 状态：Connector resources、CSV/JSON importer、稳定变更回执、私有隐藏策略和可重放 fixture 本机代码级候选通过；M5-R 整体仍在开发
+- 兼容性：沿用 schema v28，无新表、依赖或专用 HTTP API；`VirtualTaobaoConnector.capability_version` 由 1.1 升至 1.2，并 additive 增加两个只读 pull resource；既有 resource 和 action 行为不变
+- 导入契约：小时/日级输入按显式 `source_timezone` 解释并规范为 UTC，时窗必须对齐粒度；来源 ID 缺失时由 connector/listing/时窗/粒度/流量来源稳定派生；revision 自动解析要求唯一覆盖整个 bucket，归属失败隔离，结构错误或显式身份冲突逐行拒绝
+- 虚拟边界：私有 fixture 生成器保留基础曝光、素材信号、近期 CTR/CVR 反馈、库存惩罚和固定随机种子；公开 Connector、数据库与 Traffic Lab 包只接收观测和回执，不输出 ground truth 或预期方向；公开 revision 以独立缺货时窗提供库存控制变量，使库存惩罚可由观测 Eval 复核
+- 验证：同步最新 `main` 后，聚焦 8 项、Traffic Lab/Connector/迁移/灾备/CLI 关联 52 项、全量 `632 passed, 1 xfailed`；重叠 revision 守卫反证和缺货时窗红绿均成立，证据 E-20260809-003
+- 证据：E-20260809-003；`src/ecommerce_agent/traffic_lab/ingestion.py`；`src/ecommerce_agent/connectors/_virtual_traffic.py`；`tests/test_traffic_lab_ingestion.py`
 
 ## M5-R WP1 数据契约（未单独升版）
 

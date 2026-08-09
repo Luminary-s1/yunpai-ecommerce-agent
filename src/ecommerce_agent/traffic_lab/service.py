@@ -9,6 +9,7 @@ from typing import Any
 from ..business.source_versioning import SourceVersionError, decide_write, payload_digest
 from ..database import Database, utc_now
 from .models import (
+    BucketGranularity,
     CreativeAssetCreate,
     ListingRevisionCreate,
     TrafficAnalysisRunCreate,
@@ -35,6 +36,14 @@ def _json_dump(value: Any) -> str:
 
 def _json_load(value: str) -> Any:
     return json.loads(value)
+
+
+def _metric_payload(value: TrafficMetricBucketUpsert) -> dict[str, Any]:
+    payload = value.model_dump(mode="json")
+    for field in ("connector_id", "store_id", "item_id", "sku_id"):
+        if payload[field] is None:
+            payload.pop(field)
+    return payload
 
 
 class TrafficLabService:
@@ -350,7 +359,7 @@ class TrafficLabService:
         metric_start = _canonical_time(value.metric_start)
         metric_end = _canonical_time(value.metric_end)
         data_as_of = _canonical_time(value.data_as_of)
-        payload = value.model_dump(mode="json")
+        payload = _metric_payload(value)
         payload.update(
             {
                 "metric_start": metric_start,
@@ -512,7 +521,7 @@ class TrafficLabService:
         if reason_code not in self._METRIC_QUARANTINE_REASONS:
             raise TrafficLabError("metric_quarantine_reason_invalid")
         data_as_of = _canonical_time(value.data_as_of)
-        payload = value.model_dump(mode="json")
+        payload = _metric_payload(value)
         payload.update(
             {
                 "metric_start": _canonical_time(value.metric_start),
@@ -656,6 +665,7 @@ class TrafficLabService:
         *,
         listing_revision_id: str | None = None,
         traffic_source: str | None = None,
+        bucket_granularity: BucketGranularity | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         conditions = ["tenant_id=?"]
@@ -666,6 +676,9 @@ class TrafficLabService:
         if traffic_source is not None:
             conditions.append("traffic_source=?")
             params.append(traffic_source)
+        if bucket_granularity is not None:
+            conditions.append("bucket_granularity=?")
+            params.append(bucket_granularity)
         params.append(limit)
         with self.db.connect() as conn:
             rows = conn.execute(

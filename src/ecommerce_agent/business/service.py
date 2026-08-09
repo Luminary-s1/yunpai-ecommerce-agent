@@ -61,6 +61,8 @@ class OrderFactsToolInput(BaseModel):
 
 class OperationsService:
     def __init__(self, db: Database):
+        from ..traffic_lab import TrafficLabIngestionService
+
         self.db = db
         self.catalog = CatalogService(db)
         self.orders = OrderService(db)
@@ -70,6 +72,7 @@ class OperationsService:
         self.marketing = MarketingService(db)
         self.finance = FinanceService(db)
         self.ops_assistant = OpsAssistantService(db)
+        self.traffic_lab = TrafficLabIngestionService(db)
         self.metrics = MetricsService(db, self.inventory)
         self.connectors = ConnectorRegistry()
         self.connectors.register(VirtualTaobaoConnector())
@@ -110,6 +113,9 @@ class OperationsService:
         try:
             batch = connector.pull(PullRequest(resource=resource, cursor=cursor, limit=limit))
             applied = 0
+            idempotent = 0
+            quarantined = 0
+            receipts: list[dict[str, Any]] = []
             for record in batch.records:
                 if resource == "catalog":
                     result = self.catalog.upsert(
@@ -121,7 +127,6 @@ class OperationsService:
                             **record.payload,
                         ),
                     )
-                    applied += int(result["write_status"] == "applied")
                 elif resource == "orders":
                     result = self.orders.upsert(
                         tenant_id,
@@ -132,7 +137,6 @@ class OperationsService:
                             **record.payload,
                         ),
                     )
-                    applied += int(result["write_status"] == "applied")
                 elif resource == "inventory":
                     result = self.inventory.upsert(
                         tenant_id,
@@ -143,7 +147,6 @@ class OperationsService:
                             **record.payload,
                         ),
                     )
-                    applied += int(result["write_status"] == "applied")
                 elif resource == "competitor_price":
                     result = self.competitive.record(
                         tenant_id,
@@ -155,9 +158,24 @@ class OperationsService:
                             **record.payload,
                         ),
                     )
-                    applied += int(result["write_status"] == "applied")
+                elif resource == "listing_revision":
+                    result = self.traffic_lab.ingest_listing_revision_record(
+                        tenant_id,
+                        connector_id=connector_id,
+                        record=record,
+                    )
+                    receipts.append(result["receipt"])
+                elif resource == "traffic_metrics":
+                    result = self.traffic_lab.ingest_metric_record(
+                        tenant_id,
+                        connector_id=connector_id,
+                        record=record,
+                    )
                 else:
                     raise ValueError(f"no normalizer is implemented for resource: {resource}")
+                applied += int(result["write_status"] == "applied")
+                idempotent += int(result["write_status"] == "idempotent")
+                quarantined += int(result.get("disposition") == "quarantined")
         except Exception as exc:
             with self.db._write_lock, self.db.connect() as conn:
                 conn.execute(
@@ -202,6 +220,8 @@ class OperationsService:
                 "resource": resource,
                 "items_received": len(batch.records),
                 "items_applied": applied,
+                "items_idempotent": idempotent,
+                "items_quarantined": quarantined,
             },
             tenant_id,
         )
@@ -213,6 +233,9 @@ class OperationsService:
             "status": "succeeded",
             "items_received": len(batch.records),
             "items_applied": applied,
+            "items_idempotent": idempotent,
+            "items_quarantined": quarantined,
+            "receipts": receipts,
             "next_cursor": batch.next_cursor,
             "has_more": batch.has_more,
             "data_as_of": batch.data_as_of,

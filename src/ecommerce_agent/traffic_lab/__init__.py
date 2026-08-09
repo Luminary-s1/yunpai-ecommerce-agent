@@ -1,3 +1,4 @@
+from .ingestion import TrafficLabIngestionService
 from .models import (
     CreativeAssetCreate,
     ListingRevisionCreate,
@@ -17,6 +18,7 @@ __all__ = [
     "TrafficExperimentTransition",
     "TrafficExperimentWindowCreate",
     "TrafficLabError",
+    "TrafficLabIngestionService",
     "TrafficLabService",
     "TrafficMetricBucketUpsert",
 ]

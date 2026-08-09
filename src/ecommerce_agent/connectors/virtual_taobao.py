@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from ._virtual_traffic import build_virtual_traffic_records
 from .base import (
     ConnectionCheck,
     ConnectorCapabilities,
@@ -40,9 +41,16 @@ class VirtualTaobaoConnector:
         return ConnectorCapabilities(
             connector_id=self.CONNECTOR_ID,
             display_name="淘宝虚拟接口",
-            capability_version="1.1",
+            capability_version="1.2",
             virtual=True,
-            resources=["catalog", "orders", "inventory", "competitor_price"],
+            resources=[
+                "catalog",
+                "orders",
+                "inventory",
+                "competitor_price",
+                "listing_revision",
+                "traffic_metrics",
+            ],
             modes=["read", "write", "webhook", "polling"],
             actions=["send_customer_message", "update_safety_stock_buffer"],
             supports_dry_run=True,
@@ -132,7 +140,7 @@ class VirtualTaobaoConnector:
     @staticmethod
     def _build_records() -> dict[str, list[dict[str, Any]]]:
         observed_at = "2026-07-21T08:00:00+00:00"
-        return {
+        records = {
             "catalog": [
                 {
                     "source_id": "virtual-catalog-001",
@@ -301,3 +309,5 @@ class VirtualTaobaoConnector:
                 },
             ],
         }
+        records.update(build_virtual_traffic_records())
+        return records

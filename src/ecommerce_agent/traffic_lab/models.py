@@ -108,6 +108,10 @@ class TrafficMetricBucketUpsert(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     listing_revision_id: str | None = Field(default=None, min_length=1, max_length=128)
+    connector_id: str | None = Field(default=None, min_length=1, max_length=128)
+    store_id: str | None = Field(default=None, min_length=1, max_length=128)
+    item_id: str | None = Field(default=None, min_length=1, max_length=128)
+    sku_id: str | None = Field(default=None, min_length=1, max_length=128)
     metric_start: datetime
     metric_end: datetime
     bucket_granularity: BucketGranularity
