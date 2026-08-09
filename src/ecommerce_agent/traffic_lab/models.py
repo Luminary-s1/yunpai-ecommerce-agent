@@ -213,7 +213,7 @@ class TrafficExperimentWindowCreate(BaseModel):
         return self
 
 
-class TrafficAnalysisRunCreate(BaseModel):
+class _TrafficAnalysisRunRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     method: str = Field(min_length=1, max_length=128)
@@ -228,3 +228,38 @@ class TrafficAnalysisRunCreate(BaseModel):
     model_name: str | None = Field(default=None, max_length=256)
     prompt_version: str | None = Field(default=None, max_length=128)
     analysis_code_version: str = Field(min_length=1, max_length=128)
+
+
+class TrafficMechanismHypothesis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim: str = Field(min_length=1, max_length=2_000)
+    evidence_refs: list[str] = Field(default_factory=list, max_length=32)
+    counter_evidence_refs: list[str] = Field(default_factory=list, max_length=32)
+
+
+class TrafficNextExperimentSuggestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    variable: str = Field(min_length=1, max_length=128)
+    change: str = Field(min_length=1, max_length=2_000)
+    expected_observation: str = Field(min_length=1, max_length=2_000)
+
+
+class TrafficAnalysisInterpretation(BaseModel):
+    """AI-owned explanation fields; statistical facts are deliberately absent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(min_length=1, max_length=4_000)
+    evidence_explanation: list[str] = Field(default_factory=list, max_length=32)
+    counter_evidence_explanation: list[str] = Field(default_factory=list, max_length=32)
+    mechanism_hypotheses: list[TrafficMechanismHypothesis] = Field(
+        default_factory=list, max_length=16
+    )
+    next_experiments: list[TrafficNextExperimentSuggestion] = Field(
+        default_factory=list, max_length=16
+    )
+    model_provider: str = Field(min_length=1, max_length=128)
+    model_name: str = Field(min_length=1, max_length=256)
+    prompt_version: str = Field(min_length=1, max_length=128)

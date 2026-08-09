@@ -1,3 +1,4 @@
+from .analysis import TrafficAnalysisEngine, TrafficAnalysisInterpreter
 from .ingestion import TrafficLabIngestionService
 from .features import (
     SemanticFeatureOutput,
@@ -9,7 +10,7 @@ from .features import (
 from .models import (
     CreativeAssetCreate,
     ListingRevisionCreate,
-    TrafficAnalysisRunCreate,
+    TrafficAnalysisInterpretation,
     TrafficExperimentCreate,
     TrafficExperimentTransition,
     TrafficExperimentWindowCreate,
@@ -29,7 +30,9 @@ __all__ = [
     "SemanticFeatureRequest",
     "SemanticFeatureUnavailable",
     "TitleFeatureContext",
-    "TrafficAnalysisRunCreate",
+    "TrafficAnalysisEngine",
+    "TrafficAnalysisInterpretation",
+    "TrafficAnalysisInterpreter",
     "TrafficExperimentCreate",
     "TrafficExperimentTransition",
     "TrafficExperimentWindowCreate",

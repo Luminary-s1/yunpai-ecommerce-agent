@@ -1,0 +1,132 @@
+{
+  "analysis_imported_ground_truth": false,
+  "fixture": "evals/traffic_lab/wp4_blackbox_v1.json",
+  "ground_truth_boundary": {
+    "analysis_engine_call_count": 8,
+    "analysis_engine_call_fields": [
+      "experiment_id",
+      "tenant_id"
+    ],
+    "analysis_fields": [
+      "aa_observation",
+      "assignment",
+      "clicks",
+      "day",
+      "experiment_id",
+      "hour",
+      "impressions",
+      "orders",
+      "primary_metric",
+      "scenario_id",
+      "scenario_input",
+      "stock_status",
+      "switchback_buckets",
+      "tenant_id",
+      "treatment_attribute_overrides"
+    ],
+    "analysis_imported_ground_truth": false,
+    "analysis_scenario_count": 4,
+    "analysis_scenario_fields": [
+      "scenario_id",
+      "scenario_input"
+    ],
+    "oracle_field_overlap": [],
+    "oracle_fields": [
+      "conclusion",
+      "expected",
+      "required_issue_codes",
+      "strong_conclusion_allowed"
+    ],
+    "status": "passed",
+    "unexpected_analysis_fields": []
+  },
+  "passed": true,
+  "results": [
+    {
+      "checks": {
+        "aa_gate_passed": true,
+        "conclusion": true,
+        "forbidden_issue_codes": true,
+        "required_issue_codes": true,
+        "strong_conclusion_allowed": true
+      },
+      "confidence_interval": {
+        "high": 0.040784255458607914,
+        "includes_zero": false,
+        "low": 0.019215744541392084
+      },
+      "effect": 0.03,
+      "issue_codes": [],
+      "observed": "positive_effect",
+      "passed": true,
+      "scenario_id": "ctr_positive_balanced",
+      "strong_conclusion_allowed": true
+    },
+    {
+      "checks": {
+        "aa_gate_passed": true,
+        "conclusion": true,
+        "forbidden_issue_codes": true,
+        "required_issue_codes": true,
+        "strong_conclusion_allowed": true
+      },
+      "confidence_interval": {
+        "high": 0.12898825826135196,
+        "includes_zero": false,
+        "low": 0.07101174173864803
+      },
+      "effect": 0.09999999999999999,
+      "issue_codes": [],
+      "observed": "positive_effect",
+      "passed": true,
+      "scenario_id": "cvr_positive_balanced",
+      "strong_conclusion_allowed": true
+    },
+    {
+      "checks": {
+        "aa_gate_passed": true,
+        "conclusion": true,
+        "forbidden_issue_codes": true,
+        "required_issue_codes": true,
+        "strong_conclusion_allowed": true
+      },
+      "confidence_interval": {
+        "high": -0.03505728699806736,
+        "includes_zero": false,
+        "low": -0.05494271300193264
+      },
+      "effect": -0.045,
+      "issue_codes": [
+        "switchback_hour_distribution_imbalanced"
+      ],
+      "observed": "blocked",
+      "passed": true,
+      "scenario_id": "no_effect_hour_confound",
+      "strong_conclusion_allowed": false
+    },
+    {
+      "checks": {
+        "aa_gate_passed": true,
+        "conclusion": true,
+        "forbidden_issue_codes": true,
+        "required_issue_codes": true,
+        "strong_conclusion_allowed": true
+      },
+      "confidence_interval": {
+        "high": 0.040784255458607914,
+        "includes_zero": false,
+        "low": 0.019215744541392084
+      },
+      "effect": 0.03,
+      "issue_codes": [
+        "control_variable_changed",
+        "stock_not_available"
+      ],
+      "observed": "blocked",
+      "passed": true,
+      "scenario_id": "inventory_polluted",
+      "strong_conclusion_allowed": false
+    }
+  ],
+  "schema_version": "traffic-analysis-blackbox-v1"
+}

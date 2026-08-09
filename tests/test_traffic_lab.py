@@ -9,7 +9,7 @@ from ecommerce_agent.database import Database
 from ecommerce_agent.traffic_lab import (
     CreativeAssetCreate,
     ListingRevisionCreate,
-    TrafficAnalysisRunCreate,
+    TrafficAnalysisEngine,
     TrafficExperimentCreate,
     TrafficExperimentTransition,
     TrafficExperimentWindowCreate,
@@ -90,7 +90,7 @@ def experiment(control_id: str, treatment_id: str) -> TrafficExperimentCreate:
         treatment_revision_id=treatment_id,
         minimum_exposure=1000,
         washout_window=15,
-        analysis_policy_version="traffic-analysis-v1",
+        analysis_policy_version="traffic-analysis-v2",
     )
 
 
@@ -514,24 +514,15 @@ def test_experiment_windows_analysis_and_all_id_queries_are_tenant_scoped(tmp_pa
         "source_receipt_missing",
     } <= {issue["code"] for issue in quality["issues"]}
 
-    analysis = service.create_analysis_run(
-        "tenant-a",
-        created_experiment["experiment_id"],
-        TrafficAnalysisRunCreate(
-            method="switchback_uplift_v1",
-            data_window={"start": BASE_TIME.isoformat(), "end": (BASE_TIME + timedelta(hours=4)).isoformat()},
-            sample_size={"control_impressions": 1000, "treatment_impressions": 1000},
-            effect_estimate={"metric": "ctr", "absolute": 0.01},
-            confidence_interval={"low": -0.002, "high": 0.022},
-            evidence={"quality": "invalid"},
-            counter_evidence={"window_overlap": True},
-            hypotheses={"status": "insufficient_evidence"},
-            analysis_code_version="traffic-analysis-v1",
-        ),
+    analysis = TrafficAnalysisEngine(db).analyze_experiment(
+        "tenant-a", created_experiment["experiment_id"]
     )
     assert service.get_analysis_run("tenant-a", analysis["analysis_run_id"])[
         "method"
     ] == "switchback_uplift_v1"
+    assert "analysis_samples_missing" in {
+        issue["code"] for issue in analysis["evidence"]["quality_gate"]["issues"]
+    }
 
     for getter, row_id, error in (
         (service.get_asset, created_asset["asset_id"], "creative_asset_not_found"),
@@ -567,18 +558,6 @@ def test_experiment_windows_analysis_and_all_id_queries_are_tenant_scoped(tmp_pa
             "tenant-b", created_experiment["experiment_id"], first_window
         )
     with pytest.raises(ValueError, match="traffic_experiment_not_found"):
-        service.create_analysis_run(
-            "tenant-b",
-            created_experiment["experiment_id"],
-            TrafficAnalysisRunCreate(
-                method="probe",
-                data_window={},
-                sample_size={},
-                effect_estimate={},
-                confidence_interval={},
-                evidence={},
-                counter_evidence={},
-                hypotheses={},
-                analysis_code_version="probe-v1",
-            ),
+        TrafficAnalysisEngine(db).analyze_experiment(
+            "tenant-b", created_experiment["experiment_id"]
         )

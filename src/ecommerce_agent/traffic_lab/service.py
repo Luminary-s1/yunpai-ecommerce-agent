@@ -12,11 +12,11 @@ from .models import (
     BucketGranularity,
     CreativeAssetCreate,
     ListingRevisionCreate,
-    TrafficAnalysisRunCreate,
     TrafficExperimentCreate,
     TrafficExperimentTransition,
     TrafficExperimentWindowCreate,
     TrafficMetricBucketUpsert,
+    _TrafficAnalysisRunRecord,
 )
 
 
@@ -1023,12 +1023,14 @@ class TrafficLabService:
         )
         return {"quality": quality, "window_count": len(windows), "issues": issues}
 
-    def create_analysis_run(
+    def _create_analysis_run(
         self,
         tenant_id: str,
         experiment_id: str,
-        value: TrafficAnalysisRunCreate,
+        value: _TrafficAnalysisRunRecord,
     ) -> dict[str, Any]:
+        """Persist an engine-produced record; public callers use TrafficAnalysisEngine."""
+
         payload = value.model_dump(mode="json")
         payload_hash = payload_digest(payload)
         analysis_run_id = f"analysis-{uuid.uuid4().hex}"
@@ -1070,6 +1072,66 @@ class TrafficLabService:
                     payload_hash,
                     now,
                     now,
+                ),
+            )
+        result = self.get_analysis_run(tenant_id, analysis_run_id)
+        result["write_status"] = "applied"
+        return result
+
+    def _update_analysis_interpretation(
+        self,
+        tenant_id: str,
+        analysis_run_id: str,
+        *,
+        hypotheses: dict[str, Any],
+        model_provider: str | None,
+        model_name: str | None,
+        prompt_version: str | None,
+    ) -> dict[str, Any]:
+        """Update only AI-owned explanation fields on a persisted statistics run."""
+
+        with self.db._write_lock, self.db.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """
+                SELECT * FROM traffic_analysis_runs
+                WHERE tenant_id=? AND analysis_run_id=?
+                """,
+                (tenant_id, analysis_run_id),
+            ).fetchone()
+            if row is None:
+                raise TrafficLabError("traffic_analysis_run_not_found")
+            record = _TrafficAnalysisRunRecord(
+                method=row["method"],
+                data_window=_json_load(row["data_window_json"]),
+                sample_size=_json_load(row["sample_size_json"]),
+                effect_estimate=_json_load(row["effect_estimate_json"]),
+                confidence_interval=_json_load(row["confidence_interval_json"]),
+                evidence=_json_load(row["evidence_json"]),
+                counter_evidence=_json_load(row["counter_evidence_json"]),
+                hypotheses=hypotheses,
+                model_provider=model_provider,
+                model_name=model_name,
+                prompt_version=prompt_version,
+                analysis_code_version=row["analysis_code_version"],
+            )
+            payload_hash = payload_digest(record.model_dump(mode="json"))
+            conn.execute(
+                """
+                UPDATE traffic_analysis_runs
+                SET hypotheses_json=?, model_provider=?, model_name=?, prompt_version=?,
+                    payload_hash=?, updated_at=?
+                WHERE tenant_id=? AND analysis_run_id=?
+                """,
+                (
+                    _json_dump(record.hypotheses),
+                    record.model_provider,
+                    record.model_name,
+                    record.prompt_version,
+                    payload_hash,
+                    utc_now(),
+                    tenant_id,
+                    analysis_run_id,
                 ),
             )
         result = self.get_analysis_run(tenant_id, analysis_run_id)
