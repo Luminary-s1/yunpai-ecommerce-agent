@@ -5,9 +5,18 @@
 ## 当前版本
 
 - 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP2 本机候选；生产放行阻塞
-- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执；后台页面仍为 0.33.0，Traffic Lab 尚无专用 API 或 available 登记
+- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP3 本机候选；生产放行阻塞
+- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。后台页面仍为 0.33.0，Traffic Lab 尚无专用 API 或 available 登记
 - 最后更新：2026-08-09
+
+## M5-R WP3 标题 / 图片特征引擎（未单独升版）
+
+- 状态：标题/图片确定性统计、单点 feature schema、可选语义 signal 与显式降级通过本机代码级候选；M5-R 整体仍在开发
+- 兼容性：沿用 schema v28，无新表、迁移、依赖、HTTP API 或模块 available 登记；Python 包 additive 导出 `TrafficFeatureEngine`、`TitleFeatureContext`、语义 extractor 契约和当前 schema 查询；`CreativeAssetCreate` 对未知 feature schema 明确拒绝，`image-v1` 及旧 extractor 保持有效，`image-v2` 为当前版本
+- 特征契约：v1/v2 共用单点标题/图片特征清单、三类统计词表和阈值；v2 使用 `deterministic-title-v2` / `deterministic-png-v2`，无空格中文重复按归一化字符 bigram 统计，前 10 字密度按唯一信息字符占比计算，图片基础统计使用全分辨率累计与相邻边缘。同一 asset 可显式选择 v1/v2，输入 SHA 相同而版本化输出 SHA 分离，默认仍读取资产登记版本且不更新资产
+- 决策边界：词表命中仅增加 `benefit/scenario/promotion_keyword_count`，不进入对话/分析路由、模型旁路、实验有效性或机制结论；AI 标签固定为 `advisory_signal`，不可用/失败/坏输出只把 extraction 标为降级，确定性块逐字段不变
+- 验证：保留 E-20260809-004 初始接口/关键词反证；本次四项旧实现红灯均按预期失败，修复后聚焦 10 项、WP3 关联 24 项、迁移/灾备/CLI 扩展关联 63 项、工作区全量 `655 passed, 1 xfailed`；PNG 格式矩阵、随机图独立数值核对、compileall/whitespace 通过，证据 E-20260809-006
+- 证据：E-20260809-006（当前）；E-20260809-004（v1 历史）；`src/ecommerce_agent/traffic_feature_schema.py`；`src/ecommerce_agent/traffic_lab/features.py`；`tests/test_traffic_lab_features.py`
 
 ## M5-R WP2 数据接入与虚拟推流器（未单独升版）
 

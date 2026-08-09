@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from ..traffic_feature_schema import CURRENT_FEATURE_SCHEMA_VERSION
+
 
 def build_virtual_traffic_records() -> dict[str, list[dict[str, Any]]]:
     """Build replayable observations without returning the simulator's hidden inputs."""
@@ -41,7 +43,7 @@ def build_virtual_traffic_records() -> dict[str, list[dict[str, Any]]]:
                     "height": 1200,
                     "storage_ref": "objects/traffic-lab/virtual-control.png",
                     "source_ref": "fixture://virtual-traffic/control",
-                    "feature_schema_version": "image-v1",
+                    "feature_schema_version": CURRENT_FEATURE_SCHEMA_VERSION,
                 },
             },
         },
@@ -72,7 +74,7 @@ def build_virtual_traffic_records() -> dict[str, list[dict[str, Any]]]:
                     "height": 1200,
                     "storage_ref": "objects/traffic-lab/virtual-treatment.png",
                     "source_ref": "fixture://virtual-traffic/treatment",
-                    "feature_schema_version": "image-v1",
+                    "feature_schema_version": CURRENT_FEATURE_SCHEMA_VERSION,
                 },
             },
         },
@@ -103,7 +105,7 @@ def build_virtual_traffic_records() -> dict[str, list[dict[str, Any]]]:
                     "height": 1200,
                     "storage_ref": "objects/traffic-lab/virtual-treatment.png",
                     "source_ref": "fixture://virtual-traffic/treatment",
-                    "feature_schema_version": "image-v1",
+                    "feature_schema_version": CURRENT_FEATURE_SCHEMA_VERSION,
                 },
             },
         },

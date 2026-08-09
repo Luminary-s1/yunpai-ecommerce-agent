@@ -7,6 +7,8 @@ from urllib.parse import parse_qsl, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ..traffic_feature_schema import get_feature_schema
+
 
 BucketGranularity = Literal["hour", "day"]
 ExperimentAssignment = Literal["control", "treatment"]
@@ -36,6 +38,12 @@ class CreativeAssetCreate(BaseModel):
     @classmethod
     def normalize_sha256(cls, value: str) -> str:
         return value.lower()
+
+    @field_validator("feature_schema_version")
+    @classmethod
+    def require_supported_feature_schema(cls, value: str) -> str:
+        get_feature_schema(value)
+        return value
 
     @field_validator("storage_ref")
     @classmethod
