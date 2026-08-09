@@ -41,7 +41,7 @@ class SessionScopeError(ValueError):
 
 
 class Database:
-    SCHEMA_VERSION = 27
+    SCHEMA_VERSION = 28
 
     def __init__(self, path: Path):
         self.path = path
@@ -160,6 +160,9 @@ class Database:
             if 27 not in applied:
                 self._apply_v27(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (27, ?)", (utc_now(),))
+            if 28 not in applied:
+                self._apply_v28(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (28, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2207,6 +2210,219 @@ class Database:
         cls._ensure_column(conn, "messages", "intent_method", "TEXT")
 
     @staticmethod
+    def _apply_v28(conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS creative_assets (
+                asset_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                sha256 TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                width INTEGER NOT NULL CHECK(width > 0),
+                height INTEGER NOT NULL CHECK(height > 0),
+                storage_ref TEXT NOT NULL,
+                source_ref TEXT,
+                feature_schema_version TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, sha256),
+                UNIQUE(tenant_id, asset_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_creative_assets_tenant_created
+                ON creative_assets(tenant_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS listing_revisions (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                connector_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                sku_id TEXT NOT NULL,
+                revision_no INTEGER NOT NULL CHECK(revision_no >= 1),
+                title TEXT NOT NULL,
+                main_image_asset_id TEXT NOT NULL,
+                sale_price TEXT NOT NULL,
+                attributes_json TEXT NOT NULL,
+                active_from TEXT NOT NULL,
+                active_to TEXT,
+                source_updated_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                CHECK(active_to IS NULL OR active_to > active_from),
+                UNIQUE(tenant_id, connector_id, store_id, item_id, sku_id, revision_no),
+                UNIQUE(tenant_id, id),
+                FOREIGN KEY(tenant_id, main_image_asset_id)
+                    REFERENCES creative_assets(tenant_id, asset_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_listing_revisions_tenant_listing_time
+                ON listing_revisions(
+                    tenant_id, connector_id, store_id, item_id, sku_id, active_from
+                );
+            CREATE TRIGGER IF NOT EXISTS trg_listing_revisions_immutable_update
+            BEFORE UPDATE ON listing_revisions
+            BEGIN
+                SELECT RAISE(ABORT, 'listing_revision_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_listing_revisions_immutable_delete
+            BEFORE DELETE ON listing_revisions
+            BEGIN
+                SELECT RAISE(ABORT, 'listing_revision_immutable');
+            END;
+
+            CREATE TABLE IF NOT EXISTS traffic_metric_buckets (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                listing_revision_id TEXT NOT NULL,
+                metric_start TEXT NOT NULL,
+                metric_end TEXT NOT NULL,
+                bucket_granularity TEXT NOT NULL
+                    CHECK(bucket_granularity IN ('hour','day')),
+                traffic_source TEXT NOT NULL,
+                impressions INTEGER NOT NULL CHECK(impressions >= 0),
+                clicks INTEGER NOT NULL CHECK(clicks >= 0 AND clicks <= impressions),
+                visitors INTEGER NOT NULL CHECK(visitors >= 0),
+                favorites INTEGER NOT NULL CHECK(favorites >= 0),
+                cart_adds INTEGER NOT NULL CHECK(cart_adds >= 0),
+                orders INTEGER NOT NULL CHECK(orders >= 0),
+                sales_amount TEXT NOT NULL,
+                ad_spend TEXT NOT NULL,
+                search_impressions INTEGER NOT NULL CHECK(search_impressions >= 0),
+                recommend_impressions INTEGER NOT NULL CHECK(recommend_impressions >= 0),
+                data_as_of TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                quality_flags_json TEXT NOT NULL DEFAULT '[]',
+                version INTEGER NOT NULL CHECK(version >= 1),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                CHECK(metric_end > metric_start),
+                UNIQUE(tenant_id, source_id),
+                UNIQUE(tenant_id, id),
+                FOREIGN KEY(tenant_id, listing_revision_id)
+                    REFERENCES listing_revisions(tenant_id, id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_traffic_metric_buckets_revision_time
+                ON traffic_metric_buckets(
+                    tenant_id, listing_revision_id, metric_start, traffic_source
+                );
+
+            CREATE TABLE IF NOT EXISTS traffic_metric_quarantine (
+                quarantine_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                reason_code TEXT NOT NULL CHECK(
+                    reason_code IN (
+                        'listing_revision_missing',
+                        'listing_revision_not_found',
+                        'listing_revision_ambiguous',
+                        'metric_outside_revision_window'
+                    )
+                ),
+                payload_json TEXT NOT NULL,
+                data_as_of TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                version INTEGER NOT NULL CHECK(version >= 1),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, source_id),
+                UNIQUE(tenant_id, quarantine_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_traffic_metric_quarantine_tenant_time
+                ON traffic_metric_quarantine(tenant_id, data_as_of DESC, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS traffic_experiments (
+                experiment_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                sku_id TEXT NOT NULL,
+                experiment_type TEXT NOT NULL CHECK(
+                    experiment_type IN (
+                        'aa','platform_ab','switchback','difference_in_differences'
+                    )
+                ),
+                primary_metric TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(
+                    status IN ('draft','ready','running','completed','paused','invalid')
+                ),
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                control_revision_id TEXT NOT NULL,
+                treatment_revision_id TEXT NOT NULL,
+                minimum_exposure INTEGER NOT NULL CHECK(minimum_exposure >= 0),
+                washout_window INTEGER NOT NULL CHECK(washout_window >= 0),
+                analysis_policy_version TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                record_version INTEGER NOT NULL CHECK(record_version >= 1),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                CHECK(ended_at IS NULL OR ended_at > started_at),
+                UNIQUE(tenant_id, experiment_id),
+                FOREIGN KEY(tenant_id, control_revision_id)
+                    REFERENCES listing_revisions(tenant_id, id),
+                FOREIGN KEY(tenant_id, treatment_revision_id)
+                    REFERENCES listing_revisions(tenant_id, id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_traffic_experiments_tenant_scope
+                ON traffic_experiments(tenant_id, store_id, sku_id, status, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS traffic_experiment_windows (
+                window_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                experiment_id TEXT NOT NULL,
+                listing_revision_id TEXT NOT NULL,
+                window_start TEXT NOT NULL,
+                window_end TEXT NOT NULL,
+                assignment TEXT NOT NULL CHECK(assignment IN ('control','treatment')),
+                washout INTEGER NOT NULL CHECK(washout IN (0,1)),
+                source_receipt_id TEXT,
+                payload_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                CHECK(window_end > window_start),
+                UNIQUE(tenant_id, window_id),
+                UNIQUE(tenant_id, experiment_id, window_start, window_end, assignment),
+                FOREIGN KEY(tenant_id, experiment_id)
+                    REFERENCES traffic_experiments(tenant_id, experiment_id),
+                FOREIGN KEY(tenant_id, listing_revision_id)
+                    REFERENCES listing_revisions(tenant_id, id)
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_traffic_windows_receipt
+                ON traffic_experiment_windows(tenant_id, experiment_id, source_receipt_id)
+                WHERE source_receipt_id IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_traffic_windows_experiment_time
+                ON traffic_experiment_windows(tenant_id, experiment_id, window_start);
+
+            CREATE TABLE IF NOT EXISTS traffic_analysis_runs (
+                analysis_run_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                experiment_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                data_window_json TEXT NOT NULL,
+                sample_size_json TEXT NOT NULL,
+                effect_estimate_json TEXT NOT NULL,
+                confidence_interval_json TEXT NOT NULL,
+                evidence_json TEXT NOT NULL,
+                counter_evidence_json TEXT NOT NULL,
+                hypotheses_json TEXT NOT NULL,
+                model_provider TEXT,
+                model_name TEXT,
+                prompt_version TEXT,
+                analysis_code_version TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, analysis_run_id),
+                FOREIGN KEY(tenant_id, experiment_id)
+                    REFERENCES traffic_experiments(tenant_id, experiment_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_traffic_analysis_runs_experiment
+                ON traffic_analysis_runs(tenant_id, experiment_id, created_at DESC);
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -2239,6 +2455,49 @@ class Database:
                 "tenant_id", "dataset_key", "store_id", "record_date", "channel",
                 "visitors", "orders", "sales_amount", "ad_spend", "source_format",
                 "payload_hash", "version",
+            },
+            "creative_assets": {
+                "asset_id", "tenant_id", "sha256", "mime_type", "width", "height",
+                "storage_ref", "source_ref", "feature_schema_version", "payload_hash",
+                "created_at", "updated_at",
+            },
+            "listing_revisions": {
+                "id", "tenant_id", "connector_id", "store_id", "item_id", "sku_id",
+                "revision_no", "title", "main_image_asset_id", "sale_price",
+                "attributes_json", "active_from", "active_to", "source_updated_at",
+                "payload_hash", "created_at", "updated_at",
+            },
+            "traffic_metric_buckets": {
+                "id", "tenant_id", "listing_revision_id", "metric_start", "metric_end",
+                "bucket_granularity", "traffic_source", "impressions", "clicks",
+                "visitors", "favorites", "cart_adds", "orders", "sales_amount",
+                "ad_spend", "search_impressions", "recommend_impressions", "data_as_of",
+                "source_id", "payload_hash", "quality_flags_json", "version",
+                "created_at", "updated_at",
+            },
+            "traffic_metric_quarantine": {
+                "quarantine_id", "tenant_id", "source_id", "reason_code",
+                "payload_json", "data_as_of", "payload_hash", "version",
+                "created_at", "updated_at",
+            },
+            "traffic_experiments": {
+                "experiment_id", "tenant_id", "store_id", "sku_id", "experiment_type",
+                "primary_metric", "status", "started_at", "ended_at",
+                "control_revision_id", "treatment_revision_id", "minimum_exposure",
+                "washout_window", "analysis_policy_version", "payload_hash",
+                "record_version", "created_at", "updated_at",
+            },
+            "traffic_experiment_windows": {
+                "window_id", "tenant_id", "experiment_id", "listing_revision_id",
+                "window_start", "window_end", "assignment", "washout",
+                "source_receipt_id", "payload_hash", "created_at", "updated_at",
+            },
+            "traffic_analysis_runs": {
+                "analysis_run_id", "tenant_id", "experiment_id", "method",
+                "data_window_json", "sample_size_json", "effect_estimate_json",
+                "confidence_interval_json", "evidence_json", "counter_evidence_json",
+                "hypotheses_json", "model_provider", "model_name", "prompt_version",
+                "analysis_code_version", "payload_hash", "created_at", "updated_at",
             },
             "staged_rollouts": {
                 "tenant_id", "subject_type", "subject_key", "candidate_id",

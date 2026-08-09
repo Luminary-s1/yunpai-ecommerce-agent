@@ -109,7 +109,7 @@ def test_legacy_v1_database_upgrades_without_rebuild(tmp_path) -> None:
     assert {"knowledge_key", "layer", "review_status", "record_version"} <= knowledge_columns
 
 
-def test_v25_database_upgrades_to_v27_and_preserves_intent_history(tmp_path) -> None:
+def test_v25_database_upgrades_and_preserves_intent_history(tmp_path) -> None:
     db = Database(tmp_path / "v25-intent.sqlite3")
     with db.connect() as conn:
         conn.execute(
@@ -146,7 +146,7 @@ def test_v25_database_upgrades_to_v27_and_preserves_intent_history(tmp_path) -> 
     db.initialize()
     db.initialize()
 
-    assert db.schema_version() == 27
+    assert db.schema_version() == Database.SCHEMA_VERSION
     with db.connect() as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
         row = conn.execute(

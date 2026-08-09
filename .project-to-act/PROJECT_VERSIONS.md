@@ -5,9 +5,18 @@
 ## 当前版本
 
 - 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化本机候选；生产放行阻塞
-- 兼容性说明（0.33.0 增量）：无 schema / API 契约变化；后台页面新增适配器与灰度面板，发布表单增加可选夜间窗与 SOP 白名单字段（不填时请求与 0.32.0 相同）
-- 最后更新：2026-08-07
+- 发布状态：工作台渠道与灰度可视化、M5-R WP1 数据契约本机候选；生产放行阻塞
+- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移，既有 API 契约不变；后台页面仍为 0.33.0，Traffic Lab 尚无 API 或 available 登记
+- 最后更新：2026-08-09
+
+## M5-R WP1 数据契约（未单独升版）
+
+- 状态：Listing / Creative 数据模型与领域 service 本机代码级候选通过；M5-R 整体仍在开发
+- 兼容性：`Database.SCHEMA_VERSION` 由 27 升至 28；只新增 `creative_assets`、`listing_revisions`、`traffic_metric_buckets`、`traffic_metric_quarantine`、`traffic_experiments`、`traffic_experiment_windows`、`traffic_analysis_runs` 及相关索引/触发器，不重建旧表；既有 API、模块注册表和依赖不变
+- 契约：所有时间输入要求带时区并规范为 UTC；`washout_window` 的整数单位冻结为分钟；`storage_ref` 只接受 `objects/` 项目对象键或无查询参数的 `s3://`、`oss://`、`cos://` URI；跨表引用使用 `tenant_id + id`；revision 不可更新/删除；metric 与隔离记录共享 `data_as_of + payload_hash` 来源版本语义，并按 `tenant_id + source_id` 保持互斥
+- 灾备：v28 迁移前用旧程序生成并验证停机备份；迁移后、恢复业务写入前立即生成并验证新的 v28 全量备份。v28 程序按精确 schema 拒绝 v27 `.ypbak`，旧归档及匹配程序保留到新归档完成隔离恢复演练
+- 验证：初始 E-20260809-001 通过；隔离补丁的最新证据见 E-20260809-002
+- 证据：E-20260809-001、E-20260809-002；`src/ecommerce_agent/traffic_lab/`；`tests/test_traffic_lab.py`；`docs/operations.md`
 
 ## M4 验收补丁（未单独升版）
 

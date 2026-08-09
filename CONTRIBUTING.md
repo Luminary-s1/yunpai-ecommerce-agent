@@ -277,14 +277,14 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | ≤ 25 | — | 已合并进 `main` | 历史迁移，`_apply_v1` ~ `_apply_v25` | 已合并 |
 | 26 | 缪海南 | M6 / 已合并进 `main` | `competitor_observations` 新增 `rating_value`、`rating_scale`、`sales_rank`、`rank_scope` | 已合并 |
 | 27 | 闫睿涵 | M4 / 已合并进 `main` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已合并 |
-| **28** | M5-R | Traffic Lab / 待建实现分支 | creative asset、listing revision、metric bucket、experiment/window/analysis run | 已预留，未实现 |
+| 28 | M5-R | Traffic Lab / `feature/roadmap-reset-m5r-m6r` | creative asset、listing revision、metric bucket、experiment/window/analysis run | 已实现（WP1），待合并 |
 | **29** | M6-R | Forecasting / 待建实现分支 | demand fact、forecast policy/run/backtest/point/anomaly | 已预留，未实现 |
 | **30** | M6-R | Inventory Planning / 待建实现分支 | planning policy、inventory plan | 已预留，未实现 |
 | 31+ | *（空闲）* | | | |
 
-旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；截至 2026-08-07，对本地和已知远端
-分支的检查未发现 `_apply_v28` 实现。若存在尚未同步的旧 v28 分支，不得直接合入，先与
-模块负责人核对。26 和 27 已合并，28–30 仅预留、尚未实现。
+旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 已在
+`feature/roadmap-reset-m5r-m6r` 实现 `_apply_v28`。若存在尚未同步的其他 v28 分支，
+不得直接合入，先与模块负责人核对。26 和 27 已合并，28 已实现待合并，29–30 仍仅预留。
 
 **并行占号的分支合并时，`database.py` 必然在三处
 冲突**（2026-08-06 实测：26 对 27 就是这三处，已按下面的解法合入）：
