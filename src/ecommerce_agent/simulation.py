@@ -1211,6 +1211,11 @@ class VirtualStoreSimulation:
         dataset = fixture["operations_dataset"]
         ops = self.service.operations.ops_assistant
         dataset_key = str(dataset["dataset_key"])
+        scenario_parameters = next(
+            demand["input"]["parameters"]
+            for demand in fixture["demands"]
+            if demand["id"] == "D16"
+        )
 
         imported = ops.parse_dataset(
             tenant_id,
@@ -1279,7 +1284,12 @@ class VirtualStoreSimulation:
 
         report = ops.analysis_report(
             tenant_id,
-            OpsReportQuery(dataset_key=dataset_key, store_id=store_id),
+            OpsReportQuery(
+                dataset_key=dataset_key,
+                store_id=store_id,
+                start_date=scenario_parameters["start_date"],
+                end_date=scenario_parameters["end_date"],
+            ),
         )
         assert report["data_quality"]["record_count"] == 6
         assert report["data_quality"]["numbers_computed_by_code"] is True

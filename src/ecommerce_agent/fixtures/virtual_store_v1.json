@@ -373,7 +373,7 @@
     },
     {
       "id": "D16", "module": "ops_assistant", "title": "解析运营数据并生成多风格文案与分析报告",
-      "input": {"operation": "OpsAssistantService.parse_dataset + generate_copy + analysis_report", "parameters": {"store_id": "qingchuan-flagship-001", "dataset_key": "virtual-ops-week-29", "period": "2026-07-10 to 2026-07-16"}},
+      "input": {"operation": "OpsAssistantService.parse_dataset + generate_copy + analysis_report", "parameters": {"store_id": "qingchuan-flagship-001", "dataset_key": "virtual-ops-week-29", "start_date": "2026-07-10", "end_date": "2026-07-16"}},
       "expected": ["CSV 逐行拒绝坏日期和订单超访客并返回结构化记录", "JSON 与重复导入保持幂等和版本可追溯", "多风格候选文案禁止直接发布并标记生成方式", "报告数值由代码计算并命中销售下滑与花费上升建议"]
     }
   ]

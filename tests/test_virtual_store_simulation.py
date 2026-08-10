@@ -5,6 +5,7 @@ from dataclasses import replace
 from fastapi.testclient import TestClient
 
 from ecommerce_agent.api import create_app
+from ecommerce_agent.business import OpsOperationRecordUpsert
 from ecommerce_agent.service import AgentService
 from ecommerce_agent.simulation import VirtualStoreSimulation
 
@@ -15,6 +16,39 @@ ADMIN_HEADERS = {
     "X-Admin-Id": "admin-test",
     "X-Admin-Key": "test-admin-key-123456",
 }
+
+
+def test_d16_ops_report_uses_declared_period_when_dataset_has_outside_record(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        simulation = VirtualStoreSimulation(service)
+        fixture = simulation._load_fixture()
+        dataset_key = fixture["operations_dataset"]["dataset_key"]
+        service.operations.ops_assistant.upsert_record(
+            "tenant-test",
+            OpsOperationRecordUpsert(
+                dataset_key=dataset_key,
+                store_id=fixture["store"]["store_id"],
+                record_date="2026-07-05",
+                channel="推荐",
+                visitors=600,
+                orders=24,
+                sales_amount="4800.00",
+                ad_spend="300.00",
+                source_format="form",
+            ),
+        )
+
+        output = simulation._verify_ops_assistant(fixture, "tenant-test")
+
+        assert output["report"]["data_quality"]["record_count"] == 6
+        assert output["report"]["period"]["start_date"] == "2026-07-10"
+        assert output["report"]["period"]["end_date"] == "2026-07-15"
+        assert output["report"]["totals"]["sales_amount"] == "44800.00"
+    finally:
+        service.close()
 
 
 def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
