@@ -439,7 +439,7 @@
             </article>
             <article class="panel">
               <div class="panel-head"><h3>生成结果</h3><span class="muted" id="opsCopyMeta">尚未生成</span></div>
-              <div class="panel-body copy-result-grid" id="opsCopyResults"><div class="empty">填写商品信息后生成多风格候选</div></div>
+              <div class="panel-body copy-result-grid" id="opsCopyResults" aria-live="polite" aria-busy="false"><div class="empty">填写商品信息后生成多风格候选</div></div>
             </article>
           </div>
           <div class="grid two" style="margin-top:14px">
@@ -2229,7 +2229,12 @@
       if (styles.length > 5) return toast('一次最多选择 5 种文案风格');
       if (styles.length * variantsPerStyle > 9) return toast('小批量生成最多 9 条候选文案');
       const button = $('generateOpsCopy');
+      const results = $('opsCopyResults');
       button.disabled = true;
+      button.textContent = '生成中…';
+      $('opsCopyMeta').textContent = `正在生成 ${styles.length * variantsPerStyle} 条候选文案`;
+      results.setAttribute('aria-busy', 'true');
+      results.innerHTML = '<div class="empty" role="status">模型正在生成，请稍候…</div>';
       try {
         const sellingPoints = $('opsSellingPoints').value.split('\n').map((item) => item.trim()).filter(Boolean);
         state.opsCopyRequest = {
@@ -2249,8 +2254,16 @@
         state.opsCopy = result;
         renderOpsCopyResults(result);
         toast(`已生成 ${result.batch_size} 条候选文案`);
-      } catch (error) { toast(error.message); }
-      finally { button.disabled = false; }
+      } catch (error) {
+        $('opsCopyMeta').textContent = '生成失败';
+        results.textContent = error.message;
+        toast(error.message);
+      }
+      finally {
+        results.setAttribute('aria-busy', 'false');
+        button.disabled = false;
+        button.textContent = '生成候选文案';
+      }
     });
     $('refreshMarketing').addEventListener('click', () => loadMarketing().catch((error) => toast(error.message)));
     $('marketingStore').addEventListener('change', () => loadMarketing().catch((error) => toast(error.message)));

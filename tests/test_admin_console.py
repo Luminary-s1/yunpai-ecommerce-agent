@@ -158,6 +158,8 @@ def test_admin_console_page_and_audit_api(tmp_path) -> None:
         assert 'id="opsRecordForm"' in page.text
         assert 'id="opsCopyForm"' in page.text
         assert 'id="opsCopyResults"' in page.text
+        assert 'aria-live="polite" aria-busy="false"' in page.text
+        assert "模型正在生成，请稍候" in page.text
         assert 'id="opsReportFindings"' in page.text
         assert "/v1/ops-assistant/datasets/import" in page.text
         assert "/v1/ops-assistant/copywriting/generate" in page.text

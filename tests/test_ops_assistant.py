@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -44,7 +46,9 @@ JSON_SAMPLE = (
 
 
 class FakeOpsModel:
-    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
+    def generate_json(
+        self, messages: list[dict[str, str]], **_: object
+    ) -> dict[str, str]:
         assert '"task_type": "ops_copywriting"' in messages[-1]["content"]
         return {
             "title": "模型标题",
@@ -57,7 +61,9 @@ class FakeOpsModel:
 
 
 class FailingOpsModel:
-    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
+    def generate_json(
+        self, messages: list[dict[str, str]], **_: object
+    ) -> dict[str, str]:
         raise RuntimeError("model unavailable")
 
     def generate(self, messages: list[dict[str, str]]) -> str:
@@ -67,9 +73,13 @@ class FailingOpsModel:
 class CapturingOpsModel:
     def __init__(self) -> None:
         self.copy_prompts: list[list[dict[str, str]]] = []
+        self.copy_options: list[dict[str, object]] = []
 
-    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
+    def generate_json(
+        self, messages: list[dict[str, str]], **options: object
+    ) -> dict[str, str]:
         self.copy_prompts.append(messages)
+        self.copy_options.append(options)
         return {
             "title": "模型标题",
             "body": "这是一段满足中等长度要求的模型正文，围绕已提供的商品卖点展开，并提醒用户在选择前仔细核对商品详情页中的规格、价格与活动信息。",
@@ -77,21 +87,47 @@ class CapturingOpsModel:
 
 
 class OverlongOpsModel:
-    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
+    def generate_json(
+        self, messages: list[dict[str, str]], **_: object
+    ) -> dict[str, str]:
         return {"title": "模型标题", "body": "超长正文" * 100}
 
 
 class MixedOpsModel:
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def generate_json(self, messages: list[dict[str, str]]) -> dict[str, str]:
-        self.calls += 1
-        if self.calls == 2:
+    def generate_json(
+        self, messages: list[dict[str, str]], **_: object
+    ) -> dict[str, str]:
+        if '"variant_index": 2' in messages[-1]["content"]:
             raise RuntimeError("one item failed")
         return {
             "title": "模型标题",
             "body": "模型正文：无油低脂，购买前请核对参数并以详情页为准。",
+        }
+
+
+class ConcurrentOpsModel:
+    """等待同批第二个调用进入，用于验证候选生成不是串行执行。"""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._peer_started = threading.Event()
+        self._active = 0
+        self.max_active = 0
+
+    def generate_json(
+        self, messages: list[dict[str, str]], **_: object
+    ) -> dict[str, str]:
+        with self._lock:
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+            if self._active >= 2:
+                self._peer_started.set()
+        self._peer_started.wait(timeout=0.5)
+        with self._lock:
+            self._active -= 1
+        return {
+            "title": "并发模型标题",
+            "body": "这是一段满足中等长度要求的模型正文，围绕已提供的商品卖点展开，并提醒用户在选择前仔细核对商品详情页中的规格、价格与活动信息。",
         }
 
 
@@ -441,6 +477,10 @@ def test_copywriting_uses_independent_style_prompts_and_rejects_wrong_length_mod
         )
         generated = ops.generate_copy(TENANT, request)
         assert {item["generator"] for item in generated["variants"]} == {"model"}
+        assert all(
+            options.get("thinking_enabled") is False
+            for options in model.copy_options
+        )
         system_prompts = [messages[0]["content"] for messages in model.copy_prompts]
         assert len(system_prompts) == len(set(system_prompts)) == 4
         for marker in ("体验分享", "口播节奏", "卖点分层", "熟人分享"):
@@ -570,6 +610,39 @@ def test_copywriting_mixed_batch_marks_each_generator(tmp_path) -> None:
             "template_fallback",
         ]
         assert all(item["publication_allowed"] is False for item in result["variants"])
+    finally:
+        service.close()
+
+
+def test_copywriting_batch_starts_model_variants_concurrently_and_preserves_order(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        ops = service.operations.ops_assistant
+        model = ConcurrentOpsModel()
+        ops.attach_model(model)
+        result = ops.generate_copy(
+            TENANT,
+            CopywritingRequest(
+                store_id=STORE_ID,
+                product_name="青川空气炸锅 AF5",
+                selling_points=["无油低脂"],
+                styles=["formal"],
+                variants_per_style=2,
+                length="medium",
+            ),
+        )
+
+        assert model.max_active >= 2
+        assert [item["variant_id"] for item in result["variants"]] == [
+            "copy-formal-1",
+            "copy-formal-2",
+        ]
+        assert [item["generator"] for item in result["variants"]] == [
+            "model",
+            "model",
+        ]
     finally:
         service.close()
 
