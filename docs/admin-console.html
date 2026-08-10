@@ -255,6 +255,7 @@
         <button data-view="orders">订单售后</button>
         <button data-view="competitive">竞品分析</button>
         <button data-view="ops">运营辅助</button>
+        <button data-view="traffic-lab">流量实验</button>
         <button data-view="marketing">营销投放</button>
         <button data-view="finance">利润对账</button>
         <button data-view="knowledge">知识与 SOP</button>
@@ -561,6 +562,20 @@
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>评测运行账本</h3></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>评测集</th><th>结果</th><th>核心指标</th><th>发布门禁</th><th>操作</th></tr></thead><tbody id="evaluationRunRows"></tbody></table></div></article>
         </section>
 
+        <section class="view" id="view-traffic-lab">
+          <div class="section-head">
+            <div><h2>商品流量实验</h2><p>读取已固化统计证据；仅管理员显式触发分析</p></div>
+            <div class="toolbar"><input class="input" id="trafficStore" value="virtual-shop-001" placeholder="店铺 ID"><input class="input" id="trafficSku" value="YP-SKU-TRAFFIC-001" placeholder="SKU"><input class="input" id="trafficExperiment" placeholder="实验 ID"><button class="button" id="loadTrafficInsights">查询证据</button><button class="button primary" id="analyzeTrafficExperiment" disabled>显式运行分析</button></div>
+          </div>
+          <div class="notice">页面加载与查询不会运行分析；分析结果只在点击“显式运行分析”后生成，并保留污染标记与反证。</div>
+          <div class="grid kpis" id="trafficKpis"></div>
+          <article class="panel">
+            <div class="panel-head"><h3>固化实验分析</h3><span class="muted" id="trafficResultCount">0 项</span></div>
+            <div class="table-wrap"><table><thead><tr><th data-traffic-field="control">Control</th><th data-traffic-field="treatment">Treatment</th><th data-traffic-field="window">窗口</th><th data-traffic-field="sample_size">样本量</th><th data-traffic-field="uplift">Uplift</th><th data-traffic-field="confidence_interval">置信区间</th><th data-traffic-field="lag">Lag</th><th data-traffic-field="contamination">污染标记</th><th data-traffic-field="counter_evidence">反证</th><th>操作</th></tr></thead><tbody id="trafficRows"></tbody></table></div>
+          </article>
+          <article class="panel" id="trafficDetail"><div class="empty">选择实验查看完整结构化证据</div></article>
+        </section>
+
         <section class="view" id="view-simulation">
           <div class="section-head">
             <div><h2>虚拟店铺场景验收</h2><p>逐项核对调用输入、业务原始返回和断言结果</p></div>
@@ -578,7 +593,7 @@
           </article>
           <div class="simulation-layout">
             <article class="panel">
-              <div class="panel-head"><h3>13 个验收场景</h3><span class="muted" id="simulationVisibleCount">0 项</span></div>
+              <div class="panel-head"><h3>验收场景</h3><span class="muted" id="simulationVisibleCount">0 项</span></div>
               <div class="table-wrap"><table><thead><tr><th>场景</th><th>模块</th><th>状态</th><th>操作</th></tr></thead><tbody id="simulationScenarioRows"></tbody></table></div>
             </article>
             <article class="panel" id="simulationDetail"><div class="empty">选择场景查看输入输出</div></article>
@@ -830,6 +845,8 @@
       evaluationSuite: null,
       simulationFixture: null,
       simulationReport: null,
+      trafficInsights: null,
+      trafficExperimentDetail: null,
       opsRecords: [],
       opsReport: null,
       opsCopy: null,
@@ -838,7 +855,7 @@
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
 
-    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
+    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
     const sourceLabels = { api:'API 会话', channel:'渠道会话', simulation:'虚拟验收', evaluation:'隔离评测' };
     const $ = (id) => document.getElementById(id);
 
@@ -1832,12 +1849,78 @@
       }));
     }
 
+    const trafficNumber = (value) => value === null || value === undefined ? '-' : Number(value).toLocaleString('zh-CN', { maximumSignificantDigits:5 });
+
+    function trafficEvidenceRows() {
+      const rows = [...(state.trafficInsights?.insights || [])];
+      const detail = state.trafficExperimentDetail;
+      if (!detail?.experiment) return rows;
+      const candidate = { experiment:detail.experiment, windows:detail.windows || [], analysis:(detail.analysis_runs || [])[0] || null };
+      return [candidate, ...rows.filter((item) => item.experiment.experiment_id !== candidate.experiment.experiment_id)];
+    }
+
+    function renderTrafficLab() {
+      const rows = trafficEvidenceRows();
+      const selectedId = $('trafficExperiment').value.trim();
+      const blocked = rows.filter((item) => item.analysis?.evidence?.quality_gate?.status === 'blocked').length;
+      const experimentCount = new Set(rows.map((item) => item.experiment.experiment_id)).size;
+      $('trafficKpis').innerHTML = [
+        ['实验', experimentCount, '当前 SKU 的实验数'],
+        ['分析运行', rows.filter((item) => item.analysis).length, '不会在加载时自动新增'],
+        ['污染 / 阻断', blocked, '保留反证，不输出强结论'],
+        ['证据来源', '固化表', 'traffic_analysis_runs']
+      ].map(([label,value,meta]) => `<div class="kpi"><span class="label">${label}</span><span class="value">${escapeHtml(value)}</span><span class="meta">${escapeHtml(meta)}</span></div>`).join('');
+      $('trafficResultCount').textContent = `${rows.length} 项`;
+      $('trafficRows').innerHTML = rows.length ? rows.map((item) => {
+        const experiment = item.experiment, analysis = item.analysis;
+        const sample = analysis?.sample_size || {}, effect = analysis?.effect_estimate || {}, interval = analysis?.confidence_interval || {};
+        const lag = effect.lag_analysis || {}, gate = analysis?.evidence?.quality_gate || {};
+        const issues = (gate.issues || []).map((issue) => issue.code);
+        const limitations = (analysis?.counter_evidence?.analysis_limitations || []).map((entry) => entry.code);
+        const windows = item.windows || [], first = windows[0], last = windows[windows.length - 1];
+        return `<tr><td><strong class="mono">${escapeHtml(experiment.control_revision_id)}</strong><div>${escapeHtml(experiment.experiment_id)}</div><div class="muted">${escapeHtml(analysis?.analysis_run_id || '尚无分析')}</div></td><td><strong class="mono">${escapeHtml(experiment.treatment_revision_id)}</strong><div>${escapeHtml(experiment.primary_metric)}</div></td><td>${windows.length} 个<div class="muted">${formatTime(first?.window_start)} — ${formatTime(last?.window_end)}</div></td><td>C ${trafficNumber(sample.control?.impressions)} / T ${trafficNumber(sample.treatment?.impressions)}<div class="muted">桶 ${sample.control?.bucket_count ?? '-'} / ${sample.treatment?.bucket_count ?? '-'}</div></td><td>${trafficNumber(effect.absolute)}<div class="muted">${trafficNumber(effect.control)} → ${trafficNumber(effect.treatment)} · ${escapeHtml(effect.direction || '-')}</div></td><td>[${trafficNumber(interval.low)}, ${trafficNumber(interval.high)}]<div class="muted">含 0：${interval.includes_zero === true ? '是' : interval.includes_zero === false ? '否' : '-'}</div></td><td>${escapeHtml(lag.status || '-')}<div class="muted">最佳 ${lag.best_supported_lag_minutes ?? '-'} 分钟</div></td><td>${issues.length ? issues.map(escapeHtml).join('<br>') : '<span class="status ok">无污染</span>'}</td><td>${limitations.length ? limitations.map(escapeHtml).join('<br>') : '-'}<div class="muted">${(analysis?.counter_evidence?.issues || []).length} 项结构化反证</div></td><td><button class="button small" data-traffic-experiment="${escapeHtml(experiment.experiment_id)}">选择</button></td></tr>`;
+      }).join('') : '<tr><td colspan="10"><div class="empty">暂无固化分析；请先创建实验，管理员再显式运行分析。</div></td></tr>';
+      $('trafficRows').closest('.table-wrap').scrollLeft = 0;
+      document.querySelectorAll('[data-traffic-experiment]').forEach((node) => node.addEventListener('click', () => {
+        const row = rows.find((item) => item.experiment.experiment_id === node.dataset.trafficExperiment);
+        $('trafficExperiment').value = node.dataset.trafficExperiment;
+        state.trafficExperimentDetail = row ? { experiment:row.experiment, windows:row.windows, analysis_runs:row.analysis ? [row.analysis] : [] } : null;
+        renderTrafficLab();
+      }));
+      $('analyzeTrafficExperiment').disabled = !selectedId;
+      const selected = rows.find((item) => item.experiment.experiment_id === selectedId) || rows[0];
+      $('trafficDetail').innerHTML = selected ? `<div class="panel-head"><h3>${escapeHtml(selected.experiment.experiment_id)}</h3><span class="status ${statusClass(selected.analysis?.evidence?.quality_gate?.status || selected.experiment.status)}">${escapeHtml(selected.analysis?.evidence?.quality_gate?.status || selected.experiment.status)}</span></div><div class="panel-body"><pre class="json-view">${escapeHtml(prettyJson(selected))}</pre></div>` : '<div class="empty">选择实验查看完整结构化证据</div>';
+    }
+
+    async function loadTrafficLab() {
+      const sku = $('trafficSku').value.trim(), store = $('trafficStore').value.trim();
+      if (!sku) return toast('请输入 SKU');
+      const query = store ? `?store_id=${encodeURIComponent(store)}` : '';
+      state.trafficInsights = await api(`/v1/traffic-lab/items/${encodeURIComponent(sku)}/insights${query}`);
+      const experimentId = $('trafficExperiment').value.trim();
+      state.trafficExperimentDetail = experimentId ? await api(`/v1/traffic-lab/experiments/${encodeURIComponent(experimentId)}`) : null;
+      renderTrafficLab();
+    }
+
+    async function analyzeTrafficExperiment() {
+      const experimentId = $('trafficExperiment').value.trim();
+      if (!experimentId) return toast('请先选择实验');
+      const button = $('analyzeTrafficExperiment'); button.disabled = true;
+      try {
+        await api(`/v1/traffic-lab/experiments/${encodeURIComponent(experimentId)}/analyze`, { method:'POST' });
+        await loadTrafficLab();
+        toast('分析已由管理员显式触发并固化');
+      } catch (error) { toast(error.message); }
+      finally { button.disabled = false; }
+    }
+
     const simulationModuleNames = {
       catalog:'商品', orders:'订单', inventory:'库存', metrics:'经营指标',
       competitive_intelligence:'竞品分析', competitive_monitoring:'竞品监控',
       customer_service:'智能客服', order_agent:'订单 Agent', handoff_dispatch:'人工派单',
       admin_console:'后台管理', tenant_isolation:'租户隔离', connector_contract:'连接器',
-      customer_service_evaluation:'客服评测'
+      customer_service_evaluation:'客服评测', marketing:'营销投放', finance:'利润对账',
+      ops_assistant:'运营辅助', traffic_lab:'流量实验'
     };
     const simulationStatusNames = { not_run:'未运行', passed:'通过', failed:'失败', skipped:'跳过' };
     const prettyJson = (value) => JSON.stringify(value, null, 2);
@@ -1918,7 +2001,7 @@
         state.selectedSimulationScenario = state.simulationReport.scenarios.find((item) => item.status !== 'passed')?.id || 'D01';
         $('simulationStatusFilter').value = '';
         renderSimulation();
-        toast(state.simulationReport.passed ? '13 个场景全部通过' : '场景运行完成，存在失败项');
+        toast(state.simulationReport.passed ? `${state.simulationReport.summary.total} 个场景全部通过` : '场景运行完成，存在失败项');
       } catch (error) {
         toast(error.message);
       } finally {
@@ -2121,6 +2204,7 @@
       if (view === 'orders') return loadOrders();
       if (view === 'competitive') return loadCompetitive();
       if (view === 'ops') return loadOpsAssistant();
+      if (view === 'traffic-lab') return loadTrafficLab();
       if (view === 'marketing') return loadMarketing();
       if (view === 'finance') return loadFinance();
       if (view === 'knowledge') return loadGovernance();
@@ -2291,6 +2375,8 @@
       finally { button.disabled = false; }
     });
     $('runVirtualSimulation').addEventListener('click', () => runVirtualSimulation());
+    $('loadTrafficInsights').addEventListener('click', () => loadTrafficLab().catch((error) => toast(error.message)));
+    $('analyzeTrafficExperiment').addEventListener('click', () => analyzeTrafficExperiment());
     $('overviewScope').addEventListener('change', () => loadOverview().catch((error) => toast(error.message)));
     ['simulationModuleFilter','simulationStatusFilter'].forEach((id) => $(id).addEventListener('change', renderSimulation));
     $('searchConversations').addEventListener('click', () => loadConversations().catch((error) => toast(error.message)));

@@ -1,0 +1,88 @@
+{
+  "schema_version": "traffic-analysis-blackbox-v1",
+  "analysis_policy_version": "traffic-analysis-v2",
+  "control_attributes": {
+    "category": "air-circulator",
+    "stock_status": "in_stock",
+    "campaign": null,
+    "ad_plan": "fixed-baseline",
+    "holiday_calendar_version": "cn-2026-v1",
+    "store_traffic_baseline_version": "eval-store-hourly-v1",
+    "historical_ctr": 0.052,
+    "historical_cvr": 0.022
+  },
+  "scenarios": [
+    {
+      "scenario_id": "no_effect_balanced", "category": "no_effect",
+      "input": {"primary_metric": "ctr", "aa_observation": {"impressions": 1000, "clicks": 50, "orders": 3}, "switchback_buckets": [
+        {"day": 0, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 0, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 50, "orders": 3},
+        {"day": 0, "hour": 4, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 0, "hour": 6, "assignment": "treatment", "impressions": 1000, "clicks": 50, "orders": 3},
+        {"day": 1, "hour": 0, "assignment": "treatment", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 1, "hour": 2, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3},
+        {"day": 1, "hour": 4, "assignment": "treatment", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 1, "hour": 6, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}
+      ]},
+      "expected": {"conclusion": "inconclusive", "strong_conclusion_allowed": false, "effect_direction": "none", "confidence_includes_zero": true, "required_issue_codes": []}
+    },
+    {
+      "scenario_id": "ctr_feedback", "category": "ctr_cvr_feedback",
+      "input": {"primary_metric": "ctr", "aa_observation": {"impressions": 1000, "clicks": 50, "orders": 3}, "switchback_buckets": [
+        {"day": 0, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 40, "orders": 3, "recommend_impressions": 300}, {"day": 0, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4, "recommend_impressions": 400},
+        {"day": 0, "hour": 4, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 800}, {"day": 0, "hour": 6, "assignment": "treatment", "impressions": 1000, "clicks": 90, "orders": 4, "recommend_impressions": 500},
+        {"day": 1, "hour": 0, "assignment": "treatment", "impressions": 1000, "clicks": 85, "orders": 4, "recommend_impressions": 300}, {"day": 1, "hour": 2, "assignment": "control", "impressions": 1000, "clicks": 45, "orders": 3, "recommend_impressions": 850},
+        {"day": 1, "hour": 4, "assignment": "treatment", "impressions": 1000, "clicks": 95, "orders": 5, "recommend_impressions": 450}, {"day": 1, "hour": 6, "assignment": "control", "impressions": 1000, "clicks": 55, "orders": 3, "recommend_impressions": 950}
+      ]},
+      "expected": {"conclusion": "positive_effect", "strong_conclusion_allowed": true, "effect_direction": "positive", "confidence_includes_zero": false, "lag_status": "supported", "best_supported_lag_minutes": 120, "required_issue_codes": []}
+    },
+    {
+      "scenario_id": "cvr_feedback", "category": "ctr_cvr_feedback",
+      "input": {"primary_metric": "cvr", "aa_observation": {"impressions": 1000, "clicks": 200, "orders": 10}, "switchback_buckets": [
+        {"day": 0, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 200, "orders": 10, "recommend_impressions": 300}, {"day": 0, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 200, "orders": 30, "recommend_impressions": 400},
+        {"day": 0, "hour": 4, "assignment": "control", "impressions": 1000, "clicks": 200, "orders": 12, "recommend_impressions": 900}, {"day": 0, "hour": 6, "assignment": "treatment", "impressions": 1000, "clicks": 200, "orders": 32, "recommend_impressions": 450},
+        {"day": 1, "hour": 0, "assignment": "treatment", "impressions": 1000, "clicks": 200, "orders": 31, "recommend_impressions": 300}, {"day": 1, "hour": 2, "assignment": "control", "impressions": 1000, "clicks": 200, "orders": 11, "recommend_impressions": 930},
+        {"day": 1, "hour": 4, "assignment": "treatment", "impressions": 1000, "clicks": 200, "orders": 33, "recommend_impressions": 440}, {"day": 1, "hour": 6, "assignment": "control", "impressions": 1000, "clicks": 200, "orders": 13, "recommend_impressions": 950}
+      ]},
+      "expected": {"conclusion": "positive_effect", "strong_conclusion_allowed": true, "effect_direction": "positive", "confidence_includes_zero": false, "lag_status": "supported", "best_supported_lag_minutes": 120, "required_issue_codes": []}
+    },
+    {
+      "scenario_id": "inventory_penalty", "category": "inventory_penalty",
+      "input": {"primary_metric": "recommend_impressions", "treatment_attribute_overrides": {"stock_status": "out_of_stock"}, "aa_observation": {"impressions": 1000, "clicks": 50, "orders": 3}, "switchback_buckets": [
+        {"day": 0, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 800}, {"day": 0, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 200},
+        {"day": 0, "hour": 4, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 800}, {"day": 0, "hour": 6, "assignment": "treatment", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 200},
+        {"day": 1, "hour": 0, "assignment": "treatment", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 200}, {"day": 1, "hour": 2, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 800},
+        {"day": 1, "hour": 4, "assignment": "treatment", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 200}, {"day": 1, "hour": 6, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3, "recommend_impressions": 800}
+      ]},
+      "expected": {"conclusion": "blocked", "strong_conclusion_allowed": false, "effect_direction": "negative", "confidence_includes_zero": false, "required_issue_codes": ["stock_not_available"]}
+    },
+    {
+      "scenario_id": "title_weight", "category": "title_image_weight",
+      "input": {"primary_metric": "ctr", "title_changed": true, "image_changed": false, "aa_observation": {"impressions": 1000, "clicks": 50, "orders": 3}, "switchback_buckets": [
+        {"day": 0, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 0, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 0, "hour": 4, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 0, "hour": 6, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4},
+        {"day": 1, "hour": 0, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 1, "hour": 2, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 1, "hour": 4, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 1, "hour": 6, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}
+      ]},
+      "expected": {"conclusion": "positive_effect", "strong_conclusion_allowed": true, "effect_direction": "positive", "confidence_includes_zero": false, "required_issue_codes": []}
+    },
+    {
+      "scenario_id": "image_weight", "category": "title_image_weight",
+      "input": {"primary_metric": "ctr", "title_changed": false, "image_changed": true, "aa_observation": {"impressions": 1000, "clicks": 50, "orders": 3}, "switchback_buckets": [
+        {"day": 0, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 0, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 0, "hour": 4, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 0, "hour": 6, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4},
+        {"day": 1, "hour": 0, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 1, "hour": 2, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 1, "hour": 4, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 1, "hour": 6, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}
+      ]},
+      "expected": {"conclusion": "positive_effect", "strong_conclusion_allowed": true, "effect_direction": "positive", "confidence_includes_zero": false, "required_issue_codes": []}
+    },
+    {
+      "scenario_id": "interaction", "category": "interaction",
+      "input": {"primary_metric": "ctr", "title_changed": true, "image_changed": true, "aa_observation": {"impressions": 1000, "clicks": 50, "orders": 3}, "switchback_buckets": [
+        {"day": 0, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 0, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 0, "hour": 4, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 0, "hour": 6, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4},
+        {"day": 1, "hour": 0, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 1, "hour": 2, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}, {"day": 1, "hour": 4, "assignment": "treatment", "impressions": 1000, "clicks": 80, "orders": 4}, {"day": 1, "hour": 6, "assignment": "control", "impressions": 1000, "clicks": 50, "orders": 3}
+      ]},
+      "expected": {"conclusion": "blocked", "strong_conclusion_allowed": false, "effect_direction": "positive", "confidence_includes_zero": false, "required_issue_codes": ["multiple_treatment_variables_changed"]}
+    },
+    {
+      "scenario_id": "time_noise", "category": "time_noise",
+      "input": {"primary_metric": "ctr", "aa_observation": {"impressions": 1000, "clicks": 50, "orders": 3}, "switchback_buckets": [
+        {"day": 0, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 100, "orders": 5}, {"day": 0, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 10, "orders": 1}, {"day": 1, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 100, "orders": 5}, {"day": 1, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 10, "orders": 1},
+        {"day": 2, "hour": 0, "assignment": "control", "impressions": 1000, "clicks": 100, "orders": 5}, {"day": 2, "hour": 2, "assignment": "treatment", "impressions": 1000, "clicks": 10, "orders": 1}, {"day": 3, "hour": 0, "assignment": "treatment", "impressions": 1000, "clicks": 100, "orders": 5}, {"day": 3, "hour": 2, "assignment": "control", "impressions": 1000, "clicks": 10, "orders": 1}
+      ]},
+      "expected": {"conclusion": "blocked", "strong_conclusion_allowed": false, "effect_direction": "negative", "confidence_includes_zero": false, "required_issue_codes": ["switchback_hour_distribution_imbalanced"]}
+    }
+  ]
+}

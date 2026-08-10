@@ -5,9 +5,17 @@
 ## 当前版本
 
 - 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP4 本机候选；生产放行阻塞
-- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28 且无新依赖/HTTP API；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。后台页面仍为 0.33.0，Traffic Lab 尚无专用 API 或 available 登记
+- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5 本机候选；生产放行阻塞
+- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作
 - 最后更新：2026-08-10
+
+## M5-R WP5 Agent / Admin / Eval（未单独升版）
+
+- 状态：完整管理员 HTTP 工作流、持久化洞察只读 Agent tool、显式触发的实验控制台、D19 虚拟店铺场景和六类机制 Eval 通过本机代码级候选；M5-R 整体仍在开发
+- 兼容性：沿用 schema v28、无迁移或第三方依赖；所有既有 API 响应契约不变，新增端点均要求管理员租户上下文。同步 `origin/main` 时其数据库基线仍为 v27；本分支保留 v28 migration 与读取兼容，迁移专项及全量回归通过
+- 权责边界：动态工具目录供模型选择，不向 `graph.py` 或 `intent.py` 写入 traffic_lab 关键词/正则分支；工具只读取 `traffic_analysis_runs` 已固化的结构化证据，显式标记不重算统计、不主张平台权重。页面的查询仅 GET，分析 POST 只能由管理员操作触发；不会自动发布商品、改标题/图片或投放
+- 验证：8 个机制场景覆盖无影响、CTR/CVR、库存、标题/图片、interaction、时间噪声；每项以数值和结构化字段判定，oracle 与分析调用轨迹隔离。D19 由公开服务写入显式 virtual 数据，并为 available 模块提供通过场景；全量 `668 passed, 1 xfailed`，证据 E-20260810-007
+- 证据：E-20260810-007；`traffic_lab_api.py`；`business/service.py`；`business/registry.py`；`docs/admin-console.html`；`evals/traffic_lab/wp5_mechanism_v1.json`；`tests/test_traffic_lab_wp5.py`
 
 ## M5-R WP4 实验与黑盒分析引擎（未单独升版）
 

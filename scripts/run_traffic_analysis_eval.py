@@ -101,6 +101,9 @@ def _seed_revisions(
     tenant_id: str,
     controls: dict[str, Any],
     treatment_overrides: dict[str, Any],
+    *,
+    title_changed: bool = True,
+    image_changed: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     asset = service.register_asset(
         tenant_id,
@@ -114,13 +117,26 @@ def _seed_revisions(
             feature_schema_version="image-v1",
         ),
     )
+    treatment_asset = asset
+    if image_changed:
+        treatment_asset = service.register_asset(
+            tenant_id,
+            CreativeAssetCreate(
+                sha256="c" * 64,
+                mime_type="image/png",
+                width=1200,
+                height=1200,
+                storage_ref=f"objects/traffic-eval/{tenant_id}-treatment.png",
+                source_ref=f"fixture://traffic-analysis/{tenant_id}/treatment",
+                feature_schema_version="image-v1",
+            ),
+        )
     common = {
         "connector_id": "blackbox_fixture",
         "store_id": "eval-store",
         "item_id": "eval-item",
         "sku_id": "eval-sku",
         "sale_price": "109.00",
-        "main_image_asset_id": str(asset["asset_id"]),
         "active_from": _BASE_TIME - timedelta(days=2),
         "active_to": _BASE_TIME + timedelta(days=30),
     }
@@ -130,6 +146,7 @@ def _seed_revisions(
             **common,
             revision_no=1,
             title="黑盒评测标题 A",
+            main_image_asset_id=str(asset["asset_id"]),
             attributes=controls,
             source_updated_at=_BASE_TIME - timedelta(days=2),
         ),
@@ -140,7 +157,8 @@ def _seed_revisions(
         ListingRevisionCreate(
             **common,
             revision_no=2,
-            title="黑盒评测标题 B",
+            title="黑盒评测标题 B" if title_changed else "黑盒评测标题 A",
+            main_image_asset_id=str(treatment_asset["asset_id"]),
             attributes=treatment_attributes,
             source_updated_at=_BASE_TIME - timedelta(days=1),
         ),
@@ -314,6 +332,8 @@ def _analyze_scenario(
         tenant_id,
         controls,
         scenario_input.get("treatment_attribute_overrides", {}),
+        title_changed=bool(scenario_input.get("title_changed", True)),
+        image_changed=bool(scenario_input.get("image_changed", False)),
     )
     aa_id = _seed_completed_experiment(
         service,
@@ -356,6 +376,9 @@ def _analyze_scenario(
         "strong_conclusion_allowed": gate["strong_conclusion_allowed"],
         "issue_codes": issue_codes,
         "effect": run["effect_estimate"]["absolute"],
+        "effect_direction": run["effect_estimate"]["direction"],
+        "lag_analysis": run["effect_estimate"]["lag_analysis"],
+        "sample_size": run["sample_size"],
         "confidence_interval": {
             "low": run["confidence_interval"]["low"],
             "high": run["confidence_interval"]["high"],
@@ -379,6 +402,20 @@ def _score_scenario(
         "forbidden_issue_codes": not (
             set(expected.get("forbidden_issue_codes", [])) & set(issue_codes)
         ),
+        "effect_direction": expected.get("effect_direction", observation["effect_direction"])
+        == observation["effect_direction"],
+        "confidence_includes_zero": expected.get(
+            "confidence_includes_zero",
+            observation["confidence_interval"]["includes_zero"],
+        )
+        is observation["confidence_interval"]["includes_zero"],
+        "lag_status": expected.get("lag_status", observation["lag_analysis"]["status"])
+        == observation["lag_analysis"]["status"],
+        "best_supported_lag_minutes": expected.get(
+            "best_supported_lag_minutes",
+            observation["lag_analysis"]["best_supported_lag_minutes"],
+        )
+        == observation["lag_analysis"]["best_supported_lag_minutes"],
     }
     return {
         "scenario_id": observation["scenario_id"],
@@ -390,6 +427,9 @@ def _score_scenario(
         ],
         "issue_codes": issue_codes,
         "effect": observation["effect"],
+        "effect_direction": observation["effect_direction"],
+        "lag_analysis": observation["lag_analysis"],
+        "sample_size": observation["sample_size"],
         "confidence_interval": observation["confidence_interval"],
     }
 
@@ -421,7 +461,9 @@ def run_evaluation(fixture_path: Path, db_path: Path) -> dict[str, Any]:
         )
         expected = scenario["expected"]
         oracles.append(expected)
-        results.append(_score_scenario(observation, expected))
+        scored = _score_scenario(observation, expected)
+        scored["category"] = str(scenario.get("category") or "legacy")
+        results.append(scored)
     ground_truth_boundary = _audit_ground_truth_boundary(
         analysis_scenario_requests=analysis_scenario_requests,
         analysis_engine_calls=analysis_engine_calls,
