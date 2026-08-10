@@ -39,6 +39,7 @@ from .outbox import OutboxReconcileRequest
 from .rate_limit import RateLimitError, SlidingWindowRateLimiter
 from .release_api import build_release_router
 from .simulation_api import build_simulation_router
+from .traffic_lab_api import build_traffic_lab_router
 from .schemas import (
     CandidateView,
     ChatMessageRequest,
@@ -179,6 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ) from exc
 
     app.include_router(build_operations_router(service, require_admin))
+    app.include_router(build_traffic_lab_router(service, require_admin))
     app.include_router(build_ops_assistant_router(service, require_admin))
     app.include_router(build_admin_router(service, require_admin))
     app.include_router(build_governance_router(service, require_admin))

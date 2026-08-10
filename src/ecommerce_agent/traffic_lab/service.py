@@ -1165,6 +1165,74 @@ class TrafficLabService:
             ).fetchall()
         return [self._analysis_view(dict(row)) for row in rows]
 
+    def listing_traffic_insights(
+        self,
+        tenant_id: str,
+        sku_id: str,
+        *,
+        store_id: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Read persisted analysis records without recomputing statistical facts."""
+
+        conditions = ["analysis.tenant_id=?", "experiment.sku_id=?"]
+        params: list[Any] = [tenant_id, sku_id]
+        if store_id is not None:
+            conditions.append("experiment.store_id=?")
+            params.append(store_id)
+        params.append(limit)
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT analysis.*, experiment.store_id, experiment.sku_id,
+                       experiment.experiment_type, experiment.primary_metric,
+                       experiment.status AS experiment_status,
+                       experiment.control_revision_id,
+                       experiment.treatment_revision_id,
+                       experiment.started_at, experiment.ended_at
+                FROM traffic_analysis_runs AS analysis
+                JOIN traffic_experiments AS experiment
+                  ON experiment.tenant_id=analysis.tenant_id
+                 AND experiment.experiment_id=analysis.experiment_id
+                WHERE {' AND '.join(conditions)}
+                ORDER BY analysis.created_at DESC, analysis.analysis_run_id DESC
+                LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+        insights = []
+        for raw in rows:
+            row = dict(raw)
+            insights.append(
+                {
+                    "experiment": {
+                        "experiment_id": row["experiment_id"],
+                        "store_id": row["store_id"],
+                        "sku_id": row["sku_id"],
+                        "experiment_type": row["experiment_type"],
+                        "primary_metric": row["primary_metric"],
+                        "status": row["experiment_status"],
+                        "control_revision_id": row["control_revision_id"],
+                        "treatment_revision_id": row["treatment_revision_id"],
+                        "started_at": row["started_at"],
+                        "ended_at": row["ended_at"],
+                    },
+                    "windows": self.list_experiment_windows(
+                        tenant_id, str(row["experiment_id"])
+                    ),
+                    "analysis": self._analysis_view(row),
+                }
+            )
+        return {
+            "sku_id": sku_id,
+            "store_id": store_id,
+            "analysis_count": len(insights),
+            "insights": insights,
+            "evidence_source": "traffic_analysis_runs",
+            "statistics_recomputed": False,
+            "platform_weight_claim": False,
+        }
+
     def _get_experiment_window(self, tenant_id: str, window_id: str) -> dict[str, Any]:
         with self.db.connect() as conn:
             row = conn.execute(

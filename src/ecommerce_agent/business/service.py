@@ -61,7 +61,7 @@ class OrderFactsToolInput(BaseModel):
 
 class OperationsService:
     def __init__(self, db: Database):
-        from ..traffic_lab import TrafficLabIngestionService
+        from ..traffic_lab import TrafficAnalysisEngine, TrafficLabIngestionService
 
         self.db = db
         self.catalog = CatalogService(db)
@@ -73,6 +73,7 @@ class OperationsService:
         self.finance = FinanceService(db)
         self.ops_assistant = OpsAssistantService(db)
         self.traffic_lab = TrafficLabIngestionService(db)
+        self.traffic_analysis = TrafficAnalysisEngine(db)
         self.metrics = MetricsService(db, self.inventory)
         self.connectors = ConnectorRegistry()
         self.connectors.register(VirtualTaobaoConnector())
