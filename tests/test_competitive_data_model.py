@@ -51,6 +51,26 @@ def product_identity(**updates) -> CompetitiveProductIdentity:
     return CompetitiveProductIdentity(**values)
 
 
+def entity_match(**updates) -> CompetitiveEntityMatchCreate:
+    values = {
+        "connector_id": "licensed-feed",
+        "store_id": "store-a",
+        "subject_sku": "sku-a",
+        "competitor_name": "竞店 A",
+        "competitor_sku": "comp-a",
+        "subject_identity": product_identity(),
+        "competitor_identity": product_identity(),
+        "comparison_keys": ["颜色"],
+        "source_type": "licensed_provider",
+        "source_ref": "https://licensed.example/matches/1",
+        "source_id": "entity-match-source-1",
+        "is_estimate": False,
+        "observed_at": datetime(2026, 8, 5, 1, 0, tzinfo=UTC),
+    }
+    values.update(updates)
+    return CompetitiveEntityMatchCreate(**values)
+
+
 @pytest.mark.parametrize(
     "updates",
     [
@@ -173,6 +193,79 @@ def test_observation_legacy_hash_rejects_nonempty_v26_facts(tmp_path) -> None:
                     }
                 ),
             )
+    finally:
+        service.close()
+
+
+def test_entity_match_replay_accepts_legacy_hash_without_custom_dimensions(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    competitive = service.operations.competitive
+    value = entity_match()
+    try:
+        created = competitive.record_entity_match("tenant-test", value)
+        legacy_payload = value.model_dump(mode="json")
+        legacy_payload["observed_at"] = canonical_source_time(value.observed_at)
+        assert legacy_payload["subject_identity"].pop("custom_dimensions") == []
+        assert legacy_payload["competitor_identity"].pop("custom_dimensions") == []
+        legacy_hash = payload_digest(legacy_payload)
+        with service.db.connect() as conn:
+            conn.execute(
+                "UPDATE competitive_entity_matches SET payload_hash=? WHERE id=?",
+                (legacy_hash, created["id"]),
+            )
+
+        repeated = competitive.record_entity_match("tenant-test", value)
+
+        assert repeated["id"] == created["id"]
+        assert repeated["write_status"] == "idempotent"
+        with service.db.connect() as conn:
+            stored_hash = conn.execute(
+                "SELECT payload_hash FROM competitive_entity_matches WHERE id=?",
+                (created["id"],),
+            ).fetchone()[0]
+        assert stored_hash == legacy_hash
+    finally:
+        service.close()
+
+
+def test_entity_match_legacy_hash_rejects_nonempty_custom_dimensions(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    competitive = service.operations.competitive
+    value = entity_match()
+    try:
+        created = competitive.record_entity_match("tenant-test", value)
+        legacy_payload = value.model_dump(mode="json")
+        legacy_payload["observed_at"] = canonical_source_time(value.observed_at)
+        legacy_payload["subject_identity"].pop("custom_dimensions")
+        legacy_payload["competitor_identity"].pop("custom_dimensions")
+        with service.db.connect() as conn:
+            conn.execute(
+                "UPDATE competitive_entity_matches SET payload_hash=? WHERE id=?",
+                (payload_digest(legacy_payload), created["id"]),
+            )
+
+        changed = value.model_copy(
+            update={
+                "competitor_identity": product_identity(
+                    custom_dimensions=[
+                        {
+                            "key": "memory_gb",
+                            "label": "内存",
+                            "value_type": "number",
+                            "value_number": Decimal("32"),
+                            "unit": "GB",
+                        }
+                    ]
+                )
+            }
+        )
+        with pytest.raises(
+            ValueError,
+            match="competitive_match_version_conflict",
+        ):
+            competitive.record_entity_match("tenant-test", changed)
     finally:
         service.close()
 

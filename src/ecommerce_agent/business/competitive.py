@@ -23,6 +23,26 @@ CompetitiveAlertStatus = Literal["open", "acknowledged", "resolved"]
 CompetitiveMatchStatus = Literal["pending", "approved", "rejected"]
 CompetitiveSignalType = Literal["product_claim", "review_summary"]
 
+
+def _entity_match_payload_hash_candidates(payload: dict[str, Any]) -> set[str]:
+    candidates = {payload_digest(payload)}
+    identity_fields = ("subject_identity", "competitor_identity")
+    identities = [payload.get(field) for field in identity_fields]
+    if not all(
+        isinstance(identity, dict) and identity.get("custom_dimensions") == []
+        for identity in identities
+    ):
+        return candidates
+
+    legacy_payload = dict(payload)
+    for field, identity in zip(identity_fields, identities, strict=True):
+        legacy_identity = dict(identity)
+        legacy_identity.pop("custom_dimensions")
+        legacy_payload[field] = legacy_identity
+    candidates.add(payload_digest(legacy_payload))
+    return candidates
+
+
 _OBSERVATION_V26_PAYLOAD_FIELDS = frozenset(
     {"rating_value", "rating_scale", "sales_rank", "rank_scope"}
 )
@@ -345,7 +365,9 @@ class CompetitiveIntelligenceService:
                 (tenant_id, value.connector_id, value.source_id),
             ).fetchone()
             if existing is not None:
-                if str(existing["payload_hash"]) != payload_hash:
+                if str(existing["payload_hash"]) not in (
+                    _entity_match_payload_hash_candidates(payload)
+                ):
                     raise ValueError("competitive_match_version_conflict")
                 match_id = str(existing["id"])
                 write_status = "idempotent"
