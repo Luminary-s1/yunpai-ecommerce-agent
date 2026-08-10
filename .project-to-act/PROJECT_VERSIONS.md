@@ -14,8 +14,8 @@
 - 状态：A/A、switchback uplift、置信区间、lag、数据质量 Gate、带运行轨迹 ground-truth 审计的独立黑盒 Eval 与版本化 AI 解释边界通过本机代码级候选；M5-R 整体仍在开发
 - 兼容性：沿用 schema v28，无新表、迁移、依赖、HTTP API 或模块 available 登记；当前 policy/code 为 `traffic-analysis-v2` / `traffic-analysis-code-v2`，v1 analysis run 仍可读取，但旧 policy 的新分析在写入前明确拒绝，避免静默套用变更后的 Gate
 - 权责边界：v2 固化生成 data window、sample size、effect、95% interval、lag、quality Gate、evidence/counter-evidence 和完整输入值/哈希；确定性 run 先落库，AI 随后只能更新 explanation-only 字段并受硬超时，越权、异常或超时均不改变统计字段。黑盒 runner 在分析完成后才读取 oracle 评分，报告记录分析场景与引擎调用的真实字段集合；oracle 字段重叠或额外调用字段会直接令评测失败
-- 验证：E-20260809-007 保留分析引擎红绿；本次旧报告因无结构化边界证据红灯，对抗 fixture 注入 oracle 字段后整份报告按预期失败。修复后聚焦 16 项、Traffic 相关 46 项、独立黑盒 4/4、工作区全量 `658 passed, 1 xfailed`，证据 E-20260810-001
-- 证据：E-20260810-001（当前黑盒边界）；E-20260809-007（当前分析引擎）；E-20260809-005（v1 历史，已被审查反例取代）；`src/ecommerce_agent/traffic_lab/analysis.py`；`scripts/run_traffic_analysis_eval.py`；`tests/test_traffic_lab_analysis.py`；`tests/test_traffic_lab_blackbox_eval.py`
+- 验证：E-20260809-007 保留分析引擎红绿；本次旧报告因无结构化边界证据红灯，对抗 fixture 注入 oracle 字段后整份报告按预期失败。修复后聚焦 16 项、Traffic 相关 46 项、独立黑盒 4/4、工作区全量 `658 passed, 1 xfailed`，证据 E-20260810-006
+- 证据：E-20260810-006（当前黑盒边界）；E-20260809-007（当前分析引擎）；E-20260809-005（v1 历史，已被审查反例取代）；`src/ecommerce_agent/traffic_lab/analysis.py`；`scripts/run_traffic_analysis_eval.py`；`tests/test_traffic_lab_analysis.py`；`tests/test_traffic_lab_blackbox_eval.py`
 
 ## M5-R WP3 标题 / 图片特征引擎（未单独升版）
 

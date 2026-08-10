@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Literal
@@ -29,6 +30,7 @@ CopyStyle = Literal[
 CopyLength = Literal["short", "medium", "long"]
 
 MAX_IMPORT_ROWS = 2000
+MAX_COPY_GENERATION_WORKERS = 6
 
 COPY_STYLE_LABELS: dict[str, str] = {
     "formal": "专业详实",
@@ -376,6 +378,11 @@ class OpsAssistantService:
         revision_text: str | None = None,
     ) -> dict[str, Any]:
         variants: list[dict[str, Any]] = []
+        variant_specs = [
+            (style, index)
+            for style in request.styles
+            for index in range(request.variants_per_style)
+        ]
         source_text = " ".join(
             item
             for item in (
@@ -386,37 +393,53 @@ class OpsAssistantService:
             if item
         )
         source_risk_terms = sorted({term for term in RISK_TERMS if term in source_text})
-        for style in request.styles:
-            for index in range(request.variants_per_style):
-                generated = self._model_copy_variant(
+
+        def generate_model_variant(
+            spec: tuple[str, int],
+        ) -> tuple[str, str] | None:
+            style, index = spec
+            return self._model_copy_variant(
+                request, style, index, revision_text=revision_text
+            )
+
+        if self._model is not None and len(variant_specs) > 1:
+            # 候选之间没有数据依赖；限制并发量，既缩短批量等待，
+            # 也避免压垮上游模型。
+            with ThreadPoolExecutor(
+                max_workers=min(MAX_COPY_GENERATION_WORKERS, len(variant_specs)),
+                thread_name_prefix="ops-copy",
+            ) as executor:
+                model_variants = list(executor.map(generate_model_variant, variant_specs))
+        else:
+            model_variants = [generate_model_variant(spec) for spec in variant_specs]
+
+        for (style, index), generated in zip(variant_specs, model_variants, strict=True):
+            generator = "model"
+            if generated is None:
+                generated = self._template_copy_variant(
                     request, style, index, revision_text=revision_text
                 )
-                generator = "model"
-                if generated is None:
-                    generated = self._template_copy_variant(
-                        request, style, index, revision_text=revision_text
-                    )
-                    generator = "template_fallback" if self._model else "template"
-                title, body = generated
-                text = f"{title}{body}"
-                rendered_risk_terms = sorted({term for term in RISK_TERMS if term in text})
-                risk_terms = sorted(set(rendered_risk_terms) | set(source_risk_terms))
-                variants.append(
-                    {
-                        "variant_id": f"copy-{style}-{index + 1}",
-                        "style": style,
-                        "style_label": COPY_STYLE_LABELS[style],
-                        "title": title,
-                        "body": body,
-                        "char_count": len(body),
-                        "risk_terms": risk_terms,
-                        "rendered_risk_terms": rendered_risk_terms,
-                        "source_risk_terms": source_risk_terms,
-                        "needs_review": bool(risk_terms),
-                        "generator": generator,
-                        "publication_allowed": False,
-                    }
-                )
+                generator = "template_fallback" if self._model else "template"
+            title, body = generated
+            text = f"{title}{body}"
+            rendered_risk_terms = sorted({term for term in RISK_TERMS if term in text})
+            risk_terms = sorted(set(rendered_risk_terms) | set(source_risk_terms))
+            variants.append(
+                {
+                    "variant_id": f"copy-{style}-{index + 1}",
+                    "style": style,
+                    "style_label": COPY_STYLE_LABELS[style],
+                    "title": title,
+                    "body": body,
+                    "char_count": len(body),
+                    "risk_terms": risk_terms,
+                    "rendered_risk_terms": rendered_risk_terms,
+                    "source_risk_terms": source_risk_terms,
+                    "needs_review": bool(risk_terms),
+                    "generator": generator,
+                    "publication_allowed": False,
+                }
+            )
         return {
             "store_id": request.store_id,
             "product_name": request.product_name,
@@ -788,7 +811,7 @@ class OpsAssistantService:
             },
         ]
         try:
-            payload = self._model.generate_json(prompt)
+            payload = self._model.generate_json(prompt, thinking_enabled=False)
         except Exception:
             return None
         title = str(payload.get("title") or "").strip()

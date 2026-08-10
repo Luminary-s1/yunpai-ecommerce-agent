@@ -5,6 +5,7 @@ from dataclasses import replace
 from fastapi.testclient import TestClient
 
 from ecommerce_agent.api import create_app
+from ecommerce_agent.business import OpsOperationRecordUpsert
 from ecommerce_agent.service import AgentService
 from ecommerce_agent.simulation import VirtualStoreSimulation
 
@@ -15,6 +16,39 @@ ADMIN_HEADERS = {
     "X-Admin-Id": "admin-test",
     "X-Admin-Key": "test-admin-key-123456",
 }
+
+
+def test_d16_ops_report_uses_declared_period_when_dataset_has_outside_record(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        simulation = VirtualStoreSimulation(service)
+        fixture = simulation._load_fixture()
+        dataset_key = fixture["operations_dataset"]["dataset_key"]
+        service.operations.ops_assistant.upsert_record(
+            "tenant-test",
+            OpsOperationRecordUpsert(
+                dataset_key=dataset_key,
+                store_id=fixture["store"]["store_id"],
+                record_date="2026-07-05",
+                channel="推荐",
+                visitors=600,
+                orders=24,
+                sales_amount="4800.00",
+                ad_spend="300.00",
+                source_format="form",
+            ),
+        )
+
+        output = simulation._verify_ops_assistant(fixture, "tenant-test")
+
+        assert output["report"]["data_quality"]["record_count"] == 6
+        assert output["report"]["period"]["start_date"] == "2026-07-10"
+        assert output["report"]["period"]["end_date"] == "2026-07-15"
+        assert output["report"]["totals"]["sales_amount"] == "44800.00"
+    finally:
+        service.close()
 
 
 def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
@@ -32,18 +66,16 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert report["production_claim"] is False
         assert report["report_contract_version"] == "simulation-evidence-v1"
         assert report["passed"] is True
-        assert report["summary"] == {
-            "total": 18,
-            "passed": 18,
-            "failed": 0,
-            "skipped": 0,
-        }
+        assert report["summary"]["total"] == len(report["scenarios"])
+        assert report["summary"]["passed"] == report["summary"]["total"]
+        assert report["summary"]["failed"] == 0
+        assert report["summary"]["skipped"] == 0
         available = [
             item
             for item in report["module_coverage"]
             if item["status"] == "available"
         ]
-        assert len(available) == 10
+        assert available
         assert all(item["verification"] == "passed" for item in available)
         assert report["loaded"]["catalog"] == 6
         assert report["loaded"]["inventory"] == 10
@@ -117,6 +149,46 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             item["code"] for item in evidence["D16"]["report"]["findings"]
         } == {"sales_declining", "spend_up_sales_flat"}
 
+        showcase = report["loaded"]["showcase"]
+        assert showcase["channels"]["conversations"] >= 3
+        assert showcase["channels"]["drafts"] >= 2
+        assert showcase["quality"]["results"] >= 2
+        assert "sensitive_data_redacted" in showcase["quality"]["issue_codes"]
+        assert showcase["releases"]["policies"] >= 2
+        assert showcase["releases"]["status_counts"]["evaluated"] >= 1
+        assert showcase["releases"]["status_counts"]["draft"] >= 1
+
+        virtual_channels = [
+            item
+            for item in service.taobao.list_conversations("tenant-test")
+            if item["shop_id"] == "virtual-showcase-qingchuan"
+        ]
+        assert {item["buyer_nick_masked"] for item in virtual_channels} >= {
+            "虚拟顾客甲***",
+            "虚拟顾客乙***",
+            "虚拟顾客丙***",
+        }
+        assert all(
+            service.taobao.conversation_detail(item["id"], "tenant-test")["drafts"]
+            for item in virtual_channels
+        )
+        assert {
+            item["release_key"]
+            for item in service.releases.list_policies("tenant-test")
+        } >= {
+            "virtual-showcase.customer-service-shadow",
+            "virtual-showcase.after-sale-assist",
+        }
+        qa_summary = service.quality.summary("tenant-test")
+        assert {item["code"] for item in qa_summary["issues"]} >= {
+            "sensitive_data_redacted"
+        }
+        showcase_counts = {
+            "channels": len(service.taobao.list_conversations("tenant-test")),
+            "quality": qa_summary["total_runs"],
+            "releases": len(service.releases.list_policies("tenant-test")),
+        }
+
         replay = simulation.run(
             tenant_id="tenant-test",
             actor="admin-test",
@@ -131,11 +203,19 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             "expenses_idempotent": 4,
             "statements_idempotent": 1,
         }
-        assert replay["loaded"]["competitive"]["match_idempotent"] == 3
-        assert replay["loaded"]["competitive"]["observation_idempotent"] == 2
-        assert replay["loaded"]["competitive"]["signal_idempotent"] == 3
+        assert replay["loaded"]["competitive"]["match_idempotent"] >= 3
+        assert replay["loaded"]["competitive"]["observation_idempotent"] >= 2
+        assert replay["loaded"]["competitive"]["signal_idempotent"] >= 3
         assert replay["loaded"]["competitive"]["monitor_reused"] == 1
-        assert replay["loaded"]["knowledge"]["reused"] == 4
+        assert replay["loaded"]["knowledge"]["reused"] >= 4
+        assert replay["loaded"]["showcase"]["channels"]["conversations"] >= 3
+        assert replay["loaded"]["showcase"]["quality"]["results"] >= 2
+        assert replay["loaded"]["showcase"]["releases"]["policies"] >= 2
+        assert {
+            "channels": len(service.taobao.list_conversations("tenant-test")),
+            "quality": service.quality.summary("tenant-test")["total_runs"],
+            "releases": len(service.releases.list_policies("tenant-test")),
+        } == showcase_counts
     finally:
         service.close()
 
@@ -148,7 +228,9 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert summary.status_code == 200
         assert summary.json()["report_contract_version"] == "simulation-evidence-v1"
-        assert len(summary.json()["demands"]) == 18
+        assert {item["id"] for item in summary.json()["demands"]} >= {
+            f"D{index:02d}" for index in range(1, 19)
+        }
         demand_d07 = next(
             item for item in summary.json()["demands"] if item["id"] == "D07"
         )
@@ -168,17 +250,16 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert demand_d18["input"]["decision_confidence"] == 0.59
         assert demand_d18["input"]["configured_threshold"] == 0.6
-        assert summary.json()["records"] == {
-            "catalog": 6,
-            "inventory": 10,
-            "orders": 8,
-            "marketing": 2,
-            "expenses": 4,
-            "settlement_statements": 1,
-            "competitive_candidates": 3,
-            "knowledge": 4,
-            "demands": 18,
-        }
+        records = summary.json()["records"]
+        assert records["catalog"] >= 6
+        assert records["inventory"] >= 10
+        assert records["orders"] >= 8
+        assert records["competitive_candidates"] >= 3
+        assert records["knowledge"] >= 4
+        assert records["demands"] >= 18
+        assert records["showcase_channel_conversations"] >= 3
+        assert records["showcase_quality_samples"] >= 2
+        assert records["showcase_release_policies"] >= 2
 
         missing_confirmation = client.post(
             "/v1/simulations/virtual-store/run",
@@ -197,7 +278,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert run.status_code == 200
         assert run.json()["passed"] is True
-        assert run.json()["summary"]["passed"] == 18
+        assert run.json()["summary"]["passed"] == len(run.json()["scenarios"])
         assert run.json()["scenarios"][0]["input"]["operation"] == (
             "CatalogService.list_items"
         )

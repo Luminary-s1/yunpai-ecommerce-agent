@@ -281,7 +281,8 @@
 
       <div class="content">
         <section class="view active" id="view-overview">
-          <div class="section-head"><div><h2>经营运行概览</h2><p>客服、人工任务、竞品与系统运行状态</p></div><span class="muted" id="lastUpdated"></span></div>
+          <div class="section-head"><div><h2>经营运行概览</h2><p>客服、人工任务、竞品与系统运行状态</p></div><div class="toolbar"><select class="input" id="overviewScope" aria-label="总览数据范围"><option value="operational" selected>运营数据</option><option value="simulation">虚拟展示</option><option value="evaluation">隔离评测</option><option value="all">全部数据</option></select><span class="muted" id="lastUpdated"></span></div></div>
+          <div class="notice hidden" id="overviewScopeNotice"></div>
           <div class="grid kpis" id="overviewKpis"></div>
           <div class="overview-columns" style="margin-top:12px">
             <div class="overview-stack">
@@ -393,7 +394,7 @@
         <section class="view" id="view-ops">
           <div class="section-head">
             <div><h2>运营辅助与文案生成</h2><p>解析 CSV / JSON / 表单数据，生成多风格候选文案与趋势分析；不执行发布、调价或预算变更</p></div>
-            <div class="toolbar"><input class="input" id="opsDatasetKey" value="ops-week-30" placeholder="数据集 Key"><input class="input" id="opsStore" value="qingchuan-flagship-001" placeholder="店铺 ID"><button class="button primary" id="refreshOpsAssistant">刷新报告</button></div>
+            <div class="toolbar"><input class="input" id="opsDatasetKey" value="virtual-ops-week-29" placeholder="数据集 Key"><input class="input" id="opsStore" value="qingchuan-flagship-001" placeholder="店铺 ID"><button class="button primary" id="refreshOpsAssistant">刷新报告</button></div>
           </div>
           <div class="grid kpis" id="opsKpis"></div>
           <div class="grid two" style="margin-top:14px">
@@ -438,7 +439,7 @@
             </article>
             <article class="panel">
               <div class="panel-head"><h3>生成结果</h3><span class="muted" id="opsCopyMeta">尚未生成</span></div>
-              <div class="panel-body copy-result-grid" id="opsCopyResults"><div class="empty">填写商品信息后生成多风格候选</div></div>
+              <div class="panel-body copy-result-grid" id="opsCopyResults" aria-live="polite" aria-busy="false"><div class="empty">填写商品信息后生成多风格候选</div></div>
             </article>
           </div>
           <div class="grid two" style="margin-top:14px">
@@ -1005,14 +1006,27 @@
     }
 
     async function loadOverview() {
+      const scope = $('overviewScope').value;
       const [overview, health, competitive] = await Promise.all([
-        api('/v1/admin/overview'),
+        api(`/v1/admin/overview?scope=${encodeURIComponent(scope)}`),
         fetch('/health').then((response) => response.json()),
         api('/v1/competitive/overview')
       ]);
       state.health = health;
       state.adminAuthRequired = health.administrator?.authentication_required !== false;
       $('logoutButton').hidden = !state.adminAuthRequired;
+      const excludedSimulation = Number((overview.excluded_sessions || {}).simulation || 0);
+      const scopeNotice = $('overviewScopeNotice');
+      if (scope === 'operational' && excludedSimulation > 0) {
+        scopeNotice.innerHTML = `当前只展示真实运营域；另有 <strong>${excludedSimulation}</strong> 个虚拟会话已隔离，可从右上角切换到“虚拟展示”。`;
+        scopeNotice.classList.remove('hidden');
+      } else if (scope === 'simulation') {
+        scopeNotice.textContent = '当前为虚拟展示范围，所有会话与指标仅用于演示，不代表真实运营结果。';
+        scopeNotice.classList.remove('hidden');
+      } else {
+        scopeNotice.classList.add('hidden');
+        scopeNotice.textContent = '';
+      }
       const metrics = overview.metrics;
       $('overviewKpis').innerHTML = [
         ['会话总数', overview.counts.conversations, `${overview.counts.messages} 条消息`],
@@ -1037,7 +1051,8 @@
       $('modelStatus').textContent = currentModelMode.label;
       $('modelStatus').className = `status ${currentModelMode.kind}`;
       $('sidebarMode').textContent = currentModelMode.detail;
-      $('lastUpdated').textContent = `更新于 ${new Date().toLocaleTimeString('zh-CN', {hour12:false})}`;
+      const scopeLabels = { operational:'运营数据', simulation:'虚拟展示', evaluation:'隔离评测', all:'全部数据' };
+      $('lastUpdated').textContent = `${scopeLabels[scope] || scope} · 更新于 ${new Date().toLocaleTimeString('zh-CN', {hour12:false})}`;
     }
 
     async function loadConversations() {
@@ -2214,7 +2229,12 @@
       if (styles.length > 5) return toast('一次最多选择 5 种文案风格');
       if (styles.length * variantsPerStyle > 9) return toast('小批量生成最多 9 条候选文案');
       const button = $('generateOpsCopy');
+      const results = $('opsCopyResults');
       button.disabled = true;
+      button.textContent = '生成中…';
+      $('opsCopyMeta').textContent = `正在生成 ${styles.length * variantsPerStyle} 条候选文案`;
+      results.setAttribute('aria-busy', 'true');
+      results.innerHTML = '<div class="empty" role="status">模型正在生成，请稍候…</div>';
       try {
         const sellingPoints = $('opsSellingPoints').value.split('\n').map((item) => item.trim()).filter(Boolean);
         state.opsCopyRequest = {
@@ -2234,8 +2254,16 @@
         state.opsCopy = result;
         renderOpsCopyResults(result);
         toast(`已生成 ${result.batch_size} 条候选文案`);
-      } catch (error) { toast(error.message); }
-      finally { button.disabled = false; }
+      } catch (error) {
+        $('opsCopyMeta').textContent = '生成失败';
+        results.textContent = error.message;
+        toast(error.message);
+      }
+      finally {
+        results.setAttribute('aria-busy', 'false');
+        button.disabled = false;
+        button.textContent = '生成候选文案';
+      }
     });
     $('refreshMarketing').addEventListener('click', () => loadMarketing().catch((error) => toast(error.message)));
     $('marketingStore').addEventListener('change', () => loadMarketing().catch((error) => toast(error.message)));
@@ -2263,6 +2291,7 @@
       finally { button.disabled = false; }
     });
     $('runVirtualSimulation').addEventListener('click', () => runVirtualSimulation());
+    $('overviewScope').addEventListener('change', () => loadOverview().catch((error) => toast(error.message)));
     ['simulationModuleFilter','simulationStatusFilter'].forEach((id) => $(id).addEventListener('change', renderSimulation));
     $('searchConversations').addEventListener('click', () => loadConversations().catch((error) => toast(error.message)));
     $('refreshHandoffs').addEventListener('click', () => loadHandoffs().catch((error) => toast(error.message)));
