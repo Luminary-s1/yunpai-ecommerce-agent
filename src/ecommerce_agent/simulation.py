@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .business import (
     CatalogItemUpsert,
@@ -40,7 +41,10 @@ from .evaluation import (
     EvaluationTurn,
 )
 from .knowledge_management import KnowledgeCreateRequest, KnowledgeTransitionRequest
+from .quality import QualityRunRequest
+from .releases import ReleasePolicyCreateRequest, ReleaseReplayRequest
 from .schemas import HandoffOperatorQueueAssignment, HandoffOperatorUpsert
+from .taobao import ReplyDraftCreateRequest
 from .tools import ToolExecutionContext
 
 if TYPE_CHECKING:
@@ -60,6 +64,38 @@ class VirtualStoreSimulationRequest(BaseModel):
     )
     confirm_virtual: Literal[True]
     include_customer_service: bool = True
+
+
+class VirtualShowcaseChannelRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=3, max_length=64, pattern=r"^[a-z0-9-]+$")
+    buyer_nick_masked: str = Field(min_length=3, max_length=64)
+    message: str = Field(min_length=1, max_length=2000)
+    action_mode: Literal["assist", "human"]
+    ai_suggestion: str = Field(min_length=1, max_length=2000)
+    final_text: str = Field(min_length=1, max_length=2000)
+    risk_level: Literal["low", "medium", "high", "critical"]
+    confidence: float = Field(ge=0, le=1)
+
+
+class VirtualShowcaseQualitySample(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["agent", "channel"]
+    key: str | None = Field(default=None, min_length=3, max_length=64)
+    conversation_key: str | None = Field(default=None, min_length=3, max_length=64)
+    question: str | None = Field(default=None, min_length=1, max_length=4000)
+    context: dict[str, Any] = Field(default_factory=dict, max_length=16)
+    expected_issue_codes: list[str] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="after")
+    def validate_sample_target(self) -> "VirtualShowcaseQualitySample":
+        if self.kind == "agent" and (not self.key or not self.question):
+            raise ValueError("agent quality sample requires key and question")
+        if self.kind == "channel" and not self.conversation_key:
+            raise ValueError("channel quality sample requires conversation_key")
+        return self
 
 
 class VirtualStoreSimulation:
@@ -88,6 +124,15 @@ class VirtualStoreSimulation:
                 ),
                 "knowledge": len(fixture["knowledge"]),
                 "demands": len(fixture["demands"]),
+                "showcase_channel_conversations": len(
+                    fixture["showcase"]["channel"]["conversations"]
+                ),
+                "showcase_quality_samples": len(
+                    fixture["showcase"]["quality_samples"]
+                ),
+                "showcase_release_policies": len(
+                    fixture["showcase"]["release_policies"]
+                ),
             },
         }
 
@@ -435,6 +480,9 @@ class VirtualStoreSimulation:
             fixture, tenant_id=tenant_id, actor=actor
         )
         knowledge = self._load_knowledge(fixture, tenant_id=tenant_id, actor=actor)
+        showcase = self._load_showcase(
+            fixture, tenant_id=tenant_id, actor=actor
+        )
         return {
             "catalog": len(fixture["catalog"]),
             "inventory": len(fixture["inventory"]),
@@ -444,6 +492,7 @@ class VirtualStoreSimulation:
             "settlement_statements": len(fixture["settlement_statements"]),
             "competitive": competitive,
             "knowledge": knowledge,
+            "showcase": showcase,
             "write_statuses": dict(sorted(status_counts.items())),
         }
 
@@ -478,6 +527,13 @@ class VirtualStoreSimulation:
             )
             counts[f"match_{match['write_status']}"] += 1
             decision = str(candidate["decision"])
+            if decision == "pending":
+                counts[
+                    "match_pending_reused"
+                    if match["status"] == "pending"
+                    else f"match_pending_preserved_{match['status']}"
+                ] += 1
+                continue
             if match["status"] == "pending":
                 match = self.service.operations.competitive.transition_entity_match(
                     tenant_id,
@@ -611,6 +667,277 @@ class VirtualStoreSimulation:
                 )
                 counts["approved"] += 1
         return dict(sorted(counts.items()))
+
+    def _load_showcase(
+        self, fixture: dict[str, Any], *, tenant_id: str, actor: str
+    ) -> dict[str, Any]:
+        channels, conversation_ids = self._load_showcase_channels(
+            fixture, tenant_id=tenant_id, actor=actor
+        )
+        quality = self._load_showcase_quality(
+            fixture,
+            tenant_id=tenant_id,
+            actor=actor,
+            conversation_ids=conversation_ids,
+        )
+        releases = self._load_showcase_releases(
+            fixture, tenant_id=tenant_id, actor=actor
+        )
+        return {
+            "virtual": True,
+            "production_claim": False,
+            "channels": channels,
+            "quality": quality,
+            "releases": releases,
+        }
+
+    def _load_showcase_channels(
+        self, fixture: dict[str, Any], *, tenant_id: str, actor: str
+    ) -> tuple[dict[str, Any], dict[str, str]]:
+        channel = fixture["showcase"]["channel"]
+        platform = str(channel["platform"])
+        if platform != self.service.taobao.PLATFORM:
+            raise ValueError("virtual showcase channel must use the Taobao adapter")
+        shop_id = str(channel["shop_id"])
+        counts: Counter[str] = Counter()
+        conversation_ids: dict[str, str] = {}
+        for raw in channel["conversations"]:
+            record = VirtualShowcaseChannelRecord.model_validate(raw)
+            external_event_id = f"virtual-showcase:{record.key}:inbound:v1"
+            payload = {
+                "fixture_id": fixture["fixture_id"],
+                "event_id": external_event_id,
+                "message": record.message,
+                "virtual": True,
+            }
+            inbound = self.service.taobao.recorder.record(
+                tenant_id=tenant_id,
+                platform=platform,
+                shop_id=shop_id,
+                external_conversation_id=f"virtual-showcase:{record.key}",
+                external_event_id=external_event_id,
+                message_type="text",
+                content_redacted=record.message,
+                payload_hash=hashlib.sha256(
+                    json.dumps(
+                        payload,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest(),
+                buyer_hash=hashlib.sha256(
+                    f"virtual-showcase:{record.key}".encode("utf-8")
+                ).hexdigest(),
+                buyer_nick_masked=record.buyer_nick_masked,
+                routing_ciphertext=None,
+                request_id=f"virtual-showcase-request:{record.key}",
+                action_mode=record.action_mode,
+                default_owner_mode="human",
+                job_max_attempts=self.service.settings.channel_agent_max_attempts,
+            )
+            counts["event_created" if inbound.is_new else "event_reused"] += 1
+            conversation_ids[record.key] = inbound.conversation_id
+            detail = self.service.taobao.conversation_detail(
+                inbound.conversation_id, tenant_id
+            )
+            idempotency_key = f"virtual-showcase:{record.key}:draft:v1"
+            draft_existed = any(
+                item["idempotency_key"] == idempotency_key
+                for item in detail["drafts"]
+            )
+            self.service.taobao.create_reply_draft(
+                inbound.conversation_id,
+                tenant_id,
+                ReplyDraftCreateRequest(
+                    expected_conversation_version=int(
+                        detail["conversation"]["version"]
+                    ),
+                    ai_suggestion=record.ai_suggestion,
+                    final_text=record.final_text,
+                    evidence_ids=[inbound.event_id],
+                    confidence=record.confidence,
+                    risk_level=record.risk_level,
+                    idempotency_key=idempotency_key,
+                    source_event_id=inbound.event_id,
+                ),
+                actor,
+            )
+            counts["draft_reused" if draft_existed else "draft_created"] += 1
+
+        jobs = [
+            item
+            for item in self.service.channel_agents.list_jobs(tenant_id, limit=500)
+            if item["conversation_id"] in set(conversation_ids.values())
+        ]
+        return (
+            {
+                "shop_id": shop_id,
+                "conversations": len(conversation_ids),
+                "drafts": sum(
+                    counts[key]
+                    for key in ("draft_created", "draft_reused")
+                ),
+                "event_statuses": dict(sorted(counts.items())),
+                "job_statuses": dict(
+                    sorted(Counter(item["status"] for item in jobs).items())
+                ),
+            },
+            conversation_ids,
+        )
+
+    def _load_showcase_quality(
+        self,
+        fixture: dict[str, Any],
+        *,
+        tenant_id: str,
+        actor: str,
+        conversation_ids: dict[str, str],
+    ) -> dict[str, Any]:
+        counts: Counter[str] = Counter()
+        issue_codes: set[str] = set()
+        samples = [
+            VirtualShowcaseQualitySample.model_validate(item)
+            for item in fixture["showcase"]["quality_samples"]
+        ]
+        for sample in samples:
+            if sample.kind == "agent":
+                if sample.key is None or sample.question is None:
+                    raise ValueError(
+                        "agent quality sample requires key and question"
+                    )
+                external_session_id = f"virtual-showcase-quality-{sample.key}"
+                principal = self.service.auth.authenticate(
+                    self.service.settings.bootstrap_client_id,
+                    self.service.settings.bootstrap_client_key,
+                    f"virtual-showcase-quality-{sample.key}",
+                )
+                self.service.chat(
+                    principal,
+                    external_session_id,
+                    sample.question,
+                    sample.context,
+                    idempotency_key=(
+                        f"virtual-showcase:quality:{sample.key}:v1"
+                    ),
+                    source_type="simulation",
+                    source_reference=str(fixture["fixture_id"]),
+                )
+                with self.service.db.connect() as conn:
+                    session = conn.execute(
+                        "SELECT id FROM sessions WHERE tenant_id=? "
+                        "AND external_session_id=?",
+                        (tenant_id, external_session_id),
+                    ).fetchone()
+                if session is None:
+                    raise RuntimeError("virtual quality session was not persisted")
+                conversation_id = str(session["id"])
+            else:
+                if sample.conversation_key is None:
+                    raise ValueError(
+                        "channel quality sample requires conversation_key"
+                    )
+                conversation_id = conversation_ids[sample.conversation_key]
+
+            existing = next(
+                (
+                    item
+                    for item in self.service.quality.list_results(
+                        tenant_id, limit=500
+                    )
+                    if item["conversation_type"] == sample.kind
+                    and item["conversation_id"] == conversation_id
+                    and item["ruleset_version"]
+                    == self.service.quality.RULESET_VERSION
+                ),
+                None,
+            )
+            if existing is None:
+                result = self.service.quality.run(
+                    tenant_id,
+                    QualityRunRequest(
+                        conversation_type=sample.kind,
+                        conversation_id=conversation_id,
+                    ),
+                    actor,
+                )
+                counts["created"] += 1
+            else:
+                result = existing
+                counts["reused"] += 1
+            actual_codes = {item["code"] for item in result["issues"]}
+            expected_codes = set(sample.expected_issue_codes)
+            if not expected_codes.issubset(actual_codes):
+                raise AssertionError(
+                    "virtual quality sample did not produce its declared issues: "
+                    f"{sorted(expected_codes - actual_codes)}"
+                )
+            issue_codes.update(actual_codes)
+
+        return {
+            "results": sum(counts.values()),
+            "created": counts["created"],
+            "reused": counts["reused"],
+            "issue_codes": sorted(issue_codes),
+        }
+
+    def _load_showcase_releases(
+        self, fixture: dict[str, Any], *, tenant_id: str, actor: str
+    ) -> dict[str, Any]:
+        counts: Counter[str] = Counter()
+        selected: list[dict[str, Any]] = []
+        for entry in fixture["showcase"]["release_policies"]:
+            request = ReleasePolicyCreateRequest.model_validate(entry["policy"])
+            policy = next(
+                (
+                    item
+                    for item in self.service.releases.list_policies(tenant_id)
+                    if item["release_key"] == request.release_key
+                ),
+                None,
+            )
+            if policy is None:
+                policy = self.service.releases.create(
+                    tenant_id, request, actor
+                )
+                counts["created"] += 1
+            else:
+                counts["reused"] += 1
+
+            replay_entries = entry.get("replay") or []
+            if replay_entries and policy["status"] == "draft":
+                replay_request = ReleaseReplayRequest.model_validate(
+                    {"cases": [item["case"] for item in replay_entries]}
+                )
+                response_table = {
+                    str(item["case"]["case_id"]): dict(item["response"])
+                    for item in replay_entries
+                }
+                self.service.releases.run_replay(
+                    tenant_id,
+                    policy["id"],
+                    replay_request,
+                    actor,
+                    lambda case: response_table[case.case_id],
+                )
+                policy = self.service.releases.get_policy(
+                    tenant_id, policy["id"]
+                )
+                counts["replayed"] += 1
+            elif replay_entries:
+                counts["replay_reused"] += 1
+            selected.append(policy)
+
+        return {
+            "policies": len(selected),
+            "created": counts["created"],
+            "reused": counts["reused"],
+            "replayed": counts["replayed"],
+            "replay_reused": counts["replay_reused"],
+            "status_counts": dict(
+                sorted(Counter(item["status"] for item in selected).items())
+            ),
+        }
 
     def _verify_catalog(
         self, fixture: dict[str, Any], tenant_id: str
