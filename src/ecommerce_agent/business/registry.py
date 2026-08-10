@@ -27,7 +27,7 @@ def business_module_catalog() -> list[BusinessModule]:
             status="available",
             responsibilities=["SPU/SKU 主数据", "渠道商品映射", "商品事实与版本"],
             boundaries=["不直接发布渠道商品", "外部事实必须经连接器进入"],
-            agent_tools=["get_product_facts"],
+            agent_tools=["search_products", "get_product_facts"],
         ),
         BusinessModule(
             module_id="orders",
@@ -106,6 +106,17 @@ def business_module_catalog() -> list[BusinessModule]:
             responsibilities=["指标定义", "数据水位", "异常检测和证据"],
             boundaries=["模型不得直接拼接 SQL", "数据质量失败时不输出经营结论"],
             agent_tools=["get_business_metric"],
+        ),
+        BusinessModule(
+            module_id="traffic_lab",
+            display_name="商品流量实验室",
+            status="available",
+            responsibilities=["版本与流量观测", "实验分析证据", "假设与反证"],
+            boundaries=[
+                "Agent 只读已固化分析，不重算统计",
+                "不宣称平台权重，不自动发布、换图、改标题或投放",
+            ],
+            agent_tools=["get_listing_traffic_insights"],
         ),
         BusinessModule(
             module_id="customer_service",

@@ -46,6 +46,11 @@ from .releases import ReleasePolicyCreateRequest, ReleaseReplayRequest
 from .schemas import HandoffOperatorQueueAssignment, HandoffOperatorUpsert
 from .taobao import ReplyDraftCreateRequest
 from .tools import ToolExecutionContext
+from .traffic_lab import (
+    TrafficExperimentCreate,
+    TrafficExperimentTransition,
+    TrafficExperimentWindowCreate,
+)
 
 if TYPE_CHECKING:
     from .service import AgentService
@@ -110,6 +115,7 @@ class VirtualStoreSimulation:
             "fixture_id": fixture["fixture_id"],
             "fixture_version": fixture["fixture_version"],
             "virtual": True,
+            "scenario_id_registry": fixture["scenario_id_registry"],
             "store": fixture["store"],
             "demands": fixture["demands"],
             "records": {
@@ -193,6 +199,11 @@ class VirtualStoreSimulation:
             scenarios,
             demands["D16"],
             lambda: self._verify_ops_assistant(fixture, tenant_id),
+        )
+        self._scenario(
+            scenarios,
+            demands["D19"],
+            lambda: self._verify_traffic_lab(tenant_id, actor),
         )
         if include_customer_service:
             self._scenario(
@@ -325,22 +336,12 @@ class VirtualStoreSimulation:
 
     @staticmethod
     def _module_coverage(scenarios: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        scenario_ids = {
-            "catalog": ["D01"],
-            "orders": ["D02", "D08"],
-            "inventory": ["D03"],
-            "competitive_intelligence": ["D05", "D06"],
-            "marketing": ["D14"],
-            "finance": ["D15"],
-            "ops_assistant": ["D16"],
-            "metrics": ["D04"],
-            "customer_service": ["D07", "D09", "D10"],
-            "customer_service_evaluation": ["D13"],
-        }
         by_id = {item["id"]: item for item in scenarios}
         coverage: list[dict[str, Any]] = []
         for module in business_module_catalog():
-            expected = scenario_ids.get(module.module_id, [])
+            expected = [
+                item["id"] for item in scenarios if item["module"] == module.module_id
+            ]
             statuses = [by_id[item_id]["status"] for item_id in expected]
             if module.status == "available":
                 verification = (
@@ -369,6 +370,11 @@ class VirtualStoreSimulation:
             raise ValueError("simulation fixture must be explicitly virtual")
         if fixture.get("fixture_id") != "qingchuan-home-appliance-v1":
             raise ValueError("unsupported simulation fixture")
+        demand_ids = [item["id"] for item in fixture["demands"]]
+        if len(demand_ids) != len(set(demand_ids)):
+            raise ValueError("simulation demand ids must be unique")
+        if any(demand_ids.count(item) != 1 for item in fixture["scenario_id_registry"]):
+            raise ValueError("registered simulation scenario must have one demand")
         return fixture
 
     def _load_store_data(
@@ -1815,6 +1821,131 @@ class VirtualStoreSimulation:
             "isolated_domains": list(probes),
             "probe_tenant": other,
             "query_results": probes,
+        }
+
+    def _verify_traffic_lab(self, tenant_id: str, actor: str) -> dict[str, Any]:
+        operations = self.service.operations
+        syncs = {
+            resource: operations.sync(
+                tenant_id=tenant_id,
+                connector_id="virtual_taobao",
+                resource=resource,
+                actor=actor,
+            )
+            for resource in ("listing_revision", "traffic_metrics")
+        }
+        domain = operations.traffic_lab.domain
+        revisions = domain.list_revisions(
+            tenant_id,
+            connector_id="virtual_taobao",
+            store_id="virtual-shop-001",
+            sku_id="YP-SKU-TRAFFIC-001",
+        )
+        by_number = {item["revision_no"]: item for item in revisions}
+        control, treatment = by_number[1], by_number[2]
+        experiments = domain.list_experiments(
+            tenant_id, store_id="virtual-shop-001", sku_id="YP-SKU-TRAFFIC-001"
+        )
+        experiment = next(
+            (
+                item
+                for item in experiments
+                if item["control_revision_id"] == control["id"]
+                and item["treatment_revision_id"] == treatment["id"]
+                and item["analysis_policy_version"] == "traffic-analysis-v2"
+                and item["status"] != "invalid"
+            ),
+            None,
+        )
+        if experiment is None:
+            experiment = domain.create_experiment(
+                tenant_id,
+                TrafficExperimentCreate(
+                    store_id="virtual-shop-001",
+                    sku_id="YP-SKU-TRAFFIC-001",
+                    experiment_type="switchback",
+                    primary_metric="ctr",
+                    started_at="2026-08-01T00:00:00Z",
+                    ended_at="2026-08-03T00:00:00Z",
+                    control_revision_id=control["id"],
+                    treatment_revision_id=treatment["id"],
+                    minimum_exposure=100,
+                    washout_window=0,
+                    analysis_policy_version="traffic-analysis-v2",
+                ),
+            )
+        experiment_id = str(experiment["experiment_id"])
+        for revision, assignment, start, end in (
+            (control, "control", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z"),
+            (treatment, "treatment", "2026-08-02T00:00:00Z", "2026-08-03T00:00:00Z"),
+        ):
+            domain.add_experiment_window(
+                tenant_id,
+                experiment_id,
+                TrafficExperimentWindowCreate(
+                    listing_revision_id=revision["id"],
+                    window_start=start,
+                    window_end=end,
+                    assignment=assignment,
+                    source_receipt_id=f"virtual-D19-{assignment}",
+                ),
+            )
+        while experiment["status"] != "completed":
+            target = {
+                "draft": "ready",
+                "ready": "running",
+                "running": "completed",
+                "paused": "completed",
+            }[experiment["status"]]
+            experiment = domain.transition_experiment(
+                tenant_id,
+                experiment_id,
+                TrafficExperimentTransition(
+                    status=target, expected_version=experiment["record_version"]
+                ),
+            )
+        runs = domain.list_analysis_runs(tenant_id, experiment_id)
+        run = runs[0] if runs else operations.traffic_analysis.analyze_experiment(
+            tenant_id, experiment_id
+        )
+        before = domain.get_analysis_run(tenant_id, run["analysis_run_id"])
+        context = ToolExecutionContext(
+            tenant_id=tenant_id,
+            client_id="simulation",
+            session_id="simulation-traffic-lab",
+            trace_id="simulation-traffic-lab",
+            trusted_context={"store_id": "virtual-shop-001"},
+        )
+        spec, arguments = self.service.tools.validate_selection(
+            name="get_listing_traffic_insights",
+            arguments={
+                "store_id": "virtual-shop-001",
+                "sku_id": "YP-SKU-TRAFFIC-001",
+            },
+            requested_mode="observe",
+            context=context,
+        )
+        result = self.service.tools.execute(
+            spec=spec, arguments=arguments, context=context
+        )
+        after = domain.get_analysis_run(tenant_id, run["analysis_run_id"])
+        assert all(item["virtual"] is True for item in syncs.values())
+        assert spec.kind == "read" and result.postcondition_met is True
+        assert before == after
+        assert result.output["insights"][0]["analysis"]["analysis_run_id"] == run[
+            "analysis_run_id"
+        ]
+        assert result.output["statistics_recomputed"] is False
+        assert result.output["platform_weight_claim"] is False
+        return {
+            "virtual": True,
+            "syncs": syncs,
+            "experiment": experiment,
+            "analysis_run_id": run["analysis_run_id"],
+            "analysis_unchanged": before == after,
+            "tool_kind": spec.kind,
+            "tool_output": result.output,
+            "automatic_actions": [],
         }
 
     def _verify_connector_contract(self, fixture: dict[str, Any]) -> dict[str, Any]:

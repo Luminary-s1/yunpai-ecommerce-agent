@@ -70,6 +70,11 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert report["summary"]["passed"] == report["summary"]["total"]
         assert report["summary"]["failed"] == 0
         assert report["summary"]["skipped"] == 0
+        assert report["module_coverage"]
+        assert any(
+            item["module_id"] == "traffic_lab" and item["verification"] == "passed"
+            for item in report["module_coverage"]
+        )
         available = [
             item
             for item in report["module_coverage"]
@@ -100,6 +105,7 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
             "marketing",
             "finance",
             "ops_assistant",
+            "traffic_lab",
         }
         assert all(item["input"] for item in report["scenarios"])
         assert all(item["expected"] for item in report["scenarios"])
@@ -145,6 +151,10 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         assert evidence["D16"]["report"]["data_quality"][
             "numbers_computed_by_code"
         ] is True
+        assert evidence["D19"]["virtual"] is True
+        assert evidence["D19"]["analysis_unchanged"] is True
+        assert evidence["D19"]["tool_output"]["statistics_recomputed"] is False
+        assert evidence["D19"]["tool_output"]["platform_weight_claim"] is False
         assert {
             item["code"] for item in evidence["D16"]["report"]["findings"]
         } == {"sales_declining", "spend_up_sales_flat"}
@@ -228,8 +238,9 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert summary.status_code == 200
         assert summary.json()["report_contract_version"] == "simulation-evidence-v1"
+        assert summary.json()["scenario_id_registry"]["D19"] == "M5-R-WP5"
         assert {item["id"] for item in summary.json()["demands"]} >= {
-            f"D{index:02d}" for index in range(1, 19)
+            f"D{index:02d}" for index in range(1, 20)
         }
         demand_d07 = next(
             item for item in summary.json()["demands"] if item["id"] == "D07"
@@ -256,7 +267,7 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         assert records["orders"] >= 8
         assert records["competitive_candidates"] >= 3
         assert records["knowledge"] >= 4
-        assert records["demands"] >= 18
+        assert records["demands"] >= 19
         assert records["showcase_channel_conversations"] >= 3
         assert records["showcase_quality_samples"] >= 2
         assert records["showcase_release_policies"] >= 2
@@ -289,6 +300,18 @@ def test_virtual_store_api_requires_explicit_virtual_confirmation(tmp_path) -> N
         )
         assert audit.status_code == 200
         assert audit.json()[0]["detail"]["passed"] is True
+
+
+def test_d030_fails_when_available_module_loses_its_scenario() -> None:
+    demands = VirtualStoreSimulation._load_fixture()["demands"]
+    scenarios = [
+        {"id": item["id"], "module": item["module"], "status": "passed"}
+        for item in demands
+        if item["id"] != "D19"
+    ]
+    coverage = VirtualStoreSimulation._module_coverage(scenarios)
+    traffic_lab = next(item for item in coverage if item["module_id"] == "traffic_lab")
+    assert traffic_lab["verification"] == "failed"
 
 
 def test_d17_counterexample_fails_without_reference_resolution(

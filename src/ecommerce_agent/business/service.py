@@ -59,6 +59,14 @@ class OrderFactsToolInput(BaseModel):
     store_id: str = Field(min_length=1, max_length=128)
 
 
+class ListingTrafficInsightsToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sku_id: str = Field(min_length=1, max_length=128)
+    store_id: str | None = Field(default=None, max_length=128)
+    limit: int = Field(default=20, ge=1, le=100)
+
+
 class OperationsService:
     def __init__(self, db: Database):
         from ..traffic_lab import TrafficAnalysisEngine, TrafficLabIngestionService
@@ -352,6 +360,21 @@ class OperationsService:
                     metadata={"domain": "finance", "risk_level": "L0"},
                 )
             )
+        if registry.get("get_listing_traffic_insights") is None:
+            registry.register(
+                ToolSpec(
+                    name="get_listing_traffic_insights",
+                    description=(
+                        "读取指定 SKU 已固化的流量实验统计证据、区间、滞后分析与反证；"
+                        "不重算统计，不代表平台权重或因果机制"
+                    ),
+                    kind="read",
+                    input_model=ListingTrafficInsightsToolInput,
+                    handler=self._listing_traffic_insights_tool,
+                    policy=self._catalog_store_scope_policy,
+                    metadata={"domain": "traffic_lab", "risk_level": "L0"},
+                )
+            )
 
     def _inventory_risk_tool(
         self, arguments: BaseModel, context: ToolExecutionContext
@@ -510,3 +533,16 @@ class OperationsService:
                 ),
             },
         )
+
+    def _listing_traffic_insights_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = ListingTrafficInsightsToolInput.model_validate(arguments.model_dump())
+        store_id = value.store_id or self._trusted_store_id(context)
+        output = self.traffic_lab.domain.listing_traffic_insights(
+            context.tenant_id,
+            value.sku_id,
+            store_id=store_id,
+            limit=value.limit,
+        )
+        return ToolResult(status="success", output=output)

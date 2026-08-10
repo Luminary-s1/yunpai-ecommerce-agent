@@ -7,11 +7,27 @@ import json
 from fastapi.testclient import TestClient
 
 from ecommerce_agent.api import create_app
+from ecommerce_agent.business.registry import business_module_catalog
 from ecommerce_agent.connectors import ExternalAction, VirtualTaobaoConnector
 from ecommerce_agent.service import AgentService
 from ecommerce_agent.tools import ToolExecutionContext
 
 from conftest import make_settings
+
+
+def test_module_catalog_matches_registered_agent_tools(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        modules = business_module_catalog()
+        declared = {name for module in modules for name in module.agent_tools}
+        registered = {item["name"] for item in service.tools.catalog_for_model()}
+        assert declared == registered
+        traffic_lab = next(item for item in modules if item.module_id == "traffic_lab")
+        assert traffic_lab.status == "available"
+        assert traffic_lab.agent_tools == ["get_listing_traffic_insights"]
+        assert service.tools.get("get_listing_traffic_insights").kind == "read"
+    finally:
+        service.close()
 
 
 def test_virtual_connector_syncs_inventory_and_competitor_data(tmp_path) -> None:

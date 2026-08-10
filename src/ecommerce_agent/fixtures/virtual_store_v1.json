@@ -2,6 +2,7 @@
   "fixture_id": "qingchuan-home-appliance-v1",
   "fixture_version": "1.0.0",
   "virtual": true,
+  "scenario_id_registry": {"D19": "M5-R-WP5"},
   "store": {
     "store_id": "qingchuan-flagship-001",
     "name": "晴川生活电器旗舰店",
@@ -375,6 +376,11 @@
       "id": "D16", "module": "ops_assistant", "title": "解析运营数据并生成多风格文案与分析报告",
       "input": {"operation": "OpsAssistantService.parse_dataset + generate_copy + analysis_report", "parameters": {"store_id": "qingchuan-flagship-001", "dataset_key": "virtual-ops-week-29", "start_date": "2026-07-10", "end_date": "2026-07-16"}},
       "expected": ["CSV 逐行拒绝坏日期和订单超访客并返回结构化记录", "JSON 与重复导入保持幂等和版本可追溯", "多风格候选文案禁止直接发布并标记生成方式", "报告数值由代码计算并命中销售下滑与花费上升建议"]
+    },
+    {
+      "id": "D19", "module": "traffic_lab", "title": "读取虚拟商品的固化流量实验分析证据",
+      "input": {"operation": "OperationsService.sync + TrafficLabService + ToolRegistry.execute", "tool": "get_listing_traffic_insights", "mode": "observe", "arguments": {"store_id": "virtual-shop-001", "sku_id": "YP-SKU-TRAFFIC-001"}, "virtual": true},
+      "expected": ["数据仅通过公开同步与领域服务写入且标记 virtual=true", "Agent 工具返回已固化分析且调用前后统计记录不变", "输出明确不重算统计也不宣称平台权重", "不存在自动发布、改标题、换图或投放动作"]
     }
   ]
 }
