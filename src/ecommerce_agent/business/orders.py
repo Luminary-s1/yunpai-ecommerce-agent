@@ -377,6 +377,62 @@ class OrderService:
             for row in rows
         ]
 
+    def demand_source_orders(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return the current, versioned order facts for deterministic demand rebuilds.
+
+        ``end_at`` is exclusive.  Forecasting receives this public projection rather
+        than reading order tables directly, so its daily facts retain the order
+        version and source watermark needed for a later correction/backfill.
+        """
+        conditions = ["tenant_id=?", "store_id=?"]
+        params: list[Any] = [tenant_id, store_id]
+        if start_at is not None:
+            conditions.append("placed_at>=?")
+            params.append(canonical_source_time(start_at))
+        if end_at is not None:
+            conditions.append("placed_at<?")
+            params.append(canonical_source_time(end_at))
+        if start_at is not None and end_at is not None and end_at <= start_at:
+            raise ValueError("demand_source_window_invalid")
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id FROM commerce_orders
+                WHERE {' AND '.join(conditions)}
+                ORDER BY placed_at, id
+                """,
+                tuple(params),
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            order = self._row_by_internal_id(tenant_id, str(row["id"]))
+            result.append(
+                {
+                    key: order[key]
+                    for key in (
+                        "id",
+                        "store_id",
+                        "order_id",
+                        "order_status",
+                        "payment_status",
+                        "currency",
+                        "placed_at",
+                        "lines",
+                        "source_id",
+                        "source_updated_at",
+                        "version",
+                    )
+                }
+            )
+        return result
+
     def _row_by_internal_id(self, tenant_id: str, internal_id: str) -> dict[str, Any]:
         with self.db.connect() as conn:
             row = conn.execute(
