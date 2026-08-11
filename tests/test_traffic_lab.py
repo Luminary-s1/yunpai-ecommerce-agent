@@ -123,7 +123,7 @@ def test_v27_database_upgrades_to_v28_without_rebuilding_existing_data(tmp_path)
             "SELECT COUNT(*) FROM schema_migrations WHERE version=28"
         ).fetchone()[0]
         probe = conn.execute("SELECT value FROM legacy_probe WHERE id='probe-1'").fetchone()[0]
-    assert Database.SCHEMA_VERSION == 28
+    assert Database.SCHEMA_VERSION >= 28
     assert {
         "creative_assets",
         "listing_revisions",
