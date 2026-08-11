@@ -7,7 +7,15 @@
 - 版本号：`0.33.0`
 - 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5 本机候选；生产放行阻塞
 - 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作
-- 最后更新：2026-08-10
+- 最后更新：2026-08-11
+
+## M6-R WP1 Demand Fact 数据层（未单独升版）
+
+- 状态：`demand-v1`、schema v29 daily facts、全量/增量重建、水位、回补和质量标记完成本机代码级候选；`forecasting` 未登记为 available，未新增 Agent tool、关键词路由、HTTP API、自动采购或库存写入。
+- 兼容性：schema v29 在 v28 基线上仅新增 `demand_daily_facts`、forecast policy/run/backtest/point/anomaly 表、索引与 immutable fact triggers；v28 可前向迁移，既有表不重建。需求事实从 `OrderService.demand_source_orders` 与 `InventoryService.list_balances` 的公开投影读取，未绕过领域服务读取或修改订单/库存表。
+- 口径与证据：`demand-v1` 固定 Asia/Shanghai、已支付且未取消订单行、14 日固定回补窗口；重放同一水位不产生新版本，订单取消/更正产生可追溯的新 fact version。无订单真零、来源覆盖缺失和缺货 true/false/unknown 均用独立结构化值或质量标记表达。
+- 灾备：升级前以 v28 程序创建并验证停机备份；升级后、恢复业务写入前立即创建并验证 v29 全量备份。v29 验证器按精确 schema 拒绝 v28 `.ypbak`；旧归档及匹配程序保留到新的隔离恢复演练完成。
+- 验证：迁移、需求事实、订单/库存关联、M5 Traffic Lab 和既有迁移聚焦回归 `40 passed`；实际反证：改用 UTC 归日、移除取消排除、移除幂等短路分别使跨日、回补、重放断言失败，恢复后复验通过。
 
 ## M5-R WP5 Agent / Admin / Eval（未单独升版）
 
