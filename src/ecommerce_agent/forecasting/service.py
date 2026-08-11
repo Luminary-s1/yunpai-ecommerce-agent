@@ -5,14 +5,15 @@ import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from ..business.inventory import InventoryService
-from ..business.orders import OrderService
-from ..business.source_versioning import payload_digest
 from ..database import Database, utc_now
 from .models import DEMAND_V1, DemandFactRebuild
+
+if TYPE_CHECKING:
+    from ..business.inventory import InventoryService
+    from ..business.orders import OrderService
 
 
 _POLICY_TIMEZONE = ZoneInfo(DEMAND_V1.timezone)
@@ -187,6 +188,8 @@ class DemandFactService:
         balances: list[dict[str, Any]],
         coverage_complete: bool,
     ) -> dict[str, Any]:
+        from ..business.source_versioning import payload_digest
+
         stockout_flag, available_stock, stockout_evidence, inventory_lineage = (
             self._stockout_evidence(balances, sku_id=sku_id, business_date=business_date)
         )
