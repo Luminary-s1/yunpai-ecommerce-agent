@@ -8,6 +8,7 @@ from typing import Callable, Mapping, Sequence
 
 
 Forecaster = Callable[[list[float | None], int], list[float]]
+FORECAST_ENGINE_VERSION = "forecast-engine-v1"
 _BASELINES = frozenset({"last_value", "seasonal_naive_7", "rolling_mean"})
 
 
@@ -109,6 +110,7 @@ class ForecastPolicy:
     minimum_history_days: int = 14
     backtest_windows: int = 4
     required_relative_improvement: float = 0.02
+    interval_levels: tuple[float, float, float] = (0.5, 0.8, 0.95)
     candidate_models: tuple[str, ...] = SUPPORTED_FORECAST_MODELS
 
     def __post_init__(self) -> None:
@@ -116,10 +118,16 @@ class ForecastPolicy:
             raise ValueError("forecast_policy_positive_bounds_required")
         if not self.horizons or any(value < 1 for value in self.horizons):
             raise ValueError("forecast_policy_horizons_invalid")
+        if tuple(sorted(set(self.horizons))) != self.horizons:
+            raise ValueError("forecast_policy_horizons_invalid")
         if not 0 <= self.required_relative_improvement < 1:
             raise ValueError("forecast_policy_improvement_invalid")
+        if self.interval_levels != (0.5, 0.8, 0.95):
+            raise ValueError("forecast_policy_interval_levels_invalid")
         if not set(self.candidate_models) <= set(SUPPORTED_FORECAST_MODELS):
             raise ValueError("forecast_policy_model_unsupported")
+        if len(set(self.candidate_models)) != len(self.candidate_models):
+            raise ValueError("forecast_policy_model_duplicate")
         if not set(self.candidate_models) & _BASELINES:
             raise ValueError("forecast_policy_baseline_required")
 
@@ -212,7 +220,9 @@ class ForecastEngine:
             for actual, predicted in zip(row["actual"], row["forecast"], strict=True)
         ]
         if residuals:
-            upper80, upper95 = self._quantile(residuals, 0.8), self._quantile(residuals, 0.95)
+            upper80, upper95 = (
+                self._quantile(residuals, level) for level in self.policy.interval_levels[1:]
+            )
         else:
             scale = max(1.0, statistics.fmean(_known(values)) * 0.5)
             upper80, upper95 = scale, scale * 2
@@ -226,7 +236,7 @@ class ForecastEngine:
             for offset, value in enumerate(forecast)
         ]
         return {
-            "model_version": self.policy.policy_version,
+            "model_version": FORECAST_ENGINE_VERSION,
             "demand_type": demand_type,
             "quality_status": "degraded" if not backtests else "ready",
             "training_start": dates[0].isoformat(),
@@ -256,12 +266,14 @@ class ForecastEngine:
             forecast = [float(value) for row in successful for value in row["forecast"]]
             metrics = self._metrics(actual, forecast)
             comparison_metric = "wape" if metrics["wape"] is not None else "rmse"
+            eligible = bool(successful) and len(successful) == len(model_rows)
             ranking.append(
                 {
                     "model_name": name,
                     "is_baseline": name in _BASELINES,
                     "windows_successful": len(successful),
                     "windows_failed": len(model_rows) - len(successful),
+                    "eligible_for_champion": eligible,
                     "comparison_metric": comparison_metric,
                     "score": metrics[comparison_metric],
                     "metrics": metrics,
@@ -270,7 +282,7 @@ class ForecastEngine:
         return sorted(
             ranking,
             key=lambda item: (
-                item["windows_successful"] == 0,
+                not item["eligible_for_champion"],
                 float(item["score"]) if item["score"] is not None else math.inf,
                 str(item["model_name"]),
             ),
@@ -279,7 +291,7 @@ class ForecastEngine:
     def _select_champion(
         self, ranking: list[dict[str, object]]
     ) -> tuple[str, dict[str, object]]:
-        usable = [item for item in ranking if item["windows_successful"] and not item["windows_failed"]]
+        usable = [item for item in ranking if item["eligible_for_champion"]]
         baseline = next((item for item in usable if item["is_baseline"]), None)
         challenger = next((item for item in usable if not item["is_baseline"]), None)
         if baseline is None:

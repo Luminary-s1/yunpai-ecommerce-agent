@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
+
 from ecommerce_agent.database import Database
 from ecommerce_agent.forecasting import (
     ForecastEngine,
+    ForecastPolicy,
+    ForecastRunError,
     ForecastRunService,
+    SUPPORTED_FORECAST_MODELS,
 )
 
 
@@ -85,3 +90,71 @@ def test_run_persists_replayable_policy_backtests_and_quantiles(tmp_path) -> Non
             (TENANT, STORE),
         ).fetchone()[0]
     assert policy_count == 1
+    conflict = ForecastRunService(
+        db,
+        facts=_FactSource(_facts([10] * 56)),
+        engine=ForecastEngine(
+            policy=ForecastPolicy(required_relative_improvement=0.5)
+        ),
+    )
+    with pytest.raises(ForecastRunError, match="forecast_policy_version_conflict"):
+        conflict.run(TENANT, store_id=STORE, sku_id=SKU)
+
+
+def test_run_marks_gaps_stockouts_and_unknown_inventory_as_degraded(tmp_path) -> None:
+    rows = _facts([8] * 56)
+    rows.pop(20)
+    rows[29]["stockout_flag"] = "true"
+    rows[39]["stockout_flag"] = "unknown"
+    _db, service = _service(tmp_path, rows)
+
+    result = service.run(TENANT, store_id=STORE, sku_id=SKU)
+    anomaly_types = {item["anomaly_type"] for item in result["anomalies"]}
+
+    assert result["status"] == "degraded"
+    assert {
+        "missing_demand_day",
+        "stockout_excluded",
+        "stockout_unknown",
+    } <= anomaly_types
+
+
+def test_failed_candidate_is_persisted_without_blocking_the_run(tmp_path) -> None:
+    def fail_ewma(_values: list[float | None], _horizon: int) -> list[float]:
+        raise RuntimeError("injected_model_failure")
+
+    engine = ForecastEngine(forecaster_overrides={"ewma": fail_ewma})
+    _db, service = _service(tmp_path, _facts([6, 7] * 28), engine=engine)
+
+    result = service.run(TENANT, store_id=STORE, sku_id=SKU)
+    failed = [
+        row
+        for row in result["backtests"]
+        if row["model_name"] == "ewma" and row["failure_reason"] is not None
+    ]
+
+    assert result["status"] == "completed"
+    assert result["champion_model"] != "ewma"
+    assert failed
+    assert len(result["points"]) == 30
+
+
+def test_get_run_is_tenant_isolated(tmp_path) -> None:
+    _db, service = _service(tmp_path, _facts([4] * 56))
+    run = service.run(TENANT, store_id=STORE, sku_id=SKU)
+
+    with pytest.raises(ForecastRunError, match="forecast_run_not_found"):
+        service.get_run("other-tenant", run["run_id"])
+
+
+def test_all_failed_candidates_return_an_explicit_engine_failure(tmp_path) -> None:
+    def fail(_values: list[float | None], _horizon: int) -> list[float]:
+        raise RuntimeError("injected_model_failure")
+
+    engine = ForecastEngine(
+        forecaster_overrides={name: fail for name in SUPPORTED_FORECAST_MODELS}
+    )
+    _db, service = _service(tmp_path, _facts([5] * 56), engine=engine)
+
+    with pytest.raises(ForecastRunError, match="forecast_engine_failed:forecast_baseline_failed"):
+        service.run(TENANT, store_id=STORE, sku_id=SKU)

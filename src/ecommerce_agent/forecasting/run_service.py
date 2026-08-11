@@ -65,7 +65,10 @@ class ForecastRunService:
             raise ForecastRunError("forecast_demand_policy_unsupported")
 
         series, input_issues = self._series(facts)
-        evaluation = self.engine.evaluate(series)
+        try:
+            evaluation = self.engine.evaluate(series)
+        except ValueError as exc:
+            raise ForecastRunError(f"forecast_engine_failed:{exc}") from exc
         model_failures = [
             item
             for item in evaluation["ranking"]
@@ -293,9 +296,12 @@ class ForecastRunService:
             "policy_version": policy.policy_version,
             "horizons": list(policy.horizons),
             "minimum_history_days": policy.minimum_history_days,
-            "candidate_models": list(policy.candidate_models),
+            "candidate_models": {
+                "models": list(policy.candidate_models),
+                "required_relative_improvement": policy.required_relative_improvement,
+            },
             "backtest_windows": policy.backtest_windows,
-            "interval_levels": [0.5, 0.8, 0.95],
+            "interval_levels": list(policy.interval_levels),
             "required_relative_improvement": policy.required_relative_improvement,
             "demand_policy_version": DEMAND_V1.policy_version,
         }
@@ -382,7 +388,11 @@ class ForecastRunService:
         if evaluation["quality_status"] == "degraded":
             anomalies.append(
                 {
-                    "anomaly_type": "cold_start",
+                    "anomaly_type": (
+                        "cold_start"
+                        if evaluation["demand_type"] == "cold_start"
+                        else "insufficient_backtest_history"
+                    ),
                     "severity": "medium",
                     "evidence": {"demand_type": evaluation["demand_type"]},
                 }

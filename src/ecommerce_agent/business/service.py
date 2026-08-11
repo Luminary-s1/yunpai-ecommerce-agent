@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..connectors import ConnectorRegistry, PullRequest, VirtualTaobaoConnector
 from ..database import Database, utc_now
-from ..forecasting import DemandFactService
+from ..forecasting import DemandFactService, ForecastRunService
 from ..tools import ToolExecutionContext, ToolRegistry, ToolResult, ToolSpec
 from .catalog import CatalogItemUpsert, CatalogService, CatalogStatus
 from .competitive import CompetitiveIntelligenceService, CompetitorObservationCreate
@@ -79,6 +79,7 @@ class OperationsService:
         self.forecasting = DemandFactService(
             db, orders=self.orders, inventory=self.inventory
         )
+        self.forecast_runs = ForecastRunService(db, facts=self.forecasting)
         self.competitive = CompetitiveIntelligenceService(db)
         self.competitive_report = CompetitiveReportService(db)
         self.marketing = MarketingService(db)

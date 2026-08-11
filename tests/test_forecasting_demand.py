@@ -10,7 +10,7 @@ from ecommerce_agent.business.inventory import InventoryBalanceUpsert, Inventory
 from ecommerce_agent.business.orders import OrderLineInput, OrderService, OrderUpsert
 from ecommerce_agent.business.service import OperationsService
 from ecommerce_agent.database import Database
-from ecommerce_agent.forecasting import DemandFactRebuild, DemandFactService
+from ecommerce_agent.forecasting import DemandFactRebuild, DemandFactService, ForecastRunService
 
 
 TENANT_A = "tenant-forecast-a"
@@ -424,3 +424,5 @@ def test_operations_wires_forecasting_to_public_order_and_inventory_services(tmp
     assert isinstance(operations.forecasting, DemandFactService)
     assert operations.forecasting.orders is operations.orders
     assert operations.forecasting.inventory is operations.inventory
+    assert isinstance(operations.forecast_runs, ForecastRunService)
+    assert operations.forecast_runs.facts is operations.forecasting

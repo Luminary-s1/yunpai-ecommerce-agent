@@ -75,6 +75,7 @@ def test_sequence_types_and_intervals_are_deterministic(
     replay = engine.evaluate(_series(values))
 
     assert first == replay
+    assert first["model_version"] == "forecast-engine-v1"
     assert first["demand_type"] == expected_type
     if expected_type == "intermittent" and max(values) > 0:
         assert first["champion_reason"]["code"] == "challenger_improved"
@@ -96,6 +97,7 @@ def test_failed_candidate_does_not_block_available_models() -> None:
 
     assert ewma["windows_successful"] == 0
     assert ewma["windows_failed"] > 0
+    assert ewma["eligible_for_champion"] is False
     assert result["champion_model"] != "ewma"
     assert len(result["points"]) == 30
 
