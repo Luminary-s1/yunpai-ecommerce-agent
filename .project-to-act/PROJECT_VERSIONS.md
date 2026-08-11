@@ -5,9 +5,16 @@
 ## 当前版本
 
 - 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5 本机候选；生产放行阻塞
+- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5、M6-R WP1–WP2 本机候选；生产放行阻塞
 - 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作
 - 最后更新：2026-08-11
+
+## M6-R WP2 Forecast Engine（未单独升版）
+
+- 状态：`forecast-v1` / `forecast-engine-v1`、七种纯 Python 候选、数值需求类型、rolling-origin backtest、baseline fallback、失败候选隔离及 30 日 P50/P80/P95 完成开发者本机代码级候选；待独立验收。
+- 兼容性：沿用 schema v29 已有 `forecast_policies/runs/backtests/points/anomalies`，未新增迁移、依赖、HTTP API、Agent tool、关键词路由、模块 available 登记、库存计划或自动采购/库存写入。`OperationsService.forecast_runs` additive 接入，既有 `forecasting` Demand Fact 服务保持原契约。
+- 策略与读侧：所有候选共享同一批时间 origins；零需求窗口 WAPE/Bias 返回不可比并使用 RMSE；challenger 只有达到固定相对改进阈值才可替换 baseline。模型、阈值、interval levels 与 policy version 同行固化，同版本内容漂移明确拒绝；逐窗失败原因与候选资格可读回。
+- 验证：新增 15 个数值/结构化测试；forecasting/migration 聚焦 `39 passed`，全量 `690 passed, 1 xfailed`（231.82 秒）。未来泄漏、baseline 强制替换、P80/P95 交换、policy 不落库、缺货误入训练、tenant 条件移除、failure reason 丢失、同版本阈值漂移和原始异常外泄九项 mutation 均被对应测试捕获并已还原。证据 E-20260811-006。
 
 ## M6-R WP1 Demand Fact 数据层（未单独升版）
 
