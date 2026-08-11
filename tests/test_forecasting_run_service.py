@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, timedelta
 
 import pytest
@@ -33,6 +34,18 @@ class _FactSource:
             and row["store_id"] == store_id
             and row["sku_id"] == sku_id
         ]
+
+
+class _RecordingEngine(ForecastEngine):
+    def __init__(self) -> None:
+        super().__init__()
+        self.received_series: list[tuple[date, float | int | None]] = []
+
+    def evaluate(
+        self, series: Sequence[tuple[date, float | int | None]]
+    ) -> dict[str, object]:
+        self.received_series = list(series)
+        return super().evaluate(self.received_series)
 
 
 def _facts(values: list[int]) -> list[dict]:
@@ -106,17 +119,30 @@ def test_run_marks_gaps_stockouts_and_unknown_inventory_as_degraded(tmp_path) ->
     rows.pop(20)
     rows[29]["stockout_flag"] = "true"
     rows[39]["stockout_flag"] = "unknown"
-    _db, service = _service(tmp_path, rows)
+    engine = _RecordingEngine()
+    _db, service = _service(tmp_path, rows, engine=engine)
 
     result = service.run(TENANT, store_id=STORE, sku_id=SKU)
-    anomaly_types = {item["anomaly_type"] for item in result["anomalies"]}
+    anomalies = {item["anomaly_type"]: item for item in result["anomalies"]}
+    values_by_date = {
+        business_date.isoformat(): value
+        for business_date, value in engine.received_series
+    }
 
     assert result["status"] == "degraded"
     assert {
         "missing_demand_day",
         "stockout_excluded",
         "stockout_unknown",
-    } <= anomaly_types
+    } <= anomalies.keys()
+    for anomaly_type in ("missing_demand_day", "stockout_excluded"):
+        business_dates = anomalies[anomaly_type]["evidence"]["business_dates"]
+        assert business_dates
+        assert all(values_by_date[item] is None for item in business_dates)
+    assert all(
+        values_by_date[item] == 8
+        for item in anomalies["stockout_unknown"]["evidence"]["business_dates"]
+    )
 
 
 def test_failed_candidate_is_persisted_without_blocking_the_run(tmp_path) -> None:
