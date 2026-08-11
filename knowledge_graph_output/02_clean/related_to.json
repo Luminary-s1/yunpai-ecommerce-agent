@@ -362,5 +362,124 @@
     "target": "FAQ-SCRIPT-052",
     "confidence": 1.0,
     "generated_by": "rule"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-38e401d2",
+    "target": "RULE-CONSUMER-25",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-38e401d2",
+    "target": "RULE-TAOBAO-7DAYS",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-38e401d2",
+    "target": "RULE-REFUND-TIMELINESS",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-38e401d2",
+    "target": "RULE-ELECTRONIC-COMMERCE-LAW",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-38e401d2",
+    "target": "RULE-INVOICE-ISSUE",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "PRICE-cf259e1c",
+    "target": "RULE-PRICE-PROTECT",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "PRICE-cf259e1c",
+    "target": "RULE-PRICE-LABELING",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "LOGISTICS-70a98f4b",
+    "target": "RULE-SHIPPING-TIMELINESS",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "LOGISTICS-70a98f4b",
+    "target": "RULE-LOGISTICS-COMPLAINT",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "WARR-1a256956",
+    "target": "RULE-NATIONAL-3BAO",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "WARR-1a256956",
+    "target": "RULE-SMALL-APPLIANCE-WARRANTY",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-a041c044",
+    "target": "RULE-NATIONAL-3BAO",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-a041c044",
+    "target": "RULE-DIGITAL-RETURN",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-2d243e76",
+    "target": "RULE-NATIONAL-3BAO",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-2d243e76",
+    "target": "RULE-APPAREL-RETURN",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "WARR-b17b433a",
+    "target": "RULE-SMALL-APPLIANCE-WARRANTY",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "RELATED_TO",
+    "source": "RETURN-38e401d2",
+    "target": "RULE-NATIONAL-3BAO",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
   }
 ]

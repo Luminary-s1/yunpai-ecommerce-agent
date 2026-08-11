@@ -1,19 +1,24 @@
 {
   "entities": {
     "category": 10,
-    "product": 12,
+    "product_spu": 8,
+    "sku": 12,
     "attribute": 51,
     "policy": 9,
     "script": 52,
-    "faq": 60
+    "faq": 63,
+    "rule": 17
   },
   "relationships": {
-    "belongs_to": 12,
+    "belongs_to": 19,
     "has_attr": 51,
-    "applies_to": 34,
-    "refers_to": 64,
-    "related_to": 52
+    "applies_to": 36,
+    "refers_to": 66,
+    "related_to": 69
   },
-  "total_nodes": 194,
-  "total_rels": 213
+  "total_nodes": 222,
+  "total_rels": 241,
+  "orphan_nodes": 0,
+  "extended_at": "2026-08-07",
+  "note": "节点口径：FAQ 63条（52话术+4种子+7人工，含3条后续补充真实FAQ）。关系241边（本次扩充+28）。"
 }

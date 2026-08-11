@@ -82,5 +82,54 @@
     "target": "apparel",
     "confidence": 1.0,
     "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "air_fryer",
+    "target": "home_appliance",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "cordless_vacuum",
+    "target": "home_appliance",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "humidifier",
+    "target": "home_appliance",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "electric_kettle",
+    "target": "home_appliance",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "air_circulation_fan",
+    "target": "home_appliance",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "digital_audio",
+    "target": "digital",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "digital_power",
+    "target": "digital",
+    "confidence": 1.0,
+    "generated_by": "rule"
   }
 ]

@@ -27,15 +27,15 @@
 
 | 实体 | 条数 | 关系 | 条数 |
 |---|---|---|---|
-| 品类 Category | 10 | BELONGS_TO（属于） | 12 |
+| 品类 Category | 10 | BELONGS_TO（属于） | 19 |
 | 商品 Product(SPU) | 8 | HAS_ATTR（具有） | 51 |
-| 商品 SKU | 12 | APPLIES_TO（适用） | 34 |
-| 属性 Attribute | 51 | REFERS_TO（引用） | 64 |
-| 售后政策 Policy | 9 | RELATED_TO（关联） | 52 |
+| 商品 SKU | 12 | APPLIES_TO（适用） | 36 |
+| 属性 Attribute | 51 | REFERS_TO（引用） | 66 |
+| 售后政策 Policy | 9 | RELATED_TO（关联） | 69 |
 | 客服话术 Script | 52 | | |
-| 常见问答 FAQ | 60 | | |
-| 行业规则 Rule | 9 | | |
-| **合计** | **211** | **合计** | **213** |
+| 常见问答 FAQ | 63 | | |
+| 行业规则 Rule | 17 | | |
+| **合计** | **222** | **合计** | **241** |
 
 ## 下游复用（任务4/任务2 输入）
 

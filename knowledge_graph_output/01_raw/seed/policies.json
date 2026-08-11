@@ -1,0 +1,56 @@
+[
+  {
+    "sku_id": "QC-AF5-WHITE",
+    "policy_type": "warranty",
+    "content": "整机保修 12 个月，保修以订单和产品序列信息核验结果为准。",
+    "scope": "SKU",
+    "scope_key": "QC-AF5-WHITE",
+    "warranty_months": 12,
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-AF5-GREEN",
+    "policy_type": "warranty",
+    "content": "整机保修 12 个月，保修以订单和产品序列信息核验结果为准。",
+    "scope": "SKU",
+    "scope_key": "QC-AF5-GREEN",
+    "warranty_months": 12,
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-VC-A1",
+    "policy_type": "warranty",
+    "content": "整机保修 24 个月，保修以订单和产品序列信息核验结果为准。",
+    "scope": "SKU",
+    "scope_key": "QC-VC-A1",
+    "warranty_months": 24,
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-HM-3L",
+    "policy_type": "warranty",
+    "content": "整机保修 12 个月，保修以订单和产品序列信息核验结果为准。",
+    "scope": "SKU",
+    "scope_key": "QC-HM-3L",
+    "warranty_months": 12,
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-KT-17",
+    "policy_type": "warranty",
+    "content": "整机保修 12 个月，保修以订单和产品序列信息核验结果为准。",
+    "scope": "SKU",
+    "scope_key": "QC-KT-17",
+    "warranty_months": 12,
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-FN-D1",
+    "policy_type": "warranty",
+    "content": "整机保修 24 个月，保修以订单和产品序列信息核验结果为准。",
+    "scope": "SKU",
+    "scope_key": "QC-FN-D1",
+    "warranty_months": 24,
+    "source": "fixture"
+  }
+]

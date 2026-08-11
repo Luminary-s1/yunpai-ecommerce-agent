@@ -510,5 +510,21 @@
     "target_type": "Product",
     "confidence": 0.9,
     "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SCRIPT-020",
+    "target": "RETURN-38e401d2",
+    "target_type": "Policy",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "REFERS_TO",
+    "source": "FAQ-SEED-ed51",
+    "target": "LOGISTICS-70a98f4b",
+    "target_type": "Policy",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
   }
 ]

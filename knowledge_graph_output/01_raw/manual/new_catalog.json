@@ -1,0 +1,105 @@
+[
+  {
+    "item_id": "X-SPU-M1",
+    "sku_id": "X-M1-WHITE",
+    "title": "星脉蓝牙耳机 X-M1 云白色",
+    "status": "active",
+    "sale_price": "299.00",
+    "attributes": {
+      "brand": "星脉",
+      "category": "数码音频",
+      "model": "X-M1",
+      "color": "云白",
+      "battery_mah": 350,
+      "warranty_months": 12
+    },
+    "source": "manual"
+  },
+  {
+    "item_id": "X-SPU-M1",
+    "sku_id": "X-M1-BLACK",
+    "title": "星脉蓝牙耳机 X-M1 曜石黑",
+    "status": "active",
+    "sale_price": "299.00",
+    "attributes": {
+      "brand": "星脉",
+      "category": "数码音频",
+      "model": "X-M1",
+      "color": "曜石黑",
+      "battery_mah": 350,
+      "warranty_months": 12
+    },
+    "source": "manual"
+  },
+  {
+    "item_id": "X-SPU-P2",
+    "sku_id": "X-P2-BLACK",
+    "title": "星脉充电宝 X-P2 10000mAh 黑色",
+    "status": "active",
+    "sale_price": "129.00",
+    "attributes": {
+      "brand": "星脉",
+      "category": "数码电源",
+      "model": "X-P2",
+      "color": "黑色",
+      "storage_gb": 0,
+      "battery_mah": 10000,
+      "warranty_months": 12
+    },
+    "source": "manual"
+  },
+  {
+    "item_id": "Y-SPU-D01",
+    "sku_id": "Y-D01-S",
+    "title": "云织羽绒服 Y-D01 黑色 S 码",
+    "status": "active",
+    "sale_price": "599.00",
+    "attributes": {
+      "brand": "云织",
+      "category": "服饰",
+      "model": "Y-D01",
+      "color": "黑色",
+      "size": "S",
+      "material": "90%白鸭绒",
+      "season": "冬季",
+      "warranty_months": 0
+    },
+    "source": "manual"
+  },
+  {
+    "item_id": "Y-SPU-D01",
+    "sku_id": "Y-D01-M",
+    "title": "云织羽绒服 Y-D01 黑色 M 码",
+    "status": "active",
+    "sale_price": "599.00",
+    "attributes": {
+      "brand": "云织",
+      "category": "服饰",
+      "model": "Y-D01",
+      "color": "黑色",
+      "size": "M",
+      "material": "90%白鸭绒",
+      "season": "冬季",
+      "warranty_months": 0
+    },
+    "source": "manual"
+  },
+  {
+    "item_id": "Y-SPU-D01",
+    "sku_id": "Y-D01-L",
+    "title": "云织羽绒服 Y-D01 黑色 L 码",
+    "status": "active",
+    "sale_price": "599.00",
+    "attributes": {
+      "brand": "云织",
+      "category": "服饰",
+      "model": "Y-D01",
+      "color": "黑色",
+      "size": "L",
+      "material": "90%白鸭绒",
+      "season": "冬季",
+      "warranty_months": 0
+    },
+    "source": "manual"
+  }
+]

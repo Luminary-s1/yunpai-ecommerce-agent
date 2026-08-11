@@ -1,0 +1,15 @@
+{
+  "source_label": {
+    "L0": "fixture",
+    "L1": "builtin:ecommerce-sop-v1"
+  },
+  "counts": {
+    "catalog_skus": 6,
+    "catalog_items": 5,
+    "policies": 6,
+    "seed_faqs": 4,
+    "orders": 8,
+    "scripts": 52,
+    "sop_questions": 156
+  }
+}

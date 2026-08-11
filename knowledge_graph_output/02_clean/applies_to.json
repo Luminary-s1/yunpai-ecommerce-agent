@@ -236,5 +236,19 @@
     "target": "digital",
     "confidence": 1.0,
     "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "WARR-1a256956",
+    "target": "QC-AF5-WHITE",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "WARR-1a256956",
+    "target": "QC-AF5-GREEN",
+    "confidence": 0.9,
+    "generated_by": "rule+human"
   }
 ]
