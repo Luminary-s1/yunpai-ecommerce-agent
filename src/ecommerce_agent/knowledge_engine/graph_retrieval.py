@@ -61,8 +61,9 @@ def _validate_key(key: str) -> str:
 class GraphRetrievalService:
     """图谱检索服务，封装 Neo4j 图谱的常见查询。"""
 
-    def __init__(self, client: Neo4jClient) -> None:
+    def __init__(self, client: Neo4jClient, *, timeout: int = 15) -> None:
         self.client = client
+        self._timeout = timeout
 
     def entity_query(self, label: str, key: str, value: str) -> dict | None:
         """实体查询：按唯一键找单个实体，返回节点属性。"""
@@ -72,6 +73,7 @@ class GraphRetrievalService:
             f"MATCH (n:{label} {{{key}: $value}}) "
             f"RETURN n.id AS id, labels(n)[0] AS label, properties(n) AS props LIMIT 1",
             params={"value": value},
+            timeout=self._timeout,
         )
         if not rows:
             return None
@@ -95,6 +97,7 @@ class GraphRetrievalService:
             f"RETURN n.id AS source, type(r) AS rel_type, m.id AS target, "
             f"labels(m)[0] AS target_label LIMIT $limit",
             params={"eid": entity_id, "limit": max_depth * 20},
+            timeout=self._timeout,
         )
         return [
             {"source": r[0], "rel_type": r[1], "target": r[2], "target_label": r[3]}
@@ -136,6 +139,7 @@ class GraphRetrievalService:
             f"RETURN end.id AS end_id, labels(end)[0] AS end_label, "
             f"properties(end) AS props LIMIT $limit",
             params={"sid": start_id, "limit": max_hops * 20},
+            timeout=self._timeout,
         )
         return [
             {"end_id": r[0], "end_label": r[1], "props": r[2]}
@@ -193,6 +197,7 @@ class GraphRetrievalService:
             f"coalesce(n.question, n.title, n.policy_name, n.rule_title, n.id) AS title "
             f"LIMIT $limit",
             params=params,
+            timeout=self._timeout,
         )
         return [
             {"id": r[0], "label": r[1], "title": r[2]}
@@ -202,10 +207,12 @@ class GraphRetrievalService:
     def stats(self) -> dict:
         """图谱统计：各实体/关系数量。"""
         node_rows = self.client.query(
-            "MATCH (n) RETURN labels(n)[0] AS label, count(*) AS cnt ORDER BY cnt DESC"
+            "MATCH (n) RETURN labels(n)[0] AS label, count(*) AS cnt ORDER BY cnt DESC",
+            timeout=self._timeout,
         )
         rel_rows = self.client.query(
-            "MATCH ()-[r]->() RETURN type(r) AS rel, count(*) AS cnt ORDER BY cnt DESC"
+            "MATCH ()-[r]->() RETURN type(r) AS rel, count(*) AS cnt ORDER BY cnt DESC",
+            timeout=self._timeout,
         )
         total_nodes = sum(int(r[1]) for r in node_rows)
         total_rels = sum(int(r[1]) for r in rel_rows)
