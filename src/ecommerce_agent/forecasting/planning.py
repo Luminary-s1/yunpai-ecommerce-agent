@@ -100,6 +100,47 @@ class InventoryPlanningService:
         self.forecasts = forecasts
         self.inventory = inventory
 
+    def resolve_policy(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        sku_id: str,
+        warehouse_id: str | None = None,
+    ) -> InventoryPlanningPolicy | None:
+        with self.db.connect() as conn:
+            if warehouse_id is None:
+                row = conn.execute(
+                    """SELECT * FROM inventory_planning_policies
+                    WHERE tenant_id=? AND store_id=? AND sku_id=?
+                      AND warehouse_id IS NULL
+                    ORDER BY active_from DESC, created_at DESC LIMIT 1""",
+                    (tenant_id, store_id, sku_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """SELECT * FROM inventory_planning_policies
+                    WHERE tenant_id=? AND store_id=? AND sku_id=? AND warehouse_id=?
+                    ORDER BY active_from DESC, created_at DESC LIMIT 1""",
+                    (tenant_id, store_id, sku_id, warehouse_id),
+                ).fetchone()
+        if row is None:
+            return None
+        try:
+            return InventoryPlanningPolicy(
+                warehouse_id=row["warehouse_id"],
+                supplier_lead_days=row["supplier_lead_days"],
+                review_period_days=row["review_period_days"],
+                service_level=row["service_level"],
+                minimum_order_qty=row["minimum_order_qty"],
+                order_multiple=row["order_multiple"],
+                minimum_safety_stock=row["minimum_safety_stock"],
+                maximum_stock_days=row["maximum_stock_days"],
+                policy_version=row["policy_version"],
+            )
+        except (TypeError, ValueError) as exc:
+            raise InventoryPlanningError("planning_policy_evidence_invalid") from exc
+
     def create_plan(
         self,
         tenant_id: str,
@@ -176,7 +217,7 @@ class InventoryPlanningService:
         created_at = utc_now()
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            policy_id = self._ensure_policy(
+            policy_id, _write_status = self._ensure_policy(
                 conn, tenant_id, store_id, sku_id, policy, policy_evidence, created_at
             )
             existing = conn.execute(
@@ -263,6 +304,74 @@ class InventoryPlanningService:
             else:
                 plan_id = str(existing["plan_id"])
         return self.get_plan(tenant_id, plan_id)
+
+    def latest_plan(
+        self,
+        tenant_id: str,
+        *,
+        sku_id: str,
+        store_id: str | None = None,
+        warehouse_id: str | None = None,
+    ) -> dict[str, Any]:
+        conditions = ["tenant_id=?", "sku_id=?"]
+        params: list[Any] = [tenant_id, sku_id]
+        if store_id is not None:
+            conditions.append("store_id=?")
+            params.append(store_id)
+        if warehouse_id is None:
+            conditions.append("warehouse_id IS NULL")
+        else:
+            conditions.append("warehouse_id=?")
+            params.append(warehouse_id)
+        with self.db.connect() as conn:
+            row = conn.execute(
+                f"""SELECT plan_id FROM inventory_plans
+                WHERE {' AND '.join(conditions)}
+                ORDER BY created_at DESC, rowid DESC LIMIT 1""",
+                tuple(params),
+            ).fetchone()
+        if row is None:
+            raise InventoryPlanningError("inventory_plan_not_found")
+        return self.get_plan(tenant_id, str(row["plan_id"]))
+
+    def list_risks(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str | None = None,
+        sku_id: str | None = None,
+        risk_level: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        conditions = ["tenant_id=?"]
+        params: list[Any] = [tenant_id]
+        if store_id is not None:
+            conditions.append("store_id=?")
+            params.append(store_id)
+        if sku_id is not None:
+            conditions.append("sku_id=?")
+            params.append(sku_id)
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""SELECT plan_id, store_id, sku_id, COALESCE(warehouse_id, '') scope,
+                risk_level
+                FROM inventory_plans WHERE {' AND '.join(conditions)}
+                ORDER BY created_at DESC, rowid DESC""",
+                tuple(params),
+            ).fetchall()
+        latest: list[str] = []
+        seen: set[tuple[str, str, str]] = set()
+        for row in rows:
+            key = (str(row["store_id"]), str(row["sku_id"]), str(row["scope"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            if risk_level is not None and row["risk_level"] != risk_level:
+                continue
+            latest.append(str(row["plan_id"]))
+            if len(latest) >= limit:
+                break
+        return [self.get_plan(tenant_id, plan_id) for plan_id in latest]
 
     def get_plan(self, tenant_id: str, plan_id: str) -> dict[str, Any]:
         with self.db.connect() as conn:
@@ -464,7 +573,7 @@ class InventoryPlanningService:
         policy: InventoryPlanningPolicy,
         evidence: dict[str, Any],
         created_at: str,
-    ) -> str:
+    ) -> tuple[str, str]:
         existing = conn.execute(
             """SELECT * FROM inventory_planning_policies
             WHERE tenant_id=? AND store_id=? AND sku_id=?
@@ -479,7 +588,7 @@ class InventoryPlanningService:
         if existing is not None:
             if tuple(existing[key] for key in fields) != tuple(evidence[key] for key in fields):
                 raise InventoryPlanningError("planning_policy_version_conflict")
-            return str(existing["policy_id"])
+            return str(existing["policy_id"]), "idempotent"
         policy_id = "inventory-policy-" + uuid.uuid5(
             uuid.NAMESPACE_URL,
             f"{tenant_id}/{store_id}/{sku_id}/{policy.warehouse_id or '*'}/{policy.policy_version}",
@@ -499,7 +608,7 @@ class InventoryPlanningService:
                 created_at, created_at,
             ),
         )
-        return policy_id
+        return policy_id, "created"
 
     @staticmethod
     def _calculate(

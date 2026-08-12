@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from typing import Any, Protocol
 
 from ..database import Database, utc_now
-from .engine import ForecastEngine
+from .engine import ForecastEngine, ForecastPolicy
 from .models import DEMAND_V1
 
 
@@ -47,7 +47,53 @@ class ForecastRunService:
         self.facts = facts
         self.engine = engine or ForecastEngine()
 
-    def run(self, tenant_id: str, *, store_id: str, sku_id: str) -> dict[str, Any]:
+    def resolve_policy(
+        self, tenant_id: str, *, store_id: str, sku_id: str
+    ) -> ForecastPolicy | None:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """SELECT * FROM forecast_policies
+                WHERE tenant_id=? AND store_id=? AND sku_id=?
+                ORDER BY active_from DESC, created_at DESC LIMIT 1""",
+                (tenant_id, store_id, sku_id),
+            ).fetchone()
+        if row is None:
+            return None
+        if row["demand_policy_version"] != DEMAND_V1.policy_version:
+            raise ForecastRunError("forecast_demand_policy_unsupported")
+        try:
+            candidates = json.loads(row["candidate_models_json"])
+            horizons = json.loads(row["horizons_json"])
+            interval_levels = json.loads(row["interval_levels_json"])
+        except (TypeError, ValueError) as exc:
+            raise ForecastRunError("forecast_policy_evidence_invalid") from exc
+        if not isinstance(candidates, dict) or not isinstance(
+            candidates.get("models"), list
+        ):
+            raise ForecastRunError("forecast_policy_evidence_invalid")
+        try:
+            return ForecastPolicy(
+                policy_version=str(row["policy_version"]),
+                horizons=tuple(horizons),
+                minimum_history_days=int(row["minimum_history_days"]),
+                backtest_windows=int(row["backtest_windows"]),
+                required_relative_improvement=float(
+                    candidates["required_relative_improvement"]
+                ),
+                interval_levels=tuple(interval_levels),
+                candidate_models=tuple(candidates["models"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ForecastRunError("forecast_policy_evidence_invalid") from exc
+
+    def run(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        sku_id: str,
+        policy: ForecastPolicy | None = None,
+    ) -> dict[str, Any]:
         facts = sorted(
             self.facts.list_facts(tenant_id, store_id=store_id, sku_id=sku_id),
             key=lambda item: str(item["business_date"]),
@@ -65,8 +111,9 @@ class ForecastRunService:
             raise ForecastRunError("forecast_demand_policy_unsupported")
 
         series, input_issues = self._series(facts)
+        engine = self.engine if policy is None else ForecastEngine(policy=policy)
         try:
-            evaluation = self.engine.evaluate(series)
+            evaluation = engine.evaluate(series)
         except ValueError as exc:
             raise ForecastRunError(f"forecast_engine_failed:{exc}") from exc
         model_failures = [
@@ -80,7 +127,7 @@ class ForecastRunService:
             if input_issues or evaluation["quality_status"] == "degraded"
             else "completed"
         )
-        policy = self._policy_evidence()
+        policy_evidence = self._policy_evidence(engine.policy)
         data_hash = hashlib.sha256(
             _json(
                 {
@@ -91,7 +138,7 @@ class ForecastRunService:
                         }
                         for item in facts
                     ],
-                    "forecast_policy": policy,
+                    "forecast_policy": policy_evidence,
                 }
             ).encode("utf-8")
         ).hexdigest()
@@ -102,11 +149,18 @@ class ForecastRunService:
             "ranking": evaluation["ranking"],
             "demand_type": evaluation["demand_type"],
             "horizon_totals": evaluation["horizon_totals"],
-            "policy": policy,
+            "policy": policy_evidence,
         }
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            self._ensure_policy(conn, tenant_id, store_id, policy, created_at)
+            self._ensure_policy(
+                conn,
+                tenant_id,
+                store_id,
+                sku_id if policy is not None else None,
+                policy_evidence,
+                created_at,
+            )
             metrics = evaluation["metrics"]
             conn.execute(
                 """
@@ -126,7 +180,7 @@ class ForecastRunService:
                     evaluation["training_end"],
                     data_hash,
                     DEMAND_V1.policy_version,
-                    policy["policy_version"],
+                    policy_evidence["policy_version"],
                     _json(candidate_evidence),
                     evaluation["champion_model"],
                     _json(evaluation["champion_reason"]),
@@ -265,6 +319,49 @@ class ForecastRunService:
         ]
         return view
 
+    def latest_run(
+        self,
+        tenant_id: str,
+        *,
+        sku_id: str,
+        store_id: str | None = None,
+    ) -> dict[str, Any]:
+        conditions = ["tenant_id=?", "sku_id=?"]
+        params: list[Any] = [tenant_id, sku_id]
+        if store_id is not None:
+            conditions.append("store_id=?")
+            params.append(store_id)
+        with self.db.connect() as conn:
+            row = conn.execute(
+                f"""SELECT run_id FROM forecast_runs
+                WHERE {' AND '.join(conditions)}
+                ORDER BY created_at DESC, rowid DESC LIMIT 1""",
+                tuple(params),
+            ).fetchone()
+        if row is None:
+            raise ForecastRunError("forecast_run_not_found")
+        return self.get_run(tenant_id, str(row["run_id"]))
+
+    def latest_backtest(
+        self,
+        tenant_id: str,
+        *,
+        sku_id: str,
+        store_id: str | None = None,
+    ) -> dict[str, Any]:
+        run = self.latest_run(tenant_id, sku_id=sku_id, store_id=store_id)
+        return {
+            "run_id": run["run_id"],
+            "store_id": run["store_id"],
+            "sku_id": run["sku_id"],
+            "champion_model": run["champion_model"],
+            "champion_reason": run["champion_reason"],
+            "metrics": {
+                key: run[key] for key in ("wape", "bias", "smape", "rmse")
+            },
+            "backtests": run["backtests"],
+        }
+
     def _series(
         self, facts: list[dict[str, Any]]
     ) -> tuple[list[tuple[date, float | int | None]], dict[str, list[str]]]:
@@ -290,8 +387,8 @@ class ForecastRunService:
             current += timedelta(days=1)
         return series, dict(issues)
 
-    def _policy_evidence(self) -> dict[str, Any]:
-        policy = self.engine.policy
+    @staticmethod
+    def _policy_evidence(policy: ForecastPolicy) -> dict[str, Any]:
         return {
             "policy_version": policy.policy_version,
             "horizons": list(policy.horizons),
@@ -311,14 +408,23 @@ class ForecastRunService:
         conn: Any,
         tenant_id: str,
         store_id: str,
+        sku_id: str | None,
         policy: dict[str, Any],
         created_at: str,
-    ) -> None:
-        existing = conn.execute(
-            """SELECT * FROM forecast_policies
-            WHERE tenant_id=? AND store_id=? AND sku_id IS NULL AND policy_version=?""",
-            (tenant_id, store_id, policy["policy_version"]),
-        ).fetchone()
+    ) -> tuple[str, str]:
+        if sku_id is None:
+            existing = conn.execute(
+                """SELECT * FROM forecast_policies
+                WHERE tenant_id=? AND store_id=? AND sku_id IS NULL
+                  AND policy_version=?""",
+                (tenant_id, store_id, policy["policy_version"]),
+            ).fetchone()
+        else:
+            existing = conn.execute(
+                """SELECT * FROM forecast_policies
+                WHERE tenant_id=? AND store_id=? AND sku_id=? AND policy_version=?""",
+                (tenant_id, store_id, sku_id, policy["policy_version"]),
+            ).fetchone()
         expected = (
             _json(policy["horizons"]),
             policy["minimum_history_days"],
@@ -341,10 +447,10 @@ class ForecastRunService:
             )
             if actual != expected:
                 raise ForecastRunError("forecast_policy_version_conflict")
-            return
+            return str(existing["policy_id"]), "idempotent"
         policy_id = "forecast-policy-" + uuid.uuid5(
             uuid.NAMESPACE_URL,
-            f"{tenant_id}/{store_id}/{policy['policy_version']}",
+            f"{tenant_id}/{store_id}/{sku_id or '*'}/{policy['policy_version']}",
         ).hex
         conn.execute(
             """
@@ -353,18 +459,20 @@ class ForecastRunService:
                 minimum_history_days, candidate_models_json, backtest_windows,
                 interval_levels_json, demand_policy_version, policy_version,
                 active_from, created_at
-            ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 policy_id,
                 tenant_id,
                 store_id,
+                sku_id,
                 *expected,
                 policy["policy_version"],
                 created_at,
                 created_at,
             ),
         )
+        return policy_id, "created"
 
     @staticmethod
     def _anomalies(

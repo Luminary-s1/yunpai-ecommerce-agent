@@ -401,6 +401,39 @@ def test_maximum_stock_cap_and_invalid_inputs_fail_explicitly(tmp_path) -> None:
         )
 
 
+def test_latest_risk_projection_does_not_resurface_superseded_critical_plan(
+    tmp_path,
+) -> None:
+    _db, inventory, service = _service(tmp_path)
+    _balance(
+        inventory,
+        warehouse_id="warehouse-a",
+        on_hand="0",
+        reserved="0",
+        inbound="0",
+    )
+    critical = service.create_plan(TENANT, "forecast-run-planning", _policy())
+    _balance(
+        inventory,
+        warehouse_id="warehouse-a",
+        on_hand="30",
+        reserved="0",
+        inbound="0",
+        source_updated_at=datetime(2026, 8, 13, tzinfo=timezone.utc),
+    )
+    current = service.create_plan(TENANT, "forecast-run-planning", _policy())
+
+    assert critical["risk_level"] == "critical"
+    assert current["risk_level"] == "medium"
+    assert service.latest_plan(TENANT, store_id=STORE, sku_id=SKU) == current
+    assert service.list_risks(
+        TENANT, store_id=STORE, sku_id=SKU, risk_level="critical"
+    ) == []
+    assert service.list_risks(
+        TENANT, store_id=STORE, sku_id=SKU, risk_level="medium"
+    ) == [current]
+
+
 def test_reserved_above_on_hand_uses_zero_available_and_records_shortfall(tmp_path) -> None:
     _db, inventory, service = _service(tmp_path)
     _balance(inventory, warehouse_id="warehouse-a", on_hand="5", reserved="12", inbound="0")
