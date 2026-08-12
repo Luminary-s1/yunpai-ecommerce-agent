@@ -209,7 +209,7 @@ def build_policies() -> list[dict]:
          "Category", "home_appliance", "low", "m.zjtcn.com/news/51290604.html"),
         ("RETURN", "return", "数码商品退换货",
          "数码类商品自实际收到商品之日起7天内可退货、15天可换货。"
-         "已激活、含授权（激活）信息的商品激活后仅支持7天无理由退货；"
+         "已激活、含授权（激活）信息的商品一旦产生授权或激活程序，不支持7天无理由退货；"
          "商品包装拆封影响二次销售的，不支持无理由退换。",
          "Category", "digital", "medium", "help.dangdang.com/details/page95"),
         ("RETURN", "return", "服饰鞋帽退换货",
@@ -409,7 +409,10 @@ def build_relationships(categories, products, attributes, policies, scripts, faq
         intent = f.get("intent", "")
         if "保修" in f.get("category", "") or "保修" in f.get("question", ""):
             targets.append(("Policy", policy_by_name.get("小家电整机保修1年", "")))
-        if "退货" in f.get("question", "") or "退款" in f.get("question", ""):
+        # 数码/激活类 FAQ 优先连数码专项政策（避免连到通用七天无理由）
+        if "激活" in f.get("question", "") or "数码" in f.get("category", ""):
+            targets.append(("Policy", policy_by_name.get("数码商品退换货", "")))
+        elif "退货" in f.get("question", "") or "退款" in f.get("question", ""):
             targets.append(("Policy", policy_by_name.get("七天无理由退货", "")))
         for ttype, tid in targets:
             if tid:

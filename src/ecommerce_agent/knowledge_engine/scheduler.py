@@ -17,6 +17,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import logging
 import threading
 import time
 from datetime import datetime
@@ -24,6 +26,8 @@ from pathlib import Path
 
 from .dream_cycle import ingest, consistency_check, consolidate, auto_repair
 from .loader import load_clean_dir
+
+logger = logging.getLogger("knowledge_engine.scheduler")
 
 # 默认运行间隔（秒）：摄取 1 天、一致性 1 天、合并记忆 7 天
 DEFAULT_INTERVALS = {
@@ -41,8 +45,13 @@ def run_dream_cycle_once(
     *,
     min_facts: int = 3,
     threshold: float = 0.85,
+    persist: bool = False,
+    knowledge_base=None,
 ) -> dict:
-    """一次性跑完整梦循环（加载 + 三作业），返回报告。"""
+    """一次性跑完整梦循环（加载 + 三作业），返回报告。
+
+    persist=True 时把合并记忆结论落库（apply_consolidation，P1-1 闭环）。
+    """
     items = load_clean_dir(clean_dir)
     report = {
         "ts": datetime.now().isoformat(timespec="seconds"),
@@ -81,6 +90,26 @@ def run_dream_cycle_once(
         "consolidated": len(cons.consolidated),
         "skipped": cons.skipped,
     }
+    # P1-1：合并结论落库（persist=True 且提供了 knowledge_base）
+    if persist and knowledge_base is not None:
+        from .dream_cycle import apply_consolidation
+
+        persist_stats = apply_consolidation(cons, knowledge_base)
+        report["consolidate"]["persisted"] = persist_stats["written"]
+        report["consolidate"]["persist_skipped"] = persist_stats["skipped_existing"]
+    # 结构化日志（运维-1：key=value，含时间戳）
+    logger.info(
+        "dream_cycle done: total_items=%d ingest_new=%d ingest_dup=%d "
+        "dangling=%d orphan=%d repaired=%d clusters=%d consolidated=%d",
+        report["total_items"],
+        report["ingest"]["new"],
+        report["ingest"]["duplicates"],
+        report["consistency"]["dangling_references"],
+        report["consistency"]["orphan_nodes"],
+        report["auto_repair"]["marked_dangling"] + report["auto_repair"]["marked_orphan"],
+        report["consolidate"]["clusters"],
+        report["consolidate"]["consolidated"],
+    )
     return report
 
 
@@ -108,20 +137,87 @@ def run_loop(clean_dir: str | Path, intervals: dict[str, int] | None = None) -> 
         time.sleep(60)  # 每分钟检查一次
 
 
+def run_evaluation_once(*, verbose: bool = False) -> dict:
+    """跑一次检索质量评测（35 题），返回报告（可观测-1：持续监控）。
+
+    通过率下降时（< 0.9）记录告警日志，供监控捕获。
+    无 Neo4j 环境：返回降级报告（error 字段），不抛栈——调用方可据此跳过。
+    """
+    from .graph_retrieval import GraphRetrievalService
+    from .neo4j_client import Neo4jClient
+
+    try:
+        svc = GraphRetrievalService(Neo4jClient())
+    except Exception:
+        svc = None
+    from .evaluation_suite import run_evaluation
+
+    if svc is None:
+        degraded = {
+            "total": 0,
+            "passed": 0,
+            "pass_rate": 0.0,
+            "error": "Neo4j 不可用，评测跳过",
+        }
+        logger.warning("retrieval_eval skipped: Neo4j unavailable")
+        return degraded
+    try:
+        report = run_evaluation(svc, verbose=verbose)
+    except Exception as exc:
+        logger.warning("retrieval_eval failed: %s", exc)
+        return {
+            "total": 0,
+            "passed": 0,
+            "pass_rate": 0.0,
+            "error": f"{type(exc).__name__}: {str(exc)[:200]}",
+        }
+    logger.info(
+        "retrieval_eval done: total=%d passed=%d pass_rate=%.3f",
+        report["total"],
+        report["passed"],
+        report["pass_rate"],
+    )
+    if report["pass_rate"] < 0.9:
+        logger.warning(
+            "retrieval_eval regression: pass_rate=%.3f below 0.9 (details=%s)",
+            report["pass_rate"],
+            [d for d in report["details"] if not d["passed"]][:10],
+        )
+    return report
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="云湃知识库梦循环调度器")
     parser.add_argument("--once", action="store_true", help="一次性运行后退出（可配 cron）")
     parser.add_argument("--clean-dir", default=DEFAULT_CLEAN_DIR, help="任务6产物目录")
+    parser.add_argument("--eval", action="store_true", help="跑一次检索质量评测（35 题）")
+    parser.add_argument("--persist", action="store_true", help="合并记忆结论落库（需 --db）")
+    parser.add_argument("--db", default="", help="运行时 SQLite 路径（--persist 时需要）")
     parser.add_argument("--ingest-interval", type=int, default=DEFAULT_INTERVALS["ingest"])
     parser.add_argument("--consistency-interval", type=int, default=DEFAULT_INTERVALS["consistency"])
     parser.add_argument("--consolidate-interval", type=int, default=DEFAULT_INTERVALS["consolidate"])
     args = parser.parse_args()
 
-    if args.once:
-        report = run_dream_cycle_once(args.clean_dir)
-        import json
+    if args.eval:
+        report = run_evaluation_once(verbose=True)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return
+
+    if args.once:
+        kb = None
+        if args.persist:
+            from ..database import Database
+            from ..rag import KnowledgeBase
+
+            if not args.db:
+                print("--persist 需要 --db <sqlite路径>", file=sys.stderr)
+                return 1
+            db = Database(Path(args.db))
+            db.initialize()
+            kb = KnowledgeBase(db)
+        report = run_dream_cycle_once(args.clean_dir, persist=args.persist, knowledge_base=kb)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
 
     intervals = {
         "ingest": args.ingest_interval,

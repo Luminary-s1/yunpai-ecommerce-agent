@@ -65,7 +65,7 @@ def test_wiki_requires_admin(client: TestClient) -> None:
 
 
 def test_wiki_items_lists_runtime_and_asset(client: TestClient) -> None:
-    """列表同时包含运行时 Q&A 和资产层（本环境无 02_clean 时至少返回运行时）。"""
+    """列表同时包含运行时 Q&A 和资产层（本环境 02_clean 资产 382 条合并）。"""
     app = client.app
     _import_faq(
         app.state.agent,
@@ -73,13 +73,13 @@ def test_wiki_items_lists_runtime_and_asset(client: TestClient) -> None:
         question="保修多久",
         answer="保修 12 个月",
     )
-    resp = client.get("/v1/wiki/items", headers=ADMIN_HEADERS)
+    resp = client.get("/v1/wiki/items?limit=500", headers=ADMIN_HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
     ids = [i["id"] for i in data]
     assert "WIKI-TEST-1" in ids, "导入运行时的知识应出现在 Wiki 列表（id 归一化后无 kg-）"
-    # 本测试环境无 02_clean 资产，Q&A 全部来自运行时
+    # 本测试环境含 02_clean 资产层，Q&A 应同时来自运行时和资产层
     assert any(i["kind"] == "faq" for i in data)
 
 
@@ -92,7 +92,7 @@ def test_wiki_items_kind_filter(client: TestClient) -> None:
         question="退货运费谁出",
         answer="退货运费按平台规则",
     )
-    resp = client.get("/v1/wiki/items?kind=faq", headers=ADMIN_HEADERS)
+    resp = client.get("/v1/wiki/items?kind=faq&limit=500", headers=ADMIN_HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert all(i["kind"] == "faq" for i in data)
@@ -228,3 +228,82 @@ def test_wiki_does_not_touch_clean_dir(client: TestClient, tmp_path: Path) -> No
     )
     after = {p.name: (p.stat().st_mtime_ns, p.read_bytes()) for p in clean_dir.iterdir()}
     assert before == after, "读操作不得修改 02_clean/ 资产（mtime/hash 不变）"
+
+
+def test_wiki_items_pagination(client: TestClient) -> None:
+    """分页：offset+limit 返回对应切片（缺口1/深水区2）。"""
+    app = client.app
+    for i in range(3):
+        _import_faq(
+            app.state.agent,
+            item_id=f"PAGE-{i}",
+            question=f"分页问题{i}",
+            answer=f"分页答案{i}",
+        )
+    page1 = client.get("/v1/wiki/items?limit=2&offset=0", headers=ADMIN_HEADERS).json()
+    page2 = client.get("/v1/wiki/items?limit=2&offset=2", headers=ADMIN_HEADERS).json()
+    assert len(page1) == 2
+    assert len(page2) >= 1
+    ids1 = {i["id"] for i in page1}
+    ids2 = {i["id"] for i in page2}
+    assert not (ids1 & ids2), "分页两页不应有重叠"
+
+
+def test_wiki_items_has_category_field(client: TestClient) -> None:
+    """词条视图含 category 字段（缺口1：Wiki 分类验收项）。"""
+    app = client.app
+    _import_faq(
+        app.state.agent,
+        item_id="CAT-TEST-1",
+        question="分类测试",
+        answer="分类答案",
+    )
+    data = client.get("/v1/wiki/items?kind=faq&limit=500", headers=ADMIN_HEADERS).json()
+    assert data, "应有 faq 词条"
+    assert "category" in data[0], "词条视图必须含 category 字段"
+    assert data[0]["category"], "category 非空"
+
+
+def test_wiki_search_finds_runtime(client: TestClient) -> None:
+    """搜索命中运行时知识（双通道主通道，不依赖 Neo4j）。"""
+    app = client.app
+    _import_faq(
+        app.state.agent,
+        item_id="SEARCH-TEST-1",
+        question="空气炸锅保修多久",
+        answer="保修 12 个月",
+    )
+    resp = client.get("/v1/wiki/search?q=空气炸锅&limit=10", headers=ADMIN_HEADERS)
+    assert resp.status_code == 200
+    results = resp.json()
+    assert isinstance(results, list)
+
+
+def test_wiki_put_edits_runtime_kind(client: TestClient) -> None:
+    """PUT 编辑 Q&A 词条：走生命周期创建 candidate（复用 knowledge_management.create）。"""
+    app = client.app
+    _import_faq(
+        app.state.agent,
+        item_id="EDIT-TEST-1",
+        question="旧问题",
+        answer="旧答案",
+    )
+    resp = client.put(
+        "/v1/wiki/items/EDIT-TEST-1",
+        headers=ADMIN_HEADERS,
+        json={"answer": "新答案（编辑生效）"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "candidate"
+    assert body["next"] == "evaluate→approve"
+
+
+def test_wiki_put_rejects_entity_kind(client: TestClient) -> None:
+    """PUT 编辑实体类（product）→ 422 只读。"""
+    resp = client.put(
+        "/v1/wiki/items/QC-SPU-AF5",
+        headers=ADMIN_HEADERS,
+        json={"answer": "尝试编辑商品"},
+    )
+    assert resp.status_code in (404, 422)  # 资产层商品在无 02_clean 环境 404；有则 422 只读

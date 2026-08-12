@@ -81,7 +81,13 @@ class GraphRetrievalService:
     def relation_traverse(
         self, entity_id: str, rel_type: str | None = None, *, max_depth: int = 3
     ) -> list[dict]:
-        """关系遍历：从实体出发，沿关系（可指定类型）找邻居。"""
+        """关系遍历：从实体出发，沿关系（可指定类型）找邻居。
+
+        契约（对齐负责人二次 review #5）：
+        - `max_depth` 是"结果条数上限系数"，不是跳数限制：
+          实际跳数恒为 1（找直接邻居），LIMIT = max_depth * 20。
+          调用方按"最多 N 跳"理解会静默错结果——本方法只做单跳遍历。
+        """
         rel_type = _validate_rel_type(rel_type)
         rel_clause = f"-[r:{rel_type}]->" if rel_type else "-[r]->"
         rows = self.client.query(
@@ -99,6 +105,12 @@ class GraphRetrievalService:
         self, start_id: str, rel_types: list[str], *, max_hops: int = 3
     ) -> list[dict]:
         """多跳推理：沿指定关系序列找可达路径。
+
+        契约（对齐负责人二次 review #5）：
+        - **实际跳数 = len(rel_types)**（关系序列显式指定，每条关系一跳到终点）
+        - `max_hops` 是"结果条数上限系数"，不是跳数限制：
+          LIMIT = max_hops * 20，只防结果爆炸，不限制路径深度。
+          若业务层需要"最多 N 跳"，应裁剪 rel_types 而非依赖 max_hops。
 
         关系类型支持方向：默认正向，追加 `-` 表示反向。
         例：["BELONGS_TO", "APPLIES_TO-"] 表示 SKU-[:BELONGS_TO]->()<-[:APPLIES_TO]-(end)

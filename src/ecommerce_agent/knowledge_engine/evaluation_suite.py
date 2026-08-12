@@ -62,35 +62,64 @@ def run_evaluation(svc: GraphRetrievalService, *, verbose: bool = False) -> dict
     - 负例（negative）：检索结果应为空（未命中不该命中的）
 
     返回：
-        {"total": 问题总数, "passed": 通过数, "pass_rate": 通过率, "details": 逐题结果}
+        {"total": 问题总数, "passed": 通过数, "pass_rate": 通过率,
+         "details": 逐题结果（含场景/通过/命中的关键词）, "by_scene": 分场景通过率}
+
+    说明（对齐负责人二次 review #4）：
+    - details 必须逐题输出（不再只有摘要），供验收核验
+    - by_scene 分场景通过率，暴露单场景退化
+    - 门禁阈值由调用方决定（scheduler 默认 0.9，与宣称 100% 之间留退化空间）
     """
     passed = 0
     details = []
     for item in EVALUATION_QUESTIONS:
         q = item["q"]
-        if item["scene"] == "multi_hop":
+        scene = item["scene"]
+        hits: list[str] = []
+        if scene == "multi_hop":
             # 多跳推理：先用关键词定位起点实体，再做图谱推理验证
             ok = _check_multi_hop(svc, q, item["expected_terms"])
         else:
             results = svc.search(q, limit=10)
-            if item["scene"] == "negative":
+            if scene == "negative":
                 ok = len(results) == 0  # 负例应检索不到
             else:
                 titles = " ".join(str(r["title"]) for r in results)
                 ok = any(term in titles for term in item["expected_terms"])
+                if ok:
+                    hits = [t for t in item["expected_terms"] if t in titles]
         if ok:
             passed += 1
-        details.append({"q": q, "scene": item["scene"], "passed": ok})
+        details.append(
+            {
+                "q": q,
+                "scene": scene,
+                "passed": ok,
+                "expected_terms": item["expected_terms"],
+                "hits": hits,
+            }
+        )
         if verbose:
             mark = "✅" if ok else "❌"
-            print(f"{mark} [{item['scene']}] {q}")
+            print(f"{mark} [{scene}] {q}" + (f" 命中: {hits}" if hits else ""))
 
     total = len(EVALUATION_QUESTIONS)
+    # 分场景通过率（供验收逐场景核验，不只看总分）
+    by_scene: dict[str, dict[str, int | float]] = {}
+    for s in {d["scene"] for d in details}:
+        s_rows = [d for d in details if d["scene"] == s]
+        s_pass = sum(1 for d in s_rows if d["passed"])
+        by_scene[s] = {
+            "total": len(s_rows),
+            "passed": s_pass,
+            "pass_rate": round(s_pass / len(s_rows), 3),
+        }
     return {
         "total": total,
         "passed": passed,
         "pass_rate": round(passed / total, 3),
         "details": details,
+        "by_scene": by_scene,
     }
 
 

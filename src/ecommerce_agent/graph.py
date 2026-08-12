@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
@@ -12,7 +13,6 @@ from .context_builder import ContextBuilder
 from .database import Database, utc_now
 from .decision import AgentDecision
 from .handoff import HandoffService
-from .intent import classify, routing_for_intent
 from .llm import ModelError, ModelGateway, ModelUnavailableError
 from .policy import (
     asks_for_internal_identifier,
@@ -35,83 +35,31 @@ from .text_utils import normalize_text, redact_sensitive
 from .tokens import count_tokens, truncate_history
 from .tools import ToolExecutionContext, ToolRegistry, ToolResult
 
+if TYPE_CHECKING:
+    from .knowledge_engine.memory_service import KnowledgeMemoryService
+
 
 MODEL_UNAVAILABLE_HANDOFF_ANSWER = (
     "当前无法可靠完成自动处理，我会把现有信息和执行记录转给人工客服。"
 )
-LOW_QUALITY_ROUTE_REASONS = frozenset(
-    {"model_unavailable", "low_confidence_handoff", "no_evidence"}
-)
 
 
-class GenerationPlan(NamedTuple):
-    direct_answer: str | None
-    messages: list[dict[str, str]] | None
-    model_fallback: bool
-    trace_step: str
+def _map_scene(intent: str) -> str:
+    """按意图映射生成阶段场景（M3 四套 Prompt 接入）。
 
-
-def _bounded_product_context_ready(state: AgentState) -> bool:
-    if state.get("react_step") != 0:
-        return False
-    if state.get("customer_intent") != "product_inquiry":
-        return False
-    if state.get("context_readiness") != "ready" or not state.get("retrieved"):
-        return False
-    advisor = (state.get("context_bundle") or {}).get("product_advisor") or {}
-    candidates = advisor.get("candidates") or []
-    return isinstance(candidates, list) and len(candidates) == 1 and bool(candidates[0])
-
-
-def prepare_generation(state: AgentState, settings: Settings) -> GenerationPlan:
-    """Build the one generation plan shared by streaming and non-streaming chat."""
-
-    verified_result = (
-        state.get("tool_result")
-        if state.get("tool_result", {}).get("postcondition_met")
-        else None
-    )
-    if not state.get("retrieved") and not verified_result:
-        return GenerationPlan(
-            MODEL_UNAVAILABLE_HANDOFF_ANSWER,
-            None,
-            True,
-            "generate:no_evidence",
-        )
-    top_document = state["retrieved"][0] if state.get("retrieved") else None
-    if (
-        top_document
-        and state.get("decision", {}).get("reason") == "approved_knowledge_reuse"
-        and settings.rag_direct_approved_answer
-        and top_document["source"].startswith("evolution:")
-        and normalize_text(top_document["question"])
-        == normalize_text(state["normalized_input"])
-    ):
-        return GenerationPlan(
-            top_document["answer"],
-            None,
-            False,
-            "generate:approved_knowledge",
-        )
-    total = int(
-        settings.model_context_limit_tokens * settings.context_budget_ratio
-    )
-    available = max(
-        0,
-        total
-        - count_tokens(SYSTEM_PROMPT)
-        - count_tokens(state["normalized_input"]),
-    )
-    messages = build_messages(
-        question=state["normalized_input"],
-        documents=state.get("retrieved", []),
-        context=state.get("context_bundle") or {},
-        history=(state.get("context_bundle") or {}).get("recent_history", []),
-        verified_tool_result=verified_result,
-        knowledge_budget_tokens=available * 6 // 10,
-        prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
-    )
-    return GenerationPlan(None, messages, False, "generate:model")
+    return/refund/return_exchange/after_sales → aftersale_policy
+    product → product_recommend
+    competitor → competitor_analysis
+    其余 → customer_service
+    """
+    intent = (intent or "").lower()
+    if intent in {"return", "refund", "return_exchange", "after_sales", "invoice"}:
+        return "aftersale_policy"
+    if intent in {"product", "inventory", "price_promo"}:
+        return "product_recommend"
+    if "competitor" in intent:
+        return "competitor_analysis"
+    return "customer_service"
 
 
 def verify_response(state: AgentState) -> dict[str, Any]:
@@ -170,9 +118,8 @@ def persist_response(
             INSERT OR IGNORE INTO messages(
                 id, trace_id, session_id, role, content, intent, risk_level,
                 route_reason, sources_json, model_fallback, created_at,
-                tenant_id, client_id, redacted, context_snapshot_id,
-                customer_intent, intent_confidence, intent_method
-            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL, ?, ?, ?)
+                tenant_id, client_id, redacted, context_snapshot_id
+            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL)
             """,
             (
                 user_message_id,
@@ -183,9 +130,6 @@ def persist_response(
                 state["tenant_id"],
                 state["client_id"],
                 int(user_redacted),
-                state.get("customer_intent"),
-                state.get("intent_confidence"),
-                state.get("intent_method"),
             ),
         )
         conn.execute(
@@ -193,9 +137,8 @@ def persist_response(
             INSERT OR IGNORE INTO messages(
                 id, trace_id, session_id, role, content, intent, risk_level,
                 route_reason, sources_json, model_fallback, created_at,
-                tenant_id, client_id, redacted, context_snapshot_id,
-                customer_intent, intent_confidence, intent_method
-            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tenant_id, client_id, redacted, context_snapshot_id
+            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 state["message_id"],
@@ -212,9 +155,6 @@ def persist_response(
                 state["client_id"],
                 int(answer_redacted),
                 state.get("context_snapshot_id"),
-                state.get("customer_intent"),
-                state.get("intent_confidence"),
-                state.get("intent_method"),
             ),
         )
         invocation_id = state.get("invocation_id")
@@ -298,6 +238,7 @@ def build_graph(
     tools: ToolRegistry,
     sops: SopService,
     contexts: ContextBuilder,
+    memory: KnowledgeMemoryService | None = None,
 ) -> StateGraph:
     builder = StateGraph(AgentState)
 
@@ -348,16 +289,10 @@ def build_graph(
             "context": sanitize_context(state.get("context", {})),
             "execution_mode": state.get("execution_mode") or "live",
             "intent": "general",
-            "customer_intent": None,
-            "intent_confidence": None,
-            "intent_method": None,
-            "intent_error": None,
-            "intent_routing": {},
             "risk_level": "low",
             "route": "deliberate",
             "route_reason": "pending",
             "retrieved": [],
-            "knowledge_error": None,
             "draft": "",
             "answer": "",
             "citations": [],
@@ -387,92 +322,135 @@ def build_graph(
 
     def precheck(state: AgentState) -> dict[str, Any]:
         decision = precheck_request(state["normalized_input"], state["context"])
-        if decision.route != "deliberate":
-            intent_routing = routing_for_intent("chitchat")
-            return {
-                "route": decision.route,
-                "route_reason": decision.reason,
-                "risk_level": "blocked" if decision.route == "refuse" else "medium",
-                "customer_intent": "chitchat",
-                "intent_confidence": 0.0,
-                "intent_method": "default",
-                "intent_error": "precheck_short_circuit",
-                "intent_routing": intent_routing,
-                "trace": [
-                    *state["trace"],
-                    "intent:default:chitchat:precheck_short_circuit",
-                    f"precheck:{decision.route}",
-                ],
-            }
-        classifier_model = model if (settings.model_enabled or settings.model_mock_mode) else None
-        classified = classify(state["normalized_input"], model=classifier_model)
-        intent_routing = routing_for_intent(classified.intent)
-        complaint = classified.intent == "complaint"
-        route = "retrieve"
-        risk_level = "medium" if complaint else "low"
-        intent_trace = f"intent:{classified.method}:{classified.intent}"
-        if classified.error is not None:
-            intent_trace += f":{classified.error}"
+        route = "retrieve" if decision.route == "deliberate" else decision.route
+        risk_level = "blocked" if route == "refuse" else "medium" if route == "handoff" else "low"
         return {
             "route": route,
             "route_reason": decision.reason,
             "risk_level": risk_level,
-            "customer_intent": classified.intent,
-            "intent_confidence": classified.confidence,
-            "intent_method": classified.method,
-            "intent_error": classified.error,
-            "intent_routing": intent_routing,
-            "trace": [*state["trace"], intent_trace, f"precheck:{decision.route}"],
+            "trace": [*state["trace"], f"precheck:{decision.route}"],
         }
 
     def retrieve(state: AgentState) -> dict[str, Any]:
-        # Reuse ContextBuilder's trusted subject when a pronoun turn omits it.
-        effective_context = dict(state.get("context") or {})
-        previous_subject = contexts.latest_subject(
-            state["tenant_id"], state["session_id"]
-        )
-        for key, value in previous_subject.items():
-            effective_context.setdefault(key, value)
-        intent_routing = state.get("intent_routing") or routing_for_intent(
-            state.get("customer_intent") or "chitchat"
-        )
+        # P1-2 可观测性：记录检索耗时
+        from .knowledge_engine.observability import get_observer
+        observer = get_observer()
+        _retrieve_start = time.monotonic()
+        # P0-1 安全护栏：检索前意图门（超范围请求→拒绝/升级，不进检索）
+        from .knowledge_engine.security_guard import get_security_guard
+        guard = get_security_guard()
+        scope_decision = guard.classify_request(state["normalized_input"])
+        if not scope_decision.allowed:
+            observer.record_search(
+                tenant_id=state["tenant_id"],
+                store_id=state["context"].get("store_id") or state["context"].get("shop_id") or "",
+                query=state["normalized_input"],
+                hits=0,
+                guard_blocks=0,
+                guard_scope_block=True,
+                latency_ms=(time.monotonic() - _retrieve_start) * 1000,
+            )
+            return {
+                "route": "refuse" if scope_decision.action == "block" else "handoff",
+                "route_reason": f"{scope_decision.reason}:{scope_decision.detail}",
+                "risk_level": "high" if scope_decision.action == "block" else "medium",
+                "retrieved": [],
+                "citations": [],
+                "trace": [*state["trace"], f"guard:{scope_decision.reason}"],
+            }
+        # R4 修复：检索失败可观测（此前异常直接抛出，failures_total 恒为 0）
         try:
             documents = knowledge.retrieve(
                 state["normalized_input"],
                 top_k=settings.rag_top_k,
                 min_score=settings.rag_min_score,
-                intent=intent_routing["knowledge_intent"],
+                intent=None,
                 tenant_id=state["tenant_id"],
-                store_id=effective_context.get("store_id") or effective_context.get("shop_id"),
-                sku_id=effective_context.get("sku_id"),
+                store_id=state["context"].get("store_id") or state["context"].get("shop_id"),
+                sku_id=state["context"].get("sku_id"),
                 rollout_unit=state["session_id"],
             )
         except Exception as exc:
-            # Retrieval is an external dependency boundary. Preserve only the
-            # exception type so the outage is observable without retaining the
-            # shopper message or upstream error text.
-            db.audit(
-                "knowledge.retrieval_failure",
-                "system",
-                state["trace_id"],
-                {"error_type": type(exc).__name__, "stage": "initial"},
-                state["tenant_id"],
+            observer.record_search(
+                tenant_id=state["tenant_id"],
+                store_id=state["context"].get("store_id") or state["context"].get("shop_id") or "",
+                query=state["normalized_input"],
+                hits=0,
+                failed=True,
+                latency_ms=(time.monotonic() - _retrieve_start) * 1000,
+                event_type="failure",
             )
             return {
-                "context": effective_context,
                 "retrieved": [],
                 "citations": [],
-                "knowledge_error": f"retrieval_failed:{type(exc).__name__}",
-                "trace": [
-                    *state["trace"],
-                    f"retrieve:unavailable:{type(exc).__name__}",
-                ],
+                "trace": [*state["trace"], f"retrieve:failed:{type(exc).__name__}"],
             }
+        # P0-1 安全护栏：检索结果注入/敏感扫描（污染的知识条目不进回答）
+        _clean_docs: list[dict[str, Any]] = []
+        _guard_blocks = 0
+        for doc in documents:
+            _doc_dict = doc.to_dict() if hasattr(doc, "to_dict") else dict(doc)
+            result = guard.inspect_item(_doc_dict)
+            if result.status in ("injected", "sensitive"):
+                # 丢弃污染/敏感条目（记录到 trace，不阻塞其他正常条目）
+                _guard_blocks += 1
+                continue
+            _clean_docs.append(_doc_dict)
+        documents = _clean_docs
+        # A2：店铺长期记忆并入检索（记忆默认隔离，这里主动召回作为补充证据）
+        store_id = state["context"].get("store_id") or state["context"].get("shop_id")
+        _memory_recalled = 0
+        if memory is not None and store_id:
+            try:
+                memory_rows = memory.recall(
+                    str(store_id),
+                    query=state["normalized_input"],
+                    limit=settings.rag_top_k,
+                    tenant_id=state["tenant_id"],
+                )
+                _memory_recalled = len(memory_rows)
+                for row in memory_rows:
+                    _mem_doc = {
+                        "id": row["id"],
+                        "source": f"memory:{row['knowledge_key']}",
+                        "question": row["question"],
+                        "answer": row["answer"],
+                        "score": 0.0,  # 记忆不参与 RAG 打分（显式召回）
+                        "layer": "evolution",
+                        # 下游 build_messages/_knowledge_block/SourceItem 需要
+                        "category": row["category"] or "店铺记忆",
+                        "intent": row["intent"] or "memory",
+                        "version": 1,
+                    }
+                    # A3 修复：记忆召回同样过安全护栏（此前完全绕过扫描）
+                    _mem_result = guard.inspect_item(dict(_mem_doc))
+                    if _mem_result.status in ("injected", "sensitive"):
+                        _guard_blocks += 1
+                        continue
+                    documents.append(_mem_doc)
+            except Exception:
+                # B 修复：记忆召回失败不再静默吞掉（记录 trace，仍不阻塞回答）
+                state["trace"] = [*state["trace"], "memory:recall_failed"]
+        # P1-2 可观测性：记录检索统计
+        observer.record_search(
+            tenant_id=state["tenant_id"],
+            store_id=store_id or "",
+            query=state["normalized_input"],
+            hits=len(documents),
+            guard_blocks=_guard_blocks,
+            memory_recalled=_memory_recalled,
+            latency_ms=(time.monotonic() - _retrieve_start) * 1000,
+        )
         return {
-            "context": effective_context,
+            "route": "build_decision_context",
             "retrieved": documents,
             "citations": [document["id"] for document in documents],
-            "trace": [*state["trace"], f"retrieve:initial:{len(documents)}"],
+            "trace": [
+                *state["trace"],
+                f"retrieve:initial:{len(documents)}",
+                f"guard:blocked:{_guard_blocks}",
+                f"memory:recalled:{_memory_recalled}",
+            ],
         }
 
     def build_decision_context(state: AgentState) -> dict[str, Any]:
@@ -523,26 +501,16 @@ def build_graph(
         }
 
     def deliberate(state: AgentState) -> dict[str, Any]:
-        if state.get("knowledge_error"):
-            decision = AgentDecision(
-                intent=state.get("customer_intent") or "general",
-                mode="handoff",
-                reason="knowledge_unavailable",
-                confidence=1,
-            )
-            return {
-                "decision": decision.model_dump(),
-                "model_fallback": True,
-                "trace": [*state["trace"], "deliberate:knowledge_unavailable"],
-            }
         top_document = state.get("retrieved", [{}])[0] if state.get("retrieved") else None
         if (
             state["react_step"] == 0
             and top_document
             and settings.rag_direct_approved_answer
             and top_document["source"].startswith("evolution:")
-            and normalize_text(top_document["question"])
-            == normalize_text(state["normalized_input"])
+            and (
+                top_document["score"] >= settings.rag_direct_approved_min_score
+                or normalize_text(top_document["question"]) == state["normalized_input"]
+            )
         ):
             decision = AgentDecision(
                 intent=top_document["intent"],
@@ -555,7 +523,6 @@ def build_graph(
                 "trace": [*state["trace"], "deliberate:approved_knowledge"],
             }
 
-        bounded_product = _bounded_product_context_ready(state)
         history, history_meta, knowledge_budget = budgeted_history(
             state,
             DECISION_SYSTEM_PROMPT,
@@ -565,41 +532,19 @@ def build_graph(
             documents=state.get("retrieved", []),
             context=state["context_bundle"],
             history=history,
-            tool_catalog=[] if bounded_product else tools.catalog_for_model(),
+            tool_catalog=tools.catalog_for_model(),
             observation=state.get("tool_result") or None,
             step_count=state["react_step"],
-            max_steps=1 if bounded_product else settings.max_react_steps,
+            max_steps=settings.max_react_steps,
             knowledge_budget_tokens=knowledge_budget,
-            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
-            sop_intent=(state.get("intent_routing") or {}).get("sop_intent"),
-            knowledge_intent=(state.get("intent_routing") or {}).get("knowledge_intent"),
-            planning_constraint=("bounded_product_answer" if bounded_product else None),
         )
         budget_trace = (
             f"context:budget:kept{history_meta['kept']}"
             f"/dropped{history_meta['dropped']}"
         )
         try:
-            decision = AgentDecision.model_validate(
-                model.generate_json(
-                    messages,
-                    timeout_seconds=settings.model_decision_timeout_seconds,
-                    max_tokens=settings.model_decision_max_output_tokens,
-                    thinking_enabled=settings.model_decision_thinking_enabled,
-                )
-            )
-            if bounded_product and decision.mode in {"observe", "act"}:
-                decision = AgentDecision(
-                    intent=decision.intent,
-                    mode="handoff",
-                    reason="bounded_product_answer_required",
-                    confidence=decision.confidence,
-                )
-                trace_step = "deliberate:bounded_product:handoff"
-            elif bounded_product:
-                trace_step = f"deliberate:bounded_product:{decision.mode}"
-            else:
-                trace_step = f"deliberate:model:{decision.mode}"
+            decision = AgentDecision.model_validate(model.generate_json(messages))
+            trace_step = f"deliberate:model:{decision.mode}"
             fallback = False
         except (ModelError, ValidationError) as exc:
             db.audit(
@@ -682,20 +627,6 @@ def build_graph(
         if business_action and route not in {"act", "handoff", "refuse", "finish"}:
             route = "handoff"
             reason = "business_action_requires_verified_execution"
-        if (
-            decision.confidence < settings.handoff_confidence_threshold
-            and route in {"answer", "finish"}
-            and decision.reason != "approved_knowledge_reuse"
-        ):
-            route = "handoff"
-            reason = "low_confidence_handoff"
-        if route not in {"handoff", "refuse"}:
-            recent_reasons = db.recent_assistant_route_reasons(state["session_id"], 2)
-            if len(recent_reasons) == 2 and all(
-                item in LOW_QUALITY_ROUTE_REASONS for item in recent_reasons
-            ):
-                route = "handoff"
-                reason = "consecutive_low_quality"
         shadow = state.get("execution_mode") == "shadow"
         active_sop = None
         if not shadow:
@@ -747,6 +678,32 @@ def build_graph(
         }
 
     def refine_retrieval(state: AgentState) -> dict[str, Any]:
+        # P0-1 修复：精化检索与初始检索同样过安全护栏 + 可观测（此前完全绕过）
+        from .knowledge_engine.observability import get_observer
+        from .knowledge_engine.security_guard import get_security_guard
+        observer = get_observer()
+        guard = get_security_guard()
+        _start = time.monotonic()
+        # R1 修复：精化检索前复查意图门（此前绕过，block 请求仍会重新检索）
+        _scope = guard.classify_request(state["normalized_input"])
+        if not _scope.allowed:
+            observer.record_search(
+                tenant_id=state["tenant_id"],
+                store_id=state["context"].get("store_id") or state["context"].get("shop_id") or "",
+                query=state["normalized_input"],
+                hits=0,
+                guard_scope_block=True,
+                latency_ms=(time.monotonic() - _start) * 1000,
+            )
+            return {
+                "route": "refuse" if _scope.action == "block" else "handoff",
+                "route_reason": f"{_scope.reason}:{_scope.detail}",
+                "risk_level": "high" if _scope.action == "block" else "medium",
+                "retrieved": [],
+                "citations": [],
+                "trace": [*state["trace"], f"guard:{_scope.reason}:refined"],
+            }
+        # R4 修复：精化检索失败也可观测
         try:
             documents = knowledge.retrieve(
                 state["normalized_input"],
@@ -759,26 +716,51 @@ def build_graph(
                 rollout_unit=state["session_id"],
             )
         except Exception as exc:
-            db.audit(
-                "knowledge.retrieval_failure",
-                "system",
-                state["trace_id"],
-                {"error_type": type(exc).__name__, "stage": "refined"},
-                state["tenant_id"],
+            observer.record_search(
+                tenant_id=state["tenant_id"],
+                store_id=state["context"].get("store_id") or state["context"].get("shop_id") or "",
+                query=state["normalized_input"],
+                hits=0,
+                failed=True,
+                latency_ms=(time.monotonic() - _start) * 1000,
+                event_type="failure",
+                source="graph_refine",
             )
             return {
+                "route": "build_generation_context",
                 "retrieved": [],
                 "citations": [],
-                "knowledge_error": f"retrieval_failed:{type(exc).__name__}",
-                "trace": [
-                    *state["trace"],
-                    f"retrieve:unavailable:{type(exc).__name__}",
-                ],
+                "trace": [*state["trace"], f"retrieve:refined:failed:{type(exc).__name__}"],
             }
+        # 安全护栏：注入/敏感条目过滤（与 retrieve 节点一致）
+        _clean: list[dict[str, Any]] = []
+        _guard_blocks = 0
+        for doc in documents:
+            _doc_dict = doc.to_dict() if hasattr(doc, "to_dict") else dict(doc)
+            result = guard.inspect_item(_doc_dict)
+            if result.status in ("injected", "sensitive"):
+                _guard_blocks += 1
+                continue
+            _clean.append(_doc_dict)
+        # 可观测：记录精化检索统计
+        observer.record_search(
+            tenant_id=state["tenant_id"],
+            store_id=state["context"].get("store_id") or state["context"].get("shop_id") or "",
+            query=state["normalized_input"],
+            hits=len(_clean),
+            guard_blocks=_guard_blocks,
+            latency_ms=(time.monotonic() - _start) * 1000,
+            source="graph_refine",
+        )
         return {
-            "retrieved": documents,
-            "citations": [document["id"] for document in documents],
-            "trace": [*state["trace"], f"retrieve:refined:{len(documents)}"],
+            "route": "build_generation_context",
+            "retrieved": _clean,
+            "citations": [document["id"] for document in _clean],
+            "trace": [
+                *state["trace"],
+                f"retrieve:refined:{len(_clean)}",
+                f"guard:blocked:{_guard_blocks}",
+            ],
         }
 
     def tool_gate(state: AgentState) -> dict[str, Any]:
@@ -956,19 +938,13 @@ def build_graph(
             tool_result=state.get("tool_result") or None,
             parent_snapshot_id=state.get("context_snapshot_id"),
         )
-        route = (
-            "handoff"
-            if snapshot.readiness == "handoff_required" or state.get("knowledge_error")
-            else "generate"
-        )
+        route = "handoff" if snapshot.readiness == "handoff_required" else "generate"
         history_meta = snapshot.bundle["recent_history_meta"]
         return {
             "route": route,
             "route_reason": (
                 "context_evidence_conflict"
                 if snapshot.readiness == "handoff_required"
-                else "knowledge_unavailable"
-                if state.get("knowledge_error")
                 else state["route_reason"]
             ),
             "context_bundle": snapshot.bundle,
@@ -992,16 +968,63 @@ def build_graph(
             if state.get("tool_result", {}).get("postcondition_met")
             else None
         )
-        plan = prepare_generation(state, settings)
-        if plan.direct_answer is not None:
+        if not state["retrieved"] and not verified_result:
             return {
-                "draft": plan.direct_answer,
-                "model_fallback": plan.model_fallback,
-                "trace": [*state["trace"], plan.trace_step],
+                "draft": "当前知识库中没有足够信息，我会为您转人工客服进一步核对。",
+                "model_fallback": True,
+                "trace": [*state["trace"], "generate:no_evidence"],
             }
-        messages = plan.messages
-        if messages is None:
-            raise RuntimeError("generation plan has neither direct answer nor messages")
+        top_document = state["retrieved"][0] if state["retrieved"] else None
+        if (
+            top_document
+            and state["decision"].get("reason") == "approved_knowledge_reuse"
+            and settings.rag_direct_approved_answer
+            and top_document["source"].startswith("evolution:")
+            and (
+                top_document["score"] >= settings.rag_direct_approved_min_score
+                or normalize_text(top_document["question"]) == state["normalized_input"]
+            )
+        ):
+            return {
+                "draft": top_document["answer"],
+                "model_fallback": False,
+                "trace": [*state["trace"], "generate:approved_knowledge"],
+            }
+        history, history_meta, knowledge_budget = budgeted_history(
+            state,
+            SYSTEM_PROMPT,
+        )
+        messages = build_messages(
+            question=state["normalized_input"],
+            documents=state["retrieved"],
+            context=state["context_bundle"],
+            history=history,
+            verified_tool_result=verified_result,
+            knowledge_budget_tokens=knowledge_budget,
+        )
+        # M3 场景 Prompt 接入：按 intent 映射场景，叠加防幻觉指令（RAG_SCENE_PROMPTS 默认开）
+        if settings.rag_scene_prompts and messages and state["retrieved"]:
+            scene = _map_scene(state.get("intent") or "")
+            try:
+                from .knowledge_engine.prompt_templates import render_prompt
+
+                context_text = "\n".join(
+                    doc.get("answer") or doc.get("question") or ""
+                    for doc in state["retrieved"][:5]
+                )
+                scene_instructions = render_prompt(
+                    scene, context_text, state["normalized_input"]
+                )
+                messages[0] = {
+                    "role": "system",
+                    "content": f"{messages[0]['content']}\n\n【本会话场景指令】\n{scene_instructions}",
+                }
+            except (ValueError, ImportError):
+                pass  # 场景注入失败不阻塞回答（保持原 SYSTEM_PROMPT）
+        budget_trace = (
+            f"context:budget:kept{history_meta['kept']}"
+            f"/dropped{history_meta['dropped']}"
+        )
         try:
             draft = model.generate(messages)
             fallback = False
@@ -1031,7 +1054,7 @@ def build_graph(
             "draft": draft,
             "model_fallback": fallback,
             "model_retry_advised": retry_advised,
-            "trace": [*state["trace"], trace_step],
+            "trace": [*state["trace"], budget_trace, trace_step],
         }
 
     def verify(state: AgentState) -> dict[str, Any]:
@@ -1069,18 +1092,7 @@ def build_graph(
 
     def handoff(state: AgentState) -> dict[str, Any]:
         reason = state["route_reason"]
-        decision_intent = str(
-            state.get("decision", {}).get("intent")
-            or state.get("intent")
-            or "general"
-        )
-        model_confirmed_complaint = decision_intent == "complaint"
-        if model_confirmed_complaint:
-            answer = state.get("decision", {}).get("response") or (
-                "很抱歉给您带来困扰。我已将当前问题和必要上下文标记为投诉，"
-                "并转交人工客服优先跟进。"
-            )
-        elif reason == "customer_requested_human":
+        if reason == "customer_requested_human":
             answer = "好的，我会将当前问题和必要上下文转给人工客服。请勿发送密码、验证码或银行卡信息。"
         elif reason == "authorized_order_context_missing":
             answer = "这个问题需要核对您的订单信息。我会转人工处理，请只提供平台订单编号，不要发送密码或验证码。"
@@ -1088,11 +1100,6 @@ def build_graph(
             answer = "我已经理解您要办理的业务，但当前环境尚未接入对应的执行工具，我会转人工继续处理。"
         elif reason.startswith("tool_policy_denied"):
             answer = "当前操作未通过已配置的权限或业务规则校验，我会转人工进一步核对。"
-        elif reason == "knowledge_unavailable":
-            answer = (
-                "知识检索服务暂时不可用，当前无法引用知识库；"
-                "我会把对话历史和已有信息转给人工客服继续核对。"
-            )
         elif reason in {"model_unavailable", "react_step_limit_reached"}:
             answer = MODEL_UNAVAILABLE_HANDOFF_ANSWER
         else:
@@ -1120,37 +1127,23 @@ def build_graph(
             business_context["order_id"] = normalize_text(str(order_id))[:128]
         if isinstance(store_id, (str, int)) and not isinstance(store_id, bool):
             business_context["store_id"] = normalize_text(str(store_id))[:128]
-        handoff_payload = {
-            "trace_id": state["trace_id"],
-            "intent": decision_intent,
-            "risk_level": state["risk_level"],
-            "question": safe_question,
-            "selected_tool": state.get("selected_tool"),
-            "react_step": state.get("react_step", 0),
-            "context_snapshot_id": state.get("context_snapshot_id"),
-            "context_readiness": state.get("context_readiness"),
-            "context_conflicts": state.get("context_conflicts", []),
-            "business_context": business_context,
-        }
-        if model_confirmed_complaint:
-            handoff_payload["priority_flag"] = "complaint"
-        unknown_intent = (
-            state.get("intent_method") == "default" and not model_confirmed_complaint
-        )
-        if unknown_intent:
-            # Abstention means the classifier could not decide, not that the
-            # shopper was chatting. Keep it below complaint/urgent while avoiding
-            # the catch-all queue's lowest SLA.
-            handoff_payload["priority_flag"] = "intent_unknown"
-            handoff_payload["intent_method"] = "default"
-            handoff_payload["intent_error"] = state.get("intent_error")
         task = handoffs.create(
             tenant_id=state["tenant_id"],
             session_id=state["session_id"],
             message_id=state["message_id"],
             reason=reason,
-            payload=handoff_payload,
-            priority="high" if unknown_intent else None,
+            payload={
+                "trace_id": state["trace_id"],
+                "intent": state["intent"],
+                "risk_level": state["risk_level"],
+                "question": safe_question,
+                "selected_tool": state.get("selected_tool"),
+                "react_step": state.get("react_step", 0),
+                "context_snapshot_id": state.get("context_snapshot_id"),
+                "context_readiness": state.get("context_readiness"),
+                "context_conflicts": state.get("context_conflicts", []),
+                "business_context": business_context,
+            },
         )
         return {
             "answer": answer,
@@ -1200,7 +1193,17 @@ def build_graph(
         lambda state: state["route"],
         {"retrieve": "retrieve", "handoff": "handoff", "refuse": "refuse"},
     )
-    builder.add_edge("retrieve", "build_decision_context")
+    # R1 修复：意图门拦截（refuse/handoff）不再被 build_decision_context 无条件覆盖。
+    # 此前无条件边 retrieve→build_decision_context，导致意图门 block 路由被重写、拒绝永不生效。
+    builder.add_conditional_edges(
+        "retrieve",
+        lambda state: state["route"],
+        {
+            "build_decision_context": "build_decision_context",
+            "refuse": "refuse",
+            "handoff": "handoff",
+        },
+    )
     builder.add_conditional_edges(
         "build_decision_context",
         lambda state: state["route"],
@@ -1224,7 +1227,16 @@ def build_graph(
             "refuse": "refuse",
         },
     )
-    builder.add_edge("refine_retrieval", "build_generation_context")
+    # R1 修复：refine_retrieval 的意图门复查结果（refuse/handoff）也应被尊重
+    builder.add_conditional_edges(
+        "refine_retrieval",
+        lambda state: state["route"],
+        {
+            "build_generation_context": "build_generation_context",
+            "refuse": "refuse",
+            "handoff": "handoff",
+        },
+    )
     builder.add_conditional_edges(
         "build_generation_context",
         lambda state: state["route"],

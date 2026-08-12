@@ -1,61 +1,61 @@
-round,rel_type,source,target,expected,confidence,generated_by
-1,BELONGS_TO,QC-VC-A1,cordless_vacuum,TRUE,1.0,rule
-1,BELONGS_TO,QC-HM-3L,humidifier,TRUE,1.0,rule
-1,BELONGS_TO,X-P2-BLACK,digital_power,TRUE,1.0,rule
-1,BELONGS_TO,QC-FN-D1,air_circulation_fan,TRUE,1.0,rule
-1,BELONGS_TO,QC-AF5-GREEN,air_fryer,TRUE,1.0,rule
-1,BELONGS_TO,X-M1-WHITE,digital_audio,TRUE,1.0,rule
-1,BELONGS_TO,Y-D01-L,apparel,TRUE,1.0,rule
-1,BELONGS_TO,Y-D01-S,apparel,TRUE,1.0,rule
-1,BELONGS_TO,QC-KT-17,electric_kettle,TRUE,1.0,rule
-1,BELONGS_TO,Y-D01-M,apparel,TRUE,1.0,rule
-1,HAS_ATTR,Y-D01-L,Y-D01-L|material,TRUE,1.0,rule
-1,HAS_ATTR,QC-SPU-KT17,QC-SPU-KT17|warranty_months,TRUE,1.0,rule
-1,HAS_ATTR,QC-SPU-HM3,QC-SPU-HM3|brand,TRUE,1.0,rule
-1,HAS_ATTR,QC-AF5-WHITE,QC-AF5-WHITE|color,TRUE,1.0,rule
-1,HAS_ATTR,QC-SPU-VC1,QC-SPU-VC1|warranty_months,TRUE,1.0,rule
-1,HAS_ATTR,QC-SPU-HM3,QC-SPU-HM3|model,TRUE,1.0,rule
-1,HAS_ATTR,Y-SPU-D01,Y-SPU-D01|model,TRUE,1.0,rule
-1,HAS_ATTR,Y-SPU-D01,Y-SPU-D01|brand,TRUE,1.0,rule
-1,HAS_ATTR,X-SPU-M1,X-SPU-M1|brand,TRUE,1.0,rule
-1,HAS_ATTR,Y-D01-M,Y-D01-M|size,TRUE,1.0,rule
-1,APPLIES_TO,RETURN-38e401d2,electric_kettle,TRUE,1.0,rule
-1,APPLIES_TO,RETURN-38e401d2,digital_power,TRUE,1.0,rule
-1,APPLIES_TO,LOGISTICS-70a98f4b,air_fryer,TRUE,1.0,rule
-1,APPLIES_TO,PRICE-cf259e1c,air_fryer,TRUE,1.0,rule
-1,APPLIES_TO,PRICE-cf259e1c,home_appliance,TRUE,1.0,rule
-1,APPLIES_TO,RETURN-38e401d2,home_appliance,TRUE,1.0,rule
-1,APPLIES_TO,WARR-b17b433a,digital,TRUE,1.0,rule
-1,APPLIES_TO,LOGISTICS-70a98f4b,electric_kettle,TRUE,1.0,rule
-1,APPLIES_TO,RETURN-38e401d2,apparel,TRUE,1.0,rule
-1,APPLIES_TO,WARR-1a256956,home_appliance,TRUE,1.0,rule
-1,APPLIES_TO,RETURN-38e401d2,cordless_vacuum,TRUE,1.0,rule
-1,APPLIES_TO,LOGISTICS-70a98f4b,apparel,TRUE,1.0,rule
-1,APPLIES_TO,LOGISTICS-70a98f4b,digital_audio,TRUE,1.0,rule
-1,APPLIES_TO,PRICE-cf259e1c,apparel,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-047,SCRIPT-047,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-034,SCRIPT-034,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-040,SCRIPT-040,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-039,SCRIPT-039,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-031,SCRIPT-031,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-010,WARR-1a256956,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-033,SCRIPT-033,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-042,SCRIPT-042,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-036,SCRIPT-036,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-046,SCRIPT-046,TRUE,1.0,rule
-1,REFERS_TO,FAQ-SCRIPT-004,SCRIPT-004,TRUE,1.0,rule
-1,REFERS_TO,FAQ-MANUAL-51a5,Y-D01-M,TRUE,0.9,rule+human
-1,REFERS_TO,FAQ-SCRIPT-035,SCRIPT-035,TRUE,1.0,rule
-1,REFERS_TO,FAQ-MANUAL-8fbb,RETURN-38e401d2,TRUE,0.9,rule+human
-1,RELATED_TO,SCRIPT-013,FAQ-SCRIPT-013,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-005,FAQ-SCRIPT-005,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-017,FAQ-SCRIPT-017,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-051,FAQ-SCRIPT-051,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-049,FAQ-SCRIPT-049,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-009,FAQ-SCRIPT-009,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-032,FAQ-SCRIPT-032,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-006,FAQ-SCRIPT-006,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-026,FAQ-SCRIPT-026,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-038,FAQ-SCRIPT-038,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-025,FAQ-SCRIPT-025,TRUE,1.0,rule
-1,RELATED_TO,SCRIPT-028,FAQ-SCRIPT-028,TRUE,1.0,rule
+round,rel_type,source,target,expected,evidence,annotation,verifier,verified_at,confidence,generated_by
+1,BELONGS_TO,REAL-APP-02,apparel,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,QC-KT-17,electric_kettle,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,X-M1-BLACK,digital_audio,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,REAL-HUM-01,humidifier,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,REAL-FAN-01,air_circulation_fan,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,Y-D01-L,apparel,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,QC-VC-A1,cordless_vacuum,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,Y-D01-S,apparel,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,REAL-AUD-01,digital_audio,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,Y-D01-M,apparel,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,SPU-AUD-02,SPU-AUD-02|brand,TRUE,network,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,SPU-APP-01,SPU-APP-01|brand,TRUE,network,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,X-P2-BLACK,X-P2-BLACK|battery_mah,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,X-SPU-M1,X-SPU-M1|brand,TRUE,manual,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,QC-SPU-VC1,QC-SPU-VC1|warranty_months,TRUE,fixture,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,QC-KT-17,QC-KT-17|capacity_l,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,X-SPU-M1,X-SPU-M1|warranty_months,TRUE,manual,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,REAL-KET-01,REAL-KET-01|capacity_l,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,SPU-KET-01,SPU-KET-01|brand,TRUE,network,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,Y-D01-L,Y-D01-L|color,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,RETURN-38e401d2,apparel,TRUE,jianghu.taobao.com/detail/47301_58660388 | 七天无理由退货,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,RETURN-38e401d2,digital_audio,TRUE,jianghu.taobao.com/detail/47301_58660388 | 七天无理由退货,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,LOGISTICS-70a98f4b,digital_power,TRUE,rule.suning.com/ruleInfo/ruleInfoDetail/GZ100004233.htm | 发货时效与延迟赔付,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,PRICE-cf259e1c,digital_power,TRUE,diantuoyi.com/article/16500.html | 价格保护（分场景）,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,PRICE-cf259e1c,air_fryer,TRUE,diantuoyi.com/article/16500.html | 价格保护（分场景）,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,RETURN-38e401d2,air_fryer,TRUE,jianghu.taobao.com/detail/47301_58660388 | 七天无理由退货,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,WARR-b17b433a,digital,TRUE,manual | 数码产品整机保修1年,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,LOGISTICS-70a98f4b,apparel,TRUE,rule.suning.com/ruleInfo/ruleInfoDetail/GZ100004233.htm | 发货时效与延迟赔付,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,RETURN-38e401d2,digital,TRUE,jianghu.taobao.com/detail/47301_58660388 | 七天无理由退货,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,WARR-1a256956,home_appliance,TRUE,m.zjtcn.com/news/51290604.html | 小家电整机保修1年,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,RETURN-38e401d2,cordless_vacuum,TRUE,jianghu.taobao.com/detail/47301_58660388 | 七天无理由退货,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,LOGISTICS-70a98f4b,digital,TRUE,rule.suning.com/ruleInfo/ruleInfoDetail/GZ100004233.htm | 发货时效与延迟赔付,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,LOGISTICS-70a98f4b,air_circulation_fan,TRUE,rule.suning.com/ruleInfo/ruleInfoDetail/GZ100004233.htm | 发货时效与延迟赔付,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,APPLIES_TO,PRICE-cf259e1c,digital,TRUE,diantuoyi.com/article/16500.html | 价格保护（分场景）,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-047,SCRIPT-047,TRUE,builtin:ecommerce-sop-v1 | 好评返现吗 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-034,SCRIPT-034,TRUE,builtin:ecommerce-sop-v1 | 退货运费谁出 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-040,SCRIPT-040,TRUE,builtin:ecommerce-sop-v1 | 售后要提供什么证据 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-039,SCRIPT-039,TRUE,builtin:ecommerce-sop-v1 | 商品有质量问题 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-031,SCRIPT-031,TRUE,builtin:ecommerce-sop-v1 | 显示签收但没收到 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-010,WARR-1a256956,TRUE,builtin:ecommerce-sop-v1 | 保修多久 | m.zjtcn.com/news/51290604.html | 小家电整机保修1年,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-033,SCRIPT-033,TRUE,builtin:ecommerce-sop-v1 | 拆封了还能退吗 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-042,SCRIPT-042,TRUE,builtin:ecommerce-sop-v1 | 我要投诉 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-036,SCRIPT-036,TRUE,builtin:ecommerce-sop-v1 | 退款多久到账 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-046,SCRIPT-046,TRUE,builtin:ecommerce-sop-v1 | 能加微信处理吗 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-SCRIPT-004,SCRIPT-004,TRUE,builtin:ecommerce-sop-v1 | 尺码怎么选 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-MANUAL-51a5,Y-D01-M,TRUE,manual | 云织羽绒服充绒量是多少？,人工审核通过,人工审核,2026-08-12,0.9,rule+human
+1,REFERS_TO,FAQ-SCRIPT-035,SCRIPT-035,TRUE,builtin:ecommerce-sop-v1 | 可以换个尺码吗 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,REFERS_TO,FAQ-MANUAL-8fbb,RETURN-9d637afd,TRUE,manual | 数码产品激活后还能退货吗？ | help.dangdang.com/details/page95 | 数码商品退换货,人工审核通过,人工审核,2026-08-12,0.9,rule+human
+1,RELATED_TO,SCRIPT-013,FAQ-SCRIPT-013,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-005,FAQ-SCRIPT-005,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-017,FAQ-SCRIPT-017,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-051,FAQ-SCRIPT-051,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-049,FAQ-SCRIPT-049,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-009,FAQ-SCRIPT-009,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-032,FAQ-SCRIPT-032,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-006,FAQ-SCRIPT-006,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-026,FAQ-SCRIPT-026,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-038,FAQ-SCRIPT-038,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-025,FAQ-SCRIPT-025,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,RELATED_TO,SCRIPT-028,FAQ-SCRIPT-028,TRUE,builtin:ecommerce-sop-v1 | builtin:ecommerce-sop-v1,人工审核通过,人工审核,2026-08-12,1.0,rule

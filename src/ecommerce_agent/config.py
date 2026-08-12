@@ -60,11 +60,12 @@ class Settings:
     max_request_body_bytes: int
     rate_limit_requests_per_minute: int
     min_free_disk_mb: int
-    model_decision_timeout_seconds: float = 15.0
-    model_decision_max_output_tokens: int = 300
-    model_decision_thinking_enabled: bool = False
-    intent_classify_timeout_seconds: float = 2.0
-    handoff_confidence_threshold: float = 0.6
+    # 四套场景 Prompt 是否注入生产回答链路（M3 交付物⑥接入；默认开启）
+    rag_scene_prompts: bool = True
+    # 启动时是否导入 02_clean 资产知识（M3 接入；测试设 false 提速，生产默认 true）
+    kg_import_enabled: bool = True
+    # 知识库自维护调度（梦循环 + 每日评测）是否接入服务生命周期（A3；测试默认关避免抢线程）
+    kg_dream_worker_enabled: bool = True
     customer_test_enabled: bool = False
     model_allow_coding_plan: bool = False
     max_react_steps: int = 4
@@ -87,6 +88,10 @@ class Settings:
     mockchat_secret: str = ""
     mockchat_callback_max_skew_seconds: int = 600
     mockchat_messages_per_minute: int = 120
+    # Neo4j 连接（知识图谱检索/可视化；env 可覆盖，默认本地开发值）
+    neo4j_uri: str = "http://localhost:7474"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "change-me"
     outbox_worker_enabled: bool = False
     outbox_sync_dispatch: bool = True
     outbox_poll_seconds: float = 1.0
@@ -162,6 +167,11 @@ class Settings:
             rag_direct_approved_min_score=float(
                 os.getenv("RAG_DIRECT_APPROVED_MIN_SCORE", "0.6")
             ),
+            rag_scene_prompts=_as_bool(os.getenv("RAG_SCENE_PROMPTS"), default=True),
+            kg_import_enabled=_as_bool(os.getenv("KG_IMPORT_ENABLED"), default=True),
+            kg_dream_worker_enabled=_as_bool(
+                os.getenv("KG_DREAM_WORKER_ENABLED"), default=True
+            ),
             max_input_chars=int(os.getenv("MAX_INPUT_CHARS", "2000")),
             session_history_limit=int(os.getenv("SESSION_HISTORY_LIMIT", "6")),
             admin_api_key=os.getenv("ADMIN_API_KEY", ""),
@@ -187,22 +197,6 @@ class Settings:
                 1, int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "120"))
             ),
             min_free_disk_mb=max(1, int(os.getenv("MIN_FREE_DISK_MB", "1024"))),
-            model_decision_timeout_seconds=max(
-                0.001, float(os.getenv("MODEL_DECISION_TIMEOUT_SECONDS", "15.0"))
-            ),
-            model_decision_max_output_tokens=max(
-                1, int(os.getenv("MODEL_DECISION_MAX_OUTPUT_TOKENS", "300"))
-            ),
-            model_decision_thinking_enabled=_as_bool(
-                os.getenv("MODEL_DECISION_THINKING_ENABLED"), default=False
-            ),
-            intent_classify_timeout_seconds=max(
-                0.001, float(os.getenv("INTENT_CLASSIFY_TIMEOUT_SECONDS", "2.0"))
-            ),
-            handoff_confidence_threshold=max(
-                0.0,
-                min(1.0, float(os.getenv("HANDOFF_CONFIDENCE_THRESHOLD", "0.6"))),
-            ),
             customer_test_enabled=_as_bool(
                 os.getenv("CUSTOMER_TEST_ENABLED"), default=False
             ),
@@ -245,6 +239,9 @@ class Settings:
             mockchat_messages_per_minute=max(
                 1, int(os.getenv("MOCKCHAT_MESSAGES_PER_MINUTE", "120"))
             ),
+            neo4j_uri=os.getenv("NEO4J_URI", "http://localhost:7474").strip(),
+            neo4j_user=os.getenv("NEO4J_USER", "neo4j").strip(),
+            neo4j_password=os.getenv("NEO4J_PASSWORD", "change-me"),
             outbox_worker_enabled=_as_bool(
                 os.getenv("OUTBOX_WORKER_ENABLED"), default=True
             ),

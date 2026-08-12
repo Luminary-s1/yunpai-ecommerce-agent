@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import base64
-import binascii
 import json
 import math
-import re
 import sqlite3
 import threading
 import uuid
@@ -37,9 +34,7 @@ def utc_now() -> str:
 
 
 class SessionScopeError(ValueError):
-    def __init__(self, message: str, *, code: str = "session_scope_error"):
-        super().__init__(message)
-        self.code = code
+    pass
 
 
 class Database:
@@ -2196,243 +2191,6 @@ class Database:
             """
         )
 
-    @classmethod
-    def _apply_v26(cls, conn: sqlite3.Connection) -> None:
-        exists = conn.execute(
-            "SELECT 1 FROM sqlite_master "
-            "WHERE type='table' AND name='competitor_observations'"
-        ).fetchone()
-        if exists is None:
-            return
-        cls._ensure_column(conn, "competitor_observations", "rating_value", "TEXT")
-        cls._ensure_column(conn, "competitor_observations", "rating_scale", "TEXT")
-        cls._ensure_column(conn, "competitor_observations", "sales_rank", "INTEGER")
-        cls._ensure_column(conn, "competitor_observations", "rank_scope", "TEXT")
-
-    @classmethod
-    def _apply_v27(cls, conn: sqlite3.Connection) -> None:
-        exists = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'"
-        ).fetchone()
-        if exists is None:
-            return
-        cls._ensure_column(conn, "messages", "customer_intent", "TEXT")
-        cls._ensure_column(conn, "messages", "intent_confidence", "REAL")
-        cls._ensure_column(conn, "messages", "intent_method", "TEXT")
-
-    @staticmethod
-    def _apply_v28(conn: sqlite3.Connection) -> None:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS creative_assets (
-                asset_id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                sha256 TEXT NOT NULL,
-                mime_type TEXT NOT NULL,
-                width INTEGER NOT NULL CHECK(width > 0),
-                height INTEGER NOT NULL CHECK(height > 0),
-                storage_ref TEXT NOT NULL,
-                source_ref TEXT,
-                feature_schema_version TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                UNIQUE(tenant_id, sha256),
-                UNIQUE(tenant_id, asset_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_creative_assets_tenant_created
-                ON creative_assets(tenant_id, created_at DESC);
-
-            CREATE TABLE IF NOT EXISTS listing_revisions (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                connector_id TEXT NOT NULL,
-                store_id TEXT NOT NULL,
-                item_id TEXT NOT NULL,
-                sku_id TEXT NOT NULL,
-                revision_no INTEGER NOT NULL CHECK(revision_no >= 1),
-                title TEXT NOT NULL,
-                main_image_asset_id TEXT NOT NULL,
-                sale_price TEXT NOT NULL,
-                attributes_json TEXT NOT NULL,
-                active_from TEXT NOT NULL,
-                active_to TEXT,
-                source_updated_at TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                CHECK(active_to IS NULL OR active_to > active_from),
-                UNIQUE(tenant_id, connector_id, store_id, item_id, sku_id, revision_no),
-                UNIQUE(tenant_id, id),
-                FOREIGN KEY(tenant_id, main_image_asset_id)
-                    REFERENCES creative_assets(tenant_id, asset_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_listing_revisions_tenant_listing_time
-                ON listing_revisions(
-                    tenant_id, connector_id, store_id, item_id, sku_id, active_from
-                );
-            CREATE TRIGGER IF NOT EXISTS trg_listing_revisions_immutable_update
-            BEFORE UPDATE ON listing_revisions
-            BEGIN
-                SELECT RAISE(ABORT, 'listing_revision_immutable');
-            END;
-            CREATE TRIGGER IF NOT EXISTS trg_listing_revisions_immutable_delete
-            BEFORE DELETE ON listing_revisions
-            BEGIN
-                SELECT RAISE(ABORT, 'listing_revision_immutable');
-            END;
-
-            CREATE TABLE IF NOT EXISTS traffic_metric_buckets (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                listing_revision_id TEXT NOT NULL,
-                metric_start TEXT NOT NULL,
-                metric_end TEXT NOT NULL,
-                bucket_granularity TEXT NOT NULL
-                    CHECK(bucket_granularity IN ('hour','day')),
-                traffic_source TEXT NOT NULL,
-                impressions INTEGER NOT NULL CHECK(impressions >= 0),
-                clicks INTEGER NOT NULL CHECK(clicks >= 0 AND clicks <= impressions),
-                visitors INTEGER NOT NULL CHECK(visitors >= 0),
-                favorites INTEGER NOT NULL CHECK(favorites >= 0),
-                cart_adds INTEGER NOT NULL CHECK(cart_adds >= 0),
-                orders INTEGER NOT NULL CHECK(orders >= 0),
-                sales_amount TEXT NOT NULL,
-                ad_spend TEXT NOT NULL,
-                search_impressions INTEGER NOT NULL CHECK(search_impressions >= 0),
-                recommend_impressions INTEGER NOT NULL CHECK(recommend_impressions >= 0),
-                data_as_of TEXT NOT NULL,
-                source_id TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                quality_flags_json TEXT NOT NULL DEFAULT '[]',
-                version INTEGER NOT NULL CHECK(version >= 1),
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                CHECK(metric_end > metric_start),
-                UNIQUE(tenant_id, source_id),
-                UNIQUE(tenant_id, id),
-                FOREIGN KEY(tenant_id, listing_revision_id)
-                    REFERENCES listing_revisions(tenant_id, id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_traffic_metric_buckets_revision_time
-                ON traffic_metric_buckets(
-                    tenant_id, listing_revision_id, metric_start, traffic_source
-                );
-
-            CREATE TABLE IF NOT EXISTS traffic_metric_quarantine (
-                quarantine_id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                source_id TEXT NOT NULL,
-                reason_code TEXT NOT NULL CHECK(
-                    reason_code IN (
-                        'listing_revision_missing',
-                        'listing_revision_not_found',
-                        'listing_revision_ambiguous',
-                        'metric_outside_revision_window'
-                    )
-                ),
-                payload_json TEXT NOT NULL,
-                data_as_of TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                version INTEGER NOT NULL CHECK(version >= 1),
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                UNIQUE(tenant_id, source_id),
-                UNIQUE(tenant_id, quarantine_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_traffic_metric_quarantine_tenant_time
-                ON traffic_metric_quarantine(tenant_id, data_as_of DESC, created_at DESC);
-
-            CREATE TABLE IF NOT EXISTS traffic_experiments (
-                experiment_id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                store_id TEXT NOT NULL,
-                sku_id TEXT NOT NULL,
-                experiment_type TEXT NOT NULL CHECK(
-                    experiment_type IN (
-                        'aa','platform_ab','switchback','difference_in_differences'
-                    )
-                ),
-                primary_metric TEXT NOT NULL,
-                status TEXT NOT NULL CHECK(
-                    status IN ('draft','ready','running','completed','paused','invalid')
-                ),
-                started_at TEXT NOT NULL,
-                ended_at TEXT,
-                control_revision_id TEXT NOT NULL,
-                treatment_revision_id TEXT NOT NULL,
-                minimum_exposure INTEGER NOT NULL CHECK(minimum_exposure >= 0),
-                washout_window INTEGER NOT NULL CHECK(washout_window >= 0),
-                analysis_policy_version TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                record_version INTEGER NOT NULL CHECK(record_version >= 1),
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                CHECK(ended_at IS NULL OR ended_at > started_at),
-                UNIQUE(tenant_id, experiment_id),
-                FOREIGN KEY(tenant_id, control_revision_id)
-                    REFERENCES listing_revisions(tenant_id, id),
-                FOREIGN KEY(tenant_id, treatment_revision_id)
-                    REFERENCES listing_revisions(tenant_id, id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_traffic_experiments_tenant_scope
-                ON traffic_experiments(tenant_id, store_id, sku_id, status, created_at DESC);
-
-            CREATE TABLE IF NOT EXISTS traffic_experiment_windows (
-                window_id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                experiment_id TEXT NOT NULL,
-                listing_revision_id TEXT NOT NULL,
-                window_start TEXT NOT NULL,
-                window_end TEXT NOT NULL,
-                assignment TEXT NOT NULL CHECK(assignment IN ('control','treatment')),
-                washout INTEGER NOT NULL CHECK(washout IN (0,1)),
-                source_receipt_id TEXT,
-                payload_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                CHECK(window_end > window_start),
-                UNIQUE(tenant_id, window_id),
-                UNIQUE(tenant_id, experiment_id, window_start, window_end, assignment),
-                FOREIGN KEY(tenant_id, experiment_id)
-                    REFERENCES traffic_experiments(tenant_id, experiment_id),
-                FOREIGN KEY(tenant_id, listing_revision_id)
-                    REFERENCES listing_revisions(tenant_id, id)
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_traffic_windows_receipt
-                ON traffic_experiment_windows(tenant_id, experiment_id, source_receipt_id)
-                WHERE source_receipt_id IS NOT NULL;
-            CREATE INDEX IF NOT EXISTS idx_traffic_windows_experiment_time
-                ON traffic_experiment_windows(tenant_id, experiment_id, window_start);
-
-            CREATE TABLE IF NOT EXISTS traffic_analysis_runs (
-                analysis_run_id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                experiment_id TEXT NOT NULL,
-                method TEXT NOT NULL,
-                data_window_json TEXT NOT NULL,
-                sample_size_json TEXT NOT NULL,
-                effect_estimate_json TEXT NOT NULL,
-                confidence_interval_json TEXT NOT NULL,
-                evidence_json TEXT NOT NULL,
-                counter_evidence_json TEXT NOT NULL,
-                hypotheses_json TEXT NOT NULL,
-                model_provider TEXT,
-                model_name TEXT,
-                prompt_version TEXT,
-                analysis_code_version TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                UNIQUE(tenant_id, analysis_run_id),
-                FOREIGN KEY(tenant_id, experiment_id)
-                    REFERENCES traffic_experiments(tenant_id, experiment_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_traffic_analysis_runs_experiment
-                ON traffic_analysis_runs(tenant_id, experiment_id, created_at DESC);
-            """
-        )
-
     @staticmethod
     def _apply_v29(conn: sqlite3.Connection) -> None:
         conn.executescript(
@@ -3161,10 +2919,6 @@ class Database:
                 "competitor_sku",
                 "payload_hash",
                 "entity_match_id",
-                "rating_value",
-                "rating_scale",
-                "sales_rank",
-                "rank_scope",
             },
             "sop_definitions": {"tenant_id", "sop_key", "current_active_version"},
             "sop_versions": {"definition_id", "version", "dsl_json", "status"},
@@ -3307,15 +3061,7 @@ class Database:
                 "lease_until",
                 "record_version",
             },
-            "messages": {
-                "tenant_id",
-                "client_id",
-                "redacted",
-                "context_snapshot_id",
-                "customer_intent",
-                "intent_confidence",
-                "intent_method",
-            },
+            "messages": {"tenant_id", "client_id", "redacted", "context_snapshot_id"},
             "qa_results": {"tenant_id", "issues_json", "review_status", "record_version"},
             "channel_reply_drafts": {"outbox_id", "record_version", "status"},
             "channel_outbox": {
@@ -3563,25 +3309,11 @@ class Database:
             rows = conn.execute(
                 """
                 SELECT role, content, created_at FROM messages
-                WHERE session_id = ? ORDER BY created_at DESC LIMIT ?
+                WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?
                 """,
                 (session_id, limit),
             ).fetchall()
         return [dict(row) for row in reversed(rows)]
-
-    def recent_assistant_route_reasons(
-        self, session_id: str, limit: int = 2
-    ) -> list[str]:
-        with self.connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT route_reason FROM messages
-                WHERE session_id=? AND role='assistant'
-                ORDER BY created_at DESC, id DESC LIMIT ?
-                """,
-                (session_id, limit),
-            ).fetchall()
-        return [str(row[0]) for row in rows if row[0] is not None]
 
     def paginated_messages(
         self,
@@ -3595,27 +3327,11 @@ class Database:
         decoded_cursor: tuple[str, str] | None = None
         if cursor:
             try:
-                if "|" in cursor:
-                    # Legacy composite cursors remain readable. Recover the UTC
-                    # offset from clients that naively placed the old '+' form in
-                    # a query string, where form decoding changed it to a space.
-                    raw_cursor = cursor
-                    if "T" in raw_cursor and "+" not in raw_cursor:
-                        raw_cursor = re.sub(
-                            r" (?=\d{2}:\d{2}\|)", "+", raw_cursor, count=1
-                        )
-                else:
-                    padding = "=" * (-len(cursor) % 4)
-                    raw_cursor = base64.b64decode(
-                        cursor + padding,
-                        altchars=b"-_",
-                        validate=True,
-                    ).decode("utf-8")
-                created_at, message_id = raw_cursor.rsplit("|", 1)
+                created_at, message_id = cursor.rsplit("|", 1)
                 datetime.fromisoformat(created_at)
                 if created_at and message_id:
                     decoded_cursor = (created_at, message_id)
-            except (binascii.Error, TypeError, UnicodeDecodeError, ValueError):
+            except (TypeError, ValueError):
                 decoded_cursor = None
 
         page_limit = max(1, min(100, limit))
@@ -3642,12 +3358,11 @@ class Database:
                 SELECT m.id, m.trace_id, m.role, m.content, m.intent,
                        m.risk_level, m.route_reason, m.sources_json,
                        m.model_fallback, m.redacted, m.context_snapshot_id,
-                       m.customer_intent, m.intent_confidence, m.intent_method,
                        m.created_at
                 FROM messages m
                 JOIN sessions s ON s.id=m.session_id
                 WHERE {' AND '.join(conditions)}
-                ORDER BY m.created_at, m.id
+                ORDER BY m.created_at, m.rowid
                 LIMIT ?
                 """,
                 (*params, page_limit + 1),
@@ -3658,10 +3373,7 @@ class Database:
         items = [dict(row) for row in page_rows]
         next_cursor = None
         if has_more and page_rows:
-            raw_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
-            next_cursor = base64.urlsafe_b64encode(raw_cursor.encode("utf-8")).decode(
-                "ascii"
-            ).rstrip("=")
+            next_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
         return {
             "items": items,
             "next_cursor": next_cursor,
@@ -3703,13 +3415,9 @@ class Database:
         source_reference: str | None = None,
     ) -> str:
         if source_type not in SESSION_SOURCE_TYPES:
-            raise SessionScopeError(
-                "invalid session source type", code="invalid_session_source"
-            )
+            raise SessionScopeError("invalid session source type")
         if source_reference is not None and len(source_reference) > 128:
-            raise SessionScopeError(
-                "session source reference is too long", code="invalid_session_source"
-            )
+            raise SessionScopeError("session source reference is too long")
         with self._write_lock, self.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM sessions WHERE tenant_id=? AND external_session_id=?",
@@ -3717,24 +3425,13 @@ class Database:
             ).fetchone()
             if row is not None:
                 if row["subject_hash"] != subject_hash or row["client_id"] != client_id:
-                    raise SessionScopeError(
-                        "session id is already bound to another authenticated scope",
-                        code="session_scope_conflict",
-                    )
+                    raise SessionScopeError("session id is already bound to another authenticated scope")
                 if row["source_type"] != source_type:
-                    raise SessionScopeError(
-                        "session id is already bound to another source type",
-                        code="session_source_conflict",
-                    )
+                    raise SessionScopeError("session id is already bound to another source type")
                 if row["source_reference"] != source_reference:
-                    raise SessionScopeError(
-                        "session id is already bound to another source reference",
-                        code="session_source_conflict",
-                    )
+                    raise SessionScopeError("session id is already bound to another source reference")
                 if row["status"] != "active":
-                    raise SessionScopeError(
-                        "session is closed", code="session_closed"
-                    )
+                    raise SessionScopeError("session is closed")
                 conn.execute("UPDATE sessions SET last_seen_at=? WHERE id=?", (utc_now(), row["id"]))
                 return str(row["id"])
 

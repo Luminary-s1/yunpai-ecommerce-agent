@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sqlite3
@@ -31,11 +32,7 @@ from .context_builder import ContextBuilder
 from .database import Database, SessionScopeError, utc_now
 from .disaster_recovery import DataDirectoryLock
 from .evaluation import EvaluationRunRequest, EvaluationService
-from .graph import (
-    build_graph,
-    prepare_generation,
-    verify_response,
-)
+from .graph import MODEL_UNAVAILABLE_HANDOFF_ANSWER, build_graph, verify_response
 from .handoff import HandoffService
 from .handoff_dispatch import HandoffDispatchService
 from .handoff_staffing import HandoffStaffingService
@@ -44,15 +41,24 @@ from .knowledge_seed import seed_records
 from .llm import ModelGateway
 from .maintenance import MaintenanceService
 from .policy import sanitize_context
+from .prompts import SYSTEM_PROMPT, build_messages
 from .rag import KnowledgeBase
 from .quality import QualityService
 from .releases import ReleaseReplayRequest, ReleaseService
 from .schemas import ChatResponse, SourceItem
-from .text_utils import redact_sensitive
+from .text_utils import normalize_text, redact_sensitive
 from .taobao import TaobaoIntegrationService
 from .sops import SopService
+from .tokens import count_tokens
 from .tools import ToolRegistry
 from .traffic_lab import TrafficAnalysisModelInterpreter
+
+
+logger = logging.getLogger("ecommerce_agent.service")
+
+# 进程级缓存：同一进程内只导入一次知识资产（避免每次启动重复导入拖慢）
+# 数据库是新临时目录时仍需导入（key 用 db 路径区分）
+_kg_import_cache: dict[str, dict[str, int]] = {}
 
 
 class AgentService:
@@ -76,7 +82,16 @@ class AgentService:
             self.admin = AdminConsoleService(self.db, self.contexts)
             self.knowledge = KnowledgeBase(self.db)
             self.knowledge_management = KnowledgeManagementService(self.db, self.knowledge)
+            # P1-2 接入：店铺级长期记忆服务（此前仅有定义，生产零调用——A1 修复）。
+            # 延迟导入避免触发 knowledge_engine 包 __init__ → graph_api → service 循环导入。
+            from .knowledge_engine.memory_service import KnowledgeMemoryService
+
+            self.memory = KnowledgeMemoryService(self.knowledge)
             self.seeded_count = self.knowledge.seed_if_empty(seed_records())
+            # M3 知识库接入：启动时把 02_clean 资产层导入运行时表（幂等）。
+            # 深水区1修复：此前 knowledge_engine 是死代码，客服回答只用内置种子；
+            # 现在 kg-* 知识进入 RAG 检索，222 节点知识图谱真正服务客服。
+            self.kg_import_stats = self._import_knowledge_assets()
             self.model = ModelGateway(self.settings)
             self.handoff_staffing = HandoffStaffingService(self.db)
             self.handoffs = HandoffService(self.db, self.handoff_staffing)
@@ -145,6 +160,14 @@ class AgentService:
             self._session_idle_worker_last_run_at: str | None = None
             self._session_idle_worker_cycles = 0
             self._session_idle_worker_closed = 0
+            # 知识库自维护 worker（A3：梦循环 + 每日评测接入服务生命周期）
+            self._knowledge_worker_thread: threading.Thread | None = None
+            self._knowledge_worker_stop = threading.Event()
+            self._knowledge_worker_lock = threading.Lock()
+            self._knowledge_worker_last_error: str | None = None
+            self._knowledge_worker_last_run_at: str | None = None
+            self._knowledge_worker_cycles = 0
+            self._knowledge_worker_last_report: dict[str, Any] = {}
             self.sops = SopService(self.db, self.tools)
             self.seeded_sops = self.sops.seed_defaults(self.settings.bootstrap_tenant_id)
             self.sop_recovery = self.sops.recover_interrupted_runs()
@@ -177,6 +200,7 @@ class AgentService:
                 tools=self.tools,
                 sops=self.sops,
                 contexts=self.contexts,
+                memory=self.memory,
             )
             self.graph = builder.compile(checkpointer=self.checkpointer)
             self.channel_agents = ChannelAgentRuntime(
@@ -406,14 +430,6 @@ class AgentService:
             "trace_id": state["trace_id"],
         }
 
-        if state.get("knowledge_error"):
-            yield {
-                "event": "error",
-                "code": "knowledge_unavailable",
-                "message": "当前无法引用知识库，已转交人工客服继续核对",
-                "retry_advised": True,
-            }
-
         if "generate" in self.graph.get_state(config).next:
             deltas, model_fallback, trace_step = self._generation_deltas(state)
             parts: list[str] = []
@@ -461,16 +477,52 @@ class AgentService:
         self,
         state: dict[str, Any],
     ) -> tuple[Iterator[str], bool, str]:
-        plan = prepare_generation(state, self.settings)
-        if plan.direct_answer is not None:
+        verified_result = (
+            state.get("tool_result")
+            if state.get("tool_result", {}).get("postcondition_met")
+            else None
+        )
+        if not state.get("retrieved") and not verified_result:
             return (
-                iter((plan.direct_answer,)),
-                plan.model_fallback,
-                plan.trace_step,
+                iter((MODEL_UNAVAILABLE_HANDOFF_ANSWER,)),
+                True,
+                "generate:no_evidence",
             )
-        if plan.messages is None:
-            raise RuntimeError("generation plan has neither direct answer nor messages")
-        return self.model.stream_generate(plan.messages), False, "generate:stream"
+
+        top_document = state["retrieved"][0] if state.get("retrieved") else None
+        if (
+            top_document
+            and state["decision"].get("reason") == "approved_knowledge_reuse"
+            and self.settings.rag_direct_approved_answer
+            and top_document["source"].startswith("evolution:")
+            and (
+                top_document["score"]
+                >= self.settings.rag_direct_approved_min_score
+                or normalize_text(top_document["question"])
+                == state["normalized_input"]
+            )
+        ):
+            return iter((top_document["answer"],)), False, "generate:approved_knowledge"
+
+        total = int(
+            self.settings.model_context_limit_tokens
+            * self.settings.context_budget_ratio
+        )
+        available = max(
+            0,
+            total
+            - count_tokens(SYSTEM_PROMPT)
+            - count_tokens(state["normalized_input"]),
+        )
+        messages = build_messages(
+            question=state["normalized_input"],
+            documents=state["retrieved"],
+            context=state["context_bundle"],
+            history=state["context_bundle"].get("recent_history", []),
+            verified_tool_result=verified_result,
+            knowledge_budget_tokens=available * 6 // 10,
+        )
+        return self.model.stream_generate(messages), False, "generate:stream"
 
     @staticmethod
     def _response_from_state(
@@ -580,8 +632,7 @@ class AgentService:
                     or row["request_hash"] != request_hash
                 ):
                     raise SessionScopeError(
-                        "agent idempotency key is already bound to another request",
-                        code="idempotency_key_conflict",
+                        "agent idempotency key is already bound to another request"
                     )
                 if row["status"] == "running":
                     conn.execute(
@@ -756,6 +807,56 @@ class AgentService:
             finally:
                 evaluation_service.close()
 
+    def _import_knowledge_assets(self) -> dict[str, int]:
+        """把 02_clean 资产层知识导入运行时表（M3 接入，幂等）。
+
+        资产层缺失/损坏时降级（日志警告，不阻塞启动）。
+        进程级缓存：同一 db 路径只导一次（测试/多实例不重复导入）。
+        KG_IMPORT_ENABLED=false 时跳过（测试提速用）。
+        """
+        if not self.settings.kg_import_enabled:
+            return {"imported": 0, "skipped_entity": 0, "skipped_existing": 0, "seller_default_store_count": 0}
+        cache_key = str(self.settings.app_db_path)
+        cached = _kg_import_cache.get(cache_key)
+        if cached is not None:
+            self.kg_import_cached = True
+            return cached
+        from .knowledge_engine.loader import load_clean_dir
+        from .knowledge_engine.runtime_bridge import import_to_runtime
+
+        clean_dir = (
+            Path(__file__).resolve().parents[2]
+            / "knowledge_graph_output"
+            / "02_clean"
+        )
+        if not clean_dir.is_dir():
+            logger.warning("knowledge assets missing: %s (skip kg-* import)", clean_dir)
+            stats = {"imported": 0, "skipped_entity": 0, "skipped_existing": 0, "seller_default_store_count": 0}
+            _kg_import_cache[cache_key] = stats
+            return stats
+        try:
+            items = load_clean_dir(clean_dir)
+            stats = import_to_runtime(
+                items,
+                self.knowledge,
+                tenant_id=self.settings.bootstrap_tenant_id,
+                default_store_id=self.settings.bootstrap_tenant_id,
+            )
+            logger.info(
+                "knowledge assets imported: imported=%d skipped_entity=%d skipped_existing=%d seller_default_store=%d",
+                stats["imported"],
+                stats["skipped_entity"],
+                stats["skipped_existing"],
+                stats["seller_default_store_count"],
+            )
+            _kg_import_cache[cache_key] = stats
+            return stats
+        except Exception as exc:
+            logger.warning("knowledge assets import failed (non-fatal): %s", exc)
+            stats = {"imported": 0, "skipped_entity": 0, "skipped_existing": 0, "seller_default_store_count": 0}
+            _kg_import_cache[cache_key] = stats
+            return stats
+
     def health(self) -> dict[str, Any]:
         model_ok, model_detail = self.model.health()
         knowledge_count = self.knowledge.count_active()
@@ -799,6 +900,7 @@ class AgentService:
             "competitive_monitoring": self.competitive_monitor_worker_status(),
             "session_idle": self.session_idle_worker_status(),
             "handoff_sla": self.handoff_sla_worker_status(),
+            "knowledge_worker": self.knowledge_worker_status(),
             "handoff_dispatch": {
                 **self.handoff_dispatch.summary(
                     tenant_id=self.settings.bootstrap_tenant_id
@@ -893,6 +995,97 @@ class AgentService:
         self.start_session_idle_worker()
         self.start_handoff_sla_worker()
         self.start_handoff_dispatch_worker()
+        self.start_knowledge_worker()
+
+    # ---------- 知识库自维护 worker（A3：梦循环 + 每日评测） ----------
+
+    KNOWLEDGE_WORKER_POLL_SECONDS = 3600.0  # 每小时检查一次调度窗口
+    KNOWLEDGE_DREAM_INTERVAL_SECONDS = 86400.0  # 梦循环每天一次
+    KNOWLEDGE_EVAL_INTERVAL_SECONDS = 86400.0  # 检索评测每天一次
+
+    def start_knowledge_worker(self) -> None:
+        if not self.settings.kg_dream_worker_enabled:
+            return
+        with self._knowledge_worker_lock:
+            if (
+                self._knowledge_worker_thread is not None
+                and self._knowledge_worker_thread.is_alive()
+            ):
+                return
+            self._knowledge_worker_stop.clear()
+            self._knowledge_worker_thread = threading.Thread(
+                target=self._knowledge_worker_loop,
+                name="knowledge-worker",
+                daemon=True,
+            )
+            self._knowledge_worker_thread.start()
+
+    def stop_knowledge_worker(self) -> None:
+        with self._knowledge_worker_lock:
+            thread = self._knowledge_worker_thread
+            self._knowledge_worker_stop.set()
+        if thread is not None:
+            thread.join(timeout=5)
+        with self._knowledge_worker_lock:
+            if thread is None or not thread.is_alive():
+                self._knowledge_worker_thread = None
+
+    def knowledge_worker_status(self) -> dict[str, Any]:
+        thread = self._knowledge_worker_thread
+        return {
+            "enabled": self.settings.kg_dream_worker_enabled,
+            "running": bool(thread and thread.is_alive()),
+            "poll_seconds": self.KNOWLEDGE_WORKER_POLL_SECONDS,
+            "dream_interval_seconds": self.KNOWLEDGE_DREAM_INTERVAL_SECONDS,
+            "eval_interval_seconds": self.KNOWLEDGE_EVAL_INTERVAL_SECONDS,
+            "cycles": self._knowledge_worker_cycles,
+            "last_run_at": self._knowledge_worker_last_run_at,
+            "last_error": self._knowledge_worker_last_error,
+            "last_report": self._knowledge_worker_last_report,
+        }
+
+    def _knowledge_worker_loop(self) -> None:
+        while not self._knowledge_worker_stop.is_set():
+            try:
+                self._run_knowledge_cycle()
+                self._knowledge_worker_cycles += 1
+                self._knowledge_worker_last_run_at = utc_now()
+                self._knowledge_worker_last_error = None
+            except Exception as exc:
+                self._knowledge_worker_last_error = (
+                    f"{type(exc).__name__}: {str(exc)[:300]}"
+                )
+                self.db.audit(
+                    "knowledge.worker_failed",
+                    "knowledge-worker",
+                    "scheduler",
+                    {"error_type": type(exc).__name__, "error": str(exc)[:300]},
+                    self.settings.bootstrap_tenant_id,
+                )
+            self._knowledge_worker_stop.wait(self.KNOWLEDGE_WORKER_POLL_SECONDS)
+
+    def _run_knowledge_cycle(self) -> dict[str, Any]:
+        """一次知识库维护周期：梦循环（合并结论落库）+ 检索评测。
+
+        失败不抛错（单点失败不影响整个 worker 存活），通过返回值报告。
+        """
+        from .knowledge_engine.scheduler import run_dream_cycle_once, run_evaluation_once
+
+        report: dict[str, Any] = {}
+        try:
+            dream = run_dream_cycle_once(
+                persist=True,
+                knowledge_base=self.knowledge,
+            )
+            report["dream_cycle"] = dream
+        except Exception as exc:
+            report["dream_cycle"] = {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
+        try:
+            report["retrieval_eval"] = run_evaluation_once()
+        except Exception as exc:
+            report["retrieval_eval"] = {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
+        self._knowledge_worker_last_report = report
+        return report
 
     def start_session_idle_worker(self) -> None:
         with self._session_idle_worker_lock:

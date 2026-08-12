@@ -10,7 +10,7 @@
 用法：
     .venv/Scripts/python.exe -m ecommerce_agent.knowledge_engine.verify_system
 
-前提：Neo4j 已启动（localhost:7474），密码 yunpai123。
+前提：Neo4j 已启动；连接参数走 env（NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD）。
 """
 
 from __future__ import annotations
@@ -18,15 +18,17 @@ from __future__ import annotations
 import base64
 import csv
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 import urllib.request
 
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "yunpai123"
-NEO4J_URL = "http://localhost:7474/db/neo4j/tx/commit"
-REPO = Path("D:/yunpai-ecommerce-agent-main")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "change-me")
+NEO4J_URI = os.getenv("NEO4J_URI", "http://localhost:7474")
+NEO4J_URL = f"{NEO4J_URI}/db/neo4j/tx/commit"
+REPO = Path(os.getenv("VERIFY_REPO", "D:/yunpai-ecommerce-agent-main"))
 
 
 def _query(statement: str) -> list[list]:

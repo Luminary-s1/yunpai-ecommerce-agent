@@ -33,6 +33,8 @@ from .handoff import HandoffError
 from .handoff_dispatch import DispatchError
 from .handoff_staffing import StaffingError
 from .governance_api import build_governance_router
+from .knowledge_engine.graph_api import build_graph_router
+from .knowledge_engine.wiki_api import build_wiki_router
 from .llm import ModelError, ModelUnavailableError
 from .operations_api import build_operations_router
 from .ops_assistant_api import build_ops_assistant_router
@@ -40,7 +42,6 @@ from .outbox import OutboxReconcileRequest
 from .rate_limit import RateLimitError, SlidingWindowRateLimiter
 from .release_api import build_release_router
 from .simulation_api import build_simulation_router
-from .traffic_lab_api import build_traffic_lab_router
 from .schemas import (
     CandidateView,
     ChatMessageRequest,
@@ -191,15 +192,48 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_simulation_router(service, require_admin))
     app.include_router(build_customer_test_router(service, require_local_customer_test))
     app.include_router(build_chat_sessions_router(service, require_client))
-
-    # M3 知识库：图谱检索 API + Wiki 浏览 API（admin 鉴权）
-    from .knowledge_engine.graph_api import build_graph_router
-
+    # M3 知识库路由（graph/wiki）。顶部已 import（深水区6：启动即暴露导入错误）
     app.include_router(build_graph_router(service, require_admin))
-
-    from .knowledge_engine.wiki_api import build_wiki_router
-
     app.include_router(build_wiki_router(service, require_admin))
+
+    # 知识图谱可视化宿主页（iframe 嵌 knowledge_graph_output/knowledge_graph.html）
+    graph_view_page = (
+        Path(__file__).resolve().parents[2] / "docs" / "knowledge-graph-view.html"
+    )
+
+    @app.get("/knowledge-graph", include_in_schema=False)
+    def knowledge_graph_view(request: Request) -> FileResponse:
+        # 手动鉴权（静态页无路由依赖参数）：显式从请求头读取 admin 凭据
+        require_admin(
+            request,
+            request.headers.get("X-Admin-Id"),
+            request.headers.get("X-Admin-Key"),
+        )
+        if not graph_view_page.is_file():
+            raise HTTPException(status_code=404, detail="knowledge graph view is not built")
+        return FileResponse(graph_view_page, media_type="text/html; charset=utf-8")
+
+    # 知识图谱可视化本体（knowledge_graph.html，自包含 D3 力导向图）
+    knowledge_graph_page = (
+        Path(__file__).resolve().parents[2]
+        / "knowledge_graph_output"
+        / "knowledge_graph.html"
+    )
+
+    @app.get("/kg.html", include_in_schema=False)
+    def knowledge_graph_body(request: Request) -> FileResponse:
+        # 手动鉴权（静态页无路由依赖参数）：显式从请求头读取 admin 凭据
+        require_admin(
+            request,
+            request.headers.get("X-Admin-Id"),
+            request.headers.get("X-Admin-Key"),
+        )
+        if not knowledge_graph_page.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail="knowledge graph is not exported; run export_graph.py first",
+            )
+        return FileResponse(knowledge_graph_page, media_type="text/html; charset=utf-8")
 
     @app.get("/health")
     def health() -> dict:
@@ -244,32 +278,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not admin_console_page.is_file():
             raise HTTPException(status_code=404, detail="admin console is not built")
         return FileResponse(admin_console_page, media_type="text/html; charset=utf-8")
-
-    # 任务3 Wiki 前台：知识图谱可视化宿主页 + 图谱本体（M3 交付物接前端）
-    graph_view_page = (
-        Path(__file__).resolve().parents[2] / "docs" / "knowledge-graph-view.html"
-    )
-
-    @app.get("/knowledge-graph", include_in_schema=False)
-    def knowledge_graph_view() -> FileResponse:
-        if not graph_view_page.is_file():
-            raise HTTPException(status_code=404, detail="knowledge graph view is not built")
-        return FileResponse(graph_view_page, media_type="text/html; charset=utf-8")
-
-    knowledge_graph_page = (
-        Path(__file__).resolve().parents[2]
-        / "knowledge_graph_output"
-        / "knowledge_graph.html"
-    )
-
-    @app.get("/kg.html", include_in_schema=False)
-    def knowledge_graph_body() -> FileResponse:
-        if not knowledge_graph_page.is_file():
-            raise HTTPException(
-                status_code=404,
-                detail="knowledge graph is not exported; run export_graph.py first",
-            )
-        return FileResponse(knowledge_graph_page, media_type="text/html; charset=utf-8")
 
     customer_test_page = Path(__file__).resolve().parents[2] / "docs" / "customer-test.html"
 
@@ -560,17 +568,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         def events():
             metadata: dict = {}
             generated = False
-            stream_error = False
-
-            def audit_stream_failure(code: str, error_type: str) -> None:
-                service.db.audit(
-                    "chat.stream_failed",
-                    principal.client_id,
-                    metadata.get("trace_id"),
-                    {"code": code, "error_type": error_type},
-                    principal.tenant_id,
-                )
-
             try:
                 stream = service.chat_stream(
                     principal,
@@ -589,20 +586,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         generated = generated or not item.get("replay", False)
                         yield encode({"event": "delta", "text": item["text"]})
                         continue
-                    if event_name == "error":
-                        stream_error = True
-                        yield encode(item)
-                        continue
 
                     response = item["response"]
-                    if generated and response["sources"] and not stream_error:
+                    if generated and response["sources"]:
                         yield encode(
                             {
                                 "event": "citations",
                                 "sources": response["sources"],
                             }
                         )
-                    if response["requires_human"] and not stream_error:
+                    if response["requires_human"]:
                         yield encode(
                             {
                                 "event": "handoff",
@@ -621,27 +614,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                             "model_fallback": response["model_fallback"],
                         }
                     )
-            except SessionScopeError as exc:
-                audit_stream_failure(exc.code, type(exc).__name__)
-                yield encode(
-                    {
-                        "event": "error",
-                        "code": exc.code,
-                        "message": str(exc),
-                        "retry_advised": False,
-                    }
-                )
-                yield encode(
-                    {
-                        "event": "done",
-                        "message_id": metadata.get("message_id", ""),
-                        "intent": "unknown",
-                        "risk_level": "low",
-                        "model_fallback": True,
-                    }
-                )
-            except ModelUnavailableError as exc:
-                audit_stream_failure("model_unavailable", type(exc).__name__)
+            except ModelUnavailableError:
                 yield encode(
                     {
                         "event": "error",
@@ -659,8 +632,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "model_fallback": True,
                     }
                 )
-            except ModelError as exc:
-                audit_stream_failure("model_error", type(exc).__name__)
+            except ModelError:
                 yield encode(
                     {
                         "event": "error",
@@ -678,8 +650,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "model_fallback": True,
                     }
                 )
-            except Exception as exc:
-                audit_stream_failure("internal_error", type(exc).__name__)
+            except Exception:
                 yield encode(
                     {
                         "event": "error",

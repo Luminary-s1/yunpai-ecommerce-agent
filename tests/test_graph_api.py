@@ -55,6 +55,9 @@ def _make_settings(data_dir: Path) -> Settings:
 ADMIN_HEADERS = {"X-Admin-Id": "admin-test", "X-Admin-Key": "test-admin-key-123456"}
 
 
+pytestmark = pytest.mark.usefixtures("mock_neo4j_query")
+
+
 @pytest.fixture(scope="module")
 def client(tmp_path_factory) -> TestClient:
     data_dir = tmp_path_factory.mktemp("graph-api")

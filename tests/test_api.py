@@ -156,3 +156,20 @@ def test_customer_test_interface_is_disabled_by_default(tmp_path) -> None:
     with TestClient(app, client=("127.0.0.1", 50000)) as client:
         assert client.get("/v1/test/customer-chat/cases").status_code == 404
         assert client.get("/customer-test").status_code == 404
+
+
+def test_knowledge_graph_pages_require_admin(tmp_path) -> None:
+    """/knowledge-graph 和 /kg.html 必须鉴权（P0-1 修复）。"""
+    app = create_app(make_settings(tmp_path))
+    admin_headers = {"X-Admin-Id": "admin-test", "X-Admin-Key": "test-admin-key-123456"}
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
+        # 匿名访问 → 401（未配置 bootstrap admin 时 503，此处配置了 admin 应为 401）
+        anon_graph = client.get("/knowledge-graph")
+        assert anon_graph.status_code in (401, 503)
+        anon_kg = client.get("/kg.html")
+        assert anon_kg.status_code in (401, 503)
+        # 带 admin header → 200（文件存在时；测试环境 knowledge_graph_output 存在）
+        auth_graph = client.get("/knowledge-graph", headers=admin_headers)
+        assert auth_graph.status_code == 200
+        auth_kg = client.get("/kg.html", headers=admin_headers)
+        assert auth_kg.status_code == 200

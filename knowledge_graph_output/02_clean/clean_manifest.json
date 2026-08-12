@@ -1,21 +1,25 @@
 {
-  "generated_at": "2026-08-03",
+  "schema_version": 1,
+  "generated_at": "2026-08-11",
+  "regenerated_by": "11_refresh_manifest.py",
   "entities": {
-    "category.json": 10,
-    "product.json": 12,
-    "attribute.json": 51,
-    "policy.json": 9,
-    "script.json": 52,
-    "faq.json": 60,
-    "rule.json": 9
+    "product": 8,
+    "sku": 12,
+    "category": 10,
+    "attribute": 51,
+    "policy": 9,
+    "script": 52,
+    "faq": 63,
+    "rule": 9,
+    "rule_extended": 8
   },
   "relationships": {
-    "belongs_to": 12,
+    "belongs_to": 19,
     "has_attr": 51,
-    "applies_to": 34,
-    "refers_to": 64,
-    "related_to": 52
+    "applies_to": 36,
+    "refers_to": 65,
+    "related_to": 69
   },
-  "validation_errors": [],
-  "status": "PASS"
+  "total_nodes": 222,
+  "total_rels": 240
 }

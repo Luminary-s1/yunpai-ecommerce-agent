@@ -79,6 +79,19 @@ from .scheduler import (
     DEFAULT_INTERVALS,
     DEFAULT_CLEAN_DIR,
 )
+from .memory_service import (
+    KnowledgeMemoryService,
+    MEMORY_LAYER,
+    MEMORY_CATEGORIES,
+)
+from .dream_cycle import apply_consolidation
+from .security_guard import (
+    KnowledgeSecurityGuard,
+    get_security_guard,
+    GuardDecision,
+    GuardResult,
+)
+from .observability import RetrievalObserver, get_observer
 
 __all__ = [
     # models
@@ -135,4 +148,18 @@ __all__ = [
     # evaluation_suite
     "EVALUATION_QUESTIONS",
     "run_evaluation",
+    # memory_service
+    "KnowledgeMemoryService",
+    "MEMORY_LAYER",
+    "MEMORY_CATEGORIES",
+    # dream_cycle
+    "apply_consolidation",
+    # security_guard
+    "KnowledgeSecurityGuard",
+    "get_security_guard",
+    "GuardDecision",
+    "GuardResult",
+    # observability
+    "RetrievalObserver",
+    "get_observer",
 ]

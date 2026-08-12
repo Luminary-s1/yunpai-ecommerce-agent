@@ -44,7 +44,15 @@ def build_graph_router(
     def _svc() -> GraphRetrievalService:
         nonlocal retrieval
         if retrieval is None:
-            retrieval = GraphRetrievalService(Neo4jClient())
+            # 连接参数来自 settings（from_env 读 NEO4J_URI/USER/PASSWORD），
+            # 不再硬编码本机配置（P1-5 可复现）
+            retrieval = GraphRetrievalService(
+                Neo4jClient(
+                    service.settings.neo4j_uri,
+                    service.settings.neo4j_user,
+                    service.settings.neo4j_password,
+                )
+            )
         return retrieval
 
     @router.get("/entity/{label}/{key}/{value}")

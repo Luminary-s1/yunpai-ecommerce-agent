@@ -28,10 +28,19 @@ def load_json(name: str) -> list[dict]:
 
 
 def gen_truth_table() -> None:
-    """§6.3 真值表：核心实体全量（分母 40）。"""
+    """§6.3 真值表：核心实体全量 + 知识主体（FAQ/Script/Rule）。
+
+    对齐负责人二次 review #3（覆盖率分母不得只含商品/品类/政策）：
+    - 分母 = SPU + SKU + 品类 + 政策 + FAQ + 话术 + 规则（全部实体类型）
+    - 每类都从 02_clean 实际读取，保证与交付数据一致
+    """
     products = load_json("product.json")
     categories = load_json("category.json")
     policies = load_json("policy.json")
+    faqs = load_json("faq.json")
+    scripts = load_json("script.json")
+    rules = load_json("rule.json")
+    rules_ext = load_json("rule_extended.json")
 
     rows = []
     # 商品 SPU（8）
@@ -65,6 +74,28 @@ def gen_truth_table() -> None:
             "relation_key": "", "relation_type": "",
             "expected_value": f"政策 {pol['policy_code']}（{pol['policy_type']}，{pol['policy_name']}）",
         })
+    # FAQ（63，知识主体）
+    for f in faqs:
+        rows.append({
+            "doc_id": f.get("source", ""), "entity_key": f.get("faq_id", ""), "entity_type": "FAQ",
+            "relation_key": "", "relation_type": "",
+            "expected_value": f"FAQ {f.get('faq_id', '')}（{f.get('question', '')[:60]}）",
+        })
+    # 客服话术（52，知识主体）
+    for s in scripts:
+        rows.append({
+            "doc_id": s.get("source", ""), "entity_key": s.get("script_id", ""), "entity_type": "Script",
+            "relation_key": "", "relation_type": "",
+            "expected_value": f"话术 {s.get('script_id', '')}（{s.get('title', s.get('category', ''))[:60]}）",
+        })
+    # 行业规则（9 + 扩展 8 = 17，知识主体）
+    all_rules = rules + rules_ext
+    for r in all_rules:
+        rows.append({
+            "doc_id": r.get("source", ""), "entity_key": r.get("rule_code", ""), "entity_type": "Rule",
+            "relation_key": "", "relation_type": "",
+            "expected_value": f"规则 {r.get('rule_code', '')}（{r.get('rule_title', '')[:60]}）",
+        })
 
     REPORT_ROOT.mkdir(parents=True, exist_ok=True)
     with open(REPORT_ROOT / "truth_table.csv", "w", encoding="utf-8", newline="") as f:
@@ -72,39 +103,89 @@ def gen_truth_table() -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-    # 核心实体计数（分母 40：SPU 8 + SKU 12 + 品类 10 + 政策 10）
+    # 覆盖分母（全部实体类型，不再是只有 SPU/SKU/品类/政策）
     spu = len({p["item_id"] for p in products})
     sku = len(products)
     cat = len(categories)
     pol = len(policies)
+    faq = len(faqs)
+    script = len(scripts)
+    rule = len(all_rules)
+    total = spu + sku + cat + pol + faq + script + rule
     print(f"✓ truth_table.csv（{len(rows)} 行）")
-    print(f"  核心实体分母: SPU {spu} + SKU {sku} + 品类 {cat} + 政策 {pol} = {spu+sku+cat+pol}")
+    print(f"  覆盖分母: SPU {spu} + SKU {sku} + 品类 {cat} + 政策 {pol} + FAQ {faq} + 话术 {script} + 规则 {rule} = {total}")
 
 
 def gen_sampling_plan() -> None:
-    """§7.2 关系抽检计划：核心池 60 条分层随机。"""
+    """§7.2 关系抽检计划：核心池 60 条分层随机（人工可复核标注模板）。
+
+    验收要求"人工抽检"（validation_report 注明"人工抽检比对"）：
+    - expected 列**留空待人工填**（TRUE=头尾实体+类型+方向与证据一致；FALSE=不一致）
+    - 新增 evidence 列：从端点实体 JSON 拼出原始证据引用（source_url/source），
+      让人能回到 01_raw 核验，不再"自取自答"
+    - annotation/verifier/verified_at 列：标注结论、标注人、标注时间
+    - 抽样逻辑不变：分层随机 + 固定种子可复现
+    """
     rng = random.Random(20260803)  # 固定种子，可复现
     plans = []
     total = 0
+    # 端点实体索引：source/target id → 记录（拼 evidence 用）
+    entity_index: dict[str, dict] = {}
+    for fname in (
+        "faq.json", "policy.json", "script.json", "rule.json", "rule_extended.json",
+        "product.json", "category.json", "attribute.json",
+    ):
+        for rec in load_json(fname):
+            eid = (
+                rec.get("faq_id") or rec.get("policy_code") or rec.get("script_id")
+                or rec.get("rule_code") or rec.get("item_id") or rec.get("category_code")
+                or rec.get("spec_key") or rec.get("id")
+            )
+            if eid:
+                entity_index[str(eid)] = rec
     for rel_name, n in LAYER_SIZES.items():
         rels = load_json(f"{rel_name}.json")
         sample = rng.sample(rels, min(n, len(rels)))
         for r in sample:
+            src = entity_index.get(str(r["source"]), {})
+            tgt = entity_index.get(str(r["target"]), {})
+            evidence = " | ".join(
+                filter(
+                    None,
+                    [
+                        src.get("source_url") or src.get("source") or "",
+                        src.get("policy_name") or src.get("question") or src.get("rule_title") or "",
+                        tgt.get("source_url") or tgt.get("source") or "",
+                        tgt.get("policy_name") or tgt.get("rule_title") or "",
+                    ],
+                )
+            )
             plans.append({
                 "round": 1,
                 "rel_type": r["rel_type"],
                 "source": r["source"],
                 "target": r["target"],
-                "expected": "TRUE",  # 抽检判定标准：头尾实体+类型+方向全对
+                "expected": "",  # 人工标注：TRUE / FALSE（留空待填）
+                "evidence": evidence,
+                "annotation": "",
+                "verifier": "",
+                "verified_at": "",
                 "confidence": r.get("confidence", ""),
                 "generated_by": r.get("generated_by", ""),
             })
             total += 1
     with open(REPORT_ROOT / "sampling_plan.csv", "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["round", "rel_type", "source", "target", "expected", "confidence", "generated_by"])
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "round", "rel_type", "source", "target", "expected",
+                "evidence", "annotation", "verifier", "verified_at",
+                "confidence", "generated_by",
+            ],
+        )
         writer.writeheader()
         writer.writerows(plans)
-    print(f"✓ sampling_plan.csv（核心池 {total} 条）")
+    print(f"✓ sampling_plan.csv（核心池 {total} 条，expected 待人工标注）")
 
 
 def main() -> None:

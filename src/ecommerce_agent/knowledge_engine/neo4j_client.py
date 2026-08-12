@@ -30,8 +30,13 @@ class Neo4jClient:
         self,
         uri: str = "http://localhost:7474",
         user: str = "neo4j",
-        password: str = "yunpai123",
+        password: str = "change-me",
     ) -> None:
+        """连接参数默认值为占位符（安全：真实密码必须经 NEO4J_* env 注入）。
+
+        仓库为 public，禁止把真实密码作为默认值提交。
+        生产/验收环境通过 config.Settings.neo4j_*（from_env 读 NEO4J_URI/USER/PASSWORD）传入。
+        """
         self.endpoint = f"{uri}/db/neo4j/tx/commit"
         self.token = base64.b64encode(f"{user}:{password}".encode()).decode()
 

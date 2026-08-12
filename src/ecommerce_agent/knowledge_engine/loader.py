@@ -131,13 +131,20 @@ def load_record(
     """
     kind = coerce_kind(kind.value)
     resolved_scope = scope or infer_scope(kind, record)
+    # scope_key：general → "all"；seller → 优先映射记录自带的店铺维度
+    # （02_clean 资产层通常无 store_id/shop_id 字段，保持 "all" 由调用方
+    #  import_to_runtime(default_store_id=...) 显式注入店铺，禁止静默裸 default）
+    if resolved_scope is KnowledgeScope.GENERAL:
+        scope_key = "all"
+    else:
+        scope_key = record.get("store_id") or record.get("shop_id") or "all"
     item = KnowledgeItem(
         id=_to_id(kind, record),
         kind=kind,
         scope=resolved_scope,
         compiled_truth=_to_truth(kind, record),
         attributes=dict(record),
-        scope_key="all" if resolved_scope is KnowledgeScope.GENERAL else "all",
+        scope_key=scope_key,
     )
     item.timeline.append(
         TimelineEntry(

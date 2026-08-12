@@ -1,9 +1,0 @@
-item_id,title,model,status,sale_price,warranty_months,category,category_name,source,updated_at
-QC-SPU-AF5,晴川空气炸锅 5L 云白款,AF5,active,499.00,12,air_fryer,空气炸锅,fixture,2026-08-03
-QC-SPU-VC1,晴川无线吸尘器 A1,VC-A1,active,899.00,24,cordless_vacuum,无线吸尘器,fixture,2026-08-03
-QC-SPU-HM3,晴川静音加湿器 3L,HM-3L,active,239.00,12,humidifier,加湿器,fixture,2026-08-03
-QC-SPU-KT17,晴川恒温电热水壶 1.7L,KT-17,active,159.00,12,electric_kettle,电热水壶,fixture,2026-08-03
-QC-SPU-FN1,晴川循环净化风扇 D1,FN-D1,active,699.00,24,air_circulation_fan,循环风扇,fixture,2026-08-03
-X-SPU-M1,星脉蓝牙耳机 X-M1 云白色,X-M1,active,299.00,12,digital_audio,数码音频,manual,2026-08-03
-X-SPU-P2,星脉充电宝 X-P2 10000mAh 黑色,X-P2,active,129.00,12,digital_power,数码电源,manual,2026-08-03
-Y-SPU-D01,云织羽绒服 Y-D01 黑色 S 码,Y-D01,active,599.00,0,apparel,服饰,manual,2026-08-03

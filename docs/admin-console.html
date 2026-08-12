@@ -256,7 +256,6 @@
         <button data-view="orders">订单售后</button>
         <button data-view="competitive">竞品分析</button>
         <button data-view="ops">运营辅助</button>
-        <button data-view="traffic-lab">流量实验</button>
         <button data-view="marketing">营销投放</button>
         <button data-view="finance">利润对账</button>
         <button data-view="knowledge">知识与 SOP</button>
@@ -284,8 +283,7 @@
 
       <div class="content">
         <section class="view active" id="view-overview">
-          <div class="section-head"><div><h2>经营运行概览</h2><p>客服、人工任务、竞品与系统运行状态</p></div><div class="toolbar"><select class="input" id="overviewScope" aria-label="总览数据范围"><option value="operational" selected>运营数据</option><option value="simulation">虚拟展示</option><option value="evaluation">隔离评测</option><option value="all">全部数据</option></select><span class="muted" id="lastUpdated"></span></div></div>
-          <div class="notice hidden" id="overviewScopeNotice"></div>
+          <div class="section-head"><div><h2>经营运行概览</h2><p>客服、人工任务、竞品与系统运行状态</p></div><span class="muted" id="lastUpdated"></span></div>
           <div class="grid kpis" id="overviewKpis"></div>
           <div class="overview-columns" style="margin-top:12px">
             <div class="overview-stack">
@@ -418,7 +416,7 @@
         <section class="view" id="view-ops">
           <div class="section-head">
             <div><h2>运营辅助与文案生成</h2><p>解析 CSV / JSON / 表单数据，生成多风格候选文案与趋势分析；不执行发布、调价或预算变更</p></div>
-            <div class="toolbar"><input class="input" id="opsDatasetKey" value="virtual-ops-week-29" placeholder="数据集 Key"><input class="input" id="opsStore" value="qingchuan-flagship-001" placeholder="店铺 ID"><button class="button primary" id="refreshOpsAssistant">刷新报告</button></div>
+            <div class="toolbar"><input class="input" id="opsDatasetKey" value="ops-week-30" placeholder="数据集 Key"><input class="input" id="opsStore" value="qingchuan-flagship-001" placeholder="店铺 ID"><button class="button primary" id="refreshOpsAssistant">刷新报告</button></div>
           </div>
           <div class="grid kpis" id="opsKpis"></div>
           <div class="grid two" style="margin-top:14px">
@@ -455,15 +453,14 @@
 可视化烹饪窗口</textarea></div>
                 <div class="field"><label for="opsPrice">价格</label><input class="input" id="opsPrice" type="number" min="0" step="0.01" value="499.00"></div>
                 <div class="field"><label for="opsAudience">目标人群</label><input class="input" id="opsAudience" value="租房青年"></div>
-                <div class="field"><label for="opsCopyLength">文案长度</label><select class="input" id="opsCopyLength"><option value="short">短（20–60 字）</option><option value="medium" selected>中（61–120 字）</option><option value="long">长（121–200 字）</option></select></div>
                 <div class="field"><label for="opsVariantsPerStyle">每种风格数量</label><select class="input" id="opsVariantsPerStyle"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></div>
-                <div class="field wide"><label>文案风格（每次最多 5 种，总量最多 9 条）</label><div class="ops-style-options"><label><input class="ops-copy-style" type="checkbox" value="formal" checked>专业详实</label><label><input class="ops-copy-style" type="checkbox" value="playful" checked>活泼种草</label><label><input class="ops-copy-style" type="checkbox" value="urgent" checked>促销紧迫</label><label><input class="ops-copy-style" type="checkbox" value="premium">高端质感</label><label><input class="ops-copy-style" type="checkbox" value="concise">简洁卖点</label><label><input class="ops-copy-style" type="checkbox" value="xiaohongshu">小红书种草</label><label><input class="ops-copy-style" type="checkbox" value="livestream">直播话术</label><label><input class="ops-copy-style" type="checkbox" value="product_detail">详情页文案</label><label><input class="ops-copy-style" type="checkbox" value="wechat_moments">朋友圈推广</label></div></div>
+                <div class="field wide"><label>文案风格（总量最多 9 条）</label><div class="ops-style-options"><label><input class="ops-copy-style" type="checkbox" value="formal" checked>专业详实</label><label><input class="ops-copy-style" type="checkbox" value="playful" checked>活泼种草</label><label><input class="ops-copy-style" type="checkbox" value="urgent" checked>促销紧迫</label><label><input class="ops-copy-style" type="checkbox" value="premium">高端质感</label><label><input class="ops-copy-style" type="checkbox" value="concise">简洁卖点</label></div></div>
                 <div class="wide"><button class="button primary" type="submit" id="generateOpsCopy">生成候选文案</button></div>
               </form>
             </article>
             <article class="panel">
               <div class="panel-head"><h3>生成结果</h3><span class="muted" id="opsCopyMeta">尚未生成</span></div>
-              <div class="panel-body copy-result-grid" id="opsCopyResults" aria-live="polite" aria-busy="false"><div class="empty">填写商品信息后生成多风格候选</div></div>
+              <div class="panel-body copy-result-grid" id="opsCopyResults"><div class="empty">填写商品信息后生成多风格候选</div></div>
             </article>
           </div>
           <div class="grid two" style="margin-top:14px">
@@ -542,11 +539,42 @@
             <article class="panel">
               <div class="panel-head"><h3 id="wikiListTitle">全部词条</h3><span class="muted" id="wikiListMeta"></span></div>
               <div class="table-wrap"><table><thead><tr><th>类型</th><th>当前结论</th><th>层级</th><th>状态</th></tr></thead><tbody id="wikiRows"></tbody></table></div>
+              <div class="panel-body" style="display:flex;gap:8px;align-items:center;border-top:1px solid var(--line, #dce1e5)">
+                <button class="button" id="wikiPrevPage">上一页</button>
+                <button class="button" id="wikiNextPage">下一页</button>
+                <span class="muted" id="wikiPageInfo"></span>
+              </div>
             </article>
           </div>
           <article class="panel" style="margin-top:14px" id="wikiDetailPanel">
             <div class="panel-head"><h3 id="wikiDetailTitle">词条详情</h3><span class="muted" id="wikiDetailMeta"></span></div>
             <div class="panel-body stack" id="wikiDetail"></div>
+          </article>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>店铺长期记忆</h3><span class="muted">按店铺记录偏好/高频问题/决策（P1-2 接入；检索默认隔离，需显式召回）</span></div>
+            <div class="panel-body stack">
+              <div class="grid two">
+                <div class="stack">
+                  <label class="muted">记录记忆</label>
+                  <input class="input" id="memoryStoreId" placeholder="店铺 ID（如 qinchuan）">
+                  <input class="input" id="memoryFact" placeholder="记忆内容（如：本店退货高峰在周三）">
+                  <select class="input" id="memoryCategory">
+                    <option value="frequent_issue">高频问题</option>
+                    <option value="buyer_preference">买家偏好</option>
+                    <option value="decision_note">决策记录</option>
+                  </select>
+                  <button class="button primary" id="memoryRecordBtn">记录记忆</button>
+                </div>
+                <div class="stack">
+                  <label class="muted">召回记忆</label>
+                  <input class="input" id="memoryQueryStoreId" placeholder="店铺 ID">
+                  <input class="input" id="memoryQuery" placeholder="关键词（空=全部）">
+                  <button class="button" id="memoryRecallBtn">召回</button>
+                  <button class="button" id="memoryRefreshBtn">刷新</button>
+                </div>
+              </div>
+              <div class="table-wrap"><table><thead><tr><th>类别</th><th>记忆内容</th><th>来源</th><th>时间</th><th>操作</th></tr></thead><tbody id="memoryRows"></tbody></table></div>
+            </div>
           </article>
           <article class="panel" style="margin-top:14px">
             <div class="panel-head"><h3>图谱视图</h3><span class="muted">D3 力导向图（静态快照，知识更新后需重跑导出）</span></div>
@@ -640,7 +668,7 @@
           </article>
           <div class="simulation-layout">
             <article class="panel">
-              <div class="panel-head"><h3>验收场景</h3><span class="muted" id="simulationVisibleCount">0 项</span></div>
+              <div class="panel-head"><h3>13 个验收场景</h3><span class="muted" id="simulationVisibleCount">0 项</span></div>
               <div class="table-wrap"><table><thead><tr><th>场景</th><th>模块</th><th>状态</th><th>操作</th></tr></thead><tbody id="simulationScenarioRows"></tbody></table></div>
             </article>
             <article class="panel" id="simulationDetail"><div class="empty">选择场景查看输入输出</div></article>
@@ -901,7 +929,6 @@
       opsRecords: [],
       opsReport: null,
       opsCopy: null,
-      opsCopyRequest: null,
       selectedSimulationScenario: 'D01',
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
@@ -1074,27 +1101,14 @@
     }
 
     async function loadOverview() {
-      const scope = $('overviewScope').value;
       const [overview, health, competitive] = await Promise.all([
-        api(`/v1/admin/overview?scope=${encodeURIComponent(scope)}`),
+        api('/v1/admin/overview'),
         fetch('/health').then((response) => response.json()),
         api('/v1/competitive/overview')
       ]);
       state.health = health;
       state.adminAuthRequired = health.administrator?.authentication_required !== false;
       $('logoutButton').hidden = !state.adminAuthRequired;
-      const excludedSimulation = Number((overview.excluded_sessions || {}).simulation || 0);
-      const scopeNotice = $('overviewScopeNotice');
-      if (scope === 'operational' && excludedSimulation > 0) {
-        scopeNotice.innerHTML = `当前只展示真实运营域；另有 <strong>${excludedSimulation}</strong> 个虚拟会话已隔离，可从右上角切换到“虚拟展示”。`;
-        scopeNotice.classList.remove('hidden');
-      } else if (scope === 'simulation') {
-        scopeNotice.textContent = '当前为虚拟展示范围，所有会话与指标仅用于演示，不代表真实运营结果。';
-        scopeNotice.classList.remove('hidden');
-      } else {
-        scopeNotice.classList.add('hidden');
-        scopeNotice.textContent = '';
-      }
       const metrics = overview.metrics;
       $('overviewKpis').innerHTML = [
         ['会话总数', overview.counts.conversations, `${overview.counts.messages} 条消息`],
@@ -1119,8 +1133,7 @@
       $('modelStatus').textContent = currentModelMode.label;
       $('modelStatus').className = `status ${currentModelMode.kind}`;
       $('sidebarMode').textContent = currentModelMode.detail;
-      const scopeLabels = { operational:'运营数据', simulation:'虚拟展示', evaluation:'隔离评测', all:'全部数据' };
-      $('lastUpdated').textContent = `${scopeLabels[scope] || scope} · 更新于 ${new Date().toLocaleTimeString('zh-CN', {hour12:false})}`;
+      $('lastUpdated').textContent = `更新于 ${new Date().toLocaleTimeString('zh-CN', {hour12:false})}`;
     }
 
     async function loadConversations() {
@@ -2127,7 +2140,7 @@
         state.selectedSimulationScenario = state.simulationReport.scenarios.find((item) => item.status !== 'passed')?.id || 'D01';
         $('simulationStatusFilter').value = '';
         renderSimulation();
-        toast(state.simulationReport.passed ? `${state.simulationReport.summary.total} 个场景全部通过` : '场景运行完成，存在失败项');
+        toast(state.simulationReport.passed ? '13 个场景全部通过' : '场景运行完成，存在失败项');
       } catch (error) {
         toast(error.message);
       } finally {
@@ -2323,24 +2336,39 @@
       }));
     }
 
+    let wikiPage = 0;           // 当前页码（0 起）
+    const WIKI_PAGE_SIZE = 50;  // 每页 50 条（分页修复：不再一次拉 200 截断）
+    let wikiKindFilter = null;  // 当前类型筛选
+
     async function loadWiki() {
-      const [stats, items] = await Promise.all([
+      const [stats] = await Promise.all([
         api('/v1/wiki/stats'),
-        api('/v1/wiki/items?limit=200'),
       ]);
       renderWikiKpis(stats);
       renderWikiNav();
-      renderWikiRows(items, '全部词条', `共 ${items.length} 条`);
+      await fetchWikiPage(0);
       // 搜索命中切换：不自动改列表，仅提示可点搜索
       $('wikiSearch').addEventListener('keydown', (event) => {
         if (event.key === 'Enter') doWikiSearch();
       });
       $('wikiSearchBtn').addEventListener('click', doWikiSearch);
       $('refreshWiki').addEventListener('click', () => loadWiki().then(() => toast('知识库已刷新')));
-      $('wikiOpenGraph').addEventListener('click', () => {
-        window.open('/knowledge-graph', '_blank');
-        toast('已在新标签打开图谱视图');
+      $('wikiPrevPage').addEventListener('click', () => { if (wikiPage > 0) fetchWikiPage(wikiPage - 1); });
+      $('wikiNextPage').addEventListener('click', () => fetchWikiPage(wikiPage + 1));
+      $('wikiOpenGraph').addEventListener('click', async () => {
+        // /kg.html 已加 admin 鉴权，浏览器直开会 401；用 fetch(带 header) 取 Blob 再开
+        try {
+          const resp = await fetch('/kg.html', {
+            headers: { 'X-Admin-Id': state.adminId, 'X-Admin-Key': state.adminKey }
+          });
+          if (!resp.ok) throw new Error(`图谱加载失败 (${resp.status})`);
+          const blob = await resp.blob();
+          window.open(URL.createObjectURL(blob), '_blank');
+        } catch (error) {
+          toast(error.message || '图谱加载失败');
+        }
       });
+      wireMemoryEvents();  // A5：店铺记忆面板事件（每次进知识库视图绑定一次）
       // 图谱滞后提示：图谱是静态快照，知识与它可能不同步
       try {
         const graphStats = await api('/v1/graph/stats');
@@ -2372,9 +2400,22 @@
       $('wikiNav').innerHTML = kinds.map((k) => `<button class="button" data-wiki-kind="${k}">${labels[k] || k}</button>`).join('');
       document.querySelectorAll('[data-wiki-kind]').forEach((node) => node.addEventListener('click', async () => {
         const kind = node.dataset.wikiKind;
-        const items = await api(`/v1/wiki/items?kind=${kind}&limit=200`);
-        renderWikiRows(items, labels[kind] || kind, `共 ${items.length} 条`);
+        wikiKindFilter = kind;
+        wikiPage = 0;
+        await fetchWikiPage(0, kind);
       }));
+    }
+
+    async function fetchWikiPage(page, kind) {
+      const kindParam = kind || wikiKindFilter;
+      const url = `/v1/wiki/items?limit=${WIKI_PAGE_SIZE}&offset=${page * WIKI_PAGE_SIZE}${kindParam ? `&kind=${kindParam}` : ''}`;
+      const items = await api(url);
+      const labels = { rule: '行业规则', policy: '售后政策', script: '客服话术', faq: '常见问答', product: '商品', category: '品类', sku: 'SKU', attribute: '属性' };
+      const title = kindParam ? (labels[kindParam] || kindParam) : '全部词条';
+      renderWikiRows(items, title, `第 ${page + 1} 页 · 每页 ${WIKI_PAGE_SIZE} 条 · 当前 ${items.length} 条`);
+      // 分页按钮状态
+      $('wikiPrevPage').disabled = page <= 0;
+      $('wikiNextPage').disabled = items.length < WIKI_PAGE_SIZE;
     }
 
     function renderWikiRows(items, title, meta) {
@@ -2407,19 +2448,73 @@
       const q = $('wikiSearch').value.trim();
       if (!q) return;
       try {
-        const results = await api(`/v1/graph/search?q=${encodeURIComponent(q)}&limit=20`);
-        const rows = results.map((r) => `<tr data-wiki-search-id="${r.id}" style="cursor:pointer"><td>${escapeHtml(r.label)}</td><td>${escapeHtml(r.title || r.id)}</td></tr>`).join('');
+        // 双通道搜索：运行时知识表（编辑即时可搜）+ 资产层实体类，不依赖 Neo4j
+        const results = await api(`/v1/wiki/search?q=${encodeURIComponent(q)}&limit=20`);
+        const kindLabels = { rule: '行业规则', policy: '售后政策', script: '客服话术', faq: '常见问答', product: '商品', category: '品类', sku: 'SKU', attribute: '属性' };
+        const rows = results.map((r) => `<tr data-wiki-search-id="${r.id}" style="cursor:pointer"><td>${escapeHtml(kindLabels[r.kind] || r.kind || r.category || '')}</td><td>${escapeHtml(r.compiled_truth || r.id)}</td></tr>`).join('');
         $('wikiListTitle').textContent = `搜索「${q}」`;
-        $('wikiListMeta').textContent = `${results.length} 条（图谱）`;
-        $('wikiRows').innerHTML = rows || '<tr><td colspan="4" class="empty">无结果（图谱搜索可能滞后于编辑，见提示）</td></tr>';
+        $('wikiListMeta').textContent = `${results.length} 条（运行时知识表）`;
+        $('wikiRows').innerHTML = rows || '<tr><td colspan="4" class="empty">无结果（试试其他关键词）</td></tr>';
         document.querySelectorAll('[data-wiki-search-id]').forEach((node) => node.addEventListener('click', async () => {
           const id = node.dataset.wikiSearchId;
           const item = await api(`/v1/wiki/items/${encodeURIComponent(id)}`);
           renderWikiDetail(item);
         }));
       } catch (error) {
-        toast('图谱搜索暂不可用（Neo4j 未启动？）：' + error.message);
+        toast('知识搜索暂不可用：' + error.message);
       }
+    }
+
+    // ---------- 店铺长期记忆（A5：P1-2 前端入口） ----------
+    let memoryStoreFilter = '';
+
+    async function loadMemory() {
+      const storeId = $('memoryQueryStoreId').value.trim() || memoryStoreFilter;
+      if (!storeId) return;
+      try {
+        const result = await api(`/v1/admin/knowledge/memory?store_id=${encodeURIComponent(storeId)}&limit=50`);
+        const categoryLabels = { buyer_preference: '买家偏好', frequent_issue: '高频问题', decision_note: '决策记录' };
+        const rows = (result.items || []).map((m) => {
+          const cat = (m.category || '').replace('记忆·', '');
+          const catLabel = categoryLabels[m.intent && m.intent.replace('memory-', '')] || cat;
+          return `<tr data-memory-id="${m.id}"><td>${escapeHtml(catLabel)}</td><td>${escapeHtml(m.answer)}</td><td>${escapeHtml(m.source || '')}</td><td>${escapeHtml((m.created_at || '').slice(0, 16))}</td><td><button class="button danger" data-memory-delete="${m.id}">删除</button></td></tr>`;
+        }).join('');
+        $('memoryRows').innerHTML = rows || '<tr><td colspan="5" class="empty">该店铺暂无记忆（先在上方记录）</td></tr>';
+        document.querySelectorAll('[data-memory-delete]').forEach((node) => node.addEventListener('click', async () => {
+          if (!confirm('确定删除这条记忆？')) return;
+          try {
+            await api(`/v1/admin/knowledge/memory/${encodeURIComponent(node.dataset.memoryDelete)}`, { method: 'DELETE' });
+            toast('记忆已删除');
+            await loadMemory();
+          } catch (error) { toast(error.message); }
+        }));
+      } catch (error) {
+        $('memoryRows').innerHTML = `<tr><td colspan="5" class="empty">记忆加载失败：${escapeHtml(error.message)}</td></tr>`;
+      }
+    }
+
+    function wireMemoryEvents() {
+      $('memoryRecordBtn').addEventListener('click', async () => {
+        const storeId = $('memoryStoreId').value.trim();
+        const fact = $('memoryFact').value.trim();
+        if (!storeId || !fact) return toast('店铺 ID 和记忆内容必填');
+        try {
+          const result = await api('/v1/admin/knowledge/memory', {
+            method: 'POST',
+            body: JSON.stringify({ store_id: storeId, fact, category: $('memoryCategory').value })
+          });
+          toast(`记忆已记录（${result.memory_id}）`);
+          $('memoryFact').value = '';
+          memoryStoreFilter = storeId;
+          $('memoryQueryStoreId').value = storeId;
+          await loadMemory();
+        } catch (error) { toast(error.message); }
+      });
+      $('memoryRecallBtn').addEventListener('click', async () => {
+        memoryStoreFilter = $('memoryQueryStoreId').value.trim();
+        await loadMemory();
+      });
+      $('memoryRefreshBtn').addEventListener('click', loadMemory);
     }
 
     async function loadView(view) {
@@ -2430,7 +2525,6 @@
       if (view === 'orders') return loadOrders();
       if (view === 'competitive') return loadCompetitive();
       if (view === 'ops') return loadOpsAssistant();
-      if (view === 'traffic-lab') return loadTrafficLab();
       if (view === 'marketing') return loadMarketing();
       if (view === 'finance') return loadFinance();
       if (view === 'knowledge') return loadGovernance();
@@ -2500,81 +2594,36 @@
         await loadOpsAssistant();
       } catch (error) { toast(error.message); }
     });
-    function renderOpsCopyResults(result) {
-      const generators = new Set(result.variants.map((item) => item.generator));
-      const generationMode = generators.size > 1 ? '模型 / 模板混合' : generators.has('model') ? '模型生成' : '模板安全降级';
-      $('opsCopyMeta').textContent = `${result.batch_size} 条 · ${generationMode} · ${result.length_range[0]}–${result.length_range[1]} 字`;
-      $('opsCopyResults').innerHTML = result.variants.map((item, index) => { const riskLabel = item.rendered_risk_terms?.length ? '文案命中风险词，需复核' : item.source_risk_terms?.length ? '商品输入命中风险词，需复核' : '未命中绝对化风险词'; return `<article class="copy-result-card"><h4>${escapeHtml(item.title)}</h4><textarea class="input" id="opsCopyEdit-${index}" aria-label="编辑 ${escapeHtml(item.style_label)} 文案">${escapeHtml(item.body)}</textarea><div class="copy-result-meta"><span class="status info">${escapeHtml(item.style_label)}</span><span class="status ${item.needs_review ? 'warn' : 'ok'}">${riskLabel}</span><span class="muted">${escapeHtml(item.generator)} · ${item.char_count} 字</span></div><button class="button small" type="button" data-regenerate-copy="${index}">按修改内容重新生成</button></article>`; }).join('');
-      document.querySelectorAll('[data-regenerate-copy]').forEach((node) => node.addEventListener('click', async () => {
-        const index = Number(node.dataset.regenerateCopy);
-        const current = state.opsCopy.variants[index];
-        const editedCopy = $(`opsCopyEdit-${index}`).value.trim();
-        if (!editedCopy) return toast('修改后的文案不能为空');
-        node.disabled = true;
-        try {
-          const regenerated = await api('/v1/ops-assistant/copywriting/regenerate', {
-            method:'POST',
-            body:JSON.stringify({ ...state.opsCopyRequest, styles:[current.style], variants_per_style:1, edited_copy:editedCopy })
-          });
-          state.opsCopy.variants[index] = regenerated.variants[0];
-          renderOpsCopyResults(state.opsCopy);
-          toast('已基于修改内容重新生成');
-        } catch (error) { toast(error.message); }
-        finally { node.disabled = false; }
-      }));
-    }
-    function selectedOpsCopyStyles() {
-      return Array.from(document.querySelectorAll('.ops-copy-style:checked')).map((node) => node.value);
-    }
-    document.querySelectorAll('.ops-copy-style').forEach((node) => node.addEventListener('change', () => {
-      if (selectedOpsCopyStyles().length > 5) {
-        node.checked = false;
-        toast('一次最多选择 5 种文案风格');
-      }
-    }));
     $('opsCopyForm').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const styles = selectedOpsCopyStyles();
+      const styles = Array.from(document.querySelectorAll('.ops-copy-style:checked')).map((node) => node.value);
       const variantsPerStyle = Number($('opsVariantsPerStyle').value);
       if (!styles.length) return toast('至少选择一种文案风格');
-      if (styles.length > 5) return toast('一次最多选择 5 种文案风格');
       if (styles.length * variantsPerStyle > 9) return toast('小批量生成最多 9 条候选文案');
       const button = $('generateOpsCopy');
-      const results = $('opsCopyResults');
       button.disabled = true;
-      button.textContent = '生成中…';
-      $('opsCopyMeta').textContent = `正在生成 ${styles.length * variantsPerStyle} 条候选文案`;
-      results.setAttribute('aria-busy', 'true');
-      results.innerHTML = '<div class="empty" role="status">模型正在生成，请稍候…</div>';
       try {
         const sellingPoints = $('opsSellingPoints').value.split('\n').map((item) => item.trim()).filter(Boolean);
-        state.opsCopyRequest = {
-          store_id:$('opsStore').value.trim(),
-          product_name:$('opsProductName').value.trim(),
-          selling_points:sellingPoints,
-          price:$('opsPrice').value || null,
-          target_audience:$('opsAudience').value.trim() || null,
-          styles,
-          variants_per_style:variantsPerStyle,
-          length:$('opsCopyLength').value
-        };
         const result = await api('/v1/ops-assistant/copywriting/generate', {
           method:'POST',
-          body:JSON.stringify(state.opsCopyRequest)
+          body:JSON.stringify({
+            store_id:$('opsStore').value.trim(),
+            product_name:$('opsProductName').value.trim(),
+            selling_points:sellingPoints,
+            price:$('opsPrice').value || null,
+            target_audience:$('opsAudience').value.trim() || null,
+            styles,
+            variants_per_style:variantsPerStyle
+          })
         });
         state.opsCopy = result;
-        renderOpsCopyResults(result);
+        const generators = new Set(result.variants.map((item) => item.generator));
+        const generationMode = generators.size > 1 ? '模型 / 模板混合' : generators.has('model') ? '模型生成' : '模板安全降级';
+        $('opsCopyMeta').textContent = `${result.batch_size} 条 · ${generationMode}`;
+        $('opsCopyResults').innerHTML = result.variants.map((item) => `<article class="copy-result-card"><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.body)}</p><div class="copy-result-meta"><span class="status info">${escapeHtml(item.style_label)}</span><span class="status ${item.needs_review ? 'warn' : 'ok'}">${item.needs_review ? '命中风险词，需复核' : '未命中绝对化风险词'}</span><span class="muted">${escapeHtml(item.generator)} · ${item.char_count} 字</span></div></article>`).join('');
         toast(`已生成 ${result.batch_size} 条候选文案`);
-      } catch (error) {
-        $('opsCopyMeta').textContent = '生成失败';
-        results.textContent = error.message;
-        toast(error.message);
-      }
-      finally {
-        results.setAttribute('aria-busy', 'false');
-        button.disabled = false;
-        button.textContent = '生成候选文案';
-      }
+      } catch (error) { toast(error.message); }
+      finally { button.disabled = false; }
     });
     $('refreshMarketing').addEventListener('click', () => loadMarketing().catch((error) => toast(error.message)));
     $('marketingStore').addEventListener('change', () => loadMarketing().catch((error) => toast(error.message)));

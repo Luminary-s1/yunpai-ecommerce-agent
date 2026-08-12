@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from .auth import AdminPrincipal
+from .knowledge_engine.memory_service import MEMORY_CATEGORIES, KnowledgeMemoryService
 from .knowledge_management import (
     KnowledgeCreateRequest,
     KnowledgeLifecycleError,
@@ -28,6 +31,15 @@ from .sops import (
     SopStepResolutionRequest,
     SopTransitionRequest,
 )
+
+
+class MemoryRecordRequest(BaseModel):
+    """店铺长期记忆写入请求（A1）。"""
+
+    store_id: str
+    fact: str
+    category: str = "frequent_issue"
+    source: str = ""
 
 
 def build_governance_router(
@@ -60,6 +72,105 @@ def build_governance_router(
             )
         except KnowledgeLifecycleError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @router.post("/knowledge/import-assets")
+    def import_assets(
+        update: bool = Query(default=False, description="true=更新已存在内容（热更新）；false=幂等跳过"),
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """热更新：把 02_clean 资产层知识导入运行时表（P1-3 + A6 修复）。
+
+        - 默认（update=false）：kg-* 已存在跳过（幂等，重复调用不重复写）
+        - update=true：已存在的 kg-* 行更新 answer/question 等内容字段
+          （修复"假热更新"：此前即使传 update=true 也只在 runtime_bridge 层
+          支持，端点从未接线，改 02_clean 后重导不更新内容）
+        - 用于改 02_clean 后免重启热更新
+        - 返回导入统计（含 updated 条数）
+        """
+        from .knowledge_engine.loader import load_clean_dir
+        from .knowledge_engine.runtime_bridge import import_to_runtime
+
+        clean_dir = (
+            Path(__file__).resolve().parents[2]
+            / "knowledge_graph_output"
+            / "02_clean"
+        )
+        if not clean_dir.is_dir():
+            raise HTTPException(status_code=404, detail=f"资产层目录不存在: {clean_dir}")
+        try:
+            items = load_clean_dir(clean_dir)
+            stats = import_to_runtime(
+                items,
+                service.knowledge,
+                tenant_id=admin.tenant_id,
+                default_store_id=admin.tenant_id,
+                update_existing=update,
+            )
+            return {"ok": True, **stats}
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"资产导入失败: {exc}") from exc
+
+    # ---------- 店铺长期记忆管理（A1：P1-2 KnowledgeMemoryService 接线） ----------
+
+    @router.get("/knowledge/memory/categories")
+    def memory_categories(
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, str]:
+        """记忆类别字典（buyer_preference/frequent_issue/decision_note → 中文标签）。"""
+        return dict(MEMORY_CATEGORIES)
+
+    @router.post("/knowledge/memory")
+    def record_memory(
+        payload: MemoryRecordRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """记录一条店铺级长期记忆（layer=evolution，默认检索隔离）。
+
+        参数（JSON body）：
+            store_id:  店铺 id（必填；记忆按店铺隔离）
+            fact:      记忆内容（必填）
+            category:  记忆类别（默认 frequent_issue）
+            source:    证据来源（默认 memory://manual）
+        """
+        if not payload.store_id or not payload.fact.strip():
+            raise HTTPException(status_code=422, detail="store_id 和 fact 必填")
+        try:
+            memory_id = service.memory.record(
+                payload.store_id,
+                fact=payload.fact,
+                category=payload.category,
+                source=payload.source,
+                tenant_id=admin.tenant_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"ok": True, "memory_id": memory_id}
+
+    @router.get("/knowledge/memory")
+    def recall_memory(
+        store_id: str = Query(description="店铺 id"),
+        q: str = Query(default="", description="关键词过滤（空=全部）"),
+        limit: int = Query(default=10, ge=1, le=100),
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """显式召回店铺记忆（默认隔离：普通检索不命中，此端点主动查）。"""
+        if not store_id:
+            raise HTTPException(status_code=422, detail="store_id 必填")
+        items = service.memory.recall(
+            store_id, query=q, limit=limit, tenant_id=admin.tenant_id
+        )
+        return {"ok": True, "count": len(items), "items": items}
+
+    @router.delete("/knowledge/memory/{memory_id}")
+    def forget_memory(
+        memory_id: str,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """删除一条店铺记忆。"""
+        removed = service.memory.forget(memory_id, tenant_id=admin.tenant_id)
+        if not removed:
+            raise HTTPException(status_code=404, detail="memory not found")
+        return {"ok": True, "memory_id": memory_id}
 
     @router.get("/knowledge/{item_id}")
     def get_knowledge(

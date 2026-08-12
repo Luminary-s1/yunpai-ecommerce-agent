@@ -144,6 +144,7 @@ def import_to_runtime(
     *,
     tenant_id: str | None = None,
     default_store_id: str = "default",
+    update_existing: bool = False,
 ) -> dict[str, int]:
     """把双引擎资产层知识导入运行时 knowledge 表。
 
@@ -152,16 +153,27 @@ def import_to_runtime(
         knowledge_base:   运行时 KnowledgeBase 实例（service.knowledge）
         tenant_id:        租户；general 传 None（全局），seller 传店铺租户
         default_store_id: seller 知识无 scope_key 时的兜底店铺 id
+        update_existing:  True 时对已存在的 kg-* 行做内容更新（A6：热更新真正生效）；
+                          False 时跳过已存在（默认幂等，启动/测试不变）
 
     返回：
-        {"imported": 导入条数, "skipped_entity": 留在图谱的实体条数}
+        {"imported": 导入条数, "updated": 更新条数, "skipped_entity": 留在图谱的实体条数,
+         "skipped_existing": 已存在跳过的条数,
+         "seller_default_store_count": 落入 default_store_id 的 seller 条数}
 
-    幂等：以 id="kg-{item.id}" 导入，重复调用会产生重复行。
-    调用方应先查已有 id 再做增量（可配合 ingest 去重）。
+    ⚠️ 隔离红线：02_clean 资产层通常无店铺维度字段，seller 知识会落入
+    default_store_id。若该值用裸 "default"，所有店铺的 seller 知识会互相可见
+    （隔离失效）。生产接入时必须按店传入 default_store_id，禁止静默用裸 default。
+
+    幂等（默认）：以 id="kg-{item.id}" 导入，已存在的跳过（不重复、不覆盖）。
+    热更新（update_existing=True）：已存在的行更新 answer/question/关键词等
+    内容字段（不改 id/租户/店铺），让 02_clean 修改后免重启生效。
     """
     imported = 0
+    updated = 0
     skipped_entity = 0
     skipped_existing = 0
+    seller_default_store_count = 0
     # 幂等：先查已存在的 kg-* id，重复导入跳过（D-014 语义，不报错不重复）
     # 不修改运行时 KnowledgeBase，直接用其 db 连接查询
     existing: set[str] = set()
@@ -178,9 +190,40 @@ def import_to_runtime(
         if row is None:
             skipped_entity += 1
             continue
+        if (
+            item.scope is KnowledgeScope.SELLER
+            and row.get("store_id") == default_store_id
+        ):
+            seller_default_store_count += 1
         target_id = f"kg-{item.id}"
         if target_id in existing:
-            skipped_existing += 1
+            if update_existing:
+                # A6：热更新——内容字段更新（不改 id/租户/店铺/status）
+                updatable = {
+                    "category": row.get("category"),
+                    "intent": row.get("intent"),
+                    "question": row.get("question"),
+                    "answer": row.get("answer"),
+                    "keywords": row.get("keywords"),
+                    "risk_level": row.get("risk_level"),
+                    "layer": row.get("layer"),
+                    "store_id": row.get("store_id"),
+                    "sku_id": row.get("sku_id"),
+                }
+                updatable = {k: v for k, v in updatable.items() if v is not None}
+                set_clause = ", ".join(f"{k}=?" for k in updatable)
+                params = [*updatable.values(), target_id]
+                try:
+                    with knowledge_base.db.connect() as conn:
+                        conn.execute(
+                            f"UPDATE knowledge SET {set_clause} WHERE id=?",
+                            tuple(params),
+                        )
+                    updated += 1
+                except Exception:
+                    skipped_existing += 1
+            else:
+                skipped_existing += 1
             continue
         # add_document 不接受 None 的 sku_id 之外的可空字段，这里显式剔除
         row = {k: v for k, v in row.items() if v is not None}
@@ -193,8 +236,10 @@ def import_to_runtime(
         imported += 1
     return {
         "imported": imported,
+        "updated": updated,
         "skipped_entity": skipped_entity,
         "skipped_existing": skipped_existing,
+        "seller_default_store_count": seller_default_store_count,
     }
 
 

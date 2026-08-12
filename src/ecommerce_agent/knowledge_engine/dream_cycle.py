@@ -338,6 +338,71 @@ def consolidate(
 
 # ---------- 便捷封装 ----------
 
+def apply_consolidation(
+    report: ConsolidateReport,
+    knowledge_base,
+    *,
+    tenant_id: str | None = None,
+    default_store_id: str = "default",
+) -> dict[str, int]:
+    """把合并记忆结论落库（P1-1：梦循环自动维护闭环）。
+
+    对 consolidate 报告里每条结论：
+    - 以 id="kg-consolidated-{conclusion_source_id}" 写入运行时 knowledge 表
+      （category 按 kind 映射，question 用结论文本，answer 用结论内容）
+    - 幂等：已存在则跳过（不重复写）
+    - 永不删除原文（原知识由 consolidate 标记 consolidated，此处只写结论行）
+
+    参数：
+        report: consolidate() 返回的 ConsolidateReport
+        knowledge_base: 运行时 KnowledgeBase 实例
+
+    返回：{"written": 写入条数, "skipped_existing": 跳过条数}
+    """
+    if not report.consolidated:
+        return {"written": 0, "skipped_existing": 0}
+    kind_to_category = {
+        "faq": "常见问答", "script": "客服话术",
+        "policy": "售后政策", "rule": "行业规则",
+        "product": "商品", "category": "品类",
+        "sku": "SKU", "attribute": "属性",
+    }
+    written = 0
+    skipped = 0
+    for item in report.consolidated:
+        conclusion_id = f"kg-consolidated-{item['conclusion_source_id']}"
+        try:
+            existing = None
+            with knowledge_base.db.connect() as conn:
+                row = conn.execute(
+                    "SELECT knowledge_key FROM knowledge WHERE knowledge_key=?",
+                    (conclusion_id,),
+                ).fetchone()
+                existing = row
+            if existing:
+                skipped += 1
+                continue
+            knowledge_base.add_document(
+                category=kind_to_category.get(item["kind"], "常见问答"),
+                intent=f"consolidated-{item['kind']}",
+                question=str(item["conclusion"])[:500],
+                answer=str(item["conclusion"]),
+                keywords="",
+                risk_level="low",
+                source=f"dream-cycle:consolidated:{item['conclusion_source_id']}",
+                status="active",
+                approved_by="dream-cycle",
+                tenant_id=tenant_id,
+                knowledge_key=conclusion_id,
+                layer="evolution",
+                store_id=default_store_id if item["scope"] == "seller" else None,
+            )
+            written += 1
+        except Exception:
+            skipped += 1
+    return {"written": written, "skipped_existing": skipped}
+
+
 def run_dream_cycle(
     items: list[KnowledgeItem],
     *,

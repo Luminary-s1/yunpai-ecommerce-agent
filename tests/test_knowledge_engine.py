@@ -138,7 +138,8 @@ def test_infer_scope() -> None:
 def test_load_clean_dir_real_data(tmp_path: Path) -> None:
     """用真实任务6产物集成测试：02_clean/ 加载 + 标 scope + 统计。"""
     # 定位真实交付物（若 CI 无此目录则跳过）
-    repo_root = Path(__file__).resolve().parent.parent.parent
+    # __file__ = tests/test_knowledge_engine.py → parent= tests/ → parent.parent = 项目根
+    repo_root = Path(__file__).resolve().parent.parent
     clean_dir = repo_root / "knowledge_graph_output" / "02_clean"
     if not clean_dir.is_dir():
         pytest.skip("真实 02_clean 目录不存在，跳过集成测试")
@@ -155,6 +156,11 @@ def test_load_clean_dir_real_data(tmp_path: Path) -> None:
     assert KnowledgeKind.SCRIPT in kinds
     assert KnowledgeKind.FAQ in kinds
     assert KnowledgeKind.RULE in kinds
+
+    # SKU 必须从 sku.json 加载（曾因缺失被静默跳过，导致 SKU 无测试守护）
+    sku_items = [i for i in items if i.kind is KnowledgeKind.SKU]
+    assert len(sku_items) >= 12, f"SKU 应 ≥12 条（从 sku.json 派生），实际 {len(sku_items)}"
+    assert all(i.scope_key for i in sku_items)
 
     # 每个 item 都有 id、compiled_truth、scope、timeline
     for item in items:
@@ -407,3 +413,37 @@ def test_auto_repair_idempotent() -> None:
     r2 = auto_repair(report, items)
     assert r2["marked_dangling"] == 0  # 第二次不重复标记
     assert r1["marked_dangling"] >= 1
+
+
+# ---------- P1-1：合并记忆落库 ----------
+
+def test_apply_consolidation_persists(tmp_path: Path) -> None:
+    """合并结论落库（apply_consolidation）：写入 + 幂等。"""
+    from ecommerce_agent.knowledge_engine.dream_cycle import consolidate, apply_consolidation
+    from ecommerce_agent.rag import KnowledgeBase
+    from ecommerce_agent.database import Database
+
+    items = []
+    for i, txt in enumerate(["七天无理由退货", "七天无理由退货政策", "七天无理由退货规定"]):
+        items.append(KnowledgeItem(
+            id=f"C-{i}", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
+            compiled_truth=txt, scope_key="qinchuan",
+            timeline=[TimelineEntry(at="2026-08-01T00:00:00+00:00", action="created")],
+            attributes={"confidence": 0.9},
+        ))
+    rep = consolidate(items, min_facts=3, min_age_hours=1, threshold=0.7)
+    assert len(rep.clusters) >= 1, "高相似知识应触发合并"
+
+    db = Database(tmp_path / "agent.sqlite3")
+    db.initialize()
+    kb = KnowledgeBase(db)
+    first = apply_consolidation(rep, kb)
+    assert first["written"] >= 1
+    second = apply_consolidation(rep, kb)
+    assert second["written"] == 0
+    assert second["skipped_existing"] >= 1, "幂等：重复调用应跳过"
+    with db.connect() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM knowledge WHERE knowledge_key LIKE 'kg-consolidated-%'"
+        ).fetchone()[0]
+    assert count == first["written"], f"DB 应只有 {first['written']} 条结论行"

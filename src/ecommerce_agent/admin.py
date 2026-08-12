@@ -211,14 +211,13 @@ class AdminConsoleService:
                 """
                 SELECT m.id, m.trace_id, m.role, m.content, m.intent, m.risk_level,
                        m.route_reason, m.sources_json, m.model_fallback, m.redacted,
-                       m.context_snapshot_id, m.customer_intent,
-                       m.intent_confidence, m.intent_method, m.created_at,
+                       m.context_snapshot_id, m.created_at,
                        (SELECT a.detail_json FROM audit_log a
                         WHERE a.tenant_id=m.tenant_id AND a.subject_id=m.id
                           AND a.event_type='chat.completed'
                         ORDER BY a.created_at DESC LIMIT 1) AS decision_audit_json
                 FROM messages m WHERE m.session_id=? AND m.tenant_id=?
-                ORDER BY m.created_at ASC
+                ORDER BY m.created_at ASC, m.rowid ASC
                 """,
                 (session_id, tenant_id),
             ).fetchall()

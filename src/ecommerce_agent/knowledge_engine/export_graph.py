@@ -2,29 +2,28 @@
 
 目标：别人拿到一个 HTML 文件，浏览器打开即可看到知识图谱（无需装 Neo4j）。
 
-- 从 Neo4j 拉取全部节点 + 关系（通过 cypher-shell 输出 JSON）
+- 从 Neo4j 拉取全部节点 + 关系（通过 HTTP API 输出 JSON）
 - 生成自包含 HTML（内嵌 D3.js 力导向图，可缩放/拖拽/查看详情）
 - 纯前端无依赖，双击打开即用
 
 用法（命令行）：
     python -m ecommerce_agent.knowledge_engine.export_graph <output.html>
 
-依赖：本机 neo4j 已启动（localhost:7687），密码 yunpai123。
+连接参数走 env（NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD），默认本地开发值，
+不再硬编码机器专属路径（P1-5 可复现）。
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
+import os
 import sys
 from pathlib import Path
 
-# Neo4j 连接信息（本地开发）
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "yunpai123"
-NEO4J_HOME = Path("D:/neo4j-community-2026.04.0")
-CYPHR_SHELL = NEO4J_HOME / "bin" / "cypher-shell.bat"
+# Neo4j 连接信息（env 可覆盖；默认占位符密码，真实密码走 NEO4J_PASSWORD）
+NEO4J_URI = os.getenv("NEO4J_URI", "http://localhost:7474")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "change-me")
 
 # 节点颜色（按标签）
 NODE_COLORS = {
@@ -44,7 +43,7 @@ def _run_http(query: str) -> list[list]:
     import base64
     import urllib.request
 
-    endpoint = "http://localhost:7474/db/neo4j/tx/commit"
+    endpoint = f"{NEO4J_URI}/db/neo4j/tx/commit"
     body = json.dumps({"statements": [{"statement": query}]}).encode("utf-8")
     token = base64.b64encode(f"{NEO4J_USER}:{NEO4J_PASSWORD}".encode()).decode()
     req = urllib.request.Request(endpoint, data=body, method="POST")

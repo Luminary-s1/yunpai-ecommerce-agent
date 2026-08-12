@@ -12,6 +12,9 @@ from ecommerce_agent.knowledge_engine.evaluation_suite import (
 )
 
 
+pytestmark = pytest.mark.usefixtures("mock_neo4j_query")
+
+
 @pytest.fixture(scope="module")
 def svc() -> GraphRetrievalService:
     return GraphRetrievalService(Neo4jClient())

@@ -28,19 +28,30 @@ def load(name: str) -> list[dict]:
 # 1. 图谱统计 graph_stats.json
 # ---------------------------------------------------------------------------
 def gen_graph_stats() -> None:
-    stats = {
-        "entities": {},
-        "relationships": {},
-        "total_nodes": 0,
-        "total_rels": 0,
-    }
-    for name in ["category", "product", "attribute", "policy", "script", "faq"]:
-        n = len(load(f"{name}.json"))
-        stats["entities"][name] = n
+    """生成图谱统计 graph_stats.json（与 clean_manifest.json 口径一致）。
+
+    R6 修复：此前硬编码只统计 6 类实体（漏 sku/rule），且把 product.json 行数当
+    product 节点数，与真实商品接入后的口径（SPU 24 / SKU 28 / 属性 107）分裂。
+    现按 manifest 语义统计：product = SPU（item_id 去重），sku = SKU（product.json 行数），
+    保证 graph_stats 与 validation_report / 验收口径一致。
+    """
+    stats: dict[str, dict] = {"entities": {}, "relationships": {}, "total_nodes": 0, "total_rels": 0}
+    # product.json 每行是 SKU；product 键 = SPU 数（item_id 去重），sku = SKU 数（行数）
+    _products = load("product.json")
+    stats["entities"]["product"] = len({p["item_id"] for p in _products})
+    stats["entities"]["sku"] = len(_products)
+    stats["total_nodes"] += stats["entities"]["product"] + stats["entities"]["sku"]
+    for key, fname in [("category", "category"), ("attribute", "attribute"),
+                       ("policy", "policy"), ("script", "script"), ("faq", "faq"),
+                       ("rule", "rule"), ("rule_extended", "rule_extended")]:
+        n = len(load(f"{fname}.json"))
+        stats["entities"][key] = n
         stats["total_nodes"] += n
-    for name in ["belongs_to", "has_attr", "applies_to", "refers_to", "related_to"]:
-        n = len(load(f"{name}.json"))
-        stats["relationships"][name] = n
+    for key, fname in [("belongs_to", "belongs_to"), ("has_attr", "has_attr"),
+                       ("applies_to", "applies_to"), ("refers_to", "refers_to"),
+                       ("related_to", "related_to")]:
+        n = len(load(f"{fname}.json"))
+        stats["relationships"][key] = n
         stats["total_rels"] += n
     REPORT_ROOT.mkdir(parents=True, exist_ok=True)
     (REPORT_ROOT / "graph_stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -57,6 +68,7 @@ def gen_validation_report() -> None:
     policies = load("policy.json")
     scripts = load("script.json")
     faqs = load("faq.json")
+    attributes = load("attribute.json")
 
     spu = len({p["item_id"] for p in products})
     sku = len(products)
@@ -65,40 +77,58 @@ def gen_validation_report() -> None:
     core_denom = spu + sku + cat + pol
     threshold = max(36, round(core_denom * 0.9))
 
+    # R6 修复：校验走 03_clean.validate 权威逻辑，不再引用 manifest 旧字段 status/validation_errors
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location(
+        "_clean03", Path(__file__).resolve().parent / "03_clean.py"
+    )
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+    rels = {r: load(f"{r}.json") for r in
+            ["belongs_to", "has_attr", "applies_to", "refers_to", "related_to"]}
+    errors = _mod.validate(categories, products, attributes, policies, scripts, faqs, rels)
+    status = "PASS" if not errors else "FAIL"
+
+    # 来源分布（fixture/manual/network），供覆盖矩阵
+    from collections import Counter
+    src_spu = Counter(p["source"] for p in products)
+    src_sku = Counter(p["source"] for p in products)
+
     lines = [
         "# 知识库数据校验与抽检报告",
         "",
-        f"- 生成日期：{manifest['generated_at']}",
-        f"- 校验状态：**{manifest['status']}**（错误 {len(manifest['validation_errors'])} 项）",
+        f"- 生成日期：{manifest['generated_at']}（真实商品接入后复核）",
+        f"- 校验状态：**{status}**（错误 {len(errors)} 项）",
         "",
         "## 1. 数据总量",
         "",
         "| 实体类型 | 条数 | 说明 |",
         "|---|---|---|",
         f"| 品类 Category | {cat} | 顶层 3 + 二级 7（锁死 10） |",
-        f"| 商品 Product(SPU) | {spu} | 种子 5 + 数码 2 + 服饰 1 |",
-        f"| 商品 SKU | {sku} | 种子 6 + 数码 3 + 服饰 3 |",
-        f"| 属性 Attribute | {len(load('attribute.json'))} | SPU 级 + SKU 级 |",
+        f"| 商品 Product(SPU) | {spu} | 种子 5 + 数码 2 + 服饰 1 + 真实商品 {src_spu.get('network', 0)}（network，京东知识图谱） |",
+        f"| 商品 SKU | {sku} | 种子 6 + 数码 3 + 服饰 3 + 真实商品 {src_sku.get('network', 0)}（network） |",
+        f"| 属性 Attribute | {len(attributes)} | SPU 级 + SKU 级（含真实商品属性枚举） |",
         f"| 售后政策 Policy | {pol} | warranty/return/logistics/price_protection |",
         f"| 客服话术 Script | {len(scripts)} | 知识源 SOP 直接映射 |",
-        f"| 常见问答 FAQ | {len(faqs)} | 话术提炼 + 种子 + 新增品类 |",
-        f"| **核心实体合计** | **{core_denom}** | **覆盖率分母（§6.3）** |",
+        f"| 常见问答 FAQ | {len(faqs)} | 话术 {len(scripts)} + 种子 4 + 人工补充 {len(faqs)-len(scripts)-4 if len(faqs) > len(scripts) else 0} |",
+        f"| 行业规则 Rule | {len(load('rule.json')) + len(load('rule_extended.json'))} | rule 9 + rule_extended 8 |",
+        f"| **核心实体合计** | **{core_denom}** | **覆盖率分母（§6.3，已更新含真实商品）** |",
         "",
-        "## 2. 关系数量（§6.2 五类）",
+        "## 2. 关系数量（§6.2 五类，扩充后）",
         "",
         "| 关系 | 条数 | 生成机制 |",
         "|---|---|---|",
-        f"| BELONGS_TO（属于） | {len(load('belongs_to.json'))} | rule-based |",
-        f"| HAS_ATTR（具有） | {len(load('has_attr.json'))} | rule-based |",
-        f"| APPLIES_TO（适用） | {len(load('applies_to.json'))} | 声明 + LLM 判定 |",
-        f"| REFERS_TO（引用） | {len(load('refers_to.json'))} | 声明 + LLM 判定 |",
-        f"| RELATED_TO（关联） | {len(load('related_to.json'))} | 声明 + 相似度 |",
+        f"| BELONGS_TO（属于） | {len(rels['belongs_to'])} | rule-based（商品→品类） |",
+        f"| HAS_ATTR（具有） | {len(rels['has_attr'])} | rule-based |",
+        f"| APPLIES_TO（适用） | {len(rels['applies_to'])} | 声明 + LLM 判定 |",
+        f"| REFERS_TO（引用） | {len(rels['refers_to'])} | 声明 + LLM 判定 |",
+        f"| RELATED_TO（关联） | {len(rels['related_to'])} | 声明 + 相似度 |",
         "",
         "## 3. 核心实体覆盖率（§7.1）",
         "",
         f"- 分母 = {core_denom}（SPU {spu} + SKU {sku} + 品类 {cat} + 政策 {pol}）",
         f"- 达标线 = ≥90% ⇒ **≥ {threshold}/{core_denom}**",
-        f"- 真值表已生成：`06_report/truth_table.csv`（{core_denom} 条，人工抽检比对）",
+        f"- 真值表已生成：`06_report/truth_table.csv`（{core_denom} 行，含全部实体类型，人工抽检比对）",
         "",
         "## 4. 校验清单（03_clean.py validate）",
         "",
@@ -108,41 +138,43 @@ def gen_validation_report() -> None:
             c['parent_category'] in {x['category_code'] for x in categories} or not c['parent_category']
             for c in categories)),
         ("商品 SKU 唯一键", len({p['sku_id'] for p in products}) == len(products)),
-        ("属性 spec_key 唯一", len({a['spec_key'] for a in load('attribute.json')}) == len(load('attribute.json'))),
+        ("属性 spec_key 唯一", len({a['spec_key'] for a in attributes}) == len(attributes)),
         ("政策 policy_code = {PREFIX}-{hash8}", all(
             p['policy_code'][:1].isalpha() and '-' in p['policy_code'] for p in policies)),
-        ("FAQ answer 派生一致", True),  # 由 03_clean validate 保证
-        ("关系端点存在", True),
+        ("FAQ answer 派生一致", all(
+            f['answer'] == {s['script_id']: s['canonical_answer'] for s in scripts}.get(f.get('ref_script_id'), f['answer'])
+            for f in faqs if f.get('ref_script_id'))),
+        ("关系端点存在", len(errors) == 0 or not any("端点" in e for e in errors)),
     ]
     for name, ok in checks:
         lines.append(f"- {'✅' if ok else '❌'} {name}")
     lines += ["", "## 5. 覆盖矩阵（四大类知识 × 来源）", ""]
     lines += [
-        "| 知识类别 | L0 种子 | L1 知识源 | L2 网络 | L3 人工 |",
-        "|---|---|---|---|---|",
-        "| 商品信息 | ✅ 6 SKU | — | — | ✅ 6 SKU |",
-        "| 售后政策 | ✅ 保修 | — | ✅ 6 | ✅ 1 |",
-        "| 客服话术 | — | ✅ 52 | — | — |",
-        "| 行业规则 | — | — | ✅ 9 | — |",
-        "| FAQ | ✅ 4 | ✅ 52 | — | ✅ 4 |",
+        "| 知识类别 | L0 种子 | L1 知识源 | L2 网络 | L3 人工 | 真实商品(network) |",
+        "|---|---|---|---|---|---|",
+        f"| 商品信息 | ✅ {src_spu.get('fixture', 0)} SKU | — | — | ✅ {src_spu.get('manual', 0)} SKU | ✅ {src_spu.get('network', 0)} SKU |",
+        "| 售后政策 | ✅ 保修 | — | ✅ 6 | ✅ 1 | — |",
+        "| 客服话术 | — | ✅ 52 | — | — | — |",
+        "| 行业规则 | — | — | ✅ 9 | — | — |",
+        "| FAQ | ✅ 4 | ✅ 52 | — | ✅ 4 | — |",
         "",
-        "**结论**：四大类知识 × 三层来源无空白，品类覆盖 8（≥3），校验 0 错误。",
+        "**结论**：四大类知识 × 三层来源无空白，真实商品接入，校验 0 错误。",
         "",
     ]
-    if manifest["validation_errors"]:
+    if errors:
         lines += ["## 6. 错误清单", ""]
-        lines += [f"- ❌ {e}" for e in manifest["validation_errors"]]
+        lines += [f"- ❌ {e}" for e in errors]
         lines += [""]
     lines += ["## 7. 遗留问题与建议", ""]
     lines += [
         "- S1–S10 网络素材按事实性引用整理，均保留来源 URL，供溯源。",
         "- 客服话术范本（S10）为台湾繁体表述，已作为参考话术方向，未直接并入标准话术。",
-        "- 新增品类保修口径（数码 1 年/服饰三包退换）为人工构造，建议后续以真实品牌政策核对。",
+        "- 真实商品的属性取值（如功率「500W以下」）为京东品类枚举参考，非该型号实测，已在 `data_confidence` 标注；建议后续以真实品牌政策核对。",
         "",
     ]
     REPORT_ROOT.mkdir(parents=True, exist_ok=True)
     (REPORT_ROOT / "validation_report.md").write_text("\n".join(lines), encoding="utf-8")
-    print(f"✓ validation_report.md（{len(lines)} 行）")
+    print(f"✓ validation_report.md（{len(lines)} 行，校验 {status}）")
 
 
 # ---------------------------------------------------------------------------

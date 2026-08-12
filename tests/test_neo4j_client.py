@@ -7,6 +7,9 @@ import pytest
 from ecommerce_agent.knowledge_engine.neo4j_client import Neo4jClient, Neo4jError
 
 
+pytestmark = pytest.mark.usefixtures("mock_neo4j_transport")
+
+
 def test_client_query_returns_rows() -> None:
     """query 返回行列表。"""
     client = Neo4jClient()

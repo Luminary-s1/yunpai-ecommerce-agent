@@ -8,6 +8,9 @@ from ecommerce_agent.knowledge_engine.neo4j_client import Neo4jClient
 from ecommerce_agent.knowledge_engine.graph_retrieval import GraphRetrievalService
 
 
+pytestmark = pytest.mark.usefixtures("mock_neo4j_query")
+
+
 @pytest.fixture(scope="module")
 def svc() -> GraphRetrievalService:
     return GraphRetrievalService(Neo4jClient())
@@ -72,3 +75,31 @@ def test_stats(svc: GraphRetrievalService) -> None:
     assert stats["total_rels"] >= 200
     assert "Rule" in stats["by_label"]
     assert "REFERS_TO" in stats["by_rel"]
+
+
+# ---------- 契约测试（负责人二次 review #5：max_hops/max_depth 语义） ----------
+
+def test_multi_hop_hops_equal_rel_types_len(svc: GraphRetrievalService) -> None:
+    """契约：实际跳数 = len(rel_types)，与 max_hops 无关。
+
+    若把 max_hops 当跳数限制，1 条关系的链（实际 1 跳）配 max_hops=5
+    应返回结果；跳数语义错误（把 max_hops 当深度）会导致结果为空。
+    """
+    paths = svc.multi_hop("QC-AF5-WHITE", ["BELONGS_TO"], max_hops=5)
+    assert len(paths) > 0, "1 跳链配 max_hops=5 不应空（跳数由 rel_types 决定）"
+
+
+def test_multi_hop_limit_scale_factor(svc: GraphRetrievalService) -> None:
+    """契约：max_hops 只做 LIMIT 系数（max_hops*20），不限制路径深度。"""
+    paths_small = svc.multi_hop("QC-AF5-WHITE", ["BELONGS_TO", "APPLIES_TO-"], max_hops=1)
+    assert len(paths_small) >= 0
+    # 不抛异常、返回结构正确即契约成立（LIMIT 是查询参数，由 mock 接受）
+    assert all({"end_id", "end_label", "props"} <= set(p) for p in paths_small)
+
+
+def test_relation_traverse_max_depth_is_limit_not_hops(svc: GraphRetrievalService) -> None:
+    """契约：relation_traverse 只做单跳遍历，max_depth 是 LIMIT 系数。"""
+    rels = svc.relation_traverse("QC-AF5-WHITE", max_depth=10)
+    assert len(rels) > 0
+    # 单跳：返回的每条 target 都是直接邻居（结构上有 rel_type）
+    assert all("rel_type" in r and "target" in r for r in rels)

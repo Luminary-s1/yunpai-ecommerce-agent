@@ -1,13 +1,26 @@
 """四套业务场景 Prompt 模板（含防幻觉指令）。
 
 对齐验收文档交付物⑥：Prompt 需含防幻觉指令（仅基于图谱检索结果和 Wiki 文档回答）。
-每套模板通过 {context}（检索结果）和 {question}（用户问题）渲染。
+
+实现：
+- 优先从 `knowledge_graph_output/03_dictionary/prompt_templates.json` 加载
+  （机器可读唯一契约，与图谱数据同源，生产部署由 package-data 携带）
+- 文件缺失/损坏时：日志警告 + fallback 内置 dict（不崩溃，保证可用性）
+- 每套模板通过 {context}（检索结果）和 {question}（用户问题）渲染
+
+导出（向后兼容）：PROMPT_TEMPLATES / render_prompt。
 """
 
 from __future__ import annotations
 
-# 场景模板：{context} 注入图谱/Wiki 检索结果，{question} 注入用户问题
-PROMPT_TEMPLATES: dict[str, str] = {
+import json
+import logging
+from pathlib import Path
+
+logger = logging.getLogger("knowledge_engine.prompt_templates")
+
+# 内置默认模板（fallback；JSON 缺失时使用）
+_DEFAULT_TEMPLATES: dict[str, str] = {
     "customer_service": (
         "你是电商客服助手。以下是从知识图谱/Wiki 检索到的可靠事实：\n"
         "{context}\n\n"
@@ -45,6 +58,61 @@ PROMPT_TEMPLATES: dict[str, str] = {
         "3. 如果数据不足，明确指出缺少哪些信息。"
     ),
 }
+
+# 契约 JSON 路径：优先包内 fixtures（pip 安装可用，importlib.resources），
+# 回退仓库内 knowledge_graph_output/03_dictionary/（源码运行）
+_FALLBACK_JSON_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "knowledge_graph_output"
+    / "03_dictionary"
+    / "prompt_templates.json"
+)
+
+
+def _load_from_json() -> dict[str, str] | None:
+    """从契约 JSON 加载模板；失败返回 None（调用方 fallback）。"""
+    raw: str | None = None
+    source = ""
+    # 1) 包内 fixtures（生产安装）
+    try:
+        import importlib.resources
+
+        raw = importlib.resources.files("ecommerce_agent.fixtures").joinpath(
+            "prompt_templates.json"
+        ).read_text(encoding="utf-8")
+        source = "包内 fixtures"
+    except (ImportError, FileNotFoundError, OSError):
+        raw = None
+    # 2) 回退仓库内路径（源码运行）
+    if raw is None:
+        try:
+            if _FALLBACK_JSON_PATH.is_file():
+                raw = _FALLBACK_JSON_PATH.read_text(encoding="utf-8")
+                source = str(_FALLBACK_JSON_PATH)
+        except OSError:
+            raw = None
+    if raw is None:
+        logger.warning("prompt_templates.json 不可用，使用内置默认模板")
+        return None
+    try:
+        data = json.loads(raw)
+        templates = data.get("templates")
+        if not isinstance(templates, dict) or not templates:
+            logger.warning("prompt_templates.json 缺少 templates 字段，使用内置默认模板")
+            return None
+        required = {"customer_service", "product_recommend", "aftersale_policy", "competitor_analysis"}
+        missing = required - set(templates)
+        if missing:
+            logger.warning("prompt_templates.json 缺场景 %s，使用内置默认模板", sorted(missing))
+            return None
+        logger.info("prompt_templates 已从 %s 加载（%d 场景）", source, len(templates))
+        return {k: str(v) for k, v in templates.items()}
+    except (ValueError, TypeError) as exc:
+        logger.warning("prompt_templates.json 解析失败（%s），使用内置默认模板", exc)
+        return None
+
+
+PROMPT_TEMPLATES: dict[str, str] = _load_from_json() or _DEFAULT_TEMPLATES
 
 
 def render_prompt(scene: str, context: str, question: str) -> str:

@@ -193,7 +193,24 @@ def gen_cypher() -> None:
     print("✓ 00_setup.cypher / 01_load_nodes.cypher / 02_load_rels.cypher")
 
 
+def cleanup_legacy_files() -> None:
+    """清理历史遗留导入文件（D-035：单一事实源，负责人二次 review #8）。
+
+    - nodes_rule_extended.csv 是早期未合并版本的残留：rule 已合并进
+      nodes_rule.csv（rule.json 9 条 + rule_extended.json 8 条 = 17 条），
+      单独保留扩展文件会误导二次导入（Cypher 只载 nodes_rule.csv）。
+    """
+    legacy = [
+        IMPORT_ROOT / "nodes_rule_extended.csv",
+    ]
+    for f in legacy:
+        if f.exists():
+            f.unlink()
+            print(f"✓ 清理遗留文件 {f.name}")
+
+
 def main() -> None:
+    cleanup_legacy_files()
     gen_dictionary_schema()
     export_entities()
     export_relationships()

@@ -2,15 +2,20 @@
 
 对齐任务6交接内容：清洗后的知识库源数据集（结构化文档 + 数据字典）。
 同时附带下游复用物（六类实体/五类关系/CSV/Cypher/真值表）供任务4/任务2承接。
+
+盲点5（D-035）：末尾固化 zip 归档（07_handoff.zip），不再手工压缩。
+注意：07_handoff.zip 已在 .gitignore 排除（不入库），交付时在本地分发。
 """
 from __future__ import annotations
 
 import shutil
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 HANDOFF = ROOT / "07_handoff"
+ZIP_PATH = ROOT / "07_handoff.zip"
 
 TODAY = datetime.now().strftime("%Y-%m-%d")
 
@@ -47,20 +52,22 @@ def gen_readme() -> Path:
         "",
         "| 实体 | 条数 | 关系 | 条数 |",
         "|---|---|---|---|",
-        "| 品类 Category | 10 | BELONGS_TO（属于） | 12 |",
+        "| 品类 Category | 10 | BELONGS_TO（属于） | 19 |",
         "| 商品 Product(SPU) | 8 | HAS_ATTR（具有） | 51 |",
-        "| 商品 SKU | 12 | APPLIES_TO（适用） | 34 |",
-        "| 属性 Attribute | 51 | REFERS_TO（引用） | 64 |",
-        "| 售后政策 Policy | 9 | RELATED_TO（关联） | 52 |",
+        "| 商品 SKU | 12 | APPLIES_TO（适用） | 36 |",
+        "| 属性 Attribute | 51 | REFERS_TO（引用） | 65 |",
+        "| 售后政策 Policy | 9 | RELATED_TO（关联） | 69 |",
         "| 客服话术 Script | 52 | | |",
-        "| 常见问答 FAQ | 60 | | |",
-        "| 行业规则 Rule | 9 | | |",
-        "| **合计** | **211** | **合计** | **213** |",
+        "| 常见问答 FAQ | 63 | | |",
+        "| 行业规则 Rule | 17 | | |",
+        "| **合计** | **222** | **合计** | **240** |",
+        "",
+        "> 注：数字以 `02_clean/clean_manifest.json`（由 `05_scripts/11_refresh_manifest.py` 重写）为准。",
         "",
         "## 下游复用（任务4/任务2 输入）",
         "",
         "- **任务4 实体抽取输入**：`02_clean/*.json`（六类实体已按 Schema 构建，含置信度）",
-        "- **任务4 抽检输入**：`06_report/truth_table.csv`（核心实体分母 39）+ `sampling_plan.csv`（核心池 60 条）",
+        "- **任务4 抽检输入**：`06_report/truth_table.csv`（覆盖分母 171：SPU 8 + SKU 12 + 品类 10 + 政策 9 + FAQ 63 + 话术 52 + 规则 17）+ `sampling_plan.csv`（核心池 60 条，人工标注模板见 `sampling_review_instructions.md`）",
         "- **任务2 导入输入**：`04_import/`（nodes/rels CSV + 00_setup / 01_load_nodes / 02_load_rels Cypher）",
         "- **任务3 Wiki 输入**：`02_clean/*.md`（五份可读文档）+ `03_dictionary/`（分类契约）",
         "",
@@ -68,7 +75,7 @@ def gen_readme() -> Path:
         "",
         "- S10 客服话术范本为台湾繁体，仅作参考方向，未并入标准话术库",
         "- 新增品类保修口径为人工构造，建议后续以真实品牌政策核对",
-        "- M3（Neo4j 导入验证）与 M4（人工抽检）待执行",
+        "- M3 已实际完成：Neo4j 导入验证（`04_import/README.md` docker-compose + Cypher）、人工抽检模板已生成（`sampling_plan.csv` 60 条待标注，统计脚本 `13_sampling_report.py`）、检索评测 35 题（`06_report/retrieval_evaluation_report.json`）",
         "",
     ]
     readme = HANDOFF / "README.md"
@@ -88,11 +95,24 @@ def copy_dirs() -> None:
             print(f"✓ 复制 {name}/")
 
 
+def make_zip() -> Path:
+    """固化 zip 归档：07_handoff/ → 07_handoff.zip（不入 git，本地分发用）。"""
+    if ZIP_PATH.exists():
+        ZIP_PATH.unlink()
+    with zipfile.ZipFile(ZIP_PATH, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(HANDOFF.rglob("*")):
+            if path.is_file():
+                zf.write(path, path.relative_to(ROOT))
+    print(f"✓ 已归档 {ZIP_PATH}")
+    return ZIP_PATH
+
+
 def main() -> None:
     HANDOFF.mkdir(parents=True, exist_ok=True)
     copy_dirs()
     gen_readme()
     print("✓ README.md")
+    make_zip()
     print(f"\n交接包生成完成：{HANDOFF}")
 
 

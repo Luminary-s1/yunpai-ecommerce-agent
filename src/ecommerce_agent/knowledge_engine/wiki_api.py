@@ -18,15 +18,33 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from ..auth import AdminPrincipal
+from ..knowledge_management import KnowledgeCreateRequest
 from ..service import AgentService
 from .loader import load_clean_dir
 from .models import KnowledgeItem
 from .runtime_bridge import load_from_runtime
+
+
+class WikiEditRequest(BaseModel):
+    """Wiki 编辑请求（仅 Q&A 类词条；answer 必填）。"""
+
+    model_config = {"extra": "forbid"}
+
+    answer: str = Field(min_length=2, max_length=2000)
+    question: str | None = Field(default=None, min_length=2, max_length=500)
+    keywords: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=80)
+    intent: str | None = Field(
+        default=None, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$"
+    )
+    risk_level: str = Field(default="low", pattern=r"^(low|medium|high)$")
 
 # 资产层 02_clean/ 目录（相对项目根：src/ecommerce_agent/knowledge_engine/ → 根）
 _CLEAN_DIR = Path(__file__).resolve().parents[3] / "knowledge_graph_output" / "02_clean"
@@ -43,14 +61,29 @@ ENTITY_KINDS: set[str] = {"product", "category", "sku", "attribute"}
 
 
 def _to_view(item: KnowledgeItem, *, runtime: bool = False) -> dict[str, Any]:
-    """KnowledgeItem → 前端视图（含状态/属性/时间线/来源）。"""
+    """KnowledgeItem → 前端视图（含状态/属性/时间线/来源）。
+
+    含 category 字段（前端分类导航用；运行时行来自 attributes.category，
+    实体类从资产层 attributes 读，缺失则按 kind 兜底）。
+    """
     attrs = dict(item.attributes)
+    category = attrs.get("category") or attrs.get("policy_type") or ""
+    if not category:
+        # 兜底：按 kind 映射到语义分类（前端导航分组）
+        _KIND_CATEGORY = {
+            "rule": "行业规则", "policy": "售后政策",
+            "script": "客服话术", "faq": "常见问答",
+            "product": "商品", "category": "品类",
+            "sku": "SKU", "attribute": "属性",
+        }
+        category = _KIND_CATEGORY.get(item.kind.value, "")
     return {
         "id": item.id,
         "kind": item.kind.value,
         "scope": item.scope.value,
         "scope_key": item.scope_key,
         "compiled_truth": item.compiled_truth,
+        "category": category,
         "attributes": attrs,
         "timeline": [e.to_dict() for e in item.timeline],
         "source": "runtime" if runtime else "asset",
@@ -133,6 +166,7 @@ class WikiService:
         kind: str | None = None,
         status: str | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         items = load_merged_items(
             knowledge_base=self.service.knowledge,
@@ -142,7 +176,93 @@ class WikiService:
             items = [i for i in items if i["kind"] == kind]
         if status:
             items = [i for i in items if i["attributes"].get("status") == status]
-        return items[:limit]
+        return items[offset : offset + limit]
+
+    def search(self, q: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        """双通道搜索：运行时 knowledge 表为主 + 资产层实体类补充。
+
+        - 主通道：service.knowledge.retrieve（SQLite FTS + 本地 embedding 打分）
+        - 补充通道：资产层 02_clean 实体类（Category/Product/SKU/Attribute）
+          按 question/title 等字段做简单文本匹配（不依赖 Neo4j）
+        - 去重：id 归一化（运行时 kg-X ↔ 资产层 X），运行时命中优先
+        """
+        results: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        # R6 修复：Wiki 检索路径也接入观测器（此前 knowledge.retrieve 不被观测）
+        from .observability import get_observer
+        _obs = get_observer()
+        _start = time.monotonic()
+        try:
+            hits = self.service.knowledge.retrieve(
+                q,
+                top_k=limit,
+                min_score=0.08,
+                tenant_id=self.service.settings.bootstrap_tenant_id,
+            )
+            _obs.record_search(
+                tenant_id=self.service.settings.bootstrap_tenant_id,
+                store_id="",
+                query=q,
+                hits=len(hits),
+                latency_ms=(time.monotonic() - _start) * 1000,
+                source="wiki_api",
+            )
+        except Exception:
+            _obs.record_search(
+                tenant_id=self.service.settings.bootstrap_tenant_id,
+                store_id="",
+                query=q,
+                hits=0,
+                failed=True,
+                latency_ms=(time.monotonic() - _start) * 1000,
+                event_type="failure",
+                source="wiki_api",
+            )
+            hits = []
+        for h in hits:
+            doc_id = str(h.get("id", "")).removeprefix("kg-")
+            if not doc_id or doc_id in seen:
+                continue
+            seen.add(doc_id)
+            results.append(
+                {
+                    "id": doc_id,
+                    "kind": "faq",  # 运行时行无 kind 字段，由 category 反推
+                    "compiled_truth": h.get("answer") or h.get("question", ""),
+                    "category": h.get("category", ""),
+                    "score": round(float(h.get("score", 0)), 4),
+                    "source": "runtime",
+                }
+            )
+        # 补充通道：资产层实体类（只在主通道没覆盖时补）
+        if len(results) < limit:
+            try:
+                asset_items = load_clean_dir(_CLEAN_DIR)
+            except (FileNotFoundError, OSError):
+                asset_items = []
+            for item in asset_items:
+                if item.kind.value not in ENTITY_KINDS:
+                    continue
+                if item.id in seen:
+                    continue
+                haystack = " ".join(
+                    str(v) for v in item.attributes.values() if v
+                ) + " " + item.compiled_truth
+                if q in haystack:
+                    seen.add(item.id)
+                    results.append(
+                        {
+                            "id": item.id,
+                            "kind": item.kind.value,
+                            "compiled_truth": item.compiled_truth,
+                            "category": item.attributes.get("category", ""),
+                            "score": None,
+                            "source": "asset",
+                        }
+                    )
+                    if len(results) >= limit:
+                        break
+        return results
 
     def get_item(self, item_id: str) -> dict[str, Any] | None:
         items = load_merged_items(
@@ -195,10 +315,64 @@ def build_wiki_router(
             default=None, pattern=r"^(active|candidate|retired)$"
         ),
         limit: int = Query(default=100, ge=1, le=500),
+        offset: int = Query(default=0, ge=0, le=10000),
         admin: AdminPrincipal = Depends(require_admin),
     ) -> list[dict[str, Any]]:
-        """合并词条列表：运行时 Q&A（默认 active）+ 资产层实体类。"""
-        return _svc().list_items(kind=kind, status=status, limit=limit)
+        """合并词条列表（分页）：运行时 Q&A（默认 active）+ 资产层实体类。"""
+        return _svc().list_items(kind=kind, status=status, limit=limit, offset=offset)
+
+    @router.get("/search")
+    def search(
+        q: str = Query(min_length=1, max_length=200),
+        limit: int = Query(default=20, ge=1, le=50),
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> list[dict[str, Any]]:
+        """双通道搜索：运行时知识表（编辑即时可搜）+ 资产层实体类（不依赖 Neo4j）。"""
+        return _svc().search(q, limit=limit)
+
+    @router.put("/items/{item_id}")
+    def put_item(
+        item_id: str,
+        request: WikiEditRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """编辑词条（仅 Q&A 类）：走治理生命周期 draft→evaluate→approve。
+
+        - 复用 KnowledgeManagementService.create（knowledge_key=kg-{item_id}）
+        - 返回生命周期下一步（candidate/evaluated/approved 状态）
+        - 实体类（商品/SKU/品类/属性）只读不可编辑
+        """
+        item = _svc().get_item(item_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail=f"词条 {item_id} 不存在")
+        if item["kind"] not in RUNTIME_KINDS:
+            raise HTTPException(status_code=422, detail=f"{item['kind']} 实体类只读，不可编辑")
+        try:
+            create_req = KnowledgeCreateRequest(
+                category=request.category or item.get("category") or "常见问答",
+                intent=request.intent or "wiki-edit",
+                question=request.question or item.get("compiled_truth", ""),
+                answer=request.answer,
+                keywords=request.keywords or "",
+                risk_level=request.risk_level,  # type: ignore[arg-type]
+                source="wiki://manual",
+                layer="store",
+                store_id=admin.tenant_id or service.settings.bootstrap_tenant_id,
+            )
+            created = service.knowledge_management.create(
+                admin.tenant_id or service.settings.bootstrap_tenant_id,
+                create_req,
+                actor=admin.admin_id,
+                knowledge_key=f"kg-{item_id}",
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"编辑失败: {exc}") from exc
+        return {
+            "id": item_id,
+            "status": "candidate",
+            "next": "evaluate→approve",
+            "created": created,
+        }
 
     @router.get("/items/{item_id}")
     def get_item(

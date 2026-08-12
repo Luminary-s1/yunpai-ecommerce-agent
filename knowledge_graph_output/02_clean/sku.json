@@ -1,0 +1,122 @@
+[
+  {
+    "sku_id": "QC-AF5-WHITE",
+    "item_id": "QC-SPU-AF5",
+    "title": "晴川空气炸锅 5L 云白款",
+    "color": "云白",
+    "status": "active",
+    "sale_price": "499.00",
+    "category": "air_fryer",
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-AF5-GREEN",
+    "item_id": "QC-SPU-AF5",
+    "title": "晴川空气炸锅 5L 松绿色",
+    "color": "松绿",
+    "status": "active",
+    "sale_price": "529.00",
+    "category": "air_fryer",
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-VC-A1",
+    "item_id": "QC-SPU-VC1",
+    "title": "晴川无线吸尘器 A1",
+    "color": "",
+    "status": "active",
+    "sale_price": "899.00",
+    "category": "cordless_vacuum",
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-HM-3L",
+    "item_id": "QC-SPU-HM3",
+    "title": "晴川静音加湿器 3L",
+    "color": "",
+    "status": "active",
+    "sale_price": "239.00",
+    "category": "humidifier",
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-KT-17",
+    "item_id": "QC-SPU-KT17",
+    "title": "晴川恒温电热水壶 1.7L",
+    "color": "",
+    "status": "active",
+    "sale_price": "159.00",
+    "category": "electric_kettle",
+    "source": "fixture"
+  },
+  {
+    "sku_id": "QC-FN-D1",
+    "item_id": "QC-SPU-FN1",
+    "title": "晴川循环净化风扇 D1",
+    "color": "",
+    "status": "active",
+    "sale_price": "699.00",
+    "category": "air_circulation_fan",
+    "source": "fixture"
+  },
+  {
+    "sku_id": "X-M1-WHITE",
+    "item_id": "X-SPU-M1",
+    "title": "星脉蓝牙耳机 X-M1 云白色",
+    "color": "云白",
+    "status": "active",
+    "sale_price": "299.00",
+    "category": "digital_audio",
+    "source": "manual"
+  },
+  {
+    "sku_id": "X-M1-BLACK",
+    "item_id": "X-SPU-M1",
+    "title": "星脉蓝牙耳机 X-M1 曜石黑",
+    "color": "曜石黑",
+    "status": "active",
+    "sale_price": "299.00",
+    "category": "digital_audio",
+    "source": "manual"
+  },
+  {
+    "sku_id": "X-P2-BLACK",
+    "item_id": "X-SPU-P2",
+    "title": "星脉充电宝 X-P2 10000mAh 黑色",
+    "color": "黑色",
+    "status": "active",
+    "sale_price": "129.00",
+    "category": "digital_power",
+    "source": "manual"
+  },
+  {
+    "sku_id": "Y-D01-S",
+    "item_id": "Y-SPU-D01",
+    "title": "云织羽绒服 Y-D01 黑色 S 码",
+    "color": "黑色",
+    "status": "active",
+    "sale_price": "599.00",
+    "category": "apparel",
+    "source": "manual"
+  },
+  {
+    "sku_id": "Y-D01-M",
+    "item_id": "Y-SPU-D01",
+    "title": "云织羽绒服 Y-D01 黑色 M 码",
+    "color": "黑色",
+    "status": "active",
+    "sale_price": "599.00",
+    "category": "apparel",
+    "source": "manual"
+  },
+  {
+    "sku_id": "Y-D01-L",
+    "item_id": "Y-SPU-D01",
+    "title": "云织羽绒服 Y-D01 黑色 L 码",
+    "color": "黑色",
+    "status": "active",
+    "sale_price": "599.00",
+    "category": "apparel",
+    "source": "manual"
+  }
+]

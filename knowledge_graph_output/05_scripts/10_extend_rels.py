@@ -84,13 +84,11 @@ def extend_applies_to() -> int:
 
 
 def extend_refers_to() -> int:
-    """REFERS_TO 64→66：补 2 条 FAQ→Policy 引用。"""
+    """REFERS_TO 64→65：补 1 条 FAQ→Policy 引用（发票→退货错误关系已删除）。"""
     rels = load("refers_to.json")
     existing = {(r["source"], r["target"]) for r in rels}
     added = 0
     additions = [
-        # "可以开发票吗" → 七天无理由退货（发票开具属订单服务，关联退货政策）
-        ("FAQ-SCRIPT-020", "RETURN-38e401d2", "Policy"),
         # "订单物流异常怎么办" → 发货时效与延迟赔付
         ("FAQ-SEED-ed51", "LOGISTICS-70a98f4b", "Policy"),
     ]
@@ -173,11 +171,11 @@ def main() -> None:
     for name, added in counts.items():
         print(f"  {name}: +{added} → {totals[name]}")
     print(f"关系总数：{total_rels + len(load('has_attr.json'))}")
-    # 校验：节点数不变（SKU 在 product.json 的 sku_id 字段）
+    # 校验：节点数（SPU 按 item_id 去重；SKU 以 sku.json 为权威来源）
     node_counts = {
         "category": len(load("category.json")),
-        "product_spu": len(load("product.json")),
-        "sku": len({p["sku_id"] for p in load("product.json")}),
+        "product_spu": len({p["item_id"] for p in load("product.json")}),
+        "sku": len(load("sku.json")) if (CLEAN / "sku.json").exists() else len({p["sku_id"] for p in load("product.json")}),
         "attribute": len(load("attribute.json")),
         "policy": len(load("policy.json")),
         "script": len(load("script.json")),

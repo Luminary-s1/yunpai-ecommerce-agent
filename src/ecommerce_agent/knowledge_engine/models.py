@@ -130,13 +130,22 @@ class KnowledgeItem:
 
 # 供 from_dict 等场景反序列化时容错：未知 kind/scope 不崩溃
 def coerce_kind(value: str) -> KnowledgeKind:
+    """kind 是知识主键性质，未知值必须暴露（fail-fast，负责人二次 review #9.1）。
+
+    脏数据静默落 PRODUCT 会把"不是商品的错误条目"伪装成商品，排查极难。
+    加载层调用此函数时未知 kind 会抛 ValueError——错误信息含原始值，
+    数据层可在调用方统一转 quarantine（隔离）而非吞掉。
+    """
     try:
         return KnowledgeKind(value)
     except ValueError:
-        return KnowledgeKind.PRODUCT  # 未知类型回退到最通用的商品
+        raise ValueError(
+            f"未知知识类型: {value!r}（合法值: {[k.value for k in KnowledgeKind]}）"
+        ) from None
 
 
 def coerce_scope(value: str) -> KnowledgeScope:
+    """scope 是分层归属，未知值回退通用层可接受（scope 无主键语义）。"""
     try:
         return KnowledgeScope(value)
     except ValueError:

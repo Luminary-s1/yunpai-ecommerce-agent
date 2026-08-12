@@ -111,13 +111,22 @@ class KnowledgeManagementService:
         return items[0] if items else None
 
     def create(
-        self, tenant_id: str, request: KnowledgeCreateRequest, actor: str
+        self,
+        tenant_id: str,
+        request: KnowledgeCreateRequest,
+        actor: str,
+        knowledge_key: str | None = None,
     ) -> dict[str, Any]:
+        """创建知识草稿（candidate/draft）。
+
+        knowledge_key: 可选。默认 f"knowledge-{uuid}"（向后兼容）；
+        Wiki 编辑传 f"kg-{item_id}" 以覆盖资产层同名词条（编辑即时生效闭环）。
+        """
         self._validate_scope(request.layer, request.store_id, request.sku_id)
         item_id = self.knowledge.add_document(
             **request.model_dump(),
             tenant_id=tenant_id,
-            knowledge_key=f"knowledge-{uuid.uuid4().hex}",
+            knowledge_key=knowledge_key or f"knowledge-{uuid.uuid4().hex}",
             status="candidate",
             review_status="draft",
         )
