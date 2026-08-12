@@ -198,6 +198,10 @@ def build_decision_messages(
     step_count: int,
     max_steps: int,
     knowledge_budget_tokens: int | None = None,
+    prompt_variant: str | None = None,
+    sop_intent: str | None = None,
+    knowledge_intent: str | None = None,
+    planning_constraint: str | None = None,
 ) -> list[dict[str, str]]:
     context_package = _decision_context_package(context)
     session_state = context_package.get("trusted_session_state", {})
@@ -232,6 +236,13 @@ def build_decision_messages(
         "current_tool_catalog": tool_catalog,
         "latest_observation": observation or {},
         "react_budget": {"used_steps": step_count, "max_steps": max_steps},
+        "planning_constraint": planning_constraint,
+        "routing": {
+            "knowledge_intent": knowledge_intent,
+            "prompt_variant": prompt_variant,
+            "sop_intent": sop_intent,
+            "semantic_authority": False,
+        },
     }
     return [
         {"role": "system", "content": DECISION_SYSTEM_PROMPT},

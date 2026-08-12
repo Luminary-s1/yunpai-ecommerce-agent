@@ -610,6 +610,9 @@ def build_graph(
             step_count=state["react_step"],
             max_steps=settings.max_react_steps,
             knowledge_budget_tokens=knowledge_budget,
+            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
+            sop_intent=(state.get("intent_routing") or {}).get("sop_intent"),
+            knowledge_intent=(state.get("intent_routing") or {}).get("knowledge_intent"),
         )
         budget_trace = (
             f"context:budget:kept{history_meta['kept']}"
@@ -1084,6 +1087,7 @@ def build_graph(
             history=history,
             verified_tool_result=verified_result,
             knowledge_budget_tokens=knowledge_budget,
+            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
         )
         # M3 场景 Prompt 接入：按 intent 映射场景，叠加防幻觉指令（RAG_SCENE_PROMPTS 默认开）
         if settings.rag_scene_prompts and messages and state["retrieved"]:

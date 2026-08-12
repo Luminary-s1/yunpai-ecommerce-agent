@@ -521,6 +521,7 @@ class AgentService:
             history=state["context_bundle"].get("recent_history", []),
             verified_tool_result=verified_result,
             knowledge_budget_tokens=available * 6 // 10,
+            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
         )
         return self.model.stream_generate(messages), False, "generate:stream"
 
