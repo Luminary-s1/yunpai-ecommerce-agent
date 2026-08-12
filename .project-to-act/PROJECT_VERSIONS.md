@@ -5,17 +5,17 @@
 ## 当前版本
 
 - 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5、已合入 main 的 M6-R WP1–WP2 本机候选，以及分支上的 M6-R WP3 开发者候选；生产放行阻塞
-- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作
+- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5，以及已合入 main 的 M6-R WP1–WP3 本机候选；生产放行阻塞
+- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表
 - 最后更新：2026-08-12
 
 ## M6-R WP3 Inventory Planning（未单独升版）
 
-- 状态：schema v30 planning policy/plan 与确定性库存计划经对抗修复后已独立复验通过；tip `df1301a`（`626936d`/`865dacf`/`df1301a`）位于单一分支 `codex/m6r-wp3-inventory-planning`，尚未合入 main。
-- 兼容性：v30 仍只新增 `inventory_planning_policies` / `inventory_plans`、索引、复合 tenant/forecast/policy 外键与不可变触发器，v29 可前向迁移且既有表不重建。quantity/quality/risk evidence 在尚未合入 main 的 v30 定义内补齐，不另占 v31；正式支持路径只有 v29→修正版 v30，旧分支期临时 v30 数据库/备份需从 v29 备份重建。无新依赖、HTTP API、Agent tool、关键词路由或 `forecasting` available 登记。
+- 状态：schema v30 planning policy/plan 与确定性库存计划经对抗修复和独立复验后，验收 tip `fb707e4` 已从 `cf886e8` 快进合入 `main`；八个 WP3 提交完整保留，无 squash 或 merge commit。
+- 兼容性：v30 仍只新增 `inventory_planning_policies` / `inventory_plans`、索引、复合 tenant/forecast/policy 外键与不可变触发器，v29 可前向迁移且既有表不重建。quantity/quality/risk evidence 在合入 main 前的 v30 定义内补齐，不另占 v31；正式支持路径只有 v29→修正版 v30，旧分支期临时 v30 数据库/备份需从 v29 备份重建。无新依赖、HTTP API、Agent tool、关键词路由或 `forecasting` available 登记。
 - 计算与证据：从 `ForecastRunService.get_run` 和 `InventoryService.list_balances` 的公开投影读取；store+SKU 需求只计算一次；仓级 plan 强制 qty null/withheld。`available=max(0,on_hand-reserved)` 并单列 shortfall；risk 按选定分位缺货日相对 lead/review 分层；forecast degraded/anomaly、inbound day-0、快照混时/陈旧进入 `plan_quality`；service level 仅 0.50/0.80/0.95。
 - 安全边界：结果固定为 `advisory_only`，不会创建采购、付款或库存写入。升级前必须用 v29 程序生成并验证停机备份，升级后恢复业务写入前生成并验证 v30 全量备份；精确 schema 校验会拒绝 v29 `.ypbak`。
-- 验证：E-002/003 为旧 tip 史；E-004 对抗纠偏；E-005 独立复验：WP3 `15`、聚焦 `69`、全量 `705 passed, 1 xfailed`（230.55 秒），三项 P1 mutation 与八项对抗探针通过。
+- 验证：E-002/003 为旧 tip 史；E-004 对抗纠偏；E-005 独立复验：WP3 `15`、聚焦 `69`、全量 `705 passed, 1 xfailed`（230.55 秒），三项 P1 mutation 与八项对抗探针通过；合入后验证见 E-20260812-006。
 
 ## M6-R WP2 Forecast Engine（未单独升版）
 

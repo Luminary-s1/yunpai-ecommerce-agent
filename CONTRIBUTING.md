@@ -279,12 +279,12 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | 27 | 闫睿涵 | M4 / 已合并进 `main` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已合并 |
 | 28 | M5-R | Traffic Lab / `main` | creative asset、listing revision、metric bucket、experiment/window/analysis run | 已合并（WP1–WP5） |
 | **29** | M6-R | Forecasting / `main` | demand fact、forecast policy/run/backtest/point/anomaly | WP1–WP2 已合并；WP5 Eval 留待后续 |
-| **30** | M6-R | Inventory Planning / `codex/m6r-wp3-inventory-planning` | planning policy、inventory plan | 已预留，待合并 |
+| **30** | M6-R | Inventory Planning / `main` | planning policy、inventory plan | 已合并（WP3） |
 | 31+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
 若存在尚未同步的其他 v28 分支，不得直接合入，先与模块负责人核对。26–28 已合并，
-29 的 WP1–WP2 已合并进 `main`，30 仍仅预留。
+29 的 WP1–WP2 与 30 的 WP3 已合并进 `main`。
 
 **并行占号的分支合并时，`database.py` 必然在三处
 冲突**（2026-08-06 实测：26 对 27 就是这三处，已按下面的解法合入）：
