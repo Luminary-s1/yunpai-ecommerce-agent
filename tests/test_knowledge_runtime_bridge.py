@@ -316,8 +316,10 @@ def test_hot_update_refreshes_search_index(service) -> None:
     items = [
         KnowledgeItem(
             id="RULE-INVOICE-TEST", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
-            compiled_truth="电商发票开具规范：商家应依法为消费者开具发票",
-            attributes={"rule_title": "电商发票开具规范"},
+            # 内容不含"发票怎么开"查询词：首次导入（无别名）应检索不到，
+            # 热更新补 keywords 别名后才命中——这样才能验证"别名生效"（F-007）
+            compiled_truth="商家应依法向购买者开具合规税务票据",
+            attributes={"rule_title": "电商税务票据开具规范"},
         )
     ]
     import_to_runtime(items, service.knowledge)

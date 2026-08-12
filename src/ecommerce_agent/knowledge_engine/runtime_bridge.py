@@ -242,6 +242,17 @@ def import_to_runtime(
                             f"UPDATE knowledge SET {set_clause} WHERE id=?",
                             tuple(params),
                         )
+                        # F-007 补全：search_text 已重算，但 UPDATE 不自动同步 FTS 索引
+                        # （rag.add_document 只在新增时写 knowledge_fts），
+                        # 必须显式重建该行的 FTS 条目，否则热更新后全文检索仍命中旧内容。
+                        conn.execute(
+                            "DELETE FROM knowledge_fts WHERE doc_id=?",
+                            (target_id,),
+                        )
+                        conn.execute(
+                            "INSERT INTO knowledge_fts(doc_id, search_text) VALUES (?, ?)",
+                            (target_id, qa_text),
+                        )
                     updated += 1
                 except Exception:
                     skipped_existing += 1
