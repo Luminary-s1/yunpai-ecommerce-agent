@@ -369,6 +369,7 @@ def apply_consolidation(
     }
     written = 0
     skipped = 0
+    failed = 0
     for item in report.consolidated:
         conclusion_id = f"kg-consolidated-{item['conclusion_source_id']}"
         try:
@@ -398,9 +399,12 @@ def apply_consolidation(
                 store_id=default_store_id if item["scope"] == "seller" else None,
             )
             written += 1
-        except Exception:
-            skipped += 1
-    return {"written": written, "skipped_existing": skipped}
+        except Exception as exc:
+            # P1-2：写库失败不再静默吞（此前与"已存在跳过"混入同一计数器，
+            # DB 锁/约束/连接失败被掩盖）。失败计入 failed 并记录日志。
+            logger.exception("apply_consolidation 写库失败: %s (%s)", conclusion_id, type(exc).__name__)
+            failed += 1
+    return {"written": written, "skipped_existing": skipped, "failed": failed}
 
 
 def run_dream_cycle(

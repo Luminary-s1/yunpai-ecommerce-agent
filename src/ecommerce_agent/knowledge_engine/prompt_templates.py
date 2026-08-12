@@ -128,4 +128,10 @@ def render_prompt(scene: str, context: str, question: str) -> str:
     """
     if scene not in PROMPT_TEMPLATES:
         raise ValueError(f"未知场景: {scene}，可选: {list(PROMPT_TEMPLATES)}")
-    return PROMPT_TEMPLATES[scene].format(context=context, question=question)
+    # 手动占位替换（不用 str.format）：检索 context 含 { / }（JSON 片段常见）
+    # 时 format 会抛 ValueError，生产链路（graph.generate）静默吞掉整段防幻觉指令。
+    return (
+        PROMPT_TEMPLATES[scene]
+        .replace("{context}", context)
+        .replace("{question}", question)
+    )

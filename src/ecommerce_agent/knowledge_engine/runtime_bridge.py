@@ -186,6 +186,9 @@ def import_to_runtime(
             ).fetchall()
             existing = {r["id"] for r in rows}
     except Exception:
+        # P1-2：预查失败不再静默假装空集合（此前会照常 INSERT，
+        # 表缺失/迁移未跑时中途崩溃且无日志）
+        logger.exception("import_to_runtime 预查已存在知识失败，按空集合继续")
         existing = set()
     for item in items:
         row = to_knowledge_row(item, default_store_id=default_store_id)
@@ -255,6 +258,9 @@ def import_to_runtime(
                         )
                     updated += 1
                 except Exception:
+                    # P1-2：热更新失败不再静默计为 skipped_existing
+                    #（此前上游会以为"跳过=已存在"而掩盖更新失败）
+                    logger.exception("热更新失败: %s", target_id)
                     skipped_existing += 1
             else:
                 skipped_existing += 1
