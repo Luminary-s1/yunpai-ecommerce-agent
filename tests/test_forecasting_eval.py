@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from copy import deepcopy
 from pathlib import Path
 
@@ -56,3 +58,20 @@ def test_independent_oracle_can_reject_a_numerically_wrong_expectation(tmp_path)
     assert report["passed"] is False
     assert report["results"][0]["checks"]["demand_type"] is False
     assert report["results"][0]["observed"]["demand_type"] == "rising_trend"
+
+
+def test_forecast_eval_direct_cli_emits_a_passing_report(tmp_path) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).parents[1] / "scripts/run_forecast_eval.py"),
+            str(FIXTURE),
+            str(tmp_path / "cli.sqlite3"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout)["passed"] is True

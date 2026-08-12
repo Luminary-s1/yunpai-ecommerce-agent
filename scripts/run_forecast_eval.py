@@ -8,12 +8,20 @@ from typing import Any
 from ecommerce_agent.database import Database
 from ecommerce_agent.forecasting import ForecastPolicy
 
-from scripts.forecast_eval_runtime import (
-    ALLOWED_CALL_FIELDS,
-    bias_effect,
-    field_names,
-    run_scenario,
-)
+if __package__:
+    from scripts.forecast_eval_runtime import (
+        ALLOWED_CALL_FIELDS,
+        bias_effect,
+        field_names,
+        run_scenario,
+    )
+else:
+    from forecast_eval_runtime import (
+        ALLOWED_CALL_FIELDS,
+        bias_effect,
+        field_names,
+        run_scenario,
+    )
 
 
 def _score(
