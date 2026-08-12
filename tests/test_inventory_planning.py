@@ -32,12 +32,25 @@ class _ForecastReader:
         return deepcopy(self.run)
 
 
+class _StaticInventoryReader:
+    def __init__(self, balances: list[dict]):
+        self.balances = balances
+
+    def list_balances(
+        self, tenant_id: str, *, store_id: str | None = None, sku_id: str | None = None
+    ) -> list[dict]:
+        assert tenant_id == TENANT
+        assert store_id == STORE
+        assert sku_id == SKU
+        return deepcopy(self.balances)
+
+
 def _seed_forecast(db: Database, *, days: int = 10) -> dict:
     run_id = "forecast-run-planning"
     created_at = "2026-08-12T00:00:00+00:00"
     points = [
         {
-            "forecast_date": (date(2026, 9, 1) + timedelta(days=offset)).isoformat(),
+            "forecast_date": (date(2026, 8, 12) + timedelta(days=offset)).isoformat(),
             "p50": 4.0,
             "p80": 5.0,
             "p95": 6.0,
@@ -52,7 +65,7 @@ def _seed_forecast(db: Database, *, days: int = 10) -> dict:
                 data_hash, demand_policy_version, forecast_policy_version,
                 candidate_models_json, champion_model, champion_reason, model_version,
                 wape, bias, smape, rmse, forecast_horizon, status, created_at
-            ) VALUES (?, ?, ?, ?, '2026-07-01', '2026-08-31', 'forecast-data-hash',
+            ) VALUES (?, ?, ?, ?, '2026-07-01', '2026-08-11', 'forecast-data-hash',
                       'demand-v1', 'forecast-v1', '{}', 'rolling_mean', '{}',
                       'forecast-engine-v1', 0.1, 0.0, 0.1, 1.0, ?, 'completed', ?)
             """,
@@ -78,7 +91,7 @@ def _seed_forecast(db: Database, *, days: int = 10) -> dict:
         "sku_id": SKU,
         "data_hash": "forecast-data-hash",
         "training_start": "2026-07-01",
-        "training_end": "2026-08-31",
+        "training_end": "2026-08-11",
         "demand_policy_version": "demand-v1",
         "forecast_policy_version": "forecast-v1",
         "status": "completed",
@@ -181,7 +194,9 @@ def test_v29_database_upgrades_to_v30_without_rebuilding_existing_tables(tmp_pat
     assert {
         "forecast_run_id", "inventory_snapshot_json", "reorder_point",
         "inventory_as_of", "target_stock", "recommended_order_qty",
-        "overstock_risk", "calculation_steps_json",
+        "reservation_shortfall", "quantity_status", "quantity_reason",
+        "plan_quality", "quality_issues_json", "assumptions_json",
+        "risk_evidence_json", "overstock_risk", "calculation_steps_json",
     } <= plan_columns
     assert probe == "preserved"
 
@@ -199,6 +214,7 @@ def test_plan_is_numeric_replayable_advisory_and_does_not_duplicate_multiwarehou
     assert first == replay
     assert first["selected_quantile"] == "p80"
     assert first["available"] == "17"
+    assert first["reservation_shortfall"] == "0"
     assert first["inbound"] == "5"
     assert first["future_supply"] == "22"
     assert first["inventory_as_of"] == "2026-08-12T00:00:00+00:00"
@@ -212,6 +228,20 @@ def test_plan_is_numeric_replayable_advisory_and_does_not_duplicate_multiwarehou
     assert first["reorder_point"] == "13"
     assert first["target_stock"] == "23"
     assert first["recommended_order_qty"] == "12"
+    assert first["quantity_status"] == "advisory"
+    assert first["quantity_reason"] is None
+    assert first["plan_quality"] == "degraded"
+    assert {issue["code"] for issue in first["quality_issues"]} == {
+        "inbound_eta_unavailable"
+    }
+    assert first["assumptions"]["inbound_availability"] == {
+        "mode": "assumed_available_day_0",
+        "eta_available": False,
+        "effect": "plan_quality_degraded",
+    }
+    assert first["assumptions"]["service_level_tiers"] == {
+        "0.5": "p50", "0.8": "p80", "0.95": "p95",
+    }
     assert first["overstock_risk"] is False
     assert [step["step"] for step in first["calculation_steps"]] == [
         "inventory_aggregation", "quantile_demand", "minimum_safety_stock",
@@ -225,15 +255,23 @@ def test_plan_is_numeric_replayable_advisory_and_does_not_duplicate_multiwarehou
         "rounding": "ceiling", "output": "12",
     }
     assert first["stockout_dates"] == {
-        "p50": "2026-09-06", "p80": "2026-09-05", "p95": "2026-09-04",
+        "p50": "2026-08-17", "p80": "2026-08-16", "p95": "2026-08-15",
     }
-    assert first["allocation_boundary"] == {
-        "demand_scope": "store_sku",
-        "supply_scope": "store_aggregate",
-        "warehouse_ids": ["warehouse-a", "warehouse-b"],
-        "demand_copy_count": 1,
-        "warehouse_allocation": "not_computed",
-    }
+    assert first["risk_level"] == "medium"
+    assert first["risk_evidence"]["classification_reason"] == (
+        "selected_quantile_depletion_after_review_within_horizon"
+    )
+    assert first["risk_evidence"]["selected_quantile_stockout_day"] == 5
+    assert first["allocation_boundary"]["demand_scope"] == "store_sku"
+    assert first["allocation_boundary"]["supply_scope"] == "store_aggregate"
+    assert first["allocation_boundary"]["warehouse_ids"] == [
+        "warehouse-a", "warehouse-b"
+    ]
+    assert first["allocation_boundary"]["demand_copy_count"] == 1
+    assert first["allocation_boundary"]["warehouse_allocation"] == "not_computed"
+    assert first["allocation_boundary"]["quantity_recommendation"] == (
+        "store_aggregate_only"
+    )
     assert first["action_mode"] == "advisory_only"
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM inventory_plans").fetchone()[0] == 1
@@ -277,6 +315,14 @@ def test_policy_scope_conflict_tenant_isolation_and_warehouse_boundary(tmp_path)
     assert plan["lead_time_demand"] == "12"
     assert plan["allocation_boundary"]["supply_scope"] == "warehouse_supply_location"
     assert plan["allocation_boundary"]["demand_copy_count"] == 1
+    assert plan["allocation_boundary"]["quantity_recommendation"] == "withheld"
+    assert plan["recommended_order_qty"] is None
+    assert plan["quantity_status"] == "withheld"
+    assert plan["quantity_reason"] == "warehouse_allocation_not_computed"
+    assert all(
+        step["status"] == "not_applied" and step["output"] is None
+        for step in plan["calculation_steps"][3:]
+    )
     with pytest.raises(InventoryPlanningError, match="inventory_plan_not_found"):
         service.get_plan("other-tenant", plan["plan_id"])
     with pytest.raises(InventoryPlanningError, match="planning_forecast_unavailable"):
@@ -353,6 +399,150 @@ def test_maximum_stock_cap_and_invalid_inputs_fail_explicitly(tmp_path) -> None:
             "forecast-run-planning",
             _policy(policy_version="inventory-plan-ambiguous-v1"),
         )
+
+
+def test_reserved_above_on_hand_uses_zero_available_and_records_shortfall(tmp_path) -> None:
+    _db, inventory, service = _service(tmp_path)
+    _balance(inventory, warehouse_id="warehouse-a", on_hand="5", reserved="12", inbound="0")
+
+    plan = service.create_plan(TENANT, "forecast-run-planning", _policy())
+
+    assert plan["on_hand"] == "5"
+    assert plan["reserved"] == "12"
+    assert plan["available"] == "0"
+    assert plan["reservation_shortfall"] == "7"
+    assert plan["future_supply"] == "0"
+    assert plan["recommended_order_qty"] == "24"
+    assert plan["risk_level"] == "critical"
+    assert {issue["code"] for issue in plan["quality_issues"]} == {
+        "reserved_exceeds_on_hand"
+    }
+
+
+@pytest.mark.parametrize(
+    ("case", "days", "on_hand", "point_value", "expected_level", "expected_reason"),
+    [
+        (
+            "within-lead", 10, "8", "5", "critical",
+            "selected_quantile_depletion_within_lead_time",
+        ),
+        (
+            "within-review", 10, "16", "5", "high",
+            "selected_quantile_depletion_within_review_period",
+        ),
+        (
+            "day-20", 30, "40", "2", "medium",
+            "selected_quantile_depletion_after_review_within_horizon",
+        ),
+        (
+            "day-29", 30, "58", "2", "medium",
+            "selected_quantile_depletion_after_review_within_horizon",
+        ),
+        (
+            "no-selected-depletion", 10, "51", "5", "low",
+            "no_selected_quantile_depletion_or_overstock",
+        ),
+    ],
+)
+def test_risk_level_uses_time_to_selected_stockout_not_any_p50_date(
+    tmp_path,
+    case: str,
+    days: int,
+    on_hand: str,
+    point_value: str,
+    expected_level: str,
+    expected_reason: str,
+) -> None:
+    _db, inventory, service = _service(tmp_path / case, days=days)
+    for point in service.forecasts.run["points"]:
+        point["p50"] = float(point_value)
+        point["p80"] = float(point_value)
+        point["p95"] = float(point_value)
+    _balance(inventory, warehouse_id="warehouse-a", on_hand=on_hand, reserved="0", inbound="0")
+
+    plan = service.create_plan(
+        TENANT,
+        "forecast-run-planning",
+        _policy(maximum_stock_days=days),
+    )
+
+    assert plan["risk_level"] == expected_level
+    assert plan["plan_quality"] == "standard"
+    assert plan["risk_evidence"]["classification_reason"] == expected_reason
+    if case in {"day-20", "day-29"}:
+        assert plan["stockout_dates"]["p50"] is not None
+        assert plan["risk_level"] != "critical"
+
+
+def test_forecast_and_inventory_uncertainty_degrade_plan_quality(tmp_path) -> None:
+    _db, inventory, service = _service(tmp_path)
+    service.forecasts.run["status"] = "degraded"
+    service.forecasts.run["anomalies"] = [
+        {"anomaly_type": "cold_start", "severity": "medium"}
+    ]
+    _balance(
+        inventory,
+        warehouse_id="warehouse-a",
+        on_hand="30",
+        reserved="0",
+        inbound="0",
+        source_updated_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
+    )
+    _balance(
+        inventory,
+        warehouse_id="warehouse-b",
+        on_hand="20",
+        reserved="0",
+        inbound="0",
+        source_updated_at=datetime(2026, 8, 13, tzinfo=timezone.utc),
+    )
+
+    plan = service.create_plan(TENANT, "forecast-run-planning", _policy())
+
+    assert plan["plan_quality"] == "degraded"
+    assert {issue["code"] for issue in plan["quality_issues"]} == {
+        "forecast_status_degraded",
+        "forecast_anomalies_present",
+        "inventory_snapshot_time_spread",
+        "inventory_snapshot_precedes_forecast_training_end",
+    }
+    assert plan["assumptions"]["inventory_snapshot_spread_limit_hours"] == 24
+
+
+def test_supported_service_levels_are_explicit_tiers(tmp_path) -> None:
+    _db, inventory, service = _service(tmp_path)
+    _balance(inventory, warehouse_id="warehouse-a", on_hand="20", reserved="0", inbound="0")
+
+    assert service.create_plan(
+        TENANT,
+        "forecast-run-planning",
+        _policy(service_level=Decimal("0.50"), policy_version="inventory-plan-p50"),
+    )["selected_quantile"] == "p50"
+    assert service.create_plan(
+        TENANT,
+        "forecast-run-planning",
+        _policy(service_level=Decimal("0.80"), policy_version="inventory-plan-p80"),
+    )["selected_quantile"] == "p80"
+    assert service.create_plan(
+        TENANT,
+        "forecast-run-planning",
+        _policy(service_level=Decimal("0.95"), policy_version="inventory-plan-p95"),
+    )["selected_quantile"] == "p95"
+    with pytest.raises(ValueError, match="planning_service_level_unsupported"):
+        _policy(service_level=Decimal("0.51"))
+
+
+def test_malformed_inventory_snapshot_raises_typed_planning_error(tmp_path) -> None:
+    _db, inventory, service = _service(tmp_path)
+    _balance(inventory, warehouse_id="warehouse-a", on_hand="20", reserved="0", inbound="0")
+    malformed = inventory.list_balances(TENANT, store_id=STORE, sku_id=SKU)
+    malformed[0].pop("inbound")
+    service.inventory = _StaticInventoryReader(malformed)
+
+    with pytest.raises(
+        InventoryPlanningError, match="planning_inventory_snapshot_invalid"
+    ):
+        service.create_plan(TENANT, "forecast-run-planning", _policy())
 
 
 def test_operations_wires_planning_to_public_forecast_and_inventory_services(tmp_path) -> None:
