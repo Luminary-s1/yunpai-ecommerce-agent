@@ -1,0 +1,204 @@
+{
+  "schema_version": "forecast-eval-v1",
+  "forecast_policy": {
+    "policy_version": "forecast-eval-policy-v1",
+    "minimum_history_days": 14,
+    "backtest_windows": 4,
+    "required_relative_improvement": 0.02
+  },
+  "numeric_gates": {
+    "minimum_rolling_origins": 1,
+    "minimum_p80_coverage": 0.65,
+    "minimum_p95_coverage": 0.8,
+    "maximum_absolute_no_effect_bias": 0.05,
+    "minimum_directional_bias_magnitude": 0.05
+  },
+  "scenarios": [
+    {
+      "scenario_id": "stable_sales",
+      "category": "stable",
+      "input": {
+        "series_spec": {"kind": "constant", "days": 70, "level": 10},
+        "inventory": {
+          "balances": [
+            {"warehouse_id": "wh-a", "on_hand": 10, "reserved": 3, "inbound": 5},
+            {"warehouse_id": "wh-b", "on_hand": 8, "reserved": 1, "inbound": 0}
+          ],
+          "policy": {
+            "supplier_lead_days": 2,
+            "review_period_days": 2,
+            "service_level": "0.80",
+            "minimum_order_qty": "10",
+            "order_multiple": "6",
+            "minimum_safety_stock": "3",
+            "maximum_stock_days": 8
+          }
+        }
+      },
+      "oracle": {
+        "expected_type_code": "stable",
+        "expected_bias_effect": "none",
+        "expected_wape_comparable": true,
+        "maximum_wape": 0.01,
+        "expected_baseline_fallback": true,
+        "expected_inventory": {
+          "expected_selected_quantile": "p80",
+          "expected_on_hand": "18",
+          "expected_reserved": "4",
+          "expected_available": "14",
+          "expected_inbound": "5",
+          "expected_future_supply": "19",
+          "expected_lead_time_demand": "20",
+          "expected_lead_review_demand": "40",
+          "expected_reorder_point": "23",
+          "expected_target_stock": "43",
+          "expected_recommended_order_qty": "24",
+          "expected_demand_copy_count": 1,
+          "expected_action_mode": "advisory_only"
+        }
+      }
+    },
+    {
+      "scenario_id": "rising_trend",
+      "category": "rising",
+      "input": {"series_spec": {"kind": "linear", "days": 70, "start": 5, "step": 0.5}},
+      "oracle": {
+        "expected_type_code": "rising_trend",
+        "expected_bias_effect": "negative",
+        "expected_wape_comparable": true,
+        "maximum_wape": 0.25,
+        "expected_baseline_fallback": true
+      }
+    },
+    {
+      "scenario_id": "falling_trend",
+      "category": "falling",
+      "input": {"series_spec": {"kind": "linear", "days": 70, "start": 40, "step": -0.4}},
+      "oracle": {
+        "expected_type_code": "falling_trend",
+        "expected_bias_effect": "positive",
+        "expected_wape_comparable": true,
+        "maximum_wape": 0.3,
+        "expected_baseline_fallback": true
+      }
+    },
+    {
+      "scenario_id": "weekly_seasonality",
+      "category": "weekly",
+      "input": {"series_spec": {"kind": "weekly", "days": 70, "pattern": [4, 8, 12, 5, 9, 14, 6]}},
+      "oracle": {
+        "expected_type_code": "weekly_seasonal",
+        "expected_bias_effect": "none",
+        "expected_wape_comparable": true,
+        "maximum_wape": 0.01,
+        "expected_baseline_fallback": true
+      }
+    },
+    {
+      "scenario_id": "intermittent_demand",
+      "category": "intermittent",
+      "input": {"series_spec": {"kind": "sparse", "days": 70, "period": 5, "offset": 1, "level": 20}},
+      "oracle": {
+        "expected_type_code": "intermittent",
+        "expected_bias_effect": "any",
+        "expected_wape_comparable": true,
+        "maximum_wape": 2.0,
+        "expected_baseline_fallback": false
+      }
+    },
+    {
+      "scenario_id": "many_zeros",
+      "category": "many_zeros",
+      "input": {"series_spec": {"kind": "constant", "days": 70, "level": 0}},
+      "oracle": {
+        "expected_type_code": "intermittent",
+        "expected_bias_effect": "incomparable",
+        "expected_wape_comparable": false,
+        "expected_baseline_fallback": true
+      }
+    },
+    {
+      "scenario_id": "promotion_spikes",
+      "category": "promotion_spike",
+      "input": {
+        "series_spec": {
+          "kind": "constant",
+          "days": 70,
+          "level": 10,
+          "overrides": [
+            {"offset": 20, "value": 55},
+            {"offset": 41, "value": 65},
+            {"offset": 62, "value": 60}
+          ]
+        }
+      },
+      "oracle": {
+        "expected_type_code": "variable",
+        "expected_bias_effect": "any",
+        "expected_wape_comparable": true,
+        "maximum_wape": 0.7,
+        "expected_baseline_fallback": true
+      }
+    },
+    {
+      "scenario_id": "stockout_truncation",
+      "category": "stockout",
+      "input": {
+        "series_spec": {
+          "kind": "constant",
+          "days": 70,
+          "level": 12,
+          "stockout_offsets": [18, 29, 40, 51]
+        }
+      },
+      "oracle": {
+        "expected_type_code": "stable",
+        "expected_bias_effect": "none",
+        "expected_wape_comparable": true,
+        "maximum_wape": 0.01,
+        "expected_baseline_fallback": true,
+        "required_anomaly_code": "stockout_excluded"
+      }
+    },
+    {
+      "scenario_id": "missing_observations",
+      "category": "missing",
+      "input": {
+        "series_spec": {
+          "kind": "constant",
+          "days": 70,
+          "level": 9,
+          "missing_offsets": [17, 32, 47]
+        }
+      },
+      "oracle": {
+        "expected_type_code": "stable",
+        "expected_bias_effect": "none",
+        "expected_wape_comparable": true,
+        "maximum_wape": 0.01,
+        "expected_baseline_fallback": true,
+        "required_anomaly_code": "missing_demand_day"
+      }
+    },
+    {
+      "scenario_id": "cold_start",
+      "category": "cold_start",
+      "input": {
+        "series_spec": {
+          "kind": "constant",
+          "days": 70,
+          "level": 7,
+          "observed_offsets": [0, 20, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69]
+        }
+      },
+      "oracle": {
+        "expected_type_code": "cold_start",
+        "expected_bias_effect": "none",
+        "expected_wape_comparable": true,
+        "maximum_wape": 0.01,
+        "expected_baseline_fallback": true,
+        "required_anomaly_code": "missing_demand_day"
+      }
+    }
+  ]
+}
