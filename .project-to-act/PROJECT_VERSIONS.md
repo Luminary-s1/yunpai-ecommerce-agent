@@ -11,11 +11,11 @@
 
 ## M6-R WP3 Inventory Planning（未单独升版）
 
-- 状态：schema v30 planning policy/plan 与确定性库存计划已形成开发者本机候选，提交 `a27a152`、`482fb0e`、`00fbe6b` 位于单一分支 `codex/m6r-wp3-inventory-planning`；尚未合入 main，待另一成员独立验收。
-- 兼容性：v30 只新增 `inventory_planning_policies` / `inventory_plans`、索引、复合 tenant/forecast/policy 外键与不可变触发器，v29 可前向迁移且既有表不重建。无新依赖、HTTP API、Agent tool、关键词路由或 `forecasting` available 登记。
-- 计算与证据：从 `ForecastRunService.get_run` 和 `InventoryService.list_balances` 的公开投影读取；按 store+SKU 需求只计算一次，仓库仅作为 supply location。固定执行库存聚合、分位 lead/review demand、minimum safety stock、MOQ、order multiple、maximum stock cap，固化库存来源/时间/版本、forecast 指标/质量/policy、舍入步骤、P50/P80/P95 缺货日期与过量库存标记；计划和策略历史不可原地更新。
+- 状态：schema v30 planning policy/plan 与确定性库存计划已完成对抗修复候选；旧 tip `58d41d2` 的独立字面验收被后续领域复审限缩，修复提交 `626936d` / 测试提交 `865dacf` 位于单一分支 `codex/m6r-wp3-inventory-planning`，尚待独立复验且未合入 main。
+- 兼容性：v30 仍只新增 `inventory_planning_policies` / `inventory_plans`、索引、复合 tenant/forecast/policy 外键与不可变触发器，v29 可前向迁移且既有表不重建。本次在尚未合入 main 的 v30 定义内补齐 quantity/quality/risk evidence 字段，不另占 v31；正式支持路径只有 v29→修正版 v30，旧分支期临时 v30 数据库/备份需从 v29 备份重建，不作为兼容输入。无新依赖、HTTP API、Agent tool、关键词路由或 `forecasting` available 登记。
+- 计算与证据：从 `ForecastRunService.get_run` 和 `InventoryService.list_balances` 的公开投影读取；按 store+SKU 需求只计算一次，仓库仅作为 supply location 且数量强制 null/withheld。`available=max(0,on_hand-reserved)` 并单列 reservation shortfall；风险按选定服务分位数的缺货天数相对 lead/review 分层；forecast degraded/anomaly、无 ETA inbound、快照混时/陈旧进入结构化 plan quality，服务水平限定 0.50/P50、0.80/P80、0.95/P95。固定执行库存聚合、分位 lead/review demand、minimum safety stock、MOQ、order multiple、maximum stock cap，计划和策略历史不可原地更新。
 - 安全边界：结果固定为 `advisory_only`，不会创建采购、付款或库存写入。升级前必须用 v29 程序生成并验证停机备份，升级后恢复业务写入前生成并验证 v30 全量备份；精确 schema 校验会拒绝 v29 `.ypbak`。
-- 验证：E-20260812-002；聚焦 `60 passed`，全量 `696 passed, 1 xfailed`（230.82 秒），compileall、whitespace 与 project-to-act validate 通过。多仓需求复制、跳过 maximum-stock cap、改写 inventory facts 三项 mutation 均如期失败并还原。
+- 验证：E-20260812-002 为初始开发候选，E-20260812-003 为旧 tip 字面验收；当前对抗修复证据 E-20260812-004 得到旧实现 `12 failed, 3 passed`、修复后 WP3 `15 passed`、聚焦 `69 passed`、全量 `705 passed, 1 xfailed`（349.90 秒），三项 P1 回退 mutation 均命中门禁，待独立复验。
 
 ## M6-R WP2 Forecast Engine（未单独升版）
 
