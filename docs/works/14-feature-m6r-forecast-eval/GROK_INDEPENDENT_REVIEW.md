@@ -344,8 +344,8 @@ P2-1/P2-2/P2-3 **不阻断本机候选**，但应在合入评审里明示；**�
 
 ### 精确修复清单（非阻断，建议合入前处理）
 
-1. **P2-1**：`get_plan` 类型化 JSON 错误 + `/risks` 映射 409；补 INSERT 坏 JSON 测试。  
-2. **P2-2**：覆盖率改为双侧或 held-out，并补“过预报 + 零宽度失败”。  
+1. **P2-1**：`get_plan` 类型化 JSON 错误 + `/risks` 映射 409；补 INSERT 坏 JSON 测试。
+2. **P2-2**：覆盖率改为双侧或 held-out，并补“过预报 + 零宽度失败”。
 3. **P2-3**：`ForecastRunService.resolve_policy` 加 `rowid DESC` + 同戳测试。
 
 ### 七层状态（全部未豁免，除非下面写明）
