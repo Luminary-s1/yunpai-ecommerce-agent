@@ -2,7 +2,7 @@
   "fixture_id": "qingchuan-home-appliance-v1",
   "fixture_version": "1.0.0",
   "virtual": true,
-  "scenario_id_registry": {"D19": "M5-R-WP5"},
+  "scenario_id_registry": {"D19": "M5-R-WP5", "D20": "M6-R-WP4"},
   "store": {
     "store_id": "qingchuan-flagship-001",
     "name": "晴川生活电器旗舰店",
@@ -381,6 +381,11 @@
       "id": "D19", "module": "traffic_lab", "title": "读取虚拟商品的固化流量实验分析证据",
       "input": {"operation": "OperationsService.sync + TrafficLabService + ToolRegistry.execute", "tool": "get_listing_traffic_insights", "mode": "observe", "arguments": {"store_id": "virtual-shop-001", "sku_id": "YP-SKU-TRAFFIC-001"}, "virtual": true},
       "expected": ["数据仅通过公开同步与领域服务写入且标记 virtual=true", "Agent 工具返回已固化分析且调用前后统计记录不变", "输出明确不重算统计也不宣称平台权重", "不存在自动发布、改标题、换图或投放动作"]
+    },
+    {
+      "id": "D20", "module": "forecasting", "title": "读取虚拟商品的固化预测与库存计划证据",
+      "input": {"operation": "OperationsService.sync + DemandFactService + ForecastRunService + InventoryPlanningService + ToolRegistry.execute", "tools": ["get_demand_forecast", "get_inventory_plan"], "mode": "observe", "arguments": {"store_id": "virtual-shop-001", "sku_id": "YP-SKU-001"}, "virtual": true},
+      "expected": ["订单与库存只经公开同步及领域服务进入且标记 virtual=true", "预测和库存计划固化后由两个 read 工具读取且前后证据完全一致", "输出引用 run、库存快照、policy 与数据质量并明确不现场计算", "不存在采购、付款、库存调整或其他自动动作"]
     }
   ]
 }

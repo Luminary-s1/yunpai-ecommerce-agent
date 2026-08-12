@@ -40,6 +40,12 @@ from .evaluation import (
     EvaluationThresholds,
     EvaluationTurn,
 )
+from .forecasting import (
+    DemandFactRebuild,
+    ForecastRunError,
+    InventoryPlanningError,
+    InventoryPlanningPolicy,
+)
 from .knowledge_management import KnowledgeCreateRequest, KnowledgeTransitionRequest
 from .quality import QualityRunRequest
 from .releases import ReleasePolicyCreateRequest, ReleaseReplayRequest
@@ -204,6 +210,11 @@ class VirtualStoreSimulation:
             scenarios,
             demands["D19"],
             lambda: self._verify_traffic_lab(tenant_id, actor),
+        )
+        self._scenario(
+            scenarios,
+            demands["D20"],
+            lambda: self._verify_forecasting(tenant_id, actor),
         )
         if include_customer_service:
             self._scenario(
@@ -1945,6 +1956,117 @@ class VirtualStoreSimulation:
             "analysis_unchanged": before == after,
             "tool_kind": spec.kind,
             "tool_output": result.output,
+            "automatic_actions": [],
+        }
+
+    def _verify_forecasting(self, tenant_id: str, actor: str) -> dict[str, Any]:
+        operations = self.service.operations
+        store_id, sku_id = "virtual-shop-001", "YP-SKU-001"
+        syncs = {
+            resource: operations.sync(
+                tenant_id=tenant_id,
+                connector_id="virtual_taobao",
+                resource=resource,
+                actor=actor,
+            )
+            for resource in ("orders", "inventory")
+        }
+        rebuild = operations.forecasting.rebuild(
+            tenant_id,
+            DemandFactRebuild(
+                store_id=store_id,
+                sku_id=sku_id,
+                mode="full",
+                start_date="2026-06-01",
+                end_date="2026-07-21",
+                coverage_complete=True,
+            ),
+        )
+        try:
+            forecast = operations.forecast_runs.latest_run(
+                tenant_id, store_id=store_id, sku_id=sku_id
+            )
+            forecast_write_status = "reused"
+        except ForecastRunError as exc:
+            if str(exc) != "forecast_run_not_found":
+                raise
+            forecast_policy = operations.forecast_runs.resolve_policy(
+                tenant_id, store_id=store_id, sku_id=sku_id
+            )
+            forecast = operations.forecast_runs.run(
+                tenant_id,
+                store_id=store_id,
+                sku_id=sku_id,
+                policy=forecast_policy,
+            )
+            forecast_write_status = "created"
+        try:
+            plan = operations.inventory_plans.latest_plan(
+                tenant_id, store_id=store_id, sku_id=sku_id
+            )
+            if plan["forecast_run_id"] != forecast["run_id"]:
+                raise InventoryPlanningError("inventory_plan_forecast_superseded")
+            plan_write_status = "reused"
+        except InventoryPlanningError as exc:
+            if str(exc) not in {
+                "inventory_plan_not_found",
+                "inventory_plan_forecast_superseded",
+            }:
+                raise
+            planning_policy = operations.inventory_plans.resolve_policy(
+                tenant_id, store_id=store_id, sku_id=sku_id
+            ) or InventoryPlanningPolicy()
+            plan = operations.inventory_plans.create_plan(
+                tenant_id, forecast["run_id"], planning_policy
+            )
+            plan_write_status = "created"
+        before = {"forecast": forecast, "plan": plan}
+        context = ToolExecutionContext(
+            tenant_id=tenant_id,
+            client_id="simulation",
+            session_id="simulation-forecasting",
+            trace_id="simulation-forecasting",
+            trusted_context={"store_id": store_id},
+        )
+        tool_outputs: dict[str, Any] = {}
+        tool_kinds: dict[str, str] = {}
+        for name in ("get_demand_forecast", "get_inventory_plan"):
+            spec, arguments = self.service.tools.validate_selection(
+                name=name,
+                arguments={"store_id": store_id, "sku_id": sku_id},
+                requested_mode="observe",
+                context=context,
+            )
+            result = self.service.tools.execute(
+                spec=spec, arguments=arguments, context=context
+            )
+            assert result.postcondition_met is True
+            tool_kinds[name] = spec.kind
+            tool_outputs[name] = result.output
+        after = {
+            "forecast": operations.forecast_runs.get_run(
+                tenant_id, forecast["run_id"]
+            ),
+            "plan": operations.inventory_plans.get_plan(tenant_id, plan["plan_id"]),
+        }
+        assert all(item["virtual"] is True for item in syncs.values())
+        assert all(kind == "read" for kind in tool_kinds.values())
+        assert before == after
+        assert tool_outputs["get_demand_forecast"]["computed_now"] is False
+        assert tool_outputs["get_inventory_plan"]["computed_now"] is False
+        assert tool_outputs["get_inventory_plan"]["action_allowed"] is False
+        assert plan["action_mode"] == "advisory_only"
+        return {
+            "virtual": True,
+            "syncs": syncs,
+            "demand_rebuild": rebuild,
+            "forecast": forecast,
+            "forecast_write_status": forecast_write_status,
+            "inventory_plan": plan,
+            "inventory_plan_write_status": plan_write_status,
+            "evidence_unchanged": before == after,
+            "tool_kinds": tool_kinds,
+            "tool_outputs": tool_outputs,
             "automatic_actions": [],
         }
 

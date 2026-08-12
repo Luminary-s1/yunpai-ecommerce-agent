@@ -119,6 +119,17 @@ def business_module_catalog() -> list[BusinessModule]:
             agent_tools=["get_listing_traffic_insights"],
         ),
         BusinessModule(
+            module_id="forecasting",
+            display_name="需求预测与库存计划",
+            status="available",
+            responsibilities=["日需求事实", "区间预测与回测", "确定性库存风险与建议"],
+            boundaries=[
+                "Agent 只读已固化 run 与 plan，不重算预测或补货量",
+                "只输出 advisory 建议，不创建采购单、不付款、不调整库存",
+            ],
+            agent_tools=["get_demand_forecast", "get_inventory_plan"],
+        ),
+        BusinessModule(
             module_id="customer_service",
             display_name="客服与售后协同",
             status="available",

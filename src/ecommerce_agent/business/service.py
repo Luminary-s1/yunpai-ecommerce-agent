@@ -7,7 +7,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..connectors import ConnectorRegistry, PullRequest, VirtualTaobaoConnector
 from ..database import Database, utc_now
-from ..forecasting import DemandFactService, ForecastRunService, InventoryPlanningService
+from ..forecasting import (
+    DemandFactService,
+    ForecastPolicy,
+    ForecastRunService,
+    InventoryPlanningPolicy,
+    InventoryPlanningService,
+)
 from ..tools import ToolExecutionContext, ToolRegistry, ToolResult, ToolSpec
 from .catalog import CatalogItemUpsert, CatalogService, CatalogStatus
 from .competitive import CompetitiveIntelligenceService, CompetitorObservationCreate
@@ -68,6 +74,13 @@ class ListingTrafficInsightsToolInput(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
 
 
+class ForecastEvidenceToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sku_id: str = Field(min_length=1, max_length=128)
+    store_id: str | None = Field(default=None, max_length=128)
+
+
 class OperationsService:
     def __init__(self, db: Database):
         from ..traffic_lab import TrafficAnalysisEngine, TrafficLabIngestionService
@@ -99,6 +112,53 @@ class OperationsService:
 
     def connector_catalog(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in self.connectors.catalog()]
+
+    def configure_forecasting_policies(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        sku_id: str,
+        forecast_policy: ForecastPolicy,
+        inventory_policy: InventoryPlanningPolicy,
+    ) -> dict[str, Any]:
+        created_at = utc_now()
+        forecast_evidence = self.forecast_runs._policy_evidence(forecast_policy)
+        inventory_evidence = self.inventory_plans._policy_evidence(inventory_policy)
+        with self.db._write_lock, self.db.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            forecast_id, forecast_status = self.forecast_runs._ensure_policy(
+                conn,
+                tenant_id,
+                store_id,
+                sku_id,
+                forecast_evidence,
+                created_at,
+            )
+            inventory_id, inventory_status = self.inventory_plans._ensure_policy(
+                conn,
+                tenant_id,
+                store_id,
+                sku_id,
+                inventory_policy,
+                inventory_evidence,
+                created_at,
+            )
+        return {
+            "tenant_id": tenant_id,
+            "store_id": store_id,
+            "sku_id": sku_id,
+            "forecast_policy": {
+                "policy_id": forecast_id,
+                **forecast_evidence,
+                "write_status": forecast_status,
+            },
+            "inventory_policy": {
+                "policy_id": inventory_id,
+                **inventory_evidence,
+                "write_status": inventory_status,
+            },
+        }
 
     def sync(
         self,
@@ -383,6 +443,36 @@ class OperationsService:
                     metadata={"domain": "traffic_lab", "risk_level": "L0"},
                 )
             )
+        if registry.get("get_demand_forecast") is None:
+            registry.register(
+                ToolSpec(
+                    name="get_demand_forecast",
+                    description=(
+                        "读取指定 SKU 最新已固化的需求预测、区间、回测指标和数据质量证据；"
+                        "不运行预测，不修改模型选择或数值"
+                    ),
+                    kind="read",
+                    input_model=ForecastEvidenceToolInput,
+                    handler=self._demand_forecast_tool,
+                    policy=self._forecast_store_scope_policy,
+                    metadata={"domain": "forecasting", "risk_level": "L0"},
+                )
+            )
+        if registry.get("get_inventory_plan") is None:
+            registry.register(
+                ToolSpec(
+                    name="get_inventory_plan",
+                    description=(
+                        "读取指定 SKU 最新已固化的库存快照、策略、缺货风险和建议量；"
+                        "只返回 advisory 证据，不创建采购单、不付款、不调整库存"
+                    ),
+                    kind="read",
+                    input_model=ForecastEvidenceToolInput,
+                    handler=self._inventory_plan_tool,
+                    policy=self._forecast_store_scope_policy,
+                    metadata={"domain": "forecasting", "risk_level": "L0"},
+                )
+            )
 
     def _inventory_risk_tool(
         self, arguments: BaseModel, context: ToolExecutionContext
@@ -420,6 +510,19 @@ class OperationsService:
         requested_store = payload.get("store_id")
         if trusted_store and requested_store and str(requested_store) != trusted_store:
             return "store_scope_mismatch"
+        return None
+
+    @classmethod
+    def _forecast_store_scope_policy(
+        cls, arguments: BaseModel, context: ToolExecutionContext
+    ) -> str | None:
+        denial = cls._catalog_store_scope_policy(arguments, context)
+        if denial:
+            return denial
+        if not arguments.model_dump().get("store_id") and not cls._trusted_store_id(
+            context
+        ):
+            return "store_scope_required"
         return None
 
     def _product_search_tool(
@@ -554,3 +657,56 @@ class OperationsService:
             limit=value.limit,
         )
         return ToolResult(status="success", output=output)
+
+    def _demand_forecast_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = ForecastEvidenceToolInput.model_validate(arguments.model_dump())
+        store_id = value.store_id or self._trusted_store_id(context)
+        forecast = self.forecast_runs.latest_run(
+            context.tenant_id, sku_id=value.sku_id, store_id=store_id
+        )
+        return ToolResult(
+            status="success",
+            output={
+                "evidence_source": "forecast_runs",
+                "computed_now": False,
+                "forecast": forecast,
+                "references": {
+                    "forecast_run_id": forecast["run_id"],
+                    "data_hash": forecast["data_hash"],
+                    "demand_policy_version": forecast["demand_policy_version"],
+                    "forecast_policy_version": forecast["forecast_policy_version"],
+                    "model_version": forecast["model_version"],
+                    "data_quality": forecast["status"],
+                    "anomalies": forecast["anomalies"],
+                },
+            },
+        )
+
+    def _inventory_plan_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = ForecastEvidenceToolInput.model_validate(arguments.model_dump())
+        store_id = value.store_id or self._trusted_store_id(context)
+        plan = self.inventory_plans.latest_plan(
+            context.tenant_id, sku_id=value.sku_id, store_id=store_id
+        )
+        return ToolResult(
+            status="success",
+            output={
+                "evidence_source": "inventory_plans",
+                "computed_now": False,
+                "action_allowed": False,
+                "inventory_plan": plan,
+                "references": {
+                    "plan_id": plan["plan_id"],
+                    "forecast_run_id": plan["forecast_run_id"],
+                    "inventory_snapshot_hash": plan["inventory_snapshot_hash"],
+                    "inventory_as_of": plan["inventory_as_of"],
+                    "planning_policy_version": plan["planning_policy_version"],
+                    "plan_quality": plan["plan_quality"],
+                    "action_mode": plan["action_mode"],
+                },
+            },
+        )
