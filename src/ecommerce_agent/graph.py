@@ -58,6 +58,23 @@ def _map_scene(intent: str) -> str:
         return "aftersale_policy"
     if intent in {"product", "inventory", "price_promo"}:
         return "product_recommend"
+
+
+def _bounded_product_context_ready(state: AgentState) -> bool:
+    """唯一候选商品 + 产品咨询场景：决策收敛为单步（对齐 origin/main，merge 时丢失）。
+
+    满足时 deliberate 用空工具目录、max_steps=1、planning_constraint=bounded_product_answer，
+    且模型不得进入 observe/act 循环（否则唯一候选商品的答案计划会失控）。
+    """
+    if state.get("react_step") != 0:
+        return False
+    if state.get("customer_intent") != "product_inquiry":
+        return False
+    if state.get("context_readiness") != "ready" or not state.get("retrieved"):
+        return False
+    advisor = (state.get("context_bundle") or {}).get("product_advisor") or {}
+    candidates = advisor.get("candidates") or []
+    return isinstance(candidates, list) and len(candidates) == 1 and bool(candidates[0])
     if "competitor" in intent:
         return "competitor_analysis"
     return "customer_service"
@@ -580,10 +597,10 @@ def build_graph(
             and top_document
             and settings.rag_direct_approved_answer
             and top_document["source"].startswith("evolution:")
-            and (
-                top_document["score"] >= settings.rag_direct_approved_min_score
-                or normalize_text(top_document["question"]) == state["normalized_input"]
-            )
+            # 仅精确匹配才复用 approved 答案（对齐 origin/main；merge 误把"或"加进来，
+            # 导致高分但问题不匹配的文档被错误复用，绕过模型决策）
+            and normalize_text(top_document["question"])
+            == normalize_text(state["normalized_input"])
         ):
             decision = AgentDecision(
                 intent=top_document["intent"],
@@ -600,26 +617,35 @@ def build_graph(
             state,
             DECISION_SYSTEM_PROMPT,
         )
+        bounded_product = _bounded_product_context_ready(state)
         messages = build_decision_messages(
             question=state["normalized_input"],
             documents=state.get("retrieved", []),
             context=state["context_bundle"],
             history=history,
-            tool_catalog=tools.catalog_for_model(),
+            tool_catalog=[] if bounded_product else tools.catalog_for_model(),
             observation=state.get("tool_result") or None,
             step_count=state["react_step"],
-            max_steps=settings.max_react_steps,
+            max_steps=1 if bounded_product else settings.max_react_steps,
             knowledge_budget_tokens=knowledge_budget,
             prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
             sop_intent=(state.get("intent_routing") or {}).get("sop_intent"),
             knowledge_intent=(state.get("intent_routing") or {}).get("knowledge_intent"),
+            planning_constraint=("bounded_product_answer" if bounded_product else None),
         )
         budget_trace = (
             f"context:budget:kept{history_meta['kept']}"
             f"/dropped{history_meta['dropped']}"
         )
         try:
-            decision = AgentDecision.model_validate(model.generate_json(messages))
+            decision = AgentDecision.model_validate(
+                model.generate_json(
+                    messages,
+                    timeout_seconds=settings.model_decision_timeout_seconds,
+                    max_tokens=settings.model_decision_max_output_tokens,
+                    thinking_enabled=settings.model_decision_thinking_enabled,
+                )
+            )
             trace_step = f"deliberate:model:{decision.mode}"
             fallback = False
         except (ModelError, ValidationError) as exc:
@@ -662,6 +688,18 @@ def build_graph(
                 )
                 trace_step = "deliberate:fallback"
                 fallback = True
+        # 唯一候选商品收敛：bounded 场景不允许模型进入 observe/act 循环
+        # （对齐 origin/main：merge 时丢失，导致唯一商品答案计划失控）
+        if bounded_product and decision.mode in {"observe", "act"}:
+            decision = AgentDecision(
+                intent=decision.intent,
+                mode="handoff",
+                reason="bounded_product_answer_required",
+                confidence=decision.confidence,
+            )
+            trace_step = "deliberate:bounded_product:handoff"
+        elif bounded_product:
+            trace_step = f"deliberate:bounded_product:{decision.mode}"
         return {
             "decision": decision.model_dump(),
             "model_fallback": fallback,
@@ -1066,10 +1104,8 @@ def build_graph(
             and state["decision"].get("reason") == "approved_knowledge_reuse"
             and settings.rag_direct_approved_answer
             and top_document["source"].startswith("evolution:")
-            and (
-                top_document["score"] >= settings.rag_direct_approved_min_score
-                or normalize_text(top_document["question"]) == state["normalized_input"]
-            )
+            # 精确匹配才复用（对齐 deliberate 同逻辑）
+            and normalize_text(top_document["question"]) == state["normalized_input"]
         ):
             return {
                 "draft": top_document["answer"],
@@ -1179,7 +1215,19 @@ def build_graph(
 
     def handoff(state: AgentState) -> dict[str, Any]:
         reason = state["route_reason"]
-        if reason == "customer_requested_human":
+        decision_intent = str(
+            state.get("decision", {}).get("intent")
+            or state.get("intent")
+            or "general"
+        )
+        model_confirmed_complaint = decision_intent == "complaint"
+        if model_confirmed_complaint:
+            # 投诉专属文案（对齐 origin/main：此前 merge 丢失，投诉无"抱歉"前缀）
+            answer = state.get("decision", {}).get("response") or (
+                "很抱歉给您带来困扰。我已将当前问题和必要上下文标记为投诉，"
+                "并转交人工客服优先跟进。"
+            )
+        elif reason == "customer_requested_human":
             answer = "好的，我会将当前问题和必要上下文转给人工客服。请勿发送密码、验证码或银行卡信息。"
         elif reason == "authorized_order_context_missing":
             answer = "这个问题需要核对您的订单信息。我会转人工处理，请只提供平台订单编号，不要发送密码或验证码。"
@@ -1187,6 +1235,11 @@ def build_graph(
             answer = "我已经理解您要办理的业务，但当前环境尚未接入对应的执行工具，我会转人工继续处理。"
         elif reason.startswith("tool_policy_denied"):
             answer = "当前操作未通过已配置的权限或业务规则校验，我会转人工进一步核对。"
+        elif reason == "knowledge_unavailable":
+            answer = (
+                "知识检索服务暂时不可用，当前无法引用知识库；"
+                "我会把对话历史和已有信息转给人工客服继续核对。"
+            )
         elif reason in {"model_unavailable", "react_step_limit_reached"}:
             answer = MODEL_UNAVAILABLE_HANDOFF_ANSWER
         else:

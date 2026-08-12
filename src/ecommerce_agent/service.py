@@ -495,12 +495,9 @@ class AgentService:
             and state["decision"].get("reason") == "approved_knowledge_reuse"
             and self.settings.rag_direct_approved_answer
             and top_document["source"].startswith("evolution:")
-            and (
-                top_document["score"]
-                >= self.settings.rag_direct_approved_min_score
-                or normalize_text(top_document["question"])
-                == state["normalized_input"]
-            )
+            # 精确匹配才复用（对齐 graph deliberate 同逻辑）
+            and normalize_text(top_document["question"])
+            == normalize_text(state["normalized_input"])
         ):
             return iter((top_document["answer"],)), False, "generate:approved_knowledge"
 

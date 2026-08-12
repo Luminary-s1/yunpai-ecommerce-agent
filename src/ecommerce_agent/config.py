@@ -61,6 +61,11 @@ class Settings:
     max_request_body_bytes: int
     rate_limit_requests_per_minute: int
     min_free_disk_mb: int
+    # 决策模型调用参数（对齐 origin/main：merge 时丢失，deliberate 需此三值）
+    model_decision_timeout_seconds: float = 15.0
+    model_decision_max_output_tokens: int = 300
+    model_decision_thinking_enabled: bool = False
+    intent_classify_timeout_seconds: float = 2.0
     # 四套场景 Prompt 是否注入生产回答链路（M3 交付物⑥接入；默认开启）
     rag_scene_prompts: bool = True
     # 启动时是否导入 02_clean 资产知识（M3 接入；测试设 false 提速，生产默认 true）
@@ -167,6 +172,18 @@ class Settings:
             ),
             rag_direct_approved_min_score=float(
                 os.getenv("RAG_DIRECT_APPROVED_MIN_SCORE", "0.6")
+            ),
+            model_decision_timeout_seconds=max(
+                0.001, float(os.getenv("MODEL_DECISION_TIMEOUT_SECONDS", "15.0"))
+            ),
+            model_decision_max_output_tokens=max(
+                1, int(os.getenv("MODEL_DECISION_MAX_OUTPUT_TOKENS", "300"))
+            ),
+            model_decision_thinking_enabled=_as_bool(
+                os.getenv("MODEL_DECISION_THINKING_ENABLED"), default=False
+            ),
+            intent_classify_timeout_seconds=max(
+                0.001, float(os.getenv("INTENT_CLASSIFY_TIMEOUT_SECONDS", "2.0"))
             ),
             handoff_confidence_threshold=float(
                 os.getenv("HANDOFF_CONFIDENCE_THRESHOLD", "0.6")
