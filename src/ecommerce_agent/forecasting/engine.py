@@ -9,7 +9,8 @@ from typing import Callable, Mapping, Sequence
 
 Forecaster = Callable[[list[float | None], int], list[float]]
 FORECAST_ENGINE_VERSION = "forecast-engine-v1"
-_BASELINES = frozenset({"last_value", "seasonal_naive_7", "rolling_mean"})
+_BASELINE_ORDER = ("rolling_mean", "last_value", "seasonal_naive_7")
+_BASELINES = frozenset(_BASELINE_ORDER)
 
 
 def _known(values: Sequence[float | None]) -> list[float]:
@@ -201,10 +202,13 @@ class ForecastEngine:
         backtests = self.backtest(list(zip(dates, values, strict=True)))
         ranking = self._rank(backtests)
         if not backtests:
-            champion = "rolling_mean"
+            champion = next(
+                name for name in _BASELINE_ORDER if name in self.policy.candidate_models
+            )
             reason = {
                 "code": "cold_start_baseline",
                 "comparison_metric": None,
+                "baseline_model": champion,
                 "required_relative_improvement": self.policy.required_relative_improvement,
             }
             metrics = self._metrics([], [])

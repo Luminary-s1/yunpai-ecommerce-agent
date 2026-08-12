@@ -109,3 +109,13 @@ def test_zero_actual_windows_make_wape_incomparable_without_division_by_zero() -
     assert result["metrics"]["bias"] is None
     assert result["metrics"]["rmse"] == 0
     assert result["champion_reason"]["comparison_metric"] == "rmse"
+
+
+def test_cold_start_champion_is_selected_from_the_fixed_candidate_set() -> None:
+    policy = ForecastPolicy(candidate_models=("last_value", "ewma"))
+
+    result = ForecastEngine(policy=policy).evaluate(_series([3, 4, 3, 4]))
+
+    assert result["quality_status"] == "degraded"
+    assert result["champion_model"] in policy.candidate_models
+    assert result["champion_model"] == "last_value"
