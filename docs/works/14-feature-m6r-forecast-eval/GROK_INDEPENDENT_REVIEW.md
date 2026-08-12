@@ -4,6 +4,7 @@
 - Branch: `codex/m6r-wp5-forecast-eval`
 - Required WP4 ancestor: `67222d7cf3493fb4565ef14140dac13b10d57bd2`
 - Long-lived Grok conversation: `019ff6bf-f868-7520-bcbd-302682b4adad`
+- Persisted reviewer identity: `model_id=grok-4.6-build`, `reasoning_effort=xhigh`, `model_fingerprint=fp_f95ce4c3856c43c4`
 - Launch command: `grok --no-alt-screen --minimal --always-approve --no-subagents --disable-web-search`
 - Network policy: web search disabled; pytest commands used the required offline proxy environment.
 - Transcript policy: prompts and final Grok replies are preserved verbatim. Grok internal reasoning and transient terminal rendering are not copied.
@@ -542,3 +543,181 @@ assert {'p80': 1.0, 'p95': 1.0} == {'p80': 0.0, 'p95': 0.0}
 必须修复项：**无。**
 
 停在本会话，等后续追问。
+
+## Round 3 — whole-chain merge-readiness review
+
+### Codex prompt (verbatim)
+
+~~~text
+继续你在同一会话 019ff6bf-f868-7520-bcbd-302682b4adad 中对 M6-R 的独立审阅。用户现已明确授权：只有你对整条 M6-R WP1–WP5 合入链给出明确批准后，Codex 才可合入 main；批准并完成合入后，Codex 将删除已确认合入的 M6 工作分支。你现在是最终合入裁判，不得仅复述前两轮证据。
+
+仓库：/Users/luckye/Documents/Code/yunpai-ecommerce-agent
+待合入候选远端分支：origin/codex/m6r-wp5-forecast-eval
+候选预期 tip：03d3b85ed104005fd9a537a6685e43f67865ad59
+WP4 必须包含的祖先：67222d7cf3493fb4565ef14140dac13b10d57bd2
+当前 origin/main 预期：4065b12dd5178ce7239d27b27d71614c8bee77cc
+本轮必须只读审阅：不要编辑、提交、推送、合并或删除分支；必要 mutation 只能在临时副本/临时 worktree 中执行并清理。
+
+请重新 fetch，并独立完成“整链可合入性”审阅：
+
+1. 身份与父链
+- 核对本地/远端候选 tip、origin/main、WP4 祖先、merge-base 和线性父链。
+- 确认 origin/main 是候选祖先，能做 --ff-only；用 merge-tree 或临时 worktree 验证无冲突，但不得真的改 main。
+- 审阅 origin/main..candidate 的完整提交集与组合 diff，确认 WP4 未丢失、WP5 完整、没有无关或恶意文件。
+- 核查仓库的单提交/PR ≤500 行纪律；按实际规则说明是否存在阻塞，不能凭总 diff 大小替代逐提交判断。
+- 确认两个工作树当前干净，评审期间 tracked 文件最终无变化。
+
+2. 规范与任务书逐条验收
+- 读取 AGENTS.md、CONTRIBUTING.md 第 5/9/10/11 节、.project-to-act/PROJECT_OVERVIEW.md（D-034/D-035/D-039）、docs/tasks/M6R_DEMAND_FORECAST_WORKBENCH.md 全文、docs/AUDIT_ROUTING_EVOLVABILITY_20260807.md，并检查项目台账是否真实支持合入评审。
+- WP1：demand-v1、Asia/Shanghai 归日、取消/回补、水位/幂等、不可变版本、缺货 true/false/unknown、缺日不冒充零、租户隔离。
+- WP2：七候选/六类序列、rolling-origin 无未来泄漏、固定生产 champion/baseline Gate、失败隔离、P50≤P80≤P95、脏持久证据、零需求 WAPE/Bias 可比性。
+- WP3：库存聚合、available/shortfall、inbound 假设、lead/review、分位数、MOQ/倍数/上限、仓级 qty withheld、质量/风险、不可变、advisory-only。
+- WP4：API tenant/error 契约、动态目录、两个只读工具、九表或实际完整读取边界、D20、后台显式触发和 degraded 展示；无 forecasting 关键词路由或 LangGraph 拓扑变化。
+- WP5：十类 synthetic fixture、真实 rolling-origin、独立 oracle 物理隔离、实际生产调用字段/oracle overlap 审计、方向和假阳性双向可证伪、WAPE/Bias/区间数值 Gate、库存场景。
+- 跨 WP：恶意/损坏 JSON、空数据、边界数值、同时间戳、多租户、并发/幂等、误用面、时间语义、数据脏度、灾备和 v29→v30、旧 M5/M6 回归；无第三方依赖、既有 API 破坏、自动采购/付款/库存改写。
+- 特别核对任务书中 baseline fallback 的表述与当前生产固定规则/此前用户约束是否一致；若是有意且已有可审计决策，说明依据，否则判为阻塞。
+
+3. 独立命令和攻击
+- 不要只采用 Codex 的历史结果。自行运行必要的静态搜索、数据库/接口/算法探针和至少一个你自行选择的新攻击面；必要时在临时副本做 mutation，证明门禁真能失败并在清理后通过。
+- 必须用以下断网代理环境跑全量：
+  NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost ALL_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 .venv/bin/python -m pytest -q
+- 另跑 python -m compileall -q src、git diff --check、project-to-act --validate、direct Forecast Eval runner。若临时 worktree 没有 .venv，使用原仓库共享 venv绝对路径并保留相同代理。
+- 将开发者历史证据与你本轮独立证据明确分开。
+
+4. 清理建议
+- 枚举本地和 origin 上名称明确属于 M6-R 工作包的分支。
+- 对每条给出：tip、是否为 candidate/new main 的祖先、合并后是否安全删除。
+- 不得删除；只给 Codex 可执行清单。不要把未合入或名称含糊的分支纳入删除批准。
+
+5. 最终输出
+- 先列 Findings（按严重度；无则明确 none），再列独立命令/结果、新探针或 mutation、父链/合并模拟、分支清理清单、残余边界。
+- 最后一行必须严格二选一：
+  APPROVE MERGE — <明确说明批准把哪个精确 tip 以何种方式合入哪个精确 main 基线>
+  或
+  REJECT MERGE — <阻塞原因>
+- 即使 APPROVE，也必须明确：这仅批准 M6-R 代码合入 main，不等于服务器 schema v30 升级、真实数据验收、24/72h 长稳或生产放行。
+~~~
+
+### Grok response (verbatim)
+
+# M6-R 整链合入审阅（最终裁判）
+
+本轮只读。未编辑、提交、推送、合并或删除任何分支。mutation 只在 `/tmp/m6r-merge-sim` 执行，worktree 已拆除。候选仓与 main worktree 的 tracked 文件无变化。
+
+开发者历史全量（355.14s 等）**不作为本轮证据**。
+
+---
+
+## Findings
+
+**无合入阻塞项。**
+
+非阻塞残余（不构成 REJECT）：
+
+| 级 | 项 |
+|---|---|
+| P3 | WP5 覆盖率 sharpness 只卡 `width<=0`；过预报 + `1e-15` 正宽度仍 100% 覆盖。生产宽度来自残差分位，有非零误差时不会塌成 0。 |
+| P3 | 无订单日零/缺失由 rebuild 的 `coverage_complete` 控制，未写入 `DemandPolicy` 字段。口径仍可区分。 |
+| 治理后续 | 候选**未改** `CONTRIBUTING.md`（符合“功能分支不改该文件”）。合入后 main 占号表仍写 “WP5 Eval 留待后续”，需 **main 上单独文档提交** 关闭，不是代码阻塞。 |
+| 已知形态 | `forecast_runs/policies/backtests/points/anomalies` 无不可变 trigger（WP2 已在 main）；plan/fact/planning-policy 有。 |
+
+`CONTRIBUTING` §3「单个 PR 约 500 行」是经验值，不是硬门。逐提交最大 **439 行**（`9623692`）；整链合计 +3577/−67 是已验收 WP4+WP5 堆叠，用户已授权整链合入。**不按总 diff 拒合。**
+
+任务书 §6.4「未达到**预设改进阈值**时 baseline 保持 champion」与生产 `required_relative_improvement=0.02`（`engine.py:113,304-310`）一致。这是已冻结的 `forecast-v1` 确定性规则，写入 policy 证据，Eval 不重算 2%。不是“任意优于 baseline 即换冠军”，也不阻塞。
+
+---
+
+## 身份与父链
+
+| 项 | 独立结果 |
+|---|---|
+| 候选 tip（本地=origin） | `03d3b85ed104005fd9a537a6685e43f67865ad59` |
+| `origin/main` | `4065b12dd5178ce7239d27b27d71614c8bee77cc` |
+| WP4 祖先 | `67222d7` **在**候选链，**不在**当前 main |
+| merge-base | `4065b12` = `origin/main` |
+| `--ff-only` | 可以（main 是候选祖先） |
+| 线性 | `origin/main..candidate` 21 个单父提交，无 merge commit |
+| 工作树 | 候选 `03d3b85` 干净；orca main `4065b12` 干净 |
+
+`origin/main..03d3b85`：WP4 九提交（`509d3b3`…`67222d7`）+ WP5 十二提交（`255f7df`…`03d3b85`）。26 个文件，无 `pyproject.toml` / `graph.py` / `intent.py` / `prompts.py` / `llm.py` / `CONTRIBUTING.md`，无二进制。`api.py` 只挂载 forecasting router；registry 增加 `forecasting` available + 两个只读工具。
+
+`git merge-tree --write-tree` 得到树 `33370ea8…`，exit 0。临时 worktree 从 `4065b12` **`git merge --ff-only origin/codex/m6r-wp5-forecast-eval`** 成功，HEAD=`03d3b85`，WP4 在模拟主线上。原仓 `main` 仍停在 `4065b12`。
+
+---
+
+## 规范 / 工作台（合入视角）
+
+已读 AGENTS.md、CONTRIBUTING 5/9/10/11、D-034/D-035/D-039、工作台全文、审计文档。台账 E-20260813-002/003 与 `PROJECT_VERSIONS` 写的是「可进合入评审、未豁免生产」，**没有**把生产放行写成已通过。
+
+WP1–WP5 生产边界与前两轮对抗结论一致，本轮用组合 diff + 全量 + 新攻击复核，不重复逐条复述：
+
+- WP1：demand-v1 / 上海归日 / 取消回补 / 三态缺货 / 缺日≠0 / 租户隔离仍在。
+- WP2：七候选、`values[:origin]`、2% baseline Gate、失败隔离、P50≤P80≤P95、零需求 WAPE/Bias 不可比。
+- WP3：已在 main；本链只叠加读侧/计划展示，不改 v30 表结构。
+- WP4：九 API、动态目录、只读工具、九表快照、D20、显式后台；无 forecasting 关键词路由。
+- WP5：十场景、独立 oracle、32 次调用 overlap=[]、方向 Bias / 污染 Gate。
+- 跨 WP：无新依赖、无既有 API 删字段、无采购/付款/库存事实写；v30 灾备仍精确比对（升级策略已在 operations 写明，合入≠服务器已升级）。
+
+---
+
+## 独立命令（本轮）
+
+| 命令 | 结果 |
+|---|---|
+| `git fetch` + 祖先 / FF / merge-tree | main 祖先、WP4 在候选、merge-tree 无冲突 |
+| 临时 worktree `--ff-only` | `4065b12` → `03d3b85` 成功 |
+| `compileall -q src` | exit 0 |
+| `git diff --check` | exit 0 |
+| `project-to-act --validate` | `valid=true` |
+| CLI `run_forecast_eval.py` → `/tmp/m6r-merge-eval.sqlite3` | exit 0，`passed=true`，10/10，overlap=[]，32 calls |
+| **全量规定代理 pytest** | **730 passed, 1 xfailed in 255.95s** |
+
+---
+
+## 本轮新探针 / mutation（不在前两轮清单）
+
+1. **已存在 sqlite 再跑 Eval**
+   `FileExistsError: evaluation database already exists`，exit 1。评测库不会被覆盖。
+
+2. **临时 worktree 去掉 `rowid DESC`**
+   同戳+索引扰动测试失败（回到 `forecast-same-time-zzz`）；SKU override 测试仍过。`git checkout --` 后两项 **2 passed**。原仓未脏。
+
+---
+
+## 分支清理清单（只建议，未删除）
+
+合入 **`03d3b85` ff-only 到 `4065b12` 且 origin/main 已是该 tip 之后**：
+
+| 分支 | tip | 关系 | 合入后删除 |
+|---|---|---|---|
+| `origin/codex/m6r-wp5-forecast-eval` | `03d3b85` | 新 main tip | **是** |
+| `codex/m6r-wp5-forecast-eval` | `03d3b85` | 同上 | **是** |
+| `origin/codex/m6r-wp4-api-agent-admin` | `67222d7` | 新 main 祖先 | **是** |
+| `codex/m6r-wp4-api-agent-admin` | `67222d7` | 同上 | **是** |
+| `origin/codex/m6r-wp3-inventory-planning` | `fb707e4` | **已是当前 main 祖先** | **是**（与本链无关的已合入 WP3） |
+| `codex/m6r-wp3-inventory-planning` | `fb707e4` | 同上 | **是** |
+| `codex/m6r-wp3-inventory-planning-2` | `df1301a` | 已是当前 main 祖先；仅本地 | **是** |
+
+**不要删：** `feature/roadmap-reset-m5r-m6r` 及其 origin（M5-R，tip 不是本候选祖先）、`review/pr-10-m3`、`main`、其它无明确 M6-R 工作包名的分支。
+
+合入后建议（非本批准范围）：在 **main** 更新 `CONTRIBUTING.md` v29 行「WP5 Eval 留待后续」。
+
+---
+
+## 残余边界（即使合入也不豁免）
+
+服务器 schema v30 升级、真实订单/库存、24/72h 长稳、生产放行。灾备仍按精确 schema 拒绝旧 `.ypbak`，升级窗口需先旧版停机备份、迁后再做 v30 全量备份。
+
+---
+
+APPROVE MERGE — 将 `origin/codex/m6r-wp5-forecast-eval` 的精确 tip `03d3b85ed104005fd9a537a6685e43f67865ad59` 以 `--ff-only` 合入精确 main 基线 `4065b12dd5178ce7239d27b27d71614c8bee77cc`（合入后 origin/main 应为 `03d3b85`）。此批准仅限 M6-R 代码进入 main，不等于服务器 schema v30、真实数据、24/72h 长稳或生产放行。
+
+### Codex merge and cleanup record
+
+- Before the merge, Codex fetched again and atomically rechecked the exact approved main/candidate/WP4 SHAs, ancestry, and both clean worktrees.
+- `git merge --ff-only origin/codex/m6r-wp5-forecast-eval` moved local `main` from `4065b12dd5178ce7239d27b27d71614c8bee77cc` to `03d3b85ed104005fd9a537a6685e43f67865ad59` without a merge commit.
+- Separate Codex post-merge validation: required offline-proxy full suite `730 passed, 1 xfailed in 300.74s`; direct Eval `passed=true`, 10/10, 32 production calls, `oracle_field_overlap=[]`; `compileall -q src`, `git diff --check`, and `project-to-act --validate` all exited 0.
+- After a final remote-baseline check, `main` was pushed as a normal fast-forward, so `origin/main=03d3b85ed104005fd9a537a6685e43f67865ad59` before cleanup.
+- Each cleanup target was independently proven an ancestor of `origin/main`. Remote branches removed: `codex/m6r-wp3-inventory-planning`, `codex/m6r-wp4-api-agent-admin`, `codex/m6r-wp5-forecast-eval`. Local branches removed with `git branch -d`: those three plus local-only `codex/m6r-wp3-inventory-planning-2`.
+- `feature/roadmap-reset-m5r-m6r` and all ambiguous/unrelated branches were preserved.
+- This is a code merge only. Server schema v30, real data, 24/72h soak, disaster-recovery execution, and production release remain unwaived.

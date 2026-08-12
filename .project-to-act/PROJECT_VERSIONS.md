@@ -5,24 +5,24 @@
 ## 当前版本
 
 - 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5、已合入 main 的 M6-R WP1–WP3，以及已通过完整独立对抗验收但待整链合入 main 的 M6-R WP4–WP5；生产放行阻塞
+- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5，以及已合入 main 的 M6-R WP1–WP5；生产放行阻塞
 - 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变；WP5 仍沿用 v30，新增纯 Python Eval fixture/runner/report 与 D-039 oracle 边界，不改变依赖、持久 schema、API 或生产路由
 - 最后更新：2026-08-13
 
 ## M6-R WP5 Forecast Eval（未单独升版）
 
-- 状态：分支 `codex/m6r-wp5-forecast-eval` 已完成覆盖 WP1–WP5 的单会话 Grok 独立对抗评审与修复复验，代码级本机候选 PASS，可与未合入 main 的 WP4 整链进入合入评审；尚未合入 main。
+- 状态：覆盖 WP1–WP5 的同一 Grok 4.6 xhigh 会话完成两轮对抗验收与最终整链合入审阅，明确批准 `03d3b85` 从 `4065b12` 快进；该精确代码 tip 已合入并推送 `main`，已合入工作包分支完成清理。
 - 兼容性：沿用 schema v30 与现有依赖；只新增 `evals/forecasting/` synthetic fixture、可复跑 CLI 和测试。生产 API、Agent 目录、LangGraph/intent/prompt、迁移和自动动作均未改变。
 - Eval：十类序列全部使用 rolling-origin；对 test window 做未来扰动不变性检查，数值评分 WAPE/Bias/P80/P95 覆盖与 baseline fallback；库存场景调用公开 planning service。oracle 只在生产调用后进入 scorer，并以实际字段 overlap/unexpected 调用 Gate 审计；存在回测误差时零宽 P80/P95 明确失败。
 - 对抗修复：计划证据 JSON 解析与结构类型失败统一为 `inventory_plan_evidence_invalid`，两个读 API 映射 409；forecast policy 同 `active_from/created_at` 由 `rowid DESC` 确定最新版本。成功响应、schema、依赖、Agent 目录、路由、拓扑和自动动作均不变。
-- 验证：E-20260813-001/002/003；Grok 二轮最终全量 `730 passed, 1 xfailed`（296.80 秒），旧生产对三项新增门禁 `3 failed`，修复后定点 `3 passed`、聚焦 `54 passed`；最终 Codex 收口全量 `730 passed, 1 xfailed`（355.14 秒），Eval/静态/台账均通过。开发者与 Grok 证据分开，累计 mutation 均失败后还原。合入 main、服务器 v30、真实数据、长稳和生产 Gate 均未豁免。
+- 验证：E-20260813-001/002/003/004；最终合入审阅的 Grok 独立全量为 `730 passed, 1 xfailed`（255.95 秒），新增 sqlite 拒绝覆盖 probe 与同戳 rowid mutation；合入后的 Codex 独立全量为 `730 passed, 1 xfailed`（300.74 秒），Eval/静态/台账均通过。开发者与 Grok 证据分开，累计 mutation 均失败后还原。服务器 v30、真实数据、灾备实操、长稳和生产 Gate 仍未豁免。
 
 ## M6-R WP4 API / Agent / Admin（未单独升版）
 
-- 状态：单一分支 `codex/m6r-wp4-api-agent-admin` 的 tip `0c283de` 已通过两轮 Grok 独立对抗验收并与 origin 一致，可进入合入评审，尚未合入 main。
+- 状态：WP4 验收代码和后续治理提交均在 `67222d7` 祖先链中，并随 WP5 候选 `03d3b85` 经最终整链批准后快进合入并推送 `main`；原 WP4 工作分支已清理。
 - 兼容性：沿用 schema v30 和既有依赖；九个管理员 API 均为 additive，GET 只读固化证据，需求重建、policy 配置和 forecast run 需显式 POST/PUT。`forecasting` 登记 available 并由注册表 D20 场景覆盖；LangGraph、intent、prompt、既有 API 响应、采购/付款/库存事实写路径不变。
 - Agent / Admin：`get_demand_forecast` / `get_inventory_plan` 经动态目录暴露，只读最新固化 run/plan 并带 run、data hash、库存快照、policy 和质量证据；后台展示历史需求、区间、选定分位库存线、缺货日、建议量、质量和 backtest，只有显式按钮会运行。
-- 验证：E-20260812-007/008；开发者全量 `722 passed, 1 xfailed`（348.84 秒），Grok 独立聚焦 `45 passed`、全量 `722 passed, 1 xfailed`（283.82 秒），compileall、JS syntax、whitespace 与台账校验通过；脏证据、同戳 policy、九表快照等四项 mutation 如期失败并还原。合入 main、WP5 Eval、服务器 v30、真实数据和生产 Gate 不豁免。
+- 验证：E-20260812-007/008 与整链合入证据 E-20260813-004；开发者全量 `722 passed, 1 xfailed`（348.84 秒），WP4 独立验收全量 `722 passed, 1 xfailed`（283.82 秒），整链独立与合入后全量均为 `730 passed, 1 xfailed`。服务器 v30、真实数据、长稳和生产 Gate 不豁免。
 
 ## M6-R WP3 Inventory Planning（未单独升版）
 

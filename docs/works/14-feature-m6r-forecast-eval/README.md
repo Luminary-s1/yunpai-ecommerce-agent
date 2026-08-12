@@ -1,8 +1,10 @@
 # M6-R WP5 Forecast Eval 与完整对抗评审
 
 日期：2026-08-13
-分支：`codex/m6r-wp5-forecast-eval`
+开发分支（历史，合入后已删除）：`codex/m6r-wp5-forecast-eval`
 起点：`67222d7cf3493fb4565ef14140dac13b10d57bd2`
+整链代码合入：`4065b12dd5178ce7239d27b27d71614c8bee77cc` 以 `--ff-only` 前进到
+`03d3b85ed104005fd9a537a6685e43f67865ad59`
 
 ## 开工与父链证据
 
@@ -125,7 +127,7 @@ project-to-act --validate：valid=true，issues=[]
 
 完整逐轮提示、Grok 原文、独立命令、probe、mutation、修复与最终裁决见
 [`GROK_INDEPENDENT_REVIEW.md`](GROK_INDEPENDENT_REVIEW.md)。整个评审只使用会话
-`019ff6bf-f868-7520-bcbd-302682b4adad`，首次审阅、修复复验和最终裁决均在同一 PTY 中继续。
+`019ff6bf-f868-7520-bcbd-302682b4adad`，首次审阅、修复复验和整链合入裁决均在同一 PTY 中继续。
 
 - 首轮独立全量 `727 passed, 1 xfailed`，五项 mutation 均先失败并精确还原；发现计划脏
   JSON 两个 GET 500、forecast policy 同戳依赖扫描顺序、零宽区间覆盖假阳性三项 P2。
@@ -134,8 +136,10 @@ project-to-act --validate：valid=true，issues=[]
 - 二轮 Grok 将四个生产文件退回旧实现，独立得到 `3 failed`；还原后以错误结构 JSON、
   双索引扫描、零宽双向 probe 和新 sharpness mutation 复验，最终全量
   `730 passed, 1 xfailed`（296.80 秒）。
-- 最终裁决：**PASS**。M6-R 是代码级本机候选，可与尚未合入 main 的 WP4 整链进入合入
-  评审；main 合入、服务器 schema v30、真实数据、24/72h 长稳与生产放行均未授权或未豁免。
+- 第二轮裁决：**PASS**。M6-R 是代码级本机候选，可与尚未合入 main 的 WP4 整链进入合入评审。
+- 第三轮整链审阅由持久记录确认 `grok-4.6-build` / `xhigh`，独立全量
+  `730 passed, 1 xfailed`（255.95 秒），并新增“已有 sqlite 拒绝覆盖”和同戳 rowid mutation；
+  最终对精确 candidate/main SHA 给出 `APPROVE MERGE`。
 
 ## 最终开发者收口验证
 
@@ -144,3 +148,14 @@ Grok 最终裁决后，Codex 在已提交治理 tip `4d01185` 上单独运行任
 `ground_truth_boundary=passed`、oracle overlap 为空；compileall、`git diff --check` 与
 `project-to-act --validate` 均退出 0。该结果记为 E-20260813-003，不替代或混入 Grok 的
 E-20260813-002。
+
+## 整链合入结果
+
+- Codex 在批准后再次 fetch 并核对精确 SHA、父链和干净状态，以 `--ff-only` 将 WP4–WP5
+  整链合入 `main`，随后用普通 fast-forward 推送 `origin/main=03d3b85`。
+- 合入后的 Codex 独立验证为 `730 passed, 1 xfailed in 300.74s`；Eval 10/10、32 次生产调用、
+  oracle overlap 为空；compileall、whitespace 与 project-to-act validate 均通过。
+- 删除前逐条证明分支 tip 是 `origin/main` 祖先；本地/远端 WP3、WP4、WP5 明确命名工作包
+  分支已清理，仅本地的 WP3 `-2` 也用安全 `-d` 删除。混合用途分支未删除。
+- 代码合入不豁免服务器 schema v30、真实数据、灾备实操、24/72h 长稳或生产放行。证据见
+  E-20260813-004。
