@@ -92,6 +92,7 @@ def _seed_forecast(db: Database, *, days: int = 10) -> dict:
         "data_hash": "forecast-data-hash",
         "training_start": "2026-07-01",
         "training_end": "2026-08-11",
+        "created_at": created_at,
         "demand_policy_version": "demand-v1",
         "forecast_policy_version": "forecast-v1",
         "status": "completed",
@@ -132,13 +133,21 @@ def _balance(
     )
 
 
-def _service(tmp_path, *, days: int = 10):
+def _service(
+    tmp_path,
+    *,
+    days: int = 10,
+    now: datetime = datetime(2026, 8, 12, 12, tzinfo=timezone.utc),
+):
     db = Database(tmp_path / "inventory-planning.sqlite3")
     db.initialize()
     run = _seed_forecast(db, days=days)
     inventory = InventoryService(db)
     return db, inventory, InventoryPlanningService(
-        db, forecasts=_ForecastReader(run), inventory=inventory
+        db,
+        forecasts=_ForecastReader(run),
+        inventory=inventory,
+        clock=lambda: now.isoformat(),
     )
 
 
@@ -262,6 +271,10 @@ def test_plan_is_numeric_replayable_advisory_and_does_not_duplicate_multiwarehou
         "selected_quantile_depletion_after_review_within_horizon"
     )
     assert first["risk_evidence"]["selected_quantile_stockout_day"] == 5
+    assert [
+        item["projected_inventory"]
+        for item in first["risk_evidence"]["inventory_projection"][:5]
+    ] == ["17", "12", "7", "2", "-3"]
     assert first["allocation_boundary"]["demand_scope"] == "store_sku"
     assert first["allocation_boundary"]["supply_scope"] == "store_aggregate"
     assert first["allocation_boundary"]["warehouse_ids"] == [
@@ -337,6 +350,121 @@ def test_policy_scope_conflict_tenant_isolation_and_warehouse_boundary(tmp_path)
                 supplier_lead_days=3,
             ),
         )
+
+
+def test_warehouse_policy_resolution_inherits_sku_aggregate_then_prefers_override(
+    tmp_path,
+) -> None:
+    _db, inventory, service = _service(tmp_path)
+    _balance(
+        inventory,
+        warehouse_id="warehouse-a",
+        on_hand="12",
+        reserved="2",
+        inbound="0",
+    )
+    aggregate = _policy(
+        supplier_lead_days=5,
+        review_period_days=3,
+        policy_version="inventory-aggregate-v1",
+    )
+    service.create_plan(TENANT, "forecast-run-planning", aggregate)
+
+    inherited = service.resolve_policy(
+        TENANT,
+        store_id=STORE,
+        sku_id=SKU,
+        warehouse_id="warehouse-a",
+    )
+    assert inherited is not None
+    assert inherited.warehouse_id == "warehouse-a"
+    assert inherited.policy_version == "inventory-aggregate-v1"
+    assert inherited.supplier_lead_days == 5
+    assert inherited.review_period_days == 3
+    inherited_plan = service.create_plan(
+        TENANT, "forecast-run-planning", inherited
+    )
+    assert inherited_plan["warehouse_id"] == "warehouse-a"
+    assert inherited_plan["planning_policy"]["warehouse_id"] is None
+    with service.db.connect() as conn:
+        inherited_policy_rows = conn.execute(
+            """SELECT warehouse_id FROM inventory_planning_policies
+            WHERE tenant_id=? AND store_id=? AND sku_id=?
+              AND policy_version='inventory-aggregate-v1'""",
+            (TENANT, STORE, SKU),
+        ).fetchall()
+    assert [row["warehouse_id"] for row in inherited_policy_rows] == [None]
+
+    override = _policy(
+        warehouse_id="warehouse-a",
+        supplier_lead_days=2,
+        review_period_days=1,
+        policy_version="inventory-warehouse-v1",
+    )
+    service.create_plan(TENANT, "forecast-run-planning", override)
+    resolved_override = service.resolve_policy(
+        TENANT,
+        store_id=STORE,
+        sku_id=SKU,
+        warehouse_id="warehouse-a",
+    )
+    assert resolved_override is not None
+    assert resolved_override.policy_version == "inventory-warehouse-v1"
+    assert resolved_override.supplier_lead_days == 2
+    assert resolved_override.review_period_days == 1
+
+
+def test_absolute_wall_clock_staleness_degrades_inventory_plan(tmp_path) -> None:
+    now = datetime(2026, 8, 12, 12, tzinfo=timezone.utc)
+    _db, inventory, service = _service(tmp_path, now=now)
+    service.forecasts.run["created_at"] = "2026-07-22T00:00:00+00:00"
+    service.forecasts.run["training_end"] = "2026-07-21"
+    _balance(
+        inventory,
+        warehouse_id="warehouse-a",
+        on_hand="12",
+        reserved="2",
+        inbound="0",
+        source_updated_at=datetime(2026, 7, 22, tzinfo=timezone.utc),
+    )
+
+    plan = service.create_plan(TENANT, "forecast-run-planning", _policy())
+
+    assert plan["plan_quality"] == "degraded"
+    assert {
+        "inventory_snapshot_stale",
+        "forecast_run_stale",
+        "forecast_training_data_stale",
+    } <= {issue["code"] for issue in plan["quality_issues"]}
+
+
+def test_fresh_plan_is_not_reused_after_evidence_crosses_staleness_threshold(
+    tmp_path,
+) -> None:
+    _db, inventory, service = _service(
+        tmp_path,
+        now=datetime(2026, 8, 12, 12, tzinfo=timezone.utc),
+    )
+    _balance(
+        inventory,
+        warehouse_id="warehouse-a",
+        on_hand="12",
+        reserved="2",
+        inbound="0",
+    )
+    fresh = service.create_plan(TENANT, "forecast-run-planning", _policy())
+    assert fresh["plan_quality"] == "standard"
+
+    service._clock = lambda: "2026-08-15T12:00:00+00:00"
+    stale = service.create_plan(TENANT, "forecast-run-planning", _policy())
+
+    assert stale["plan_id"] != fresh["plan_id"]
+    assert stale["plan_quality"] == "degraded"
+    assert {
+        "inventory_snapshot_stale",
+        "forecast_run_stale",
+        "forecast_training_data_stale",
+    } <= {issue["code"] for issue in stale["quality_issues"]}
 
 
 def test_maximum_stock_cap_and_invalid_inputs_fail_explicitly(tmp_path) -> None:
@@ -536,6 +664,7 @@ def test_forecast_and_inventory_uncertainty_degrade_plan_quality(tmp_path) -> No
     assert {issue["code"] for issue in plan["quality_issues"]} == {
         "forecast_status_degraded",
         "forecast_anomalies_present",
+        "inventory_snapshot_stale",
         "inventory_snapshot_time_spread",
         "inventory_snapshot_precedes_forecast_training_end",
     }

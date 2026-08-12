@@ -53,9 +53,10 @@ class ForecastRunService:
         with self.db.connect() as conn:
             row = conn.execute(
                 """SELECT * FROM forecast_policies
-                WHERE tenant_id=? AND store_id=? AND sku_id=?
-                ORDER BY active_from DESC, created_at DESC LIMIT 1""",
-                (tenant_id, store_id, sku_id),
+                WHERE tenant_id=? AND store_id=? AND (sku_id=? OR sku_id IS NULL)
+                ORDER BY CASE WHEN sku_id=? THEN 0 ELSE 1 END,
+                         active_from DESC, created_at DESC LIMIT 1""",
+                (tenant_id, store_id, sku_id, sku_id),
             ).fetchone()
         if row is None:
             return None
@@ -324,19 +325,14 @@ class ForecastRunService:
         tenant_id: str,
         *,
         sku_id: str,
-        store_id: str | None = None,
+        store_id: str,
     ) -> dict[str, Any]:
-        conditions = ["tenant_id=?", "sku_id=?"]
-        params: list[Any] = [tenant_id, sku_id]
-        if store_id is not None:
-            conditions.append("store_id=?")
-            params.append(store_id)
         with self.db.connect() as conn:
             row = conn.execute(
-                f"""SELECT run_id FROM forecast_runs
-                WHERE {' AND '.join(conditions)}
+                """SELECT run_id FROM forecast_runs
+                WHERE tenant_id=? AND store_id=? AND sku_id=?
                 ORDER BY created_at DESC, rowid DESC LIMIT 1""",
-                tuple(params),
+                (tenant_id, store_id, sku_id),
             ).fetchone()
         if row is None:
             raise ForecastRunError("forecast_run_not_found")
@@ -347,7 +343,7 @@ class ForecastRunService:
         tenant_id: str,
         *,
         sku_id: str,
-        store_id: str | None = None,
+        store_id: str,
     ) -> dict[str, Any]:
         run = self.latest_run(tenant_id, sku_id=sku_id, store_id=store_id)
         return {

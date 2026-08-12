@@ -173,6 +173,49 @@ def test_get_run_is_tenant_isolated(tmp_path) -> None:
         service.get_run("other-tenant", run["run_id"])
 
 
+def test_policy_resolution_prefers_sku_override_then_store_default(tmp_path) -> None:
+    db, service = _service(tmp_path, _facts([4] * 56))
+    store_default = ForecastPolicy(
+        policy_version="forecast-store-default-v1",
+        minimum_history_days=21,
+    )
+    sku_override = ForecastPolicy(
+        policy_version="forecast-sku-override-v1",
+        minimum_history_days=28,
+    )
+    with db.connect() as conn:
+        service._ensure_policy(
+            conn,
+            TENANT,
+            STORE,
+            None,
+            service._policy_evidence(store_default),
+            "2026-08-12T00:00:00+00:00",
+        )
+
+    resolved_default = service.resolve_policy(
+        TENANT, store_id=STORE, sku_id="sku-without-override"
+    )
+    assert resolved_default is not None
+    assert resolved_default.policy_version == "forecast-store-default-v1"
+    assert resolved_default.minimum_history_days == 21
+
+    with db.connect() as conn:
+        service._ensure_policy(
+            conn,
+            TENANT,
+            STORE,
+            SKU,
+            service._policy_evidence(sku_override),
+            "2026-08-12T01:00:00+00:00",
+        )
+
+    resolved_override = service.resolve_policy(TENANT, store_id=STORE, sku_id=SKU)
+    assert resolved_override is not None
+    assert resolved_override.policy_version == "forecast-sku-override-v1"
+    assert resolved_override.minimum_history_days == 28
+
+
 def test_all_failed_candidates_return_an_explicit_engine_failure(tmp_path) -> None:
     def fail(_values: list[float | None], _horizon: int) -> list[float]:
         raise RuntimeError("injected_model_failure")

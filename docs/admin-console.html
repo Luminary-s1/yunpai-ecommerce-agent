@@ -1889,12 +1889,10 @@
       $('forecastRunEvidence').textContent = forecast ? `${forecast.run_id} · ${forecast.forecast_policy_version} · ${forecast.status}` : '尚无固化 run';
       const stockoutDates = plan?.stockout_dates || {};
       const inventoryQuantile = plan?.risk_evidence?.selected_quantile || 'p80';
-      const futureSupply = Number(plan?.future_supply);
-      let cumulativeDemand = 0;
+      const inventoryProjection = new Map((plan?.risk_evidence?.inventory_projection || []).map((item) => [item.forecast_date, item]));
       $('forecastPointRows').innerHTML = forecast?.points?.length ? forecast.points.map((point) => {
         const crossings = Object.entries(stockoutDates).filter(([, value]) => value === point.forecast_date).map(([key]) => key.toUpperCase());
-        cumulativeDemand += Number(point[inventoryQuantile] ?? 0);
-        const projectedInventory = Number.isFinite(futureSupply) ? futureSupply - cumulativeDemand : '-';
+        const projectedInventory = inventoryProjection.get(point.forecast_date)?.projected_inventory ?? '-';
         return `<tr><td>${escapeHtml(point.forecast_date)}</td><td>${escapeHtml(point.p50)} / ${escapeHtml(point.p80)} / ${escapeHtml(point.p95)}</td><td>${escapeHtml(projectedInventory)}<div class="muted">${escapeHtml(inventoryQuantile.toUpperCase())} · 快照 ${escapeHtml(plan?.inventory_as_of || '-')}</div></td><td>${crossings.length ? crossings.map(escapeHtml).join(' / ') : '-'}</td></tr>`;
       }).join('') : '<tr><td colspan="4"><div class="empty">暂无固化预测点</div></td></tr>';
       $('forecastBacktestRows').innerHTML = forecast?.backtests?.length ? forecast.backtests.map((row) => `<tr><td><strong>${escapeHtml(row.model_name)}</strong><div class="muted">${escapeHtml(row.origin_date)}</div></td><td>${escapeHtml(row.training_end)}</td><td>${escapeHtml(row.forecast_start)} — ${escapeHtml(row.forecast_end)}</td><td>${row.failure_reason ? escapeHtml(row.failure_reason) : escapeHtml(prettyJson(row.metrics))}</td></tr>`).join('') : '<tr><td colspan="4"><div class="empty">暂无 rolling backtest</div></td></tr>';
@@ -1913,6 +1911,8 @@
       state.forecastRun = forecast.status === 'fulfilled' ? forecast.value : null;
       state.forecastPlan = plan.status === 'fulfilled' ? plan.value : null;
       state.forecastRisks = risks.status === 'fulfilled' ? risks.value : [];
+      const failures = [forecast, plan, risks].filter((result) => result.status === 'rejected');
+      if (failures.length) toast(`部分预测证据加载失败：${failures.map((result) => result.reason?.message || '未知错误').join('；')}`);
       renderForecasting();
     }
 

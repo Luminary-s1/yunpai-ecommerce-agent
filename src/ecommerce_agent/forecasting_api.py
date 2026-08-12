@@ -241,7 +241,7 @@ def build_forecasting_router(
     @router.get("/skus/{sku_id}/forecast")
     def latest_forecast(
         sku_id: str,
-        store_id: str | None = Query(default=None, max_length=128),
+        store_id: str = Query(min_length=1, max_length=128),
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
         return call(
@@ -254,7 +254,7 @@ def build_forecasting_router(
     @router.get("/skus/{sku_id}/backtest")
     def latest_backtest(
         sku_id: str,
-        store_id: str | None = Query(default=None, max_length=128),
+        store_id: str = Query(min_length=1, max_length=128),
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
         return call(
@@ -267,7 +267,7 @@ def build_forecasting_router(
     @router.get("/skus/{sku_id}/inventory-plan")
     def latest_inventory_plan(
         sku_id: str,
-        store_id: str | None = Query(default=None, max_length=128),
+        store_id: str = Query(min_length=1, max_length=128),
         warehouse_id: str | None = Query(default=None, max_length=128),
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:

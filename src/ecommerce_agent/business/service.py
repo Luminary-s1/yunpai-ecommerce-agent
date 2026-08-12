@@ -706,6 +706,7 @@ class OperationsService:
                     "inventory_as_of": plan["inventory_as_of"],
                     "planning_policy_version": plan["planning_policy_version"],
                     "plan_quality": plan["plan_quality"],
+                    "quality_issues": plan["quality_issues"],
                     "action_mode": plan["action_mode"],
                 },
             },

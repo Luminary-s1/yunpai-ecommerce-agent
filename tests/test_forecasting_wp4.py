@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from dataclasses import replace
 from html.parser import HTMLParser
 
 import pytest
@@ -218,6 +219,12 @@ def test_forecasting_api_hides_cross_tenant_evidence_and_maps_errors(tmp_path) -
     _prepare_virtual_inputs(app.state.agent)
     with TestClient(app) as client:
         forecast = _configure_and_run(client)["forecast"]
+        for path in (
+            f"/v1/forecasting/skus/{SKU}/forecast",
+            f"/v1/forecasting/skus/{SKU}/backtest",
+            f"/v1/forecasting/skus/{SKU}/inventory-plan",
+        ):
+            assert client.get(path, headers=ADMIN).status_code == 422
         hidden_paths = (
             f"/v1/forecasting/runs/{forecast['run_id']}",
             f"/v1/forecasting/skus/{SKU}/forecast?store_id={STORE}",
@@ -306,6 +313,25 @@ def test_forecasting_api_rejects_corrupt_persisted_policy_as_domain_error(
 
 def _evidence_counts(service: AgentService) -> dict[str, int]:
     tables = (
+        "demand_daily_facts",
+        "inventory_balances",
+        "forecast_policies",
+        "forecast_runs",
+        "forecast_backtests",
+        "forecast_points",
+        "forecast_anomalies",
+        "inventory_planning_policies",
+        "inventory_plans",
+    )
+    with service.db.connect() as conn:
+        return {
+            table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in tables
+        }
+
+
+def _evidence_snapshot(service: AgentService) -> dict[str, list[tuple[object, ...]]]:
+    tables = (
         "forecast_runs",
         "forecast_backtests",
         "forecast_points",
@@ -314,9 +340,25 @@ def _evidence_counts(service: AgentService) -> dict[str, int]:
     )
     with service.db.connect() as conn:
         return {
-            table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            table: [
+                tuple(row)
+                for row in conn.execute(f"SELECT * FROM {table} ORDER BY rowid")
+            ]
             for table in tables
         }
+
+
+def _execute_read_tool_unchanged(
+    service: AgentService,
+    *,
+    spec,
+    arguments,
+    context: ToolExecutionContext,
+):
+    before = _evidence_snapshot(service)
+    result = service.tools.execute(spec=spec, arguments=arguments, context=context)
+    assert _evidence_snapshot(service) == before
+    return result
 
 
 def test_forecasting_tools_read_only_persisted_evidence_via_dynamic_catalog(tmp_path) -> None:
@@ -344,7 +386,6 @@ def test_forecasting_tools_read_only_persisted_evidence_via_dynamic_catalog(tmp_
             trace_id="trace-test",
             trusted_context={"store_id": STORE},
         )
-        before = _evidence_counts(service)
         outputs = {}
         for name in forecasting.agent_tools:
             spec, arguments = service.tools.validate_selection(
@@ -353,10 +394,9 @@ def test_forecasting_tools_read_only_persisted_evidence_via_dynamic_catalog(tmp_
                 requested_mode="observe",
                 context=context,
             )
-            outputs[name] = service.tools.execute(
-                spec=spec, arguments=arguments, context=context
+            outputs[name] = _execute_read_tool_unchanged(
+                service, spec=spec, arguments=arguments, context=context
             ).output
-        assert _evidence_counts(service) == before
 
         forecast = outputs["get_demand_forecast"]
         assert forecast["evidence_source"] == "forecast_runs"
@@ -370,6 +410,9 @@ def test_forecasting_tools_read_only_persisted_evidence_via_dynamic_catalog(tmp_
         assert plan["inventory_plan"]["plan_id"] == run["inventory_plan"]["plan_id"]
         assert plan["references"]["inventory_snapshot_hash"]
         assert plan["references"]["planning_policy_version"] == "inventory-wp4-v1"
+        assert plan["references"]["quality_issues"] == (
+            plan["inventory_plan"]["quality_issues"]
+        )
 
         unscoped = ToolExecutionContext(
             tenant_id="tenant-test",
@@ -386,6 +429,46 @@ def test_forecasting_tools_read_only_persisted_evidence_via_dynamic_catalog(tmp_
                 arguments={"sku_id": SKU},
                 requested_mode="observe",
                 context=unscoped,
+            )
+
+
+def test_read_only_tool_snapshot_gate_detects_in_place_update(tmp_path) -> None:
+    app = create_app(make_settings(tmp_path))
+    _prepare_virtual_inputs(app.state.agent)
+    with TestClient(app) as client:
+        _configure_and_run(client)
+
+        service = app.state.agent
+        context = ToolExecutionContext(
+            tenant_id="tenant-test",
+            client_id="client-test",
+            session_id="session-mutation",
+            trace_id="trace-mutation",
+            trusted_context={"store_id": STORE},
+        )
+        spec, arguments = service.tools.validate_selection(
+            name="get_demand_forecast",
+            arguments={"store_id": STORE, "sku_id": SKU},
+            requested_mode="observe",
+            context=context,
+        )
+        original_handler = spec.handler
+
+        def mutating_handler(arguments, context):
+            with service.db.connect() as conn:
+                conn.execute(
+                    """UPDATE forecast_runs SET champion_model='mutated-model'
+                    WHERE tenant_id=? AND store_id=? AND sku_id=?""",
+                    (context.tenant_id, STORE, SKU),
+                )
+            return original_handler(arguments, context)
+
+        with pytest.raises(AssertionError):
+            _execute_read_tool_unchanged(
+                service,
+                spec=replace(spec, handler=mutating_handler),
+                arguments=arguments,
+                context=context,
             )
 
 
