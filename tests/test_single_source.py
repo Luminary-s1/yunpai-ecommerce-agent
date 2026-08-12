@@ -128,6 +128,69 @@ def test_graph_stats_consistent_with_manifest_and_data() -> None:
         assert not ghosts, f"抽样含幽灵实体边（源/目标不存在）: {ghosts[:5]}"
 
 
+def test_import_csv_consistent_with_clean() -> None:
+    """R7 修复：04_import/*.csv 行数与 02_clean 一致（Neo4j 导入物 = 同一事实源）。
+
+    负责人复验必修项：02_clean 已是 24/28，但 04_import CSV 还是旧规模（8/12），
+    导致 docker compose + Cypher 导入后 Neo4j 装旧图。此处锁死导入物与 clean 一致。
+    """
+    import csv as _csv
+
+    def clean_count(name: str) -> int:
+        data = json.loads((KB_ROOT / "02_clean" / f"{name}.json").read_text(encoding="utf-8"))
+        return len(data)
+
+    # 实体 CSV（product 按 item_id 去重 = SPU 数，其余按行数）
+    entity_map = {
+        "nodes_product": ("product", "item_id"),
+        "nodes_sku": ("sku", "sku_id"),
+        "nodes_category": ("category", "category_code"),
+        "nodes_attribute": ("attribute", "spec_key"),
+        "nodes_policy": ("policy", "policy_code"),
+        "nodes_script": ("script", "script_id"),
+        "nodes_faq": ("faq", "faq_id"),
+        "nodes_rule": ("rule", "rule_code"),
+    }
+    for csv_name, (clean_name, key) in entity_map.items():
+        csv_path = KB_ROOT / "04_import" / f"{csv_name}.csv"
+        assert csv_path.is_file(), f"04_import 缺 {csv_name}.csv"
+        rows = list(_csv.DictReader(csv_path.open(encoding="utf-8")))
+        if clean_name == "product":
+            data = json.loads((KB_ROOT / "02_clean" / "product.json").read_text(encoding="utf-8"))
+            expected = len({p["item_id"] for p in data})
+        elif clean_name == "rule":
+            # 04_import 用合并版 rule（rule 9 + rule_extended 8），clean 分开存
+            rule = json.loads((KB_ROOT / "02_clean" / "rule.json").read_text(encoding="utf-8"))
+            ext = json.loads((KB_ROOT / "02_clean" / "rule_extended.json").read_text(encoding="utf-8"))
+            expected = len(rule) + len(ext)
+        else:
+            data = json.loads((KB_ROOT / "02_clean" / f"{clean_name}.json").read_text(encoding="utf-8"))
+            expected = len(data)
+        assert len(rows) == expected, (
+            f"{csv_name}: {len(rows)} 行 ≠ clean {clean_name} {expected}"
+        )
+        # 唯一键不重复
+        keys = [r.get(key) for r in rows]
+        assert len(keys) == len(set(keys)), f"{csv_name} 唯一键重复"
+
+    # 关系 CSV 行数与 clean 关系文件一致
+    rel_map = {
+        "rels_belongs_to": "belongs_to",
+        "rels_has_attr": "has_attr",
+        "rels_applies_to": "applies_to",
+        "rels_refers_to": "refers_to",
+        "rels_related_to": "related_to",
+    }
+    for csv_name, clean_name in rel_map.items():
+        csv_path = KB_ROOT / "04_import" / f"{csv_name}.csv"
+        assert csv_path.is_file(), f"04_import 缺 {csv_name}.csv"
+        rows = list(_csv.DictReader(csv_path.open(encoding="utf-8")))
+        rels = json.loads((KB_ROOT / "02_clean" / f"{clean_name}.json").read_text(encoding="utf-8"))
+        assert len(rows) == len(rels), (
+            f"{csv_name}: {len(rows)} 行 ≠ clean {clean_name} {len(rels)}"
+        )
+
+
 def test_no_wrong_digital_return_wording() -> None:
     """P0-2 修复：'激活后仅支持'错误文案 0 残留。"""
     hits = []

@@ -229,7 +229,7 @@ svc.close()
 ## 一、环境与导入
 
 - **Neo4j**：`D:\neo4j-community-2026.04.0`（已清库重建，全新实例）
-- **账号**：neo4j / yunpai123（本地开发用，可自行改）
+- **账号**：neo4j / ${NEO4J_PASSWORD:-change-me}（本地开发用，可自行改）
 - **导入**：任务6 `04_import/` 的 3 个 Cypher（约束→节点→关系），CSV 拷入 `import/kg/`
 - **数据规模**：211 节点 + 213 关系（与任务6交付一致）
 
@@ -280,7 +280,7 @@ svc.close()
 
 ```bash
 # 连接
-D:\neo4j-community-2026.04.0\bin\cypher-shell.bat -a bolt://localhost:7687 -u neo4j -p yunpai123
+D:\neo4j-community-2026.04.0\bin\cypher-shell.bat -a bolt://localhost:7687 -u neo4j -p ${NEO4J_PASSWORD:-change-me}
 
 # 多跳推理
 MATCH (s:SKU {sku_id:'QC-AF5-WHITE'})-[:BELONGS_TO]->(c:Category)<-[:APPLIES_TO]-(p:Policy)

@@ -1,9 +1,25 @@
 item_id,title,model,status,sale_price,warranty_months,category,category_name,source,updated_at
-QC-SPU-AF5,晴川空气炸锅 5L 云白款,AF5,active,499.00,12,air_fryer,空气炸锅,fixture,2026-08-11
-QC-SPU-VC1,晴川无线吸尘器 A1,VC-A1,active,899.00,24,cordless_vacuum,无线吸尘器,fixture,2026-08-11
-QC-SPU-HM3,晴川静音加湿器 3L,HM-3L,active,239.00,12,humidifier,加湿器,fixture,2026-08-11
-QC-SPU-KT17,晴川恒温电热水壶 1.7L,KT-17,active,159.00,12,electric_kettle,电热水壶,fixture,2026-08-11
-QC-SPU-FN1,晴川循环净化风扇 D1,FN-D1,active,699.00,24,air_circulation_fan,循环风扇,fixture,2026-08-11
-X-SPU-M1,星脉蓝牙耳机 X-M1 云白色,X-M1,active,299.00,12,digital_audio,数码音频,manual,2026-08-11
-X-SPU-P2,星脉充电宝 X-P2 10000mAh 黑色,X-P2,active,129.00,12,digital_power,数码电源,manual,2026-08-11
-Y-SPU-D01,云织羽绒服 Y-D01 黑色 S 码,Y-D01,active,599.00,0,apparel,服饰,manual,2026-08-11
+QC-SPU-AF5,晴川空气炸锅 5L 云白款,AF5,active,499.00,12,air_fryer,空气炸锅,fixture,2026-08-12
+QC-SPU-VC1,晴川无线吸尘器 A1,VC-A1,active,899.00,24,cordless_vacuum,无线吸尘器,fixture,2026-08-12
+QC-SPU-HM3,晴川静音加湿器 3L,HM-3L,active,239.00,12,humidifier,加湿器,fixture,2026-08-12
+QC-SPU-KT17,晴川恒温电热水壶 1.7L,KT-17,active,159.00,12,electric_kettle,电热水壶,fixture,2026-08-12
+QC-SPU-FN1,晴川循环净化风扇 D1,FN-D1,active,699.00,24,air_circulation_fan,循环风扇,fixture,2026-08-12
+X-SPU-M1,星脉蓝牙耳机 X-M1 云白色,X-M1,active,299.00,12,digital_audio,数码音频,manual,2026-08-12
+X-SPU-P2,星脉充电宝 X-P2 10000mAh 黑色,X-P2,active,129.00,12,digital_power,数码电源,manual,2026-08-12
+Y-SPU-D01,云织羽绒服 Y-D01 黑色 S 码,Y-D01,active,599.00,0,apparel,服饰,manual,2026-08-12
+SPU-AFR-01,格兰仕 Galanz KZ40-108,Galanz KZ40-108,active,329.00,0,air_fryer,空气炸锅,network,2026-08-12
+SPU-AFR-02,美的 Midea KZ25E101,Midea KZ25E101,active,249.00,0,air_fryer,空气炸锅,network,2026-08-12
+SPU-VAC-01,戴森 Dyson V15 Detect Fluffy,Dyson V15 Detect Fluffy,active,3490.00,0,cordless_vacuum,吸尘器,network,2026-08-12
+SPU-VAC-02,德尔玛 Deerma DX700,Deerma DX700,active,299.00,0,cordless_vacuum,吸尘器,network,2026-08-12
+SPU-HUM-01,德尔玛 Deerma F628S,Deerma F628S,active,169.00,0,humidifier,加湿器,network,2026-08-12
+SPU-HUM-02,小熊 Bear JSQ-C30Q1,Bear JSQ-C30Q1,active,129.00,0,humidifier,加湿器,network,2026-08-12
+SPU-KET-01,苏泊尔 SUPOR SW-17J63B,SUPOR SW-17J63B,active,159.00,0,electric_kettle,电水壶,network,2026-08-12
+SPU-KET-02,美的 Midea MK-SH15Colour102,Midea MK-SH15Colour102,active,79.00,0,electric_kettle,电水壶,network,2026-08-12
+SPU-FAN-01,格力 GREE FXDZ-2307Bg5,GREE FXDZ-2307Bg5,active,499.00,0,air_circulation_fan,循环风扇,network,2026-08-12
+SPU-FAN-02,美的 Midea SAC35CR,Midea SAC35CR,active,199.00,0,air_circulation_fan,循环风扇,network,2026-08-12
+SPU-AUD-01,捷波朗 Jabra Elite 7 Active,Jabra Elite 7 Active,active,1299.00,0,digital_audio,蓝牙耳机,network,2026-08-12
+SPU-AUD-02,QCY QCY H3,QCY H3,active,299.00,0,digital_audio,蓝牙耳机,network,2026-08-12
+SPU-PWR-01,小米 Xiaomi 移动电源 3 20000mAh,Xiaomi 移动电源 3 20000mAh,active,129.00,0,digital_power,移动电源,network,2026-08-12
+SPU-PWR-02,罗马仕 ROMOSS 10000mAh 22.5W,ROMOSS 10000mAh 22.5W,active,59.00,0,digital_power,移动电源,network,2026-08-12
+SPU-APP-01,雪中飞 雪中飞 XZF2155,雪中飞 XZF2155,active,499.00,0,apparel,羽绒服,network,2026-08-12
+SPU-APP-02,茵曼 茵曼 INMAN W2302,茵曼 INMAN W2302,active,499.00,0,apparel,羽绒服,network,2026-08-12

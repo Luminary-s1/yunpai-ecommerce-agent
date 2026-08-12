@@ -1,13 +1,29 @@
 sku_id,item_id,title,color,status,sale_price,category,source,updated_at
-QC-AF5-WHITE,QC-SPU-AF5,晴川空气炸锅 5L 云白款,云白,active,499.00,air_fryer,fixture,2026-08-11
-QC-AF5-GREEN,QC-SPU-AF5,晴川空气炸锅 5L 松绿色,松绿,active,529.00,air_fryer,fixture,2026-08-11
-QC-VC-A1,QC-SPU-VC1,晴川无线吸尘器 A1,,active,899.00,cordless_vacuum,fixture,2026-08-11
-QC-HM-3L,QC-SPU-HM3,晴川静音加湿器 3L,,active,239.00,humidifier,fixture,2026-08-11
-QC-KT-17,QC-SPU-KT17,晴川恒温电热水壶 1.7L,,active,159.00,electric_kettle,fixture,2026-08-11
-QC-FN-D1,QC-SPU-FN1,晴川循环净化风扇 D1,,active,699.00,air_circulation_fan,fixture,2026-08-11
-X-M1-WHITE,X-SPU-M1,星脉蓝牙耳机 X-M1 云白色,云白,active,299.00,digital_audio,manual,2026-08-11
-X-M1-BLACK,X-SPU-M1,星脉蓝牙耳机 X-M1 曜石黑,曜石黑,active,299.00,digital_audio,manual,2026-08-11
-X-P2-BLACK,X-SPU-P2,星脉充电宝 X-P2 10000mAh 黑色,黑色,active,129.00,digital_power,manual,2026-08-11
-Y-D01-S,Y-SPU-D01,云织羽绒服 Y-D01 黑色 S 码,黑色,active,599.00,apparel,manual,2026-08-11
-Y-D01-M,Y-SPU-D01,云织羽绒服 Y-D01 黑色 M 码,黑色,active,599.00,apparel,manual,2026-08-11
-Y-D01-L,Y-SPU-D01,云织羽绒服 Y-D01 黑色 L 码,黑色,active,599.00,apparel,manual,2026-08-11
+QC-AF5-WHITE,QC-SPU-AF5,晴川空气炸锅 5L 云白款,云白,active,499.00,air_fryer,fixture,2026-08-12
+QC-AF5-GREEN,QC-SPU-AF5,晴川空气炸锅 5L 松绿色,松绿,active,529.00,air_fryer,fixture,2026-08-12
+QC-VC-A1,QC-SPU-VC1,晴川无线吸尘器 A1,,active,899.00,cordless_vacuum,fixture,2026-08-12
+QC-HM-3L,QC-SPU-HM3,晴川静音加湿器 3L,,active,239.00,humidifier,fixture,2026-08-12
+QC-KT-17,QC-SPU-KT17,晴川恒温电热水壶 1.7L,,active,159.00,electric_kettle,fixture,2026-08-12
+QC-FN-D1,QC-SPU-FN1,晴川循环净化风扇 D1,,active,699.00,air_circulation_fan,fixture,2026-08-12
+X-M1-WHITE,X-SPU-M1,星脉蓝牙耳机 X-M1 云白色,云白,active,299.00,digital_audio,manual,2026-08-12
+X-M1-BLACK,X-SPU-M1,星脉蓝牙耳机 X-M1 曜石黑,曜石黑,active,299.00,digital_audio,manual,2026-08-12
+X-P2-BLACK,X-SPU-P2,星脉充电宝 X-P2 10000mAh 黑色,黑色,active,129.00,digital_power,manual,2026-08-12
+Y-D01-S,Y-SPU-D01,云织羽绒服 Y-D01 黑色 S 码,黑色,active,599.00,apparel,manual,2026-08-12
+Y-D01-M,Y-SPU-D01,云织羽绒服 Y-D01 黑色 M 码,黑色,active,599.00,apparel,manual,2026-08-12
+Y-D01-L,Y-SPU-D01,云织羽绒服 Y-D01 黑色 L 码,黑色,active,599.00,apparel,manual,2026-08-12
+REAL-AFR-01,SPU-AFR-01,格兰仕 Galanz KZ40-108,,active,329.00,air_fryer,network,2026-08-12
+REAL-AFR-02,SPU-AFR-02,美的 Midea KZ25E101,,active,249.00,air_fryer,network,2026-08-12
+REAL-VAC-01,SPU-VAC-01,戴森 Dyson V15 Detect Fluffy,,active,3490.00,cordless_vacuum,network,2026-08-12
+REAL-VAC-02,SPU-VAC-02,德尔玛 Deerma DX700,,active,299.00,cordless_vacuum,network,2026-08-12
+REAL-HUM-01,SPU-HUM-01,德尔玛 Deerma F628S,,active,169.00,humidifier,network,2026-08-12
+REAL-HUM-02,SPU-HUM-02,小熊 Bear JSQ-C30Q1,,active,129.00,humidifier,network,2026-08-12
+REAL-KET-01,SPU-KET-01,苏泊尔 SUPOR SW-17J63B,,active,159.00,electric_kettle,network,2026-08-12
+REAL-KET-02,SPU-KET-02,美的 Midea MK-SH15Colour102,,active,79.00,electric_kettle,network,2026-08-12
+REAL-FAN-01,SPU-FAN-01,格力 GREE FXDZ-2307Bg5,,active,499.00,air_circulation_fan,network,2026-08-12
+REAL-FAN-02,SPU-FAN-02,美的 Midea SAC35CR,,active,199.00,air_circulation_fan,network,2026-08-12
+REAL-AUD-01,SPU-AUD-01,捷波朗 Jabra Elite 7 Active,,active,1299.00,digital_audio,network,2026-08-12
+REAL-AUD-02,SPU-AUD-02,QCY QCY H3,,active,299.00,digital_audio,network,2026-08-12
+REAL-PWR-01,SPU-PWR-01,小米 Xiaomi 移动电源 3 20000mAh,,active,129.00,digital_power,network,2026-08-12
+REAL-PWR-02,SPU-PWR-02,罗马仕 ROMOSS 10000mAh 22.5W,,active,59.00,digital_power,network,2026-08-12
+REAL-APP-01,SPU-APP-01,雪中飞 雪中飞 XZF2155,,active,499.00,apparel,network,2026-08-12
+REAL-APP-02,SPU-APP-02,茵曼 茵曼 INMAN W2302,,active,499.00,apparel,network,2026-08-12

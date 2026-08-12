@@ -16,14 +16,14 @@ docker compose ps
 
 - HTTP: `http://localhost:7474`（浏览器打开能看到 Neo4j 浏览器）
 - Bolt: `bolt://localhost:7687`
-- 账号: `neo4j` / `yunpai123`（本地开发默认；生产请在 docker-compose.yml 改 `NEO4J_AUTH`）
+- 账号: `neo4j` / `${NEO4J_PASSWORD:-change-me}`（本地开发默认；生产请在 docker-compose.yml 改 `NEO4J_AUTH`）
 
 ### 方式 B：本机安装 Neo4j Community 手动部署
 
 1. 下载 Neo4j Community 5.x：https://neo4j.com/download-center/
 2. 解压后设置初始密码：
    ```bash
-   <neo4j-home>/bin/neo4j-admin dbms set-initial-password yunpai123
+   <neo4j-home>/bin/neo4j-admin dbms set-initial-password ${NEO4J_PASSWORD:-change-me}
    ```
 3. 启动：`<neo4j-home>/bin/neo4j.bat console`（Windows）或 `neo4j console`（Linux/macOS）
 
@@ -32,11 +32,11 @@ docker compose ps
 ```bash
 # 进入容器（方式 A）或本机 bin 目录（方式 B），依次执行 3 个 Cypher：
 # 1. 建约束/索引（幂等）
-cypher-shell -u neo4j -p yunpai123 -f /var/lib/neo4j/import/kg/00_setup.cypher
+cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-change-me} -f /var/lib/neo4j/import/kg/00_setup.cypher
 # 2. 导入节点
-cypher-shell -u neo4j -p yunpai123 -f /var/lib/neo4j/import/kg/01_load_nodes.cypher
+cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-change-me} -f /var/lib/neo4j/import/kg/01_load_nodes.cypher
 # 3. 导入关系
-cypher-shell -u neo4j -p yunpai123 -f /var/lib/neo4j/import/kg/02_load_rels.cypher
+cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-change-me} -f /var/lib/neo4j/import/kg/02_load_rels.cypher
 ```
 
 > docker-compose 已将 `knowledge_graph_output/04_import/` 挂载到容器
@@ -45,10 +45,10 @@ cypher-shell -u neo4j -p yunpai123 -f /var/lib/neo4j/import/kg/02_load_rels.cyph
 导入后验证：
 
 ```bash
-cypher-shell -u neo4j -p yunpai123 "MATCH (n) RETURN labels(n)[0] AS l, count(*) ORDER BY l"
+cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-change-me} "MATCH (n) RETURN labels(n)[0] AS l, count(*) ORDER BY l"
 # 期望：222 节点（Category 10 / Product 8 / SKU 12 / Attribute 51 /
 #        Policy 9 / Script 52 / FAQ 63 / Rule 17）
-cypher-shell -u neo4j -p yunpai123 "MATCH ()-[r]->() RETURN type(r) AS t, count(*) ORDER BY t"
+cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-change-me} "MATCH ()-[r]->() RETURN type(r) AS t, count(*) ORDER BY t"
 # 期望：240 关系（BELONGS_TO 19 / HAS_ATTR 51 / APPLIES_TO 36 /
 #        REFERS_TO 65 / RELATED_TO 69）
 ```

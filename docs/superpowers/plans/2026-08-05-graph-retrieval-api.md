@@ -29,7 +29,7 @@
 **Interfaces:**
 - Consumes: 无（独立）
 - Produces: `Neo4jClient`（封装 HTTP API）
-  - `__init__(self, uri="http://localhost:7474", user="neo4j", password="yunpai123")`
+  - `__init__(self, uri="http://localhost:7474", user="neo4j", password="${NEO4J_PASSWORD:-change-me}")`
   - `query(self, statement: str) -> list[list]` — 执行 Cypher，返回行列表
   - `connect_check(self) -> bool` — 连接测试
 
@@ -89,7 +89,7 @@ class Neo4jClient:
         self,
         uri: str = "http://localhost:7474",
         user: str = "neo4j",
-        password: str = "yunpai123",
+        password: str = "${NEO4J_PASSWORD:-change-me}",
     ) -> None:
         self.endpoint = f"{uri}/db/neo4j/tx/commit"
         self.token = base64.b64encode(f"{user}:{password}".encode()).decode()

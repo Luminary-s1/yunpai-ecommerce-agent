@@ -1,64 +1,64 @@
 faq_id,category,intent,question,answer,risk_level,layer,ref_script_id,sku_id,source,updated_at
-FAQ-SCRIPT-001,接待,greeting,你好,您好，我是店铺智能客服。您可以告诉我想了解的商品、订单或售后问题；涉及退款、赔付、改价、改地址等操作时，我会为您转人工确认。,low,store,SCRIPT-001,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-002,商品,product,这个商品有什么功能,我可以依据当前商品详情说明功能和参数。请发商品名称、链接或规格；未出现在商品详情中的能力，我不会自行承诺。,low,store,SCRIPT-002,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-003,商品,product,这是什么材质,材质请以当前商品详情页的成分或参数标注为准。不同颜色、批次或规格可能不同，请提供具体 SKU 后再核对。,low,store,SCRIPT-003,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-004,商品,product,尺码怎么选,请参考商品页对应规格的尺寸表，并结合自己的实际测量值选择。不同版型可能有差异；拿不准时请提供身高、体重或使用尺寸，由人工进一步建议。,low,store,SCRIPT-004,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-005,商品,product,实物有色差吗,商品图片会尽量还原实物，但受拍摄光线和屏幕显示影响可能存在轻微色差。请以收到的实物和商品页说明为准。,low,store,SCRIPT-005,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-006,商品,product,这个能适配吗,是否适配需要核对商品支持列表与您的具体品牌、型号和版本。请提供完整型号；未列明的设备不能直接承诺兼容。,low,store,SCRIPT-006,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-007,商品,product,是正品吗,商品来源与正品保障以店铺资质、商品页承诺和可提供的凭证为准。如需核验防伪方式或授权材料，我可以转人工处理。,low,store,SCRIPT-007,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-008,商品,product,保质期多久,生产日期和保质期以商品页说明及实际包装标识为准。仓库批次会流动，无法在未核实库存批次时承诺某个具体日期。,low,store,SCRIPT-008,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-009,商品,product,怎么清洗,使用、清洗和保养请优先遵循商品说明书、洗涤标或包装标识。若说明缺失，请提供商品名称和具体问题后再核对。,low,store,SCRIPT-009,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-010,商品,product,保修多久,质保范围和期限以商品页、保修卡及店铺售后政策为准。人为损坏、耗材或非正常使用是否覆盖，需要人工依据凭证判定。,low,store,SCRIPT-010,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-011,库存,inventory,现在有货吗,页面可下单通常表示当前系统有可售库存，但大促或并发下单时库存可能变化。最终以订单提交和仓库复核结果为准。,low,store,SCRIPT-011,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-012,库存,inventory,什么时候补货,补货时间需以采购和入库结果为准，未确认前不能承诺具体日期。您可以关注商品页面，或留下需要的规格由人工登记。,low,store,SCRIPT-012,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-013,价格,price_promo,实际多少钱,实际支付金额由商品价、店铺优惠、平台优惠和账号可用券共同计算，请以结算页实时展示为准。客服不能绕过平台修改成交价。,low,store,SCRIPT-013,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-014,活动,price_promo,最近有什么活动,活动范围、门槛和时间以当前活动页及结算页规则为准。过期活动、截图或历史价格不能作为当前优惠承诺。,low,store,SCRIPT-014,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-015,活动,price_promo,优惠券怎么领,优惠券能否领取和使用取决于发放对象、有效期、商品范围及金额门槛，请在结算页核对；不同优惠不一定可以叠加。,low,store,SCRIPT-015,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-016,活动,price_promo,刚买就降价怎么办,是否支持保价及计算周期以平台和店铺当前规则为准。差价申请属于资金相关操作，需要人工核对订单、活动类型和时间。,low,store,SCRIPT-016,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-017,活动,price_promo,直播间为什么更便宜,直播间价格可能受时段、限量券和指定链接影响，请以直播间对应商品的结算页为准；其他链接不能直接套用同一价格。,low,store,SCRIPT-017,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-018,预售,shipping,预售什么时候发,预售商品的定金、尾款和预计发货时间以商品页预售规则为准。预计时间不是必然送达时间，订单异常时会转人工处理。,low,store,SCRIPT-018,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-019,支付,payment,为什么支付失败,支付方式和结果由平台支付页面决定。若显示扣款但订单未成功，请勿重复支付，先保存支付记录并联系平台或人工客服核对。,low,store,SCRIPT-019,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-020,发票,invoice,可以开发票吗,发票类型、可开内容和申请入口以店铺及平台规则为准。实际开票或修改抬头需要核对订单与税务信息，我会转人工确认。,low,store,SCRIPT-020,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-021,订单,order,我的订单怎么样了,订单状态属于个人交易信息，需要在已授权会话中查询。请通过平台订单页查看；如果状态异常，我会转人工并请您只提供必要的订单编号。,low,store,SCRIPT-021,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-022,订单,order,怎么取消订单,取消订单会改变交易状态，不能由智能客服直接执行。请先在平台订单页尝试取消；若无法操作，我会转人工核对发货状态。,low,store,SCRIPT-022,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-023,订单,order,收货地址写错了,收货信息涉及隐私和履约风险，智能客服不会直接修改。若订单尚未发货，请立即转人工核对；已发货时需按承运方规则处理。,low,store,SCRIPT-023,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-024,发货,shipping,什么时候发货,发货时效以商品页承诺、订单状态和仓库实际处理为准。预售、定制、大促及不可抗力可能影响时间，未核实订单前不能承诺具体发出时刻。,low,store,SCRIPT-024,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-025,发货,shipping,能加急发货吗,可以记录您的加急诉求，但不能保证仓库改变出库顺序。催发货属于订单操作，需要人工结合订单状态处理。,low,store,SCRIPT-025,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-026,发货,shipping,发什么快递,承运商通常由仓库根据地址和线路安排，是否可指定以商品页及仓库能力为准。特殊需求请在下单前让人工确认。,low,store,SCRIPT-026,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-027,发货,shipping,偏远地区能发吗,偏远地区是否配送、运费及附加条件以结算页和承运商覆盖范围为准。页面无法下单时，客服不能私下承诺发货。,low,store,SCRIPT-027,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-028,物流,logistics,快递到哪里了,具体物流轨迹需要在已授权订单上下文中查询，请先查看平台物流页。若长时间无更新或轨迹异常，我会转人工核验。,low,store,SCRIPT-028,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-029,物流,logistics,快递怎么还没到,物流时效受线路和承运商影响，预计送达并非保证时间。若超过平台或商品页承诺，请提供订单编号，由人工核验并按规则处理。,low,store,SCRIPT-029,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-030,物流,logistics,包裹丢了怎么办,如包裹疑似丢失或外包装破损，请保留物流记录、外包装和开箱证据，不要私下处理赔付。我会转人工联系承运商并按平台流程核验。,low,store,SCRIPT-030,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-031,物流,logistics,显示签收但没收到,显示签收但未收到时，请先核对门卫、驿站、家人代收和配送电话；仍未找到请尽快转人工，由人工联系承运商核查。,low,store,SCRIPT-031,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-032,售后,return_exchange,支持七天无理由吗,是否支持七天无理由退货，以商品性质、完好标准、签收时间和平台规则为准。定制、鲜活、已拆封影响二次销售等情形可能不适用。,low,store,SCRIPT-032,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-033,售后,return_exchange,拆封了还能退吗,退货通常需保持商品、配件、赠品、包装和凭证完整，不影响二次销售；具体标准以平台售后页和商品说明为准。,low,store,SCRIPT-033,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-034,售后,return_exchange,退货运费谁出,退货运费由退货原因、运费险状态和平台判责共同决定。未核验订单和责任前，客服不能承诺由某一方承担。,low,store,SCRIPT-034,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-035,售后,return_exchange,可以换个尺码吗,能否换货取决于平台入口、商品状态和目标规格库存。实际换货会改变订单履约，请从售后页申请或转人工确认。,low,store,SCRIPT-035,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-036,退款,refund,退款多久到账,退款通过平台审核后通常按原支付路径退回，到账时间由平台、银行或支付机构决定。具体进度请查看售后详情，异常时转人工核验。,low,store,SCRIPT-036,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-037,退款,refund,怎么申请退款,退款会改变交易和资金状态，智能客服不能代为执行。请在平台订单的售后入口申请；需要协助时我会转人工。,low,store,SCRIPT-037,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-038,售后,after_sales,少发了一件,发现少件、漏发或错发，请保留外包装、面单、商品和开箱记录，并提供订单编号。补发、退款或赔付需人工核验后按平台规则处理。,low,store,SCRIPT-038,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-039,售后,after_sales,商品有质量问题,如有质量问题或商品破损，请停止继续使用并保留清晰照片或视频、包装和订单信息。人工会依据证据和平台规则判断退换方案。,low,store,SCRIPT-039,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-040,售后,after_sales,售后要提供什么证据,售后核验通常需要订单编号、问题部位照片或视频、外包装和物流面单。请只提交必要信息，并遮盖无关的个人隐私。,low,store,SCRIPT-040,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-041,赔付,complaint,你们要怎么赔,赔付属于资金和责任判定事项，智能客服不能承诺金额或直接执行。请提供订单与问题证据，由人工依据平台规则核验。,low,store,SCRIPT-041,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-042,投诉,complaint,我要投诉,很抱歉给您带来不好的体验。我会记录问题并转人工处理；请说明订单和具体情况，不需要提供账号密码、验证码等敏感信息。,low,store,SCRIPT-042,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-043,人工,human,转人工,好的，我会将当前问题和必要上下文转给人工客服。请不要发送密码、验证码、完整身份证号或银行卡信息。,low,store,SCRIPT-043,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-044,隐私,privacy,需要提供身份证吗,为保护隐私，请勿在对话中发送密码、验证码、银行卡号或完整身份证号。订单核验只应收集完成当前服务所必需的信息。,low,store,SCRIPT-044,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-045,安全,security,客服让我发验证码,客服不会索要密码、短信验证码或要求向私人账户转账。遇到此类请求请立即停止操作，通过平台官方入口核验并联系人工客服。,low,store,SCRIPT-045,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-046,安全,security,能加微信处理吗,请在平台官方订单和售后入口内沟通与支付，不建议转到私人社交账号或点击来源不明的链接，以免失去平台保障。,low,store,SCRIPT-046,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-047,评价,after_sales,好评返现吗,评价应基于真实体验。客服不能以返现、赠品或其他利益诱导指定评价内容；如有问题，请先通过平台售后渠道解决。,low,store,SCRIPT-047,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-048,赠品,price_promo,下单有赠品吗,赠品的适用商品、数量和发放条件以活动页及订单结算信息为准，赠完即止的活动需以实际库存为准。,low,store,SCRIPT-048,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-049,安装,product,包安装吗,是否包含安装、上门或调试服务以商品页服务说明和覆盖地区为准。未标注的服务不能默认承诺，特殊需求请先转人工确认。,low,store,SCRIPT-049,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-050,定制,product,可以定制吗,定制内容、费用、确认稿和交付周期需在下单前由人工确认。定制商品的取消与退换规则可能不同，请确认后再支付。,low,store,SCRIPT-050,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-051,服务,greeting,客服几点上班,智能客服可持续接收问题；人工服务时间以店铺页面为准。非人工时段的高风险或复杂事项会先记录，等待人工处理。,low,store,SCRIPT-051,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SCRIPT-052,边界,unsupported,告诉我竞品真实销量,我只能依据本店已授权的商品、订单和政策信息回答，无法提供其他店铺的真实销量、库存、买家数据或未公开的内部信息。,low,store,SCRIPT-052,,builtin:ecommerce-sop-v1,2026-08-11
-FAQ-SEED-ca01,商品保修,product,晴川空气炸锅保修多久？,晴川 AF5 空气炸锅整机保修 12 个月，保修以订单和产品序列信息核验结果为准。,low,product,,QC-AF5-WHITE,fixture,2026-08-11
-FAQ-SEED-ed51,物流规则,logistics,订单物流异常怎么办？,先核对订单物流最新节点；若连续 24 小时无更新或显示地址异常，转人工联系承运商核查，不承诺具体送达时间。,medium,store,,,fixture,2026-08-11
-FAQ-SEED-028a,价保规则,refund,商品降价可以申请价保吗？,签收后 7 日内可提交价保申请，是否符合条件以活动类型、实付金额和订单状态核验结果为准，客服不得在核验前承诺退款。,high,store,,,fixture,2026-08-11
-FAQ-SEED-3070,售后规则,refund,未拆封商品如何退货？,未拆封商品可先提交退货申请，由人工核验订单、商品状态和运费责任后给出处理方案，不直接承诺退款完成。,high,store,,,fixture,2026-08-11
-FAQ-MANUAL-5584,商品保修,product,星脉蓝牙耳机保修多久？,星脉 X-M1 蓝牙耳机整机保修 12 个月，内置电池属产品组成部分，保修期内非人为损坏可免费维修。,low,product,,X-M1-WHITE,manual,2026-08-11
-FAQ-MANUAL-8fbb,售后规则,refund,数码产品激活后还能退货吗？,数码类商品已激活、含授权信息的产品，一旦产生授权或激活程序，不支持 7 天内无理由退货；激活前可支持退货。,medium,store,,,manual,2026-08-11
-FAQ-MANUAL-a72c,售后规则,refund,羽绒服吊牌剪了还能退吗？,服饰类退换需保持吊牌、包装完整；吊牌已剪或丢失，可能影响二次销售，不支持无理由退换。,medium,store,,Y-D01-M,manual,2026-08-11
-FAQ-MANUAL-51a5,商品,product,云织羽绒服充绒量是多少？,云织 Y-D01 羽绒服填充 90% 白鸭绒，具体克重请以商品详情页标注为准。,low,product,,Y-D01-M,manual,2026-08-11
-FAQ-MANUAL-RETURN-HOW,商品,return,怎么退货？,"如需退货，请在我的订单中选择对应商品，点击""申请售后-退货退款""，按提示填写退货原因并提交。商品需保持完好，不影响二次销售，退回运费按平台规则承担。",low,store,SCRIPT-006,,manual,2026-08-11
-FAQ-MANUAL-SHIPPING-TIME,物流,logistics,多久发货？,除定制、预售商品外，商家将在您付款后48小时内上传快递单号并安排发货。延迟发货按平台规则赔付。,low,store,SCRIPT-010,,manual,2026-08-11
-FAQ-MANUAL-LOGISTICS-COMPLAINT,物流,logistics,物流投诉怎么处理？,如遇快递延误、丢失或损坏，请先联系商家协商处理；商家应在7日内答复。若未解决，可向快递企业投诉或向邮政管理部门申诉。,low,store,SCRIPT-015,,manual,2026-08-11
+FAQ-SCRIPT-001,接待,greeting,你好,您好，我是店铺智能客服。您可以告诉我想了解的商品、订单或售后问题；涉及退款、赔付、改价、改地址等操作时，我会为您转人工确认。,low,platform,SCRIPT-001,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-002,商品,product,这个商品有什么功能,我可以依据当前商品详情说明功能和参数。请发商品名称、链接或规格；未出现在商品详情中的能力，我不会自行承诺。,low,platform,SCRIPT-002,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-003,商品,product,这是什么材质,材质请以当前商品详情页的成分或参数标注为准。不同颜色、批次或规格可能不同，请提供具体 SKU 后再核对。,low,platform,SCRIPT-003,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-004,商品,product,尺码怎么选,请参考商品页对应规格的尺寸表，并结合自己的实际测量值选择。不同版型可能有差异；拿不准时请提供身高、体重或使用尺寸，由人工进一步建议。,low,platform,SCRIPT-004,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-005,商品,product,实物有色差吗,商品图片会尽量还原实物，但受拍摄光线和屏幕显示影响可能存在轻微色差。请以收到的实物和商品页说明为准。,low,platform,SCRIPT-005,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-006,商品,product,这个能适配吗,是否适配需要核对商品支持列表与您的具体品牌、型号和版本。请提供完整型号；未列明的设备不能直接承诺兼容。,low,platform,SCRIPT-006,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-007,商品,product,是正品吗,商品来源与正品保障以店铺资质、商品页承诺和可提供的凭证为准。如需核验防伪方式或授权材料，我可以转人工处理。,low,platform,SCRIPT-007,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-008,商品,product,保质期多久,生产日期和保质期以商品页说明及实际包装标识为准。仓库批次会流动，无法在未核实库存批次时承诺某个具体日期。,low,platform,SCRIPT-008,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-009,商品,product,怎么清洗,使用、清洗和保养请优先遵循商品说明书、洗涤标或包装标识。若说明缺失，请提供商品名称和具体问题后再核对。,low,platform,SCRIPT-009,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-010,商品,product,保修多久,质保范围和期限以商品页、保修卡及店铺售后政策为准。人为损坏、耗材或非正常使用是否覆盖，需要人工依据凭证判定。,low,platform,SCRIPT-010,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-011,库存,inventory,现在有货吗,页面可下单通常表示当前系统有可售库存，但大促或并发下单时库存可能变化。最终以订单提交和仓库复核结果为准。,low,platform,SCRIPT-011,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-012,库存,inventory,什么时候补货,补货时间需以采购和入库结果为准，未确认前不能承诺具体日期。您可以关注商品页面，或留下需要的规格由人工登记。,low,platform,SCRIPT-012,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-013,价格,price_promo,实际多少钱,实际支付金额由商品价、店铺优惠、平台优惠和账号可用券共同计算，请以结算页实时展示为准。客服不能绕过平台修改成交价。,low,platform,SCRIPT-013,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-014,活动,price_promo,最近有什么活动,活动范围、门槛和时间以当前活动页及结算页规则为准。过期活动、截图或历史价格不能作为当前优惠承诺。,low,platform,SCRIPT-014,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-015,活动,price_promo,优惠券怎么领,优惠券能否领取和使用取决于发放对象、有效期、商品范围及金额门槛，请在结算页核对；不同优惠不一定可以叠加。,low,platform,SCRIPT-015,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-016,活动,price_promo,刚买就降价怎么办,是否支持保价及计算周期以平台和店铺当前规则为准。差价申请属于资金相关操作，需要人工核对订单、活动类型和时间。,low,platform,SCRIPT-016,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-017,活动,price_promo,直播间为什么更便宜,直播间价格可能受时段、限量券和指定链接影响，请以直播间对应商品的结算页为准；其他链接不能直接套用同一价格。,low,platform,SCRIPT-017,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-018,预售,shipping,预售什么时候发,预售商品的定金、尾款和预计发货时间以商品页预售规则为准。预计时间不是必然送达时间，订单异常时会转人工处理。,low,platform,SCRIPT-018,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-019,支付,payment,为什么支付失败,支付方式和结果由平台支付页面决定。若显示扣款但订单未成功，请勿重复支付，先保存支付记录并联系平台或人工客服核对。,low,platform,SCRIPT-019,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-020,发票,invoice,可以开发票吗,发票类型、可开内容和申请入口以店铺及平台规则为准。实际开票或修改抬头需要核对订单与税务信息，我会转人工确认。,low,platform,SCRIPT-020,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-021,订单,order,我的订单怎么样了,订单状态属于个人交易信息，需要在已授权会话中查询。请通过平台订单页查看；如果状态异常，我会转人工并请您只提供必要的订单编号。,low,platform,SCRIPT-021,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-022,订单,order,怎么取消订单,取消订单会改变交易状态，不能由智能客服直接执行。请先在平台订单页尝试取消；若无法操作，我会转人工核对发货状态。,low,platform,SCRIPT-022,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-023,订单,order,收货地址写错了,收货信息涉及隐私和履约风险，智能客服不会直接修改。若订单尚未发货，请立即转人工核对；已发货时需按承运方规则处理。,low,platform,SCRIPT-023,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-024,发货,shipping,什么时候发货,发货时效以商品页承诺、订单状态和仓库实际处理为准。预售、定制、大促及不可抗力可能影响时间，未核实订单前不能承诺具体发出时刻。,low,platform,SCRIPT-024,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-025,发货,shipping,能加急发货吗,可以记录您的加急诉求，但不能保证仓库改变出库顺序。催发货属于订单操作，需要人工结合订单状态处理。,low,platform,SCRIPT-025,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-026,发货,shipping,发什么快递,承运商通常由仓库根据地址和线路安排，是否可指定以商品页及仓库能力为准。特殊需求请在下单前让人工确认。,low,platform,SCRIPT-026,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-027,发货,shipping,偏远地区能发吗,偏远地区是否配送、运费及附加条件以结算页和承运商覆盖范围为准。页面无法下单时，客服不能私下承诺发货。,low,platform,SCRIPT-027,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-028,物流,logistics,快递到哪里了,具体物流轨迹需要在已授权订单上下文中查询，请先查看平台物流页。若长时间无更新或轨迹异常，我会转人工核验。,low,platform,SCRIPT-028,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-029,物流,logistics,快递怎么还没到,物流时效受线路和承运商影响，预计送达并非保证时间。若超过平台或商品页承诺，请提供订单编号，由人工核验并按规则处理。,low,platform,SCRIPT-029,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-030,物流,logistics,包裹丢了怎么办,如包裹疑似丢失或外包装破损，请保留物流记录、外包装和开箱证据，不要私下处理赔付。我会转人工联系承运商并按平台流程核验。,low,platform,SCRIPT-030,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-031,物流,logistics,显示签收但没收到,显示签收但未收到时，请先核对门卫、驿站、家人代收和配送电话；仍未找到请尽快转人工，由人工联系承运商核查。,low,platform,SCRIPT-031,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-032,售后,return_exchange,支持七天无理由吗,是否支持七天无理由退货，以商品性质、完好标准、签收时间和平台规则为准。定制、鲜活、已拆封影响二次销售等情形可能不适用。,low,platform,SCRIPT-032,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-033,售后,return_exchange,拆封了还能退吗,退货通常需保持商品、配件、赠品、包装和凭证完整，不影响二次销售；具体标准以平台售后页和商品说明为准。,low,platform,SCRIPT-033,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-034,售后,return_exchange,退货运费谁出,退货运费由退货原因、运费险状态和平台判责共同决定。未核验订单和责任前，客服不能承诺由某一方承担。,low,platform,SCRIPT-034,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-035,售后,return_exchange,可以换个尺码吗,能否换货取决于平台入口、商品状态和目标规格库存。实际换货会改变订单履约，请从售后页申请或转人工确认。,low,platform,SCRIPT-035,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-036,退款,refund,退款多久到账,退款通过平台审核后通常按原支付路径退回，到账时间由平台、银行或支付机构决定。具体进度请查看售后详情，异常时转人工核验。,low,platform,SCRIPT-036,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-037,退款,refund,怎么申请退款,退款会改变交易和资金状态，智能客服不能代为执行。请在平台订单的售后入口申请；需要协助时我会转人工。,low,platform,SCRIPT-037,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-038,售后,after_sales,少发了一件,发现少件、漏发或错发，请保留外包装、面单、商品和开箱记录，并提供订单编号。补发、退款或赔付需人工核验后按平台规则处理。,low,platform,SCRIPT-038,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-039,售后,after_sales,商品有质量问题,如有质量问题或商品破损，请停止继续使用并保留清晰照片或视频、包装和订单信息。人工会依据证据和平台规则判断退换方案。,low,platform,SCRIPT-039,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-040,售后,after_sales,售后要提供什么证据,售后核验通常需要订单编号、问题部位照片或视频、外包装和物流面单。请只提交必要信息，并遮盖无关的个人隐私。,low,platform,SCRIPT-040,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-041,赔付,complaint,你们要怎么赔,赔付属于资金和责任判定事项，智能客服不能承诺金额或直接执行。请提供订单与问题证据，由人工依据平台规则核验。,low,platform,SCRIPT-041,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-042,投诉,complaint,我要投诉,很抱歉给您带来不好的体验。我会记录问题并转人工处理；请说明订单和具体情况，不需要提供账号密码、验证码等敏感信息。,low,platform,SCRIPT-042,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-043,人工,human,转人工,好的，我会将当前问题和必要上下文转给人工客服。请不要发送密码、验证码、完整身份证号或银行卡信息。,low,platform,SCRIPT-043,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-044,隐私,privacy,需要提供身份证吗,为保护隐私，请勿在对话中发送密码、验证码、银行卡号或完整身份证号。订单核验只应收集完成当前服务所必需的信息。,low,platform,SCRIPT-044,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-045,安全,security,客服让我发验证码,客服不会索要密码、短信验证码或要求向私人账户转账。遇到此类请求请立即停止操作，通过平台官方入口核验并联系人工客服。,low,platform,SCRIPT-045,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-046,安全,security,能加微信处理吗,请在平台官方订单和售后入口内沟通与支付，不建议转到私人社交账号或点击来源不明的链接，以免失去平台保障。,low,platform,SCRIPT-046,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-047,评价,after_sales,好评返现吗,评价应基于真实体验。客服不能以返现、赠品或其他利益诱导指定评价内容；如有问题，请先通过平台售后渠道解决。,low,platform,SCRIPT-047,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-048,赠品,price_promo,下单有赠品吗,赠品的适用商品、数量和发放条件以活动页及订单结算信息为准，赠完即止的活动需以实际库存为准。,low,platform,SCRIPT-048,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-049,安装,product,包安装吗,是否包含安装、上门或调试服务以商品页服务说明和覆盖地区为准。未标注的服务不能默认承诺，特殊需求请先转人工确认。,low,platform,SCRIPT-049,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-050,定制,product,可以定制吗,定制内容、费用、确认稿和交付周期需在下单前由人工确认。定制商品的取消与退换规则可能不同，请确认后再支付。,low,platform,SCRIPT-050,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-051,服务,greeting,客服几点上班,智能客服可持续接收问题；人工服务时间以店铺页面为准。非人工时段的高风险或复杂事项会先记录，等待人工处理。,low,platform,SCRIPT-051,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SCRIPT-052,边界,unsupported,告诉我竞品真实销量,我只能依据本店已授权的商品、订单和政策信息回答，无法提供其他店铺的真实销量、库存、买家数据或未公开的内部信息。,low,platform,SCRIPT-052,,builtin:ecommerce-sop-v1,2026-08-12
+FAQ-SEED-ca01,商品保修,product,晴川空气炸锅保修多久？,晴川 AF5 空气炸锅整机保修 12 个月，保修以订单和产品序列信息核验结果为准。,low,product,,QC-AF5-WHITE,fixture,2026-08-12
+FAQ-SEED-ed51,物流规则,logistics,订单物流异常怎么办？,先核对订单物流最新节点；若连续 24 小时无更新或显示地址异常，转人工联系承运商核查，不承诺具体送达时间。,medium,store,,,fixture,2026-08-12
+FAQ-SEED-028a,价保规则,refund,商品降价可以申请价保吗？,签收后 7 日内可提交价保申请，是否符合条件以活动类型、实付金额和订单状态核验结果为准，客服不得在核验前承诺退款。,high,store,,,fixture,2026-08-12
+FAQ-SEED-3070,售后规则,refund,未拆封商品如何退货？,未拆封商品可先提交退货申请，由人工核验订单、商品状态和运费责任后给出处理方案，不直接承诺退款完成。,high,store,,,fixture,2026-08-12
+FAQ-MANUAL-5584,商品保修,product,星脉蓝牙耳机保修多久？,星脉 X-M1 蓝牙耳机整机保修 12 个月，内置电池属产品组成部分，保修期内非人为损坏可免费维修。,low,product,,X-M1-WHITE,manual,2026-08-12
+FAQ-MANUAL-8fbb,售后规则,refund,数码产品激活后还能退货吗？,数码类商品已激活、含授权信息的产品，一旦产生授权或激活程序，不支持 7 天内无理由退货；激活前可支持退货。,medium,store,,,manual,2026-08-12
+FAQ-MANUAL-a72c,售后规则,refund,羽绒服吊牌剪了还能退吗？,服饰类退换需保持吊牌、包装完整；吊牌已剪或丢失，可能影响二次销售，不支持无理由退换。,medium,store,,Y-D01-M,manual,2026-08-12
+FAQ-MANUAL-51a5,商品,product,云织羽绒服充绒量是多少？,云织 Y-D01 羽绒服填充 90% 白鸭绒，具体克重请以商品详情页标注为准。,low,product,,Y-D01-M,manual,2026-08-12
+FAQ-MANUAL-RETURN-HOW,商品,return,怎么退货？,是否支持七天无理由退货，以商品性质、完好标准、签收时间和平台规则为准。定制、鲜活、已拆封影响二次销售等情形可能不适用。,low,platform,SCRIPT-032,,manual,2026-08-12
+FAQ-MANUAL-SHIPPING-TIME,物流,logistics,多久发货？,发货时效以商品页承诺、订单状态和仓库实际处理为准。预售、定制、大促及不可抗力可能影响时间，未核实订单前不能承诺具体发出时刻。,low,platform,SCRIPT-024,,manual,2026-08-12
+FAQ-MANUAL-LOGISTICS-COMPLAINT,物流,logistics,物流投诉怎么处理？,具体物流轨迹需要在已授权订单上下文中查询，请先查看平台物流页。若长时间无更新或轨迹异常，我会转人工核验。,low,platform,SCRIPT-028,,manual,2026-08-12
