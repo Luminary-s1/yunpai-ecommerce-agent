@@ -15,7 +15,7 @@
 - 兼容性：沿用 schema v30 与现有依赖；只新增 `evals/forecasting/` synthetic fixture、可复跑 CLI 和测试。生产 API、Agent 目录、LangGraph/intent/prompt、迁移和自动动作均未改变。
 - Eval：十类序列全部使用 rolling-origin；对 test window 做未来扰动不变性检查，数值评分 WAPE/Bias/P80/P95 覆盖与 baseline fallback；库存场景调用公开 planning service。oracle 只在生产调用后进入 scorer，并以实际字段 overlap/unexpected 调用 Gate 审计；存在回测误差时零宽 P80/P95 明确失败。
 - 对抗修复：计划证据 JSON 解析与结构类型失败统一为 `inventory_plan_evidence_invalid`，两个读 API 映射 409；forecast policy 同 `active_from/created_at` 由 `rowid DESC` 确定最新版本。成功响应、schema、依赖、Agent 目录、路由、拓扑和自动动作均不变。
-- 验证：E-20260813-001/002；开发者全量 `727 passed, 1 xfailed`；Grok 二轮最终全量 `730 passed, 1 xfailed`（296.80 秒），旧生产对三项新增门禁 `3 failed`，修复后定点 `3 passed`、聚焦 `54 passed`，累计 mutation 均失败后还原。合入 main、服务器 v30、真实数据、长稳和生产 Gate 均未豁免。
+- 验证：E-20260813-001/002/003；Grok 二轮最终全量 `730 passed, 1 xfailed`（296.80 秒），旧生产对三项新增门禁 `3 failed`，修复后定点 `3 passed`、聚焦 `54 passed`；最终 Codex 收口全量 `730 passed, 1 xfailed`（355.14 秒），Eval/静态/台账均通过。开发者与 Grok 证据分开，累计 mutation 均失败后还原。合入 main、服务器 v30、真实数据、长稳和生产 Gate 均未豁免。
 
 ## M6-R WP4 API / Agent / Admin（未单独升版）
 

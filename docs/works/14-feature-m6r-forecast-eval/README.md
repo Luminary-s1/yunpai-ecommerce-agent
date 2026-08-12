@@ -136,3 +136,11 @@ project-to-act --validate：valid=true，issues=[]
   `730 passed, 1 xfailed`（296.80 秒）。
 - 最终裁决：**PASS**。M6-R 是代码级本机候选，可与尚未合入 main 的 WP4 整链进入合入
   评审；main 合入、服务器 schema v30、真实数据、24/72h 长稳与生产放行均未授权或未豁免。
+
+## 最终开发者收口验证
+
+Grok 最终裁决后，Codex 在已提交治理 tip `4d01185` 上单独运行任务指定的断网代理全量命令，
+得到 `730 passed, 1 xfailed in 355.14s`。direct Eval runner 同时得到 10/10、32 次生产调用、
+`ground_truth_boundary=passed`、oracle overlap 为空；compileall、`git diff --check` 与
+`project-to-act --validate` 均退出 0。该结果记为 E-20260813-003，不替代或混入 Grok 的
+E-20260813-002。
