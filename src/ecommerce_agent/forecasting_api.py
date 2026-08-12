@@ -289,7 +289,8 @@ def build_forecasting_router(
         limit: int = Query(default=100, ge=1, le=500),
         admin: AdminPrincipal = Depends(require_admin),
     ) -> list[dict[str, Any]]:
-        return plans.list_risks(
+        return call(
+            plans.list_risks,
             admin.tenant_id,
             store_id=store_id,
             sku_id=sku_id,

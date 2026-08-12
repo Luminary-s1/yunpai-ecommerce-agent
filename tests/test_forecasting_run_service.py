@@ -216,6 +216,42 @@ def test_policy_resolution_prefers_sku_override_then_store_default(tmp_path) -> 
     assert resolved_override.minimum_history_days == 28
 
 
+def test_policy_resolution_breaks_equal_timestamps_by_newest_rowid(tmp_path) -> None:
+    db, service = _service(tmp_path, _facts([4] * 56))
+    created_at = "2026-08-12T00:00:00+00:00"
+    older = ForecastPolicy(
+        policy_version="forecast-same-time-zzz",
+        minimum_history_days=21,
+    )
+    newer = ForecastPolicy(
+        policy_version="forecast-same-time-aaa",
+        minimum_history_days=28,
+    )
+    with db.connect() as conn:
+        for policy in (older, newer):
+            service._ensure_policy(
+                conn,
+                TENANT,
+                STORE,
+                SKU,
+                service._policy_evidence(policy),
+                created_at,
+            )
+        conn.execute(
+            """CREATE INDEX test_forecast_policy_scan_order
+            ON forecast_policies(
+                tenant_id, store_id, sku_id, policy_version DESC
+            )"""
+        )
+        conn.execute("ANALYZE")
+
+    resolved = service.resolve_policy(TENANT, store_id=STORE, sku_id=SKU)
+
+    assert resolved is not None
+    assert resolved.policy_version == "forecast-same-time-aaa"
+    assert resolved.minimum_history_days == 28
+
+
 def test_all_failed_candidates_return_an_explicit_engine_failure(tmp_path) -> None:
     def fail(_values: list[float | None], _horizon: int) -> list[float]:
         raise RuntimeError("injected_model_failure")

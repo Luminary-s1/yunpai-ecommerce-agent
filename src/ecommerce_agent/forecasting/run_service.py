@@ -65,7 +65,7 @@ class ForecastRunService:
                 """SELECT * FROM forecast_policies
                 WHERE tenant_id=? AND store_id=? AND (sku_id=? OR sku_id IS NULL)
                 ORDER BY CASE WHEN sku_id=? THEN 0 ELSE 1 END,
-                         active_from DESC, created_at DESC LIMIT 1""",
+                         active_from DESC, created_at DESC, rowid DESC LIMIT 1""",
                 (tenant_id, store_id, sku_id, sku_id),
             ).fetchone()
         if row is None:

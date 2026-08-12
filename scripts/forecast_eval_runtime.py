@@ -238,9 +238,14 @@ def _interval_coverage(run: dict[str, Any]) -> dict[str, float]:
     ]
     if not pairs:
         return {"p80": 0.0, "p95": 0.0}
+    has_nonzero_error = any(actual != predicted for actual, predicted in pairs)
     return {
-        level: sum(actual <= predicted + width for actual, predicted in pairs)
-        / len(pairs)
+        level: (
+            0.0
+            if has_nonzero_error and width <= 0.0
+            else sum(actual <= predicted + width for actual, predicted in pairs)
+            / len(pairs)
+        )
         for level, width in widths.items()
     }
 

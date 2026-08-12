@@ -6,6 +6,7 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
+from scripts.forecast_eval_runtime import _interval_coverage
 from scripts.run_forecast_eval import run_evaluation
 
 
@@ -58,6 +59,25 @@ def test_independent_oracle_can_reject_a_numerically_wrong_expectation(tmp_path)
     assert report["passed"] is False
     assert report["results"][0]["checks"]["demand_type"] is False
     assert report["results"][0]["observed"]["demand_type"] == "rising_trend"
+
+
+def test_interval_coverage_rejects_zero_width_overforecast() -> None:
+    run = {
+        "champion_model": "last_value",
+        "backtests": [
+            {
+                "model_name": "last_value",
+                "failure_reason": None,
+                "actual": [1.0, 2.0],
+                "forecast": [5.0, 5.0],
+            }
+        ],
+        "points": [{"p50": 5.0, "p80": 5.0, "p95": 5.0}],
+    }
+
+    coverage = _interval_coverage(run)
+
+    assert coverage == {"p80": 0.0, "p95": 0.0}
 
 
 def test_forecast_eval_direct_cli_emits_a_passing_report(tmp_path) -> None:

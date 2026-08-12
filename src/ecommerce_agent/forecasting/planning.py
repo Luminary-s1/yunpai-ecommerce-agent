@@ -34,6 +34,16 @@ class InventoryPlanningError(ValueError):
     """Raised when a deterministic inventory plan cannot be built or read safely."""
 
 
+def _evidence_json(value: Any, expected_type: type[Any]) -> Any:
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError) as exc:
+        raise InventoryPlanningError("inventory_plan_evidence_invalid") from exc
+    if not isinstance(parsed, expected_type):
+        raise InventoryPlanningError("inventory_plan_evidence_invalid")
+    return parsed
+
+
 SERVICE_LEVEL_QUANTILES = {
     Decimal("0.50"): "p50",
     Decimal("0.80"): "p80",
@@ -417,17 +427,17 @@ class InventoryPlanningService:
                 "maximum_stock_days", "policy_version", "active_from",
             )
         }
-        for stored, exposed in (
-            ("inventory_snapshot_json", "inventory_snapshot"),
-            ("forecast_evidence_json", "forecast_evidence"),
-            ("stockout_dates_json", "stockout_dates"),
-            ("risk_evidence_json", "risk_evidence"),
-            ("quality_issues_json", "quality_issues"),
-            ("assumptions_json", "assumptions"),
-            ("allocation_boundary_json", "allocation_boundary"),
-            ("calculation_steps_json", "calculation_steps"),
+        for stored, exposed, expected_type in (
+            ("inventory_snapshot_json", "inventory_snapshot", list),
+            ("forecast_evidence_json", "forecast_evidence", dict),
+            ("stockout_dates_json", "stockout_dates", dict),
+            ("risk_evidence_json", "risk_evidence", dict),
+            ("quality_issues_json", "quality_issues", list),
+            ("assumptions_json", "assumptions", dict),
+            ("allocation_boundary_json", "allocation_boundary", dict),
+            ("calculation_steps_json", "calculation_steps", list),
         ):
-            result[exposed] = json.loads(result.pop(stored))
+            result[exposed] = _evidence_json(result.pop(stored), expected_type)
         return result
 
     @staticmethod

@@ -334,6 +334,40 @@ def test_forecasting_api_rejects_corrupt_persisted_run_as_domain_error(
             assert response.json()["detail"] == "forecast_run_evidence_invalid"
 
 
+def test_forecasting_api_rejects_corrupt_inventory_plan_as_domain_error(
+    tmp_path,
+) -> None:
+    app = create_app(make_settings(tmp_path))
+    _prepare_virtual_inputs(app.state.agent)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        plan = _configure_and_run(client)["inventory_plan"]
+        with app.state.agent.db.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM inventory_plans WHERE plan_id=?",
+                (plan["plan_id"],),
+            ).fetchone()
+            corrupt = dict(row)
+            corrupt.update(
+                plan_id="inventory-plan-corrupt",
+                input_hash="inventory-plan-corrupt-input",
+                stockout_dates_json="{",
+            )
+            columns = tuple(corrupt)
+            conn.execute(
+                f"INSERT INTO inventory_plans ({','.join(columns)}) "
+                f"VALUES ({','.join('?' for _ in columns)})",
+                tuple(corrupt[column] for column in columns),
+            )
+
+        for path in (
+            f"/v1/forecasting/skus/{SKU}/inventory-plan?store_id={STORE}",
+            f"/v1/forecasting/risks?store_id={STORE}&sku_id={SKU}",
+        ):
+            response = client.get(path, headers=ADMIN)
+            assert response.status_code == 409
+            assert response.json()["detail"] == "inventory_plan_evidence_invalid"
+
+
 _FORECASTING_READ_ONLY_TABLES = (
     "demand_daily_facts",
     "inventory_balances",
