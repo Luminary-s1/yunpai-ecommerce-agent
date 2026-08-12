@@ -41,7 +41,7 @@ class SessionScopeError(ValueError):
 
 
 class Database:
-    SCHEMA_VERSION = 29
+    SCHEMA_VERSION = 30
 
     def __init__(self, path: Path):
         self.path = path
@@ -166,6 +166,9 @@ class Database:
             if 29 not in applied:
                 self._apply_v29(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (29, ?)", (utc_now(),))
+            if 30 not in applied:
+                self._apply_v30(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (30, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2600,6 +2603,108 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v30(conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS inventory_planning_policies (
+                policy_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                sku_id TEXT NOT NULL,
+                warehouse_id TEXT,
+                supplier_lead_days INTEGER NOT NULL CHECK(supplier_lead_days >= 0),
+                review_period_days INTEGER NOT NULL CHECK(review_period_days >= 1),
+                service_level TEXT NOT NULL,
+                minimum_order_qty TEXT NOT NULL,
+                order_multiple TEXT NOT NULL,
+                minimum_safety_stock TEXT NOT NULL,
+                maximum_stock_days INTEGER NOT NULL CHECK(maximum_stock_days >= 1),
+                policy_version TEXT NOT NULL,
+                active_from TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(tenant_id, policy_id),
+                UNIQUE(tenant_id, policy_id, policy_version)
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_planning_policy_default
+                ON inventory_planning_policies(
+                    tenant_id, store_id, sku_id, policy_version
+                ) WHERE warehouse_id IS NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_planning_policy_warehouse
+                ON inventory_planning_policies(
+                    tenant_id, store_id, sku_id, warehouse_id, policy_version
+                ) WHERE warehouse_id IS NOT NULL;
+            CREATE TRIGGER IF NOT EXISTS trg_inventory_planning_policies_immutable_update
+            BEFORE UPDATE ON inventory_planning_policies
+            BEGIN
+                SELECT RAISE(ABORT, 'inventory_planning_policy_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_inventory_planning_policies_immutable_delete
+            BEFORE DELETE ON inventory_planning_policies
+            BEGIN
+                SELECT RAISE(ABORT, 'inventory_planning_policy_immutable');
+            END;
+
+            CREATE TABLE IF NOT EXISTS inventory_plans (
+                plan_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                sku_id TEXT NOT NULL,
+                warehouse_id TEXT,
+                forecast_run_id TEXT NOT NULL,
+                planning_policy_id TEXT NOT NULL,
+                planning_policy_version TEXT NOT NULL,
+                inventory_snapshot_json TEXT NOT NULL,
+                inventory_snapshot_hash TEXT NOT NULL,
+                inventory_as_of TEXT NOT NULL,
+                forecast_evidence_json TEXT NOT NULL,
+                selected_quantile TEXT NOT NULL
+                    CHECK(selected_quantile IN ('p50','p80','p95')),
+                on_hand TEXT NOT NULL,
+                reserved TEXT NOT NULL,
+                inbound TEXT NOT NULL,
+                available TEXT NOT NULL,
+                future_supply TEXT NOT NULL,
+                lead_time_demand TEXT NOT NULL,
+                lead_review_demand TEXT NOT NULL,
+                reorder_point TEXT NOT NULL,
+                target_stock TEXT NOT NULL,
+                maximum_stock TEXT NOT NULL,
+                recommended_order_qty TEXT NOT NULL,
+                stockout_dates_json TEXT NOT NULL,
+                risk_level TEXT NOT NULL
+                    CHECK(risk_level IN ('low','medium','high','critical')),
+                overstock_risk INTEGER NOT NULL CHECK(overstock_risk IN (0, 1)),
+                allocation_boundary_json TEXT NOT NULL,
+                calculation_steps_json TEXT NOT NULL,
+                action_mode TEXT NOT NULL CHECK(action_mode = 'advisory_only'),
+                input_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(tenant_id, plan_id),
+                UNIQUE(tenant_id, input_hash),
+                FOREIGN KEY(tenant_id, forecast_run_id)
+                    REFERENCES forecast_runs(tenant_id, run_id),
+                FOREIGN KEY(
+                    tenant_id, planning_policy_id, planning_policy_version
+                ) REFERENCES inventory_planning_policies(
+                    tenant_id, policy_id, policy_version
+                )
+            );
+            CREATE INDEX IF NOT EXISTS idx_inventory_plans_scope
+                ON inventory_plans(tenant_id, store_id, sku_id, created_at DESC);
+            CREATE TRIGGER IF NOT EXISTS trg_inventory_plans_immutable_update
+            BEFORE UPDATE ON inventory_plans
+            BEGIN
+                SELECT RAISE(ABORT, 'inventory_plan_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_inventory_plans_immutable_delete
+            BEFORE DELETE ON inventory_plans
+            BEGIN
+                SELECT RAISE(ABORT, 'inventory_plan_immutable');
+            END;
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -2711,6 +2816,24 @@ class Database:
                 "anomaly_id", "tenant_id", "store_id", "sku_id", "run_id",
                 "anomaly_type", "severity", "evidence_json", "resolution_status",
                 "created_at", "resolved_at",
+            },
+            "inventory_planning_policies": {
+                "policy_id", "tenant_id", "store_id", "sku_id", "warehouse_id",
+                "supplier_lead_days", "review_period_days", "service_level",
+                "minimum_order_qty", "order_multiple", "minimum_safety_stock",
+                "maximum_stock_days", "policy_version", "active_from", "created_at",
+            },
+            "inventory_plans": {
+                "plan_id", "tenant_id", "store_id", "sku_id", "warehouse_id",
+                "forecast_run_id", "planning_policy_id", "planning_policy_version",
+                "inventory_snapshot_json", "inventory_snapshot_hash",
+                "inventory_as_of", "forecast_evidence_json", "selected_quantile",
+                "on_hand", "reserved", "inbound", "available", "future_supply",
+                "lead_time_demand", "lead_review_demand", "reorder_point",
+                "target_stock", "maximum_stock", "recommended_order_qty",
+                "stockout_dates_json", "risk_level", "overstock_risk",
+                "allocation_boundary_json", "calculation_steps_json", "action_mode",
+                "input_hash", "created_at",
             },
             "staged_rollouts": {
                 "tenant_id", "subject_type", "subject_key", "candidate_id",

@@ -14,7 +14,7 @@
 
 ## 上线门禁
 
-- `/health` 必须显示 schema v29、客户端和管理员认证已配置、知识库不少于 100 条、渠道 Agent/outbox/竞品监控/SLA/自动派单 worker 正常且无未处置异常积压；评测中断恢复数量必须核对。
+- `/health` 显示的 schema 必须等于运行代码的 `Database.SCHEMA_VERSION`；客户端和管理员认证已配置、知识库不少于 100 条、渠道 Agent/outbox/竞品监控/SLA/自动派单 worker 正常且无未处置异常积压；评测中断恢复数量必须核对。
 - `/ready` 必须返回 200，并通过 checkpoint、磁盘余量等全部检查。
 - `yunpai-agent eval` 必须零失败；目标发布还必须使用冻结的客户脱敏标注集运行版本化 Agent 评测并通过 Gate。
 - `ADMIN_API_KEY` 必须为长随机值，管理接口不得暴露到公网。
@@ -110,7 +110,7 @@ yunpai-agent backup-prune --backup-dir D:\yunpai-backups --keep 14 --apply
 - `backup-verify` 必须作为备份任务的后置步骤。错钥、密文或头部篡改、ZIP 成员异常、哈希不符、SQLite 损坏、schema 不兼容或跨库关系不一致均返回非零。
 - `backup-prune` 默认仅预览，只处理具有合法云湃备份头的 `yunpai-*.ypbak`；必须复核候选列表后显式 `--apply`。
 
-每次 schema 升级都必须在维护窗口内先用旧版本程序创建并验证停机备份；迁移完成后、恢复业务写入前，立即用新版本程序重新执行一次完整 `backup --require-stopped` 和 `backup-verify`。验证器按当前 schema 精确匹配，因此 v29 程序会拒绝 v28 `.ypbak`；旧归档及其匹配程序必须保留到 v29 新归档完成验证和隔离恢复演练后，期间不得被保留策略提前清理。
+每次 schema 升级都必须在维护窗口内先用旧版本程序创建并验证停机备份；迁移完成后、恢复业务写入前，立即用新版本程序重新执行一次完整 `backup --require-stopped` 和 `backup-verify`。验证器按 `Database.SCHEMA_VERSION` 精确匹配，因此升级后的程序会拒绝升级前生成的 `.ypbak`；旧归档及其匹配程序必须保留到新 schema 归档完成验证和隔离恢复演练后，期间不得被保留策略提前清理。
 
 ### 恢复演练与正式恢复
 
