@@ -103,6 +103,7 @@ def _is_general(kind: KnowledgeKind, record: dict) -> bool:
     - rule（行业规则）→ general
     - policy 且 scope_key=all → general（跨品类政策）
     - script 且 layer 是 platform/industry → general（平台/行业通用话术）
+    - faq 且 layer 是 platform/industry → general（平台/行业通用问答）
     - 其余 → seller
     """
     kind = coerce_kind(kind.value)
@@ -110,7 +111,10 @@ def _is_general(kind: KnowledgeKind, record: dict) -> bool:
         return True
     if kind is KnowledgeKind.POLICY and record.get("scope_key") == "all":
         return True
-    if kind is KnowledgeKind.SCRIPT and record.get("layer") in ("platform", "industry"):
+    if kind in (KnowledgeKind.SCRIPT, KnowledgeKind.FAQ) and record.get("layer") in (
+        "platform",
+        "industry",
+    ):
         return True
     return False
 

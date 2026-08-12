@@ -118,5 +118,165 @@
     "sale_price": "599.00",
     "category": "apparel",
     "source": "manual"
+  },
+  {
+    "sku_id": "REAL-AFR-01",
+    "item_id": "SPU-AFR-01",
+    "title": "格兰仕 Galanz KZ40-108",
+    "color": "",
+    "status": "active",
+    "sale_price": "329.00",
+    "category": "air_fryer",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-AFR-02",
+    "item_id": "SPU-AFR-02",
+    "title": "美的 Midea KZ25E101",
+    "color": "",
+    "status": "active",
+    "sale_price": "249.00",
+    "category": "air_fryer",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-VAC-01",
+    "item_id": "SPU-VAC-01",
+    "title": "戴森 Dyson V15 Detect Fluffy",
+    "color": "",
+    "status": "active",
+    "sale_price": "3490.00",
+    "category": "cordless_vacuum",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-VAC-02",
+    "item_id": "SPU-VAC-02",
+    "title": "德尔玛 Deerma DX700",
+    "color": "",
+    "status": "active",
+    "sale_price": "299.00",
+    "category": "cordless_vacuum",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-HUM-01",
+    "item_id": "SPU-HUM-01",
+    "title": "德尔玛 Deerma F628S",
+    "color": "",
+    "status": "active",
+    "sale_price": "169.00",
+    "category": "humidifier",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-HUM-02",
+    "item_id": "SPU-HUM-02",
+    "title": "小熊 Bear JSQ-C30Q1",
+    "color": "",
+    "status": "active",
+    "sale_price": "129.00",
+    "category": "humidifier",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-KET-01",
+    "item_id": "SPU-KET-01",
+    "title": "苏泊尔 SUPOR SW-17J63B",
+    "color": "",
+    "status": "active",
+    "sale_price": "159.00",
+    "category": "electric_kettle",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-KET-02",
+    "item_id": "SPU-KET-02",
+    "title": "美的 Midea MK-SH15Colour102",
+    "color": "",
+    "status": "active",
+    "sale_price": "79.00",
+    "category": "electric_kettle",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-FAN-01",
+    "item_id": "SPU-FAN-01",
+    "title": "格力 GREE FXDZ-2307Bg5",
+    "color": "",
+    "status": "active",
+    "sale_price": "499.00",
+    "category": "air_circulation_fan",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-FAN-02",
+    "item_id": "SPU-FAN-02",
+    "title": "美的 Midea SAC35CR",
+    "color": "",
+    "status": "active",
+    "sale_price": "199.00",
+    "category": "air_circulation_fan",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-AUD-01",
+    "item_id": "SPU-AUD-01",
+    "title": "捷波朗 Jabra Elite 7 Active",
+    "color": "",
+    "status": "active",
+    "sale_price": "1299.00",
+    "category": "digital_audio",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-AUD-02",
+    "item_id": "SPU-AUD-02",
+    "title": "QCY QCY H3",
+    "color": "",
+    "status": "active",
+    "sale_price": "299.00",
+    "category": "digital_audio",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-PWR-01",
+    "item_id": "SPU-PWR-01",
+    "title": "小米 Xiaomi 移动电源 3 20000mAh",
+    "color": "",
+    "status": "active",
+    "sale_price": "129.00",
+    "category": "digital_power",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-PWR-02",
+    "item_id": "SPU-PWR-02",
+    "title": "罗马仕 ROMOSS 10000mAh 22.5W",
+    "color": "",
+    "status": "active",
+    "sale_price": "59.00",
+    "category": "digital_power",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-APP-01",
+    "item_id": "SPU-APP-01",
+    "title": "雪中飞 雪中飞 XZF2155",
+    "color": "",
+    "status": "active",
+    "sale_price": "499.00",
+    "category": "apparel",
+    "source": "network"
+  },
+  {
+    "sku_id": "REAL-APP-02",
+    "item_id": "SPU-APP-02",
+    "title": "茵曼 茵曼 INMAN W2302",
+    "color": "",
+    "status": "active",
+    "sale_price": "499.00",
+    "category": "apparel",
+    "source": "network"
   }
 ]

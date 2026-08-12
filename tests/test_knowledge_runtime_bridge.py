@@ -299,3 +299,76 @@ def test_load_from_runtime_industry_is_rule(service) -> None:
     assert "RULE-READBACK" in by_id
     assert by_id["RULE-READBACK"].kind is KnowledgeKind.RULE
     assert by_id["RULE-READBACK"].scope is KnowledgeScope.GENERAL
+
+
+# ---------- F-007 修复：热更新必须刷新检索索引 ----------
+
+def test_hot_update_refreshes_search_index(service) -> None:
+    """F-007：update_existing=True 时 search_text/embedding 一并刷新。
+
+    此前只更新内容字段，keywords 别名修改后检索索引不更新——
+    "发票怎么开" 永远命中不了加了别名"发票怎么开"的规则（假热更新）。
+    """
+    from ecommerce_agent.knowledge_engine import (
+        KnowledgeItem, KnowledgeKind, KnowledgeScope, import_to_runtime,
+    )
+
+    items = [
+        KnowledgeItem(
+            id="RULE-INVOICE-TEST", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+            compiled_truth="电商发票开具规范：商家应依法为消费者开具发票",
+            attributes={"rule_title": "电商发票开具规范"},
+        )
+    ]
+    import_to_runtime(items, service.knowledge)
+
+    # 1. 无别名时：检索不到（基线）
+    before = service.knowledge.retrieve(
+        "发票怎么开", top_k=5, min_score=0.05, tenant_id="tenant-test"
+    )
+    assert all(r["source"] != "kg:RULE-INVOICE-TEST" for r in before)
+
+    # 2. 资产层补别名 keywords，热更新导入
+    items[0].attributes["keywords"] = "发票怎么开 开票 电子发票"
+    stats = import_to_runtime(
+        items, service.knowledge, update_existing=True
+    )
+    assert stats["updated"] == 1
+
+    # 3. 别名生效：检索命中（索引已刷新）
+    after = service.knowledge.retrieve(
+        "发票怎么开", top_k=5, min_score=0.05, tenant_id="tenant-test"
+    )
+    assert any(r["source"] == "kg:RULE-INVOICE-TEST" for r in after), (
+        "热更新后 keywords 别名必须可检索（F-007）"
+    )
+
+
+def test_faq_platform_layer_maps_to_general(service) -> None:
+    """F-008：FAQ 且 layer=platform 判为 general（此前 FAQ 无判定，永远 seller）。
+
+    平台通用问答（builtin 话术提炼）被误标 store → 常规检索被店铺隔离过滤不可见。
+    """
+    from ecommerce_agent.knowledge_engine import (
+        KnowledgeItem, KnowledgeKind, KnowledgeScope, import_to_runtime,
+    )
+
+    items = [
+        KnowledgeItem(
+            id="FAQ-PLATFORM-1", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.GENERAL,
+            compiled_truth="七天无理由退货：自签收起 7 天内可退",
+            attributes={"question": "七天无理由退货", "layer": "platform"},
+        )
+    ]
+    import_to_runtime(items, service.knowledge)
+
+    # general（platform 层）无 store_id，任何店铺都能检索到
+    principal = principal_for(service)
+    for store_id in ("store-a", "store-b"):
+        results = service.knowledge.retrieve(
+            "七天无理由退货", top_k=5, min_score=0.05,
+            tenant_id=principal.tenant_id, store_id=store_id,
+        )
+        assert any(r["source"] == "kg:FAQ-PLATFORM-1" for r in results), (
+            f"platform 层 FAQ 应对 {store_id} 可见（F-008）"
+        )

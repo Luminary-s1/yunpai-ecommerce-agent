@@ -490,7 +490,7 @@
   {
     "rel_type": "REFERS_TO",
     "source": "FAQ-MANUAL-8fbb",
-    "target": "RETURN-a041c044",
+    "target": "RETURN-9d637afd",
     "target_type": "Policy",
     "confidence": 0.9,
     "generated_by": "rule+human"
@@ -508,14 +508,6 @@
     "source": "FAQ-MANUAL-51a5",
     "target": "Y-D01-M",
     "target_type": "Product",
-    "confidence": 0.9,
-    "generated_by": "rule+human"
-  },
-  {
-    "rel_type": "REFERS_TO",
-    "source": "FAQ-SEED-ed51",
-    "target": "LOGISTICS-70a98f4b",
-    "target_type": "Policy",
     "confidence": 0.9,
     "generated_by": "rule+human"
   }

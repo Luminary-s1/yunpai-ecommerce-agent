@@ -133,7 +133,9 @@ def to_knowledge_row(item: KnowledgeItem, *, default_store_id: str = "default") 
         "approved_by": "builtin",
         "layer": layer,
         "store_id": store_id,
-        "sku_id": item.attributes.get("sku_id"),
+        # 空字符串归一化为 None：检索过滤是 `sku_id IS NULL`，
+        # 空串会让常规检索静默漏掉该知识（F-006）
+        "sku_id": item.attributes.get("sku_id") or None,
         "review_status": "approved",
     }
 
@@ -199,6 +201,20 @@ def import_to_runtime(
         if target_id in existing:
             if update_existing:
                 # A6：热更新——内容字段更新（不改 id/租户/店铺/status）
+                # search_text / embedding 必须一并刷新，否则 keywords 别名
+                # 修改后检索索引不更新（F-007：热更新假修复）
+                from ..text_utils import hash_embedding, search_text, vector_to_blob
+
+                qa_text = search_text(
+                    row.get("question") or "",
+                    row.get("answer") or "",
+                    row.get("keywords") or "",
+                    row.get("category") or "",
+                    row.get("intent") or "",
+                )
+                emb_text = (
+                    f"{row.get('question') or ''} {row.get('keywords') or ''} {row.get('answer') or ''}"
+                )
                 updatable = {
                     "category": row.get("category"),
                     "intent": row.get("intent"),
@@ -207,10 +223,17 @@ def import_to_runtime(
                     "keywords": row.get("keywords"),
                     "risk_level": row.get("risk_level"),
                     "layer": row.get("layer"),
-                    "store_id": row.get("store_id"),
+                    "search_text": qa_text,
+                    "embedding": vector_to_blob(hash_embedding(emb_text)),
                     "sku_id": row.get("sku_id"),
                 }
-                updatable = {k: v for k, v in updatable.items() if v is not None}
+                if item.scope is KnowledgeScope.GENERAL:
+                    # general 知识不得带 store_id（否则常规检索被店铺隔离过滤，
+                    # 平台通用话术不可见——修复 B1b 层迁移后残留的隔离误伤）
+                    updatable["store_id"] = None
+                else:
+                    updatable["store_id"] = row.get("store_id")
+                # None 值需要显式 SET（清除旧值）；其余字段保留
                 set_clause = ", ".join(f"{k}=?" for k in updatable)
                 params = [*updatable.values(), target_id]
                 try:

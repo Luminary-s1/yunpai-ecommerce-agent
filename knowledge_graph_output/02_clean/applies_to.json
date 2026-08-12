@@ -2,6 +2,27 @@
   {
     "rel_type": "APPLIES_TO",
     "source": "RETURN-38e401d2",
+    "target": "home_appliance",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "RETURN-38e401d2",
+    "target": "apparel",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "RETURN-38e401d2",
+    "target": "cordless_vacuum",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "RETURN-38e401d2",
     "target": "digital",
     "confidence": 1.0,
     "generated_by": "rule"
@@ -16,13 +37,6 @@
   {
     "rel_type": "APPLIES_TO",
     "source": "RETURN-38e401d2",
-    "target": "cordless_vacuum",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "RETURN-38e401d2",
     "target": "humidifier",
     "confidence": 1.0,
     "generated_by": "rule"
@@ -30,7 +44,14 @@
   {
     "rel_type": "APPLIES_TO",
     "source": "RETURN-38e401d2",
-    "target": "home_appliance",
+    "target": "digital_audio",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "RETURN-38e401d2",
+    "target": "air_fryer",
     "confidence": 1.0,
     "generated_by": "rule"
   },
@@ -50,22 +71,22 @@
   },
   {
     "rel_type": "APPLIES_TO",
-    "source": "RETURN-38e401d2",
+    "source": "PRICE-cf259e1c",
+    "target": "home_appliance",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "PRICE-cf259e1c",
     "target": "apparel",
     "confidence": 1.0,
     "generated_by": "rule"
   },
   {
     "rel_type": "APPLIES_TO",
-    "source": "RETURN-38e401d2",
-    "target": "air_fryer",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "RETURN-38e401d2",
-    "target": "digital_audio",
+    "source": "PRICE-cf259e1c",
+    "target": "cordless_vacuum",
     "confidence": 1.0,
     "generated_by": "rule"
   },
@@ -86,13 +107,6 @@
   {
     "rel_type": "APPLIES_TO",
     "source": "PRICE-cf259e1c",
-    "target": "cordless_vacuum",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "PRICE-cf259e1c",
     "target": "humidifier",
     "confidence": 1.0,
     "generated_by": "rule"
@@ -100,7 +114,14 @@
   {
     "rel_type": "APPLIES_TO",
     "source": "PRICE-cf259e1c",
-    "target": "home_appliance",
+    "target": "digital_audio",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "PRICE-cf259e1c",
+    "target": "air_fryer",
     "confidence": 1.0,
     "generated_by": "rule"
   },
@@ -115,27 +136,6 @@
     "rel_type": "APPLIES_TO",
     "source": "PRICE-cf259e1c",
     "target": "electric_kettle",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "PRICE-cf259e1c",
-    "target": "apparel",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "PRICE-cf259e1c",
-    "target": "air_fryer",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "PRICE-cf259e1c",
-    "target": "digital_audio",
     "confidence": 1.0,
     "generated_by": "rule"
   },
@@ -148,7 +148,7 @@
   },
   {
     "rel_type": "APPLIES_TO",
-    "source": "RETURN-a041c044",
+    "source": "RETURN-9d637afd",
     "target": "digital",
     "confidence": 1.0,
     "generated_by": "rule"
@@ -163,6 +163,27 @@
   {
     "rel_type": "APPLIES_TO",
     "source": "LOGISTICS-70a98f4b",
+    "target": "home_appliance",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "LOGISTICS-70a98f4b",
+    "target": "apparel",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "LOGISTICS-70a98f4b",
+    "target": "cordless_vacuum",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "LOGISTICS-70a98f4b",
     "target": "digital",
     "confidence": 1.0,
     "generated_by": "rule"
@@ -177,13 +198,6 @@
   {
     "rel_type": "APPLIES_TO",
     "source": "LOGISTICS-70a98f4b",
-    "target": "cordless_vacuum",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "LOGISTICS-70a98f4b",
     "target": "humidifier",
     "confidence": 1.0,
     "generated_by": "rule"
@@ -191,7 +205,14 @@
   {
     "rel_type": "APPLIES_TO",
     "source": "LOGISTICS-70a98f4b",
-    "target": "home_appliance",
+    "target": "digital_audio",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "APPLIES_TO",
+    "source": "LOGISTICS-70a98f4b",
+    "target": "air_fryer",
     "confidence": 1.0,
     "generated_by": "rule"
   },
@@ -211,44 +232,9 @@
   },
   {
     "rel_type": "APPLIES_TO",
-    "source": "LOGISTICS-70a98f4b",
-    "target": "apparel",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "LOGISTICS-70a98f4b",
-    "target": "air_fryer",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "LOGISTICS-70a98f4b",
-    "target": "digital_audio",
-    "confidence": 1.0,
-    "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
     "source": "WARR-b17b433a",
     "target": "digital",
     "confidence": 1.0,
     "generated_by": "rule"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "WARR-1a256956",
-    "target": "QC-AF5-WHITE",
-    "confidence": 0.9,
-    "generated_by": "rule+human"
-  },
-  {
-    "rel_type": "APPLIES_TO",
-    "source": "WARR-1a256956",
-    "target": "QC-AF5-GREEN",
-    "confidence": 0.9,
-    "generated_by": "rule+human"
   }
 ]

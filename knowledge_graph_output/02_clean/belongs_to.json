@@ -85,50 +85,113 @@
   },
   {
     "rel_type": "BELONGS_TO",
-    "source": "air_fryer",
-    "target": "home_appliance",
+    "source": "REAL-AFR-01",
+    "target": "air_fryer",
     "confidence": 1.0,
     "generated_by": "rule"
   },
   {
     "rel_type": "BELONGS_TO",
-    "source": "cordless_vacuum",
-    "target": "home_appliance",
+    "source": "REAL-AFR-02",
+    "target": "air_fryer",
     "confidence": 1.0,
     "generated_by": "rule"
   },
   {
     "rel_type": "BELONGS_TO",
-    "source": "humidifier",
-    "target": "home_appliance",
+    "source": "REAL-VAC-01",
+    "target": "cordless_vacuum",
     "confidence": 1.0,
     "generated_by": "rule"
   },
   {
     "rel_type": "BELONGS_TO",
-    "source": "electric_kettle",
-    "target": "home_appliance",
+    "source": "REAL-VAC-02",
+    "target": "cordless_vacuum",
     "confidence": 1.0,
     "generated_by": "rule"
   },
   {
     "rel_type": "BELONGS_TO",
-    "source": "air_circulation_fan",
-    "target": "home_appliance",
+    "source": "REAL-HUM-01",
+    "target": "humidifier",
     "confidence": 1.0,
     "generated_by": "rule"
   },
   {
     "rel_type": "BELONGS_TO",
-    "source": "digital_audio",
-    "target": "digital",
+    "source": "REAL-HUM-02",
+    "target": "humidifier",
     "confidence": 1.0,
     "generated_by": "rule"
   },
   {
     "rel_type": "BELONGS_TO",
-    "source": "digital_power",
-    "target": "digital",
+    "source": "REAL-KET-01",
+    "target": "electric_kettle",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-KET-02",
+    "target": "electric_kettle",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-FAN-01",
+    "target": "air_circulation_fan",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-FAN-02",
+    "target": "air_circulation_fan",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-AUD-01",
+    "target": "digital_audio",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-AUD-02",
+    "target": "digital_audio",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-PWR-01",
+    "target": "digital_power",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-PWR-02",
+    "target": "digital_power",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-APP-01",
+    "target": "apparel",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "BELONGS_TO",
+    "source": "REAL-APP-02",
+    "target": "apparel",
     "confidence": 1.0,
     "generated_by": "rule"
   }

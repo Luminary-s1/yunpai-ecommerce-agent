@@ -355,5 +355,397 @@
     "target": "Y-D01-L|season",
     "confidence": 1.0,
     "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-AFR-01",
+    "target": "SPU-AFR-01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-AFR-01",
+    "target": "SPU-AFR-01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-AFR-01",
+    "target": "REAL-AFR-01|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-AFR-01",
+    "target": "REAL-AFR-01|control",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-AFR-01",
+    "target": "REAL-AFR-01|capacity_l",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-AFR-02",
+    "target": "SPU-AFR-02|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-AFR-02",
+    "target": "SPU-AFR-02|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-AFR-02",
+    "target": "REAL-AFR-02|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-AFR-02",
+    "target": "REAL-AFR-02|control",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-AFR-02",
+    "target": "REAL-AFR-02|capacity_l",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-VAC-01",
+    "target": "SPU-VAC-01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-VAC-01",
+    "target": "SPU-VAC-01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-VAC-01",
+    "target": "REAL-VAC-01|power_w",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-VAC-02",
+    "target": "SPU-VAC-02|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-VAC-02",
+    "target": "SPU-VAC-02|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-VAC-02",
+    "target": "REAL-VAC-02|power_w",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-HUM-01",
+    "target": "SPU-HUM-01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-HUM-01",
+    "target": "SPU-HUM-01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-HUM-01",
+    "target": "REAL-HUM-01|humidity_type",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-HUM-02",
+    "target": "SPU-HUM-02|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-HUM-02",
+    "target": "SPU-HUM-02|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-HUM-02",
+    "target": "REAL-HUM-02|humidity_type",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-KET-01",
+    "target": "SPU-KET-01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-KET-01",
+    "target": "SPU-KET-01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-KET-01",
+    "target": "REAL-KET-01|capacity_l",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-KET-01",
+    "target": "REAL-KET-01|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-KET-02",
+    "target": "SPU-KET-02|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-KET-02",
+    "target": "SPU-KET-02|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-KET-02",
+    "target": "REAL-KET-02|capacity_l",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-KET-02",
+    "target": "REAL-KET-02|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-FAN-01",
+    "target": "SPU-FAN-01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-FAN-01",
+    "target": "SPU-FAN-01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-FAN-01",
+    "target": "REAL-FAN-01|control",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-FAN-02",
+    "target": "SPU-FAN-02|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-FAN-02",
+    "target": "SPU-FAN-02|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-FAN-02",
+    "target": "REAL-FAN-02|control",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-AUD-01",
+    "target": "SPU-AUD-01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-AUD-01",
+    "target": "SPU-AUD-01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-AUD-01",
+    "target": "REAL-AUD-01|wearing",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-AUD-02",
+    "target": "SPU-AUD-02|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-AUD-02",
+    "target": "SPU-AUD-02|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-AUD-02",
+    "target": "REAL-AUD-02|wearing",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-PWR-01",
+    "target": "SPU-PWR-01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-PWR-01",
+    "target": "SPU-PWR-01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-PWR-01",
+    "target": "REAL-PWR-01|capacity_mah",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-PWR-02",
+    "target": "SPU-PWR-02|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-PWR-02",
+    "target": "SPU-PWR-02|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-PWR-02",
+    "target": "REAL-PWR-02|capacity_mah",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-APP-01",
+    "target": "SPU-APP-01|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-APP-01",
+    "target": "SPU-APP-01|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-APP-01",
+    "target": "REAL-APP-01|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-APP-01",
+    "target": "REAL-APP-01|fill",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-APP-02",
+    "target": "SPU-APP-02|brand",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "SPU-APP-02",
+    "target": "SPU-APP-02|model",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-APP-02",
+    "target": "REAL-APP-02|material",
+    "confidence": 1.0,
+    "generated_by": "rule"
+  },
+  {
+    "rel_type": "HAS_ATTR",
+    "source": "REAL-APP-02",
+    "target": "REAL-APP-02|fill",
+    "confidence": 1.0,
+    "generated_by": "rule"
   }
 ]
