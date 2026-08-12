@@ -385,6 +385,10 @@ def build_graph(
         from .knowledge_engine.observability import get_observer
         observer = get_observer(db)
         _retrieve_start = time.monotonic()
+        # 意图路由：precheck 已产出 intent_routing，缺失时按 customer_intent 回落（对齐 origin/main）
+        intent_routing = state.get("intent_routing") or routing_for_intent(
+            state.get("customer_intent") or "chitchat"
+        )
         # P0-1 安全护栏：检索前意图门（超范围请求→拒绝/升级，不进检索）
         from .knowledge_engine.security_guard import get_security_guard
         guard = get_security_guard()
@@ -413,7 +417,7 @@ def build_graph(
                 state["normalized_input"],
                 top_k=settings.rag_top_k,
                 min_score=settings.rag_min_score,
-                intent=None,
+                intent=intent_routing["knowledge_intent"],
                 tenant_id=state["tenant_id"],
                 store_id=effective_context.get("store_id") or effective_context.get("shop_id"),
                 sku_id=effective_context.get("sku_id"),
