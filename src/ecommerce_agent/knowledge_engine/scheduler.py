@@ -228,7 +228,8 @@ def main() -> None:
     if args.eval:
         report = run_evaluation_once(verbose=True)
         print(json.dumps(report, ensure_ascii=False, indent=2))
-        return
+        # P1-3 门禁硬失效：低于阈值/失败 → 非零退出码（供 CI/cron 阻断）
+        return 1 if report.get("status") in ("below_threshold", "error") else 0
 
     if args.once:
         kb = None

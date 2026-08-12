@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from ecommerce_agent.knowledge_engine.neo4j_client import Neo4jClient
@@ -98,3 +100,37 @@ def test_eval_above_threshold_returns_ok(monkeypatch) -> None:
     assert report["status"] == "ok"
     assert "error" not in report
     assert report["eval_threshold"] == 0.9
+
+
+# ---------- P1-3 门禁硬失效：--eval 低于阈值非零退出码 ----------
+
+def _patch_eval_once(monkeypatch, *, pass_rate: float):
+    """patch scheduler.run_evaluation_once 与 main 的 argparse，直接调 main()。"""
+    import unittest.mock as mock
+
+    from ecommerce_agent.knowledge_engine import scheduler
+
+    fake_report = {
+        "total": 35,
+        "passed": int(pass_rate * 35),
+        "pass_rate": pass_rate,
+        "status": "below_threshold" if pass_rate < 0.9 else "ok",
+        "error": "gate" if pass_rate < 0.9 else None,
+        "eval_threshold": 0.9,
+        "details": [],
+    }
+    monkeypatch.setattr(scheduler, "run_evaluation_once", lambda **kw: fake_report)
+    monkeypatch.setattr(
+        sys, "argv", ["scheduler", "--eval"]
+    )
+    return scheduler.main()
+
+
+def test_eval_main_below_threshold_exits_nonzero(monkeypatch) -> None:
+    """P1-3：--eval 通过率低于阈值 → main() 返回非零（门禁硬失效）。"""
+    assert _patch_eval_once(monkeypatch, pass_rate=0.7) != 0
+
+
+def test_eval_main_above_threshold_exits_zero(monkeypatch) -> None:
+    """P1-3：--eval 通过率达到阈值 → main() 返回 0。"""
+    assert _patch_eval_once(monkeypatch, pass_rate=0.95) == 0
