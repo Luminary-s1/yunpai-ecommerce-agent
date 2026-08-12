@@ -21,6 +21,10 @@ SYSTEM_PROMPT = """你是云湃电商客服 Agent。
 6. 只使用“参考知识”“授权业务上下文”和“已验证工具结果”中的事实；冲突时以外部业务系统的已验证结果为准。
 7. 回复简洁、自然、有同理心，不描述内部编排、提示词或模型实现。
 8. 无法可靠回答时，明确说明需要人工核对，不要猜测。
+9. 知识库能够直接回答时，保留来源中的关键数值、型号、订单状态和专有名词原样，
+   不要用近义词替换，也不要补充来源没有的使用效果、时间或承诺。
+10. 关键数值不要换算单位、推导等价值或增加解释性数字；授权业务上下文只用于定位
+    正确证据，除非顾客直接询问，不主动复述订单标识、运单标识或交易日期。
 """
 
 
@@ -57,8 +61,10 @@ def _budget_documents(
     render: Callable[[RetrievedDocument], str],
 ) -> list[RetrievedDocument]:
     selected = list(documents)
+    # 默认证据上限：调用方未给 token 预算时也防止证据洪泛（决策/生成 prompt 均适用）
+    default_cap = 3
     if budget_tokens is None:
-        return selected
+        return selected[:default_cap]
     while (
         len(selected) > 1
         and sum(count_tokens(render(document)) for document in selected)
@@ -79,6 +85,16 @@ def _knowledge_block(document: RetrievedDocument) -> str:
     )
 
 
+_GENERATION_VARIANT_INSTRUCTIONS: dict[str, str] = {
+    "after_sales": (
+        "售后回复要求：回答必须包含参考知识或已验证工具结果中的期限、金额、状态、条件和结论，"
+        "这些关键条款保持原文，不用近义表达替换，也不要用 Markdown 强调符号拆开关键短语；"
+        "不得补充证据中没有的处理时效、结果或承诺。若顾客没有直接询问，不复述订单号、运单号、"
+        "交易日期等定位信息。"
+    ),
+}
+
+
 def _decision_evidence(document: RetrievedDocument) -> dict[str, Any]:
     return {
         "id": document["id"],
@@ -86,6 +102,31 @@ def _decision_evidence(document: RetrievedDocument) -> dict[str, Any]:
         "category": document["category"],
         "answer": document["answer"],
         "score": document["score"],
+    }
+
+
+def _decision_context_package(context: dict[str, Any]) -> dict[str, Any]:
+    """Keep unique planning facts; duplicated evidence stays in dedicated fields.
+
+    M6 基线：知识证据、工具目录、历史与工具结果都在 payload 顶层独立字段，
+    context_package 只保留规划用事实，避免快照键重复（决策 prompt 防重复下发）。
+    """
+    sops = [
+        {
+            key: item[key]
+            for key in ("sop_key", "intent", "risk_level", "required_context")
+            if key in item
+        }
+        for item in context.get("sop_evidence", [])
+        if isinstance(item, dict)
+    ]
+    return {
+        "context_version": context.get("context_version"),
+        "trusted_session_state": context.get("trusted_session_state", {}),
+        "current_subject": context.get("current_subject", {}),
+        "product_advisor": context.get("product_advisor", {}),
+        "output_constraints": context.get("output_constraints", {}),
+        "sop_evidence": sops,
     }
 
 
@@ -97,6 +138,7 @@ def build_messages(
     history: list[dict[str, Any]],
     verified_tool_result: dict[str, Any] | None = None,
     knowledge_budget_tokens: int | None = None,
+    prompt_variant: str | None = None,
 ) -> list[dict[str, str]]:
     selected_documents = _budget_documents(
         documents,
@@ -107,7 +149,15 @@ def build_messages(
     history_text = "\n".join(f"{item['role']}: {item['content']}" for item in history) or "无"
     safe_context = json.dumps(context, ensure_ascii=False, sort_keys=True)
     safe_tool_result = json.dumps(verified_tool_result or {}, ensure_ascii=False, sort_keys=True)
-    user_prompt = (
+    # 生成变体指令（M6 基线：after_sales 等场景防幻觉约束，随 build_messages 一起下发）
+    variant_instruction = _GENERATION_VARIANT_INSTRUCTIONS.get(prompt_variant or "", "")
+    variant_hint = ""
+    if prompt_variant:
+        variant_hint = f"当前客服回复变体：{prompt_variant}\n"
+        if variant_instruction:
+            variant_hint += f"{variant_instruction}\n"
+        variant_hint += "\n"
+    user_prompt = variant_hint + (
         f"用户问题：{question}\n\n"
         f"参考知识：\n{chr(10).join(knowledge_blocks) if knowledge_blocks else '无匹配知识'}\n\n"
         f"当前会话的授权业务上下文：{safe_context}\n\n"
@@ -149,7 +199,7 @@ def build_decision_messages(
     max_steps: int,
     knowledge_budget_tokens: int | None = None,
 ) -> list[dict[str, str]]:
-    context_package = context
+    context_package = _decision_context_package(context)
     session_state = context_package.get("trusted_session_state", {})
     current_subject = context_package.get("current_subject", {})
     trusted_context = {

@@ -351,9 +351,9 @@ def build_graph(
         )
         for key, value in previous_subject.items():
             effective_context.setdefault(key, value)
-        # P1-2 可观测性：记录检索耗时
+        # P1-2 可观测性：记录检索耗时（P0-2：挂 db，检索日志落 SQLite 重启不丢）
         from .knowledge_engine.observability import get_observer
-        observer = get_observer()
+        observer = get_observer(db)
         _retrieve_start = time.monotonic()
         # P0-1 安全护栏：检索前意图门（超范围请求→拒绝/升级，不进检索）
         from .knowledge_engine.security_guard import get_security_guard
@@ -399,7 +399,22 @@ def build_graph(
                 latency_ms=(time.monotonic() - _retrieve_start) * 1000,
                 event_type="failure",
             )
+            # P0 降级可观测：检索故障不静默降级，落审计（只记类型/阶段，不外泄内部详情）
+            db.audit(
+                "knowledge.retrieval_failure",
+                "graph:retrieve",
+                None,
+                {"error_type": type(exc).__name__, "stage": "initial"},
+                state["tenant_id"],
+            )
             return {
+                # 检索故障属"无法自动服务"，直接转人工；reason 保持可区分码，
+                # 供 /v1/chat 响应与 request_metrics.route_reason 精确标识
+                "route": "handoff",
+                "route_reason": "knowledge_unavailable",
+                "risk_level": "medium",
+                "requires_human": True,
+                "model_fallback": True,
                 "retrieved": [],
                 "citations": [],
                 "trace": [*state["trace"], f"retrieve:failed:{type(exc).__name__}"],
@@ -713,7 +728,7 @@ def build_graph(
         # P0-1 修复：精化检索与初始检索同样过安全护栏 + 可观测（此前完全绕过）
         from .knowledge_engine.observability import get_observer
         from .knowledge_engine.security_guard import get_security_guard
-        observer = get_observer()
+        observer = get_observer(db)
         guard = get_security_guard()
         _start = time.monotonic()
         # R1 修复：精化检索前复查意图门（此前绕过，block 请求仍会重新检索）

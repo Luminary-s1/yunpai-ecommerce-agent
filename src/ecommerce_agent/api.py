@@ -650,6 +650,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "model_fallback": True,
                     }
                 )
+            except SessionScopeError as exc:
+                # 会话/幂等冲突是客户端可预期错误：透传区分码（session_closed /
+                # session_scope_conflict / idempotency_key_conflict），不归为 internal_error
+                yield encode(
+                    {
+                        "event": "error",
+                        "code": getattr(exc, "code", "session_conflict"),
+                        "message": str(exc),
+                        "retry_advised": False,
+                    }
+                )
+                yield encode(
+                    {
+                        "event": "done",
+                        "message_id": metadata.get("message_id", ""),
+                        "intent": "unknown",
+                        "risk_level": "low",
+                        "model_fallback": True,
+                    }
+                )
             except Exception:
                 yield encode(
                     {

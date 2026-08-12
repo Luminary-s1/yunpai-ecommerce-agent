@@ -632,7 +632,8 @@ class AgentService:
                     or row["request_hash"] != request_hash
                 ):
                     raise SessionScopeError(
-                        "agent idempotency key is already bound to another request"
+                        "agent idempotency key is already bound to another request",
+                        code="idempotency_key_conflict",
                     )
                 if row["status"] == "running":
                     conn.execute(

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..rag import KnowledgeBase
@@ -30,6 +31,8 @@ MEMORY_CATEGORIES = {
     "frequent_issue": "高频问题",
     "decision_note": "决策记录",
 }
+# 长期记忆默认 TTL：到期后不再被检索命中（P1-2 防事实过期后误答）
+MEMORY_DEFAULT_TTL_DAYS = 180
 
 
 class KnowledgeMemoryService:
@@ -46,6 +49,7 @@ class KnowledgeMemoryService:
         category: str = "frequent_issue",
         source: str = "",
         tenant_id: str | None = None,
+        ttl_days: int = MEMORY_DEFAULT_TTL_DAYS,
     ) -> str:
         """记录一条店铺级长期记忆（写 layer=evolution，检索默认隔离）。
 
@@ -55,11 +59,14 @@ class KnowledgeMemoryService:
             category: 记忆类别（buyer_preference/frequent_issue/decision_note）
             source: 证据来源（如"feedback://..."、"chat://..."）
             tenant_id: 租户
+            ttl_days: 有效期天数（默认 180 天，到期后 recall/检索不再命中）
 
         返回：knowledge 行 id。
         """
         if not store_id or not fact.strip():
             raise ValueError("store_id 和 fact 必填")
+        if ttl_days <= 0:
+            raise ValueError("ttl_days 必须为正数")
         # 幂等去重（防呆）：同店铺同内容不重复写，返回已有 id
         with self.knowledge.db.connect() as conn:
             existing_row = conn.execute(
@@ -72,7 +79,7 @@ class KnowledgeMemoryService:
                 return str(existing_row["knowledge_key"])
         category_label = MEMORY_CATEGORIES.get(category, category)
         memory_id = f"kg-memory-{uuid.uuid4().hex[:12]}"
-        self.knowledge.add_document(
+        row_id = self.knowledge.add_document(
             category=category_label,
             intent=f"memory-{category}",
             question=f"[记忆·{store_id}] {fact[:100]}",
@@ -87,6 +94,16 @@ class KnowledgeMemoryService:
             layer=MEMORY_LAYER,
             store_id=store_id,
         )
+        # P1-2 过期：记忆是时效性事实，写 effective_to（now + ttl_days），
+        # 复用 knowledge 检索的 effective_to 过滤（retrieve 已按它过滤），到期自然不命中。
+        # 注意：add_document 返回的是行主键 id（随机 kb-xxx），不是 memory_id。
+        now = datetime.now(UTC)
+        expires = now + timedelta(days=ttl_days)
+        with self.knowledge.db._write_lock, self.knowledge.db.connect() as conn:
+            conn.execute(
+                "UPDATE knowledge SET effective_from=?, effective_to=? WHERE id=?",
+                (now.isoformat(), expires.isoformat(), row_id),
+            )
         return memory_id
 
     def recall(
@@ -112,6 +129,10 @@ class KnowledgeMemoryService:
             "source, store_id, layer, created_at FROM knowledge "
             "WHERE layer=? AND store_id=? AND status='active'"
         )
+        # P1-2 过期过滤：不返回已过有效期的记忆（record 写入 effective_to）
+        now = datetime.now(UTC).isoformat()
+        sql += " AND (effective_to IS NULL OR effective_to > ?)"
+        params.append(now)
         if tenant_id:
             sql += " AND (tenant_id IS NULL OR tenant_id=?)"
             params.append(tenant_id)

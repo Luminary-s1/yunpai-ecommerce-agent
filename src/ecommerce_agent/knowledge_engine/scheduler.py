@@ -140,11 +140,22 @@ def run_loop(clean_dir: str | Path, intervals: dict[str, int] | None = None) -> 
 def run_evaluation_once(*, verbose: bool = False) -> dict:
     """跑一次检索质量评测（35 题），返回报告（可观测-1：持续监控）。
 
-    通过率下降时（< 0.9）记录告警日志，供监控捕获。
+    通过率下降时（< RAG_EVAL_THRESHOLD 环境变量，默认 0.9）返回 error 状态：
+    - report["status"] = "below_threshold" / "ok"
+    - report["error"] = 门禁告警消息（供监控/飞书/CI 捕获）
     无 Neo4j 环境：返回降级报告（error 字段），不抛栈——调用方可据此跳过。
     """
+    import os
+
     from .graph_retrieval import GraphRetrievalService
     from .neo4j_client import Neo4jClient
+
+    # P2-2 评测阈值门禁：环境变量可配置，低于阈值不再只记日志
+    try:
+        eval_threshold = float(os.environ.get("RAG_EVAL_THRESHOLD", "0.9"))
+    except ValueError:
+        eval_threshold = 0.9
+        logger.warning("RAG_EVAL_THRESHOLD 非数值，回落默认 0.9")
 
     try:
         svc = GraphRetrievalService(Neo4jClient())
@@ -157,6 +168,7 @@ def run_evaluation_once(*, verbose: bool = False) -> dict:
             "total": 0,
             "passed": 0,
             "pass_rate": 0.0,
+            "status": "skipped",
             "error": "Neo4j 不可用，评测跳过",
         }
         logger.warning("retrieval_eval skipped: Neo4j unavailable")
@@ -169,20 +181,34 @@ def run_evaluation_once(*, verbose: bool = False) -> dict:
             "total": 0,
             "passed": 0,
             "pass_rate": 0.0,
+            "status": "error",
             "error": f"{type(exc).__name__}: {str(exc)[:200]}",
         }
+    pass_rate = report["pass_rate"]
     logger.info(
         "retrieval_eval done: total=%d passed=%d pass_rate=%.3f",
         report["total"],
         report["passed"],
-        report["pass_rate"],
+        pass_rate,
     )
-    if report["pass_rate"] < 0.9:
-        logger.warning(
-            "retrieval_eval regression: pass_rate=%.3f below 0.9 (details=%s)",
-            report["pass_rate"],
+    if pass_rate < eval_threshold:
+        # P2-2 门禁：低于阈值 = 评测未通过（error 状态 + 结构化告警载荷）
+        report["status"] = "below_threshold"
+        report["error"] = (
+            f"retrieval_eval gate: pass_rate={pass_rate:.3f} "
+            f"< RAG_EVAL_THRESHOLD={eval_threshold:.3f}"
+        )
+        report["eval_threshold"] = eval_threshold
+        logger.error(
+            "retrieval_eval REGRESSION GATE: pass_rate=%.3f < threshold=%.3f "
+            "(failing=%s)",
+            pass_rate,
+            eval_threshold,
             [d for d in report["details"] if not d["passed"]][:10],
         )
+    else:
+        report["status"] = "ok"
+        report["eval_threshold"] = eval_threshold
     return report
 
 

@@ -190,7 +190,7 @@ class WikiService:
         seen: set[str] = set()
         # R6 修复：Wiki 检索路径也接入观测器（此前 knowledge.retrieve 不被观测）
         from .observability import get_observer
-        _obs = get_observer()
+        _obs = get_observer(self.service.db)
         _start = time.monotonic()
         try:
             hits = self.service.knowledge.retrieve(

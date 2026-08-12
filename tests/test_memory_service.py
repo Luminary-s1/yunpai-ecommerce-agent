@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -92,3 +93,44 @@ def test_record_idempotent(service: AgentService) -> None:
     assert first == second
     rows = mem.recall("store-a", tenant_id=service.settings.bootstrap_tenant_id)
     assert len(rows) == 1
+
+
+def test_record_default_ttl_sets_effective_to(service: AgentService) -> None:
+    """P1-2：record 默认写 effective_to = now + 180 天（到期后不命中）。"""
+    mem = KnowledgeMemoryService(service.knowledge)
+    kid = mem.record(
+        "store-a", fact="默认有效期的记忆",
+        tenant_id=service.settings.bootstrap_tenant_id,
+    )
+    # record 返回 knowledge_key（kg-memory-xxx），按它查行
+    with service.knowledge.db.connect() as conn:
+        row = conn.execute(
+            "SELECT effective_from, effective_to FROM knowledge WHERE knowledge_key=?",
+            (kid,),
+        ).fetchone()
+    assert row is not None
+    effective_from = datetime.fromisoformat(row["effective_from"])
+    effective_to = datetime.fromisoformat(row["effective_to"])
+    assert effective_to > effective_from
+    assert (effective_to - effective_from).days == 180
+
+
+def test_expired_memory_not_recalled(service: AgentService) -> None:
+    """P1-2：记忆过期后 recall 不再命中（recall 侧过滤）。"""
+    mem = KnowledgeMemoryService(service.knowledge)
+    kid = mem.record(
+        "store-a", fact="会过期的记忆",
+        tenant_id=service.settings.bootstrap_tenant_id,
+        ttl_days=1,
+    )
+    # 刚写入，未过期，可召回
+    assert mem.recall("store-a", tenant_id=service.settings.bootstrap_tenant_id)
+    # 人为把 effective_to 拨到过去，模拟到期（按 knowledge_key 定位行）
+    past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    with service.knowledge.db.connect() as conn:
+        conn.execute(
+            "UPDATE knowledge SET effective_to=? WHERE knowledge_key=?",
+            (past, kid),
+        )
+    rows = mem.recall("store-a", tenant_id=service.settings.bootstrap_tenant_id)
+    assert rows == []
