@@ -2663,17 +2663,26 @@ class Database:
                 reserved TEXT NOT NULL,
                 inbound TEXT NOT NULL,
                 available TEXT NOT NULL,
+                reservation_shortfall TEXT NOT NULL,
                 future_supply TEXT NOT NULL,
                 lead_time_demand TEXT NOT NULL,
                 lead_review_demand TEXT NOT NULL,
                 reorder_point TEXT NOT NULL,
                 target_stock TEXT NOT NULL,
                 maximum_stock TEXT NOT NULL,
-                recommended_order_qty TEXT NOT NULL,
+                recommended_order_qty TEXT,
+                quantity_status TEXT NOT NULL
+                    CHECK(quantity_status IN ('advisory','withheld')),
+                quantity_reason TEXT,
                 stockout_dates_json TEXT NOT NULL,
                 risk_level TEXT NOT NULL
                     CHECK(risk_level IN ('low','medium','high','critical')),
+                risk_evidence_json TEXT NOT NULL,
                 overstock_risk INTEGER NOT NULL CHECK(overstock_risk IN (0, 1)),
+                plan_quality TEXT NOT NULL
+                    CHECK(plan_quality IN ('standard','degraded')),
+                quality_issues_json TEXT NOT NULL,
+                assumptions_json TEXT NOT NULL,
                 allocation_boundary_json TEXT NOT NULL,
                 calculation_steps_json TEXT NOT NULL,
                 action_mode TEXT NOT NULL CHECK(action_mode = 'advisory_only'),
@@ -2687,6 +2696,15 @@ class Database:
                     tenant_id, planning_policy_id, planning_policy_version
                 ) REFERENCES inventory_planning_policies(
                     tenant_id, policy_id, policy_version
+                ),
+                CHECK(
+                    (quantity_status='advisory'
+                        AND recommended_order_qty IS NOT NULL
+                        AND quantity_reason IS NULL)
+                    OR
+                    (quantity_status='withheld'
+                        AND recommended_order_qty IS NULL
+                        AND quantity_reason IS NOT NULL)
                 )
             );
             CREATE INDEX IF NOT EXISTS idx_inventory_plans_scope
@@ -2828,10 +2846,13 @@ class Database:
                 "forecast_run_id", "planning_policy_id", "planning_policy_version",
                 "inventory_snapshot_json", "inventory_snapshot_hash",
                 "inventory_as_of", "forecast_evidence_json", "selected_quantile",
-                "on_hand", "reserved", "inbound", "available", "future_supply",
+                "on_hand", "reserved", "inbound", "available",
+                "reservation_shortfall", "future_supply",
                 "lead_time_demand", "lead_review_demand", "reorder_point",
                 "target_stock", "maximum_stock", "recommended_order_qty",
-                "stockout_dates_json", "risk_level", "overstock_risk",
+                "quantity_status", "quantity_reason", "stockout_dates_json",
+                "risk_level", "risk_evidence_json", "overstock_risk",
+                "plan_quality", "quality_issues_json", "assumptions_json",
                 "allocation_boundary_json", "calculation_steps_json", "action_mode",
                 "input_hash", "created_at",
             },

@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import date, timedelta
-from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_FLOOR
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -17,7 +17,10 @@ def _json(value: Any) -> str:
 
 
 def _number(value: Any) -> Decimal:
-    result = Decimal(str(value))
+    try:
+        result = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise InventoryPlanningError("planning_number_invalid") from exc
     if not result.is_finite():
         raise InventoryPlanningError("planning_number_invalid")
     return result
@@ -29,6 +32,18 @@ def _text(value: Decimal) -> str:
 
 class InventoryPlanningError(ValueError):
     """Raised when a deterministic inventory plan cannot be built or read safely."""
+
+
+SERVICE_LEVEL_QUANTILES = {
+    Decimal("0.50"): "p50",
+    Decimal("0.80"): "p80",
+    Decimal("0.95"): "p95",
+}
+INVENTORY_SNAPSHOT_SPREAD_LIMIT_HOURS = 24
+INVENTORY_SNAPSHOT_FIELDS = (
+    "id", "connector_id", "store_id", "warehouse_id", "sku_id",
+    "on_hand", "reserved", "inbound", "source_id", "source_updated_at", "version",
+)
 
 
 class InventoryPlanningPolicy(BaseModel):
@@ -44,9 +59,16 @@ class InventoryPlanningPolicy(BaseModel):
     maximum_stock_days: int = Field(default=30, ge=1, le=30)
     policy_version: str = Field(default="inventory-plan-v1", min_length=1, max_length=128)
 
-    @field_validator(
-        "service_level", "minimum_order_qty", "order_multiple", "minimum_safety_stock"
-    )
+    @field_validator("service_level")
+    @classmethod
+    def supported_service_level(cls, value: Decimal) -> Decimal:
+        if not value.is_finite():
+            raise ValueError("planning_policy_number_invalid")
+        if value not in SERVICE_LEVEL_QUANTILES:
+            raise ValueError("planning_service_level_unsupported")
+        return value
+
+    @field_validator("minimum_order_qty", "order_multiple", "minimum_safety_stock")
     @classmethod
     def finite_decimals(cls, value: Decimal) -> Decimal:
         if not value.is_finite():
@@ -95,37 +117,38 @@ class InventoryPlanningService:
             or forecast.get("run_id") != forecast_run_id
         ):
             raise InventoryPlanningError("planning_forecast_scope_mismatch")
-        store_id, sku_id = str(forecast["store_id"]), str(forecast["sku_id"])
+        try:
+            store_id, sku_id = str(forecast["store_id"]), str(forecast["sku_id"])
+            raw_points = forecast["points"]
+        except (KeyError, TypeError) as exc:
+            raise InventoryPlanningError("planning_forecast_evidence_invalid") from exc
         balances = self.inventory.list_balances(
             tenant_id, store_id=store_id, sku_id=sku_id
         )
+        snapshot, snapshot_times = self._validated_snapshot(
+            balances, store_id=store_id, sku_id=sku_id
+        )
         if policy.warehouse_id is not None:
-            balances = [
-                item for item in balances if item["warehouse_id"] == policy.warehouse_id
+            snapshot = [
+                item for item in snapshot
+                if item["warehouse_id"] == policy.warehouse_id
             ]
-        if not balances:
+            snapshot_times = [
+                self._snapshot_time(item["source_updated_at"]) for item in snapshot
+            ]
+        if not snapshot:
             raise InventoryPlanningError("planning_inventory_snapshot_not_found")
-        if any(
-            item["store_id"] != store_id or item["sku_id"] != sku_id
-            for item in balances
-        ):
-            raise InventoryPlanningError("planning_inventory_scope_mismatch")
-        warehouses = [str(item["warehouse_id"]) for item in balances]
+        warehouses = [str(item["warehouse_id"]) for item in snapshot]
         if len(warehouses) != len(set(warehouses)):
             raise InventoryPlanningError("planning_inventory_snapshot_ambiguous")
-        snapshot = [
-            {
-                key: item[key]
-                for key in (
-                    "id", "connector_id", "store_id", "warehouse_id", "sku_id",
-                    "on_hand", "reserved", "inbound", "source_id",
-                    "source_updated_at", "version",
-                )
-            }
-            for item in sorted(balances, key=lambda row: (row["warehouse_id"], row["id"]))
-        ]
-        inventory_as_of = min(str(item["source_updated_at"]) for item in snapshot)
-        calculation = self._calculate(forecast["points"], snapshot, policy)
+        inventory_as_of = min(snapshot_times).isoformat()
+        calculation = self._calculate(raw_points, snapshot, policy)
+        quality_issues, assumptions = self._quality_evidence(
+            forecast, snapshot_times, calculation
+        )
+        calculation["plan_quality"] = "degraded" if quality_issues else "standard"
+        calculation["quality_issues"] = quality_issues
+        calculation["assumptions"] = assumptions
         policy_evidence = self._policy_evidence(policy)
         forecast_evidence = {
             key: forecast.get(key)
@@ -141,7 +164,7 @@ class InventoryPlanningService:
         input_hash = hashlib.sha256(
             _json(
                 {
-                    "forecast": {**forecast_evidence, "points": forecast["points"]},
+                    "forecast": {**forecast_evidence, "points": raw_points},
                     "inventory_snapshot_hash": inventory_hash,
                     "policy": policy_evidence,
                 }
@@ -168,31 +191,74 @@ class InventoryPlanningService:
                         forecast_run_id, planning_policy_id, planning_policy_version,
                         inventory_snapshot_json, inventory_snapshot_hash,
                         inventory_as_of, forecast_evidence_json, selected_quantile,
-                        on_hand, reserved, inbound, available, future_supply,
+                        on_hand, reserved, inbound, available, reservation_shortfall,
+                        future_supply,
                         lead_time_demand, lead_review_demand, reorder_point,
                         target_stock, maximum_stock, recommended_order_qty,
-                        stockout_dates_json, risk_level, overstock_risk,
+                        quantity_status, quantity_reason, stockout_dates_json,
+                        risk_level, risk_evidence_json, overstock_risk,
+                        plan_quality, quality_issues_json, assumptions_json,
                         allocation_boundary_json, calculation_steps_json,
                         action_mode, input_hash, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'advisory_only', ?, ?)
+                    ) VALUES (
+                        :plan_id, :tenant_id, :store_id, :sku_id, :warehouse_id,
+                        :forecast_run_id, :planning_policy_id, :planning_policy_version,
+                        :inventory_snapshot_json, :inventory_snapshot_hash,
+                        :inventory_as_of, :forecast_evidence_json, :selected_quantile,
+                        :on_hand, :reserved, :inbound, :available, :reservation_shortfall,
+                        :future_supply, :lead_time_demand, :lead_review_demand,
+                        :reorder_point, :target_stock, :maximum_stock,
+                        :recommended_order_qty, :quantity_status, :quantity_reason,
+                        :stockout_dates_json, :risk_level, :risk_evidence_json,
+                        :overstock_risk, :plan_quality, :quality_issues_json,
+                        :assumptions_json, :allocation_boundary_json,
+                        :calculation_steps_json, 'advisory_only', :input_hash, :created_at
+                    )
                     """,
-                    (
-                        plan_id, tenant_id, store_id, sku_id, policy.warehouse_id,
-                        forecast_run_id, policy_id, policy.policy_version, _json(snapshot),
-                        inventory_hash, inventory_as_of, _json(forecast_evidence),
-                        calculation["selected_quantile"], calculation["on_hand"],
-                        calculation["reserved"], calculation["inbound"],
-                        calculation["available"], calculation["future_supply"],
-                        calculation["lead_time_demand"], calculation["lead_review_demand"],
-                        calculation["reorder_point"], calculation["target_stock"],
-                        calculation["maximum_stock"],
-                        calculation["recommended_order_qty"],
-                        _json(calculation["stockout_dates"]), calculation["risk_level"],
-                        calculation["overstock_risk"],
-                        _json(calculation["allocation_boundary"]),
-                        _json(calculation["calculation_steps"]), input_hash, created_at,
-                    ),
+                    {
+                        "plan_id": plan_id,
+                        "tenant_id": tenant_id,
+                        "store_id": store_id,
+                        "sku_id": sku_id,
+                        "warehouse_id": policy.warehouse_id,
+                        "forecast_run_id": forecast_run_id,
+                        "planning_policy_id": policy_id,
+                        "planning_policy_version": policy.policy_version,
+                        "inventory_snapshot_json": _json(snapshot),
+                        "inventory_snapshot_hash": inventory_hash,
+                        "inventory_as_of": inventory_as_of,
+                        "forecast_evidence_json": _json(forecast_evidence),
+                        "selected_quantile": calculation["selected_quantile"],
+                        "on_hand": calculation["on_hand"],
+                        "reserved": calculation["reserved"],
+                        "inbound": calculation["inbound"],
+                        "available": calculation["available"],
+                        "reservation_shortfall": calculation["reservation_shortfall"],
+                        "future_supply": calculation["future_supply"],
+                        "lead_time_demand": calculation["lead_time_demand"],
+                        "lead_review_demand": calculation["lead_review_demand"],
+                        "reorder_point": calculation["reorder_point"],
+                        "target_stock": calculation["target_stock"],
+                        "maximum_stock": calculation["maximum_stock"],
+                        "recommended_order_qty": calculation["recommended_order_qty"],
+                        "quantity_status": calculation["quantity_status"],
+                        "quantity_reason": calculation["quantity_reason"],
+                        "stockout_dates_json": _json(calculation["stockout_dates"]),
+                        "risk_level": calculation["risk_level"],
+                        "risk_evidence_json": _json(calculation["risk_evidence"]),
+                        "overstock_risk": calculation["overstock_risk"],
+                        "plan_quality": calculation["plan_quality"],
+                        "quality_issues_json": _json(calculation["quality_issues"]),
+                        "assumptions_json": _json(calculation["assumptions"]),
+                        "allocation_boundary_json": _json(
+                            calculation["allocation_boundary"]
+                        ),
+                        "calculation_steps_json": _json(
+                            calculation["calculation_steps"]
+                        ),
+                        "input_hash": input_hash,
+                        "created_at": created_at,
+                    },
                 )
             else:
                 plan_id = str(existing["plan_id"])
@@ -228,11 +294,152 @@ class InventoryPlanningService:
             ("inventory_snapshot_json", "inventory_snapshot"),
             ("forecast_evidence_json", "forecast_evidence"),
             ("stockout_dates_json", "stockout_dates"),
+            ("risk_evidence_json", "risk_evidence"),
+            ("quality_issues_json", "quality_issues"),
+            ("assumptions_json", "assumptions"),
             ("allocation_boundary_json", "allocation_boundary"),
             ("calculation_steps_json", "calculation_steps"),
         ):
             result[exposed] = json.loads(result.pop(stored))
         return result
+
+    @staticmethod
+    def _snapshot_time(value: Any) -> datetime:
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if parsed.tzinfo is None or parsed.utcoffset() is None:
+                raise ValueError("timezone_required")
+        except (TypeError, ValueError) as exc:
+            raise InventoryPlanningError("planning_inventory_snapshot_invalid") from exc
+        return parsed
+
+    @classmethod
+    def _validated_snapshot(
+        cls,
+        balances: list[dict[str, Any]],
+        *,
+        store_id: str,
+        sku_id: str,
+    ) -> tuple[list[dict[str, Any]], list[datetime]]:
+        snapshot: list[dict[str, Any]] = []
+        snapshot_times: list[datetime] = []
+        try:
+            for item in balances:
+                row = {key: item[key] for key in INVENTORY_SNAPSHOT_FIELDS}
+                if str(row["store_id"]) != store_id or str(row["sku_id"]) != sku_id:
+                    raise InventoryPlanningError("planning_inventory_scope_mismatch")
+                for key in ("on_hand", "reserved", "inbound"):
+                    if _number(row[key]) < 0:
+                        raise InventoryPlanningError(
+                            "planning_inventory_snapshot_invalid"
+                        )
+                parsed = cls._snapshot_time(row["source_updated_at"])
+                row["source_updated_at"] = parsed.isoformat()
+                snapshot.append(row)
+                snapshot_times.append(parsed)
+        except InventoryPlanningError:
+            raise
+        except (KeyError, TypeError) as exc:
+            raise InventoryPlanningError("planning_inventory_snapshot_invalid") from exc
+        order = sorted(
+            range(len(snapshot)),
+            key=lambda index: (
+                str(snapshot[index]["warehouse_id"]), str(snapshot[index]["id"])
+            ),
+        )
+        return [snapshot[index] for index in order], [snapshot_times[index] for index in order]
+
+    @staticmethod
+    def _quality_evidence(
+        forecast: dict[str, Any],
+        snapshot_times: list[datetime],
+        calculation: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        if forecast.get("status") == "degraded":
+            issues.append({"code": "forecast_status_degraded", "status": "degraded"})
+        anomalies = forecast.get("anomalies", [])
+        if not isinstance(anomalies, list):
+            raise InventoryPlanningError("planning_forecast_evidence_invalid")
+        if anomalies:
+            issues.append(
+                {
+                    "code": "forecast_anomalies_present",
+                    "count": len(anomalies),
+                    "anomaly_types": sorted(
+                        {
+                            str(item.get("anomaly_type", "unknown"))
+                            for item in anomalies
+                            if isinstance(item, dict)
+                        }
+                    ),
+                }
+            )
+        if _number(calculation["reservation_shortfall"]) > 0:
+            issues.append(
+                {
+                    "code": "reserved_exceeds_on_hand",
+                    "reservation_shortfall": calculation["reservation_shortfall"],
+                }
+            )
+        inbound = _number(calculation["inbound"])
+        if inbound > 0:
+            issues.append(
+                {
+                    "code": "inbound_eta_unavailable",
+                    "inbound": calculation["inbound"],
+                }
+            )
+        spread = max(snapshot_times) - min(snapshot_times)
+        if spread > timedelta(hours=INVENTORY_SNAPSHOT_SPREAD_LIMIT_HOURS):
+            issues.append(
+                {
+                    "code": "inventory_snapshot_time_spread",
+                    "spread_seconds": int(spread.total_seconds()),
+                    "limit_hours": INVENTORY_SNAPSHOT_SPREAD_LIMIT_HOURS,
+                }
+            )
+        try:
+            training_end = date.fromisoformat(str(forecast["training_end"]))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise InventoryPlanningError("planning_forecast_evidence_invalid") from exc
+        oldest_snapshot_date = min(snapshot_times).date()
+        if oldest_snapshot_date < training_end:
+            issues.append(
+                {
+                    "code": "inventory_snapshot_precedes_forecast_training_end",
+                    "oldest_snapshot_date": oldest_snapshot_date.isoformat(),
+                    "forecast_training_end": training_end.isoformat(),
+                }
+            )
+        assumptions = {
+            "available_inventory": {
+                "formula": "max(0,on_hand-reserved)",
+                "reservation_shortfall_formula": "max(0,reserved-on_hand)",
+            },
+            "inbound_availability": (
+                {
+                    "mode": "assumed_available_day_0",
+                    "eta_available": False,
+                    "effect": "plan_quality_degraded",
+                }
+                if inbound > 0
+                else {
+                    "mode": "no_inbound_quantity",
+                    "eta_available": False,
+                    "effect": "none",
+                }
+            ),
+            "inventory_snapshot_spread_limit_hours": (
+                INVENTORY_SNAPSHOT_SPREAD_LIMIT_HOURS
+            ),
+            "service_level_tiers": {
+                _text(level): quantile
+                for level, quantile in SERVICE_LEVEL_QUANTILES.items()
+            },
+            "minimum_safety_stock": "additive_before_order_constraints",
+        }
+        return issues, assumptions
 
     @staticmethod
     def _policy_evidence(policy: InventoryPlanningPolicy) -> dict[str, Any]:
@@ -300,31 +507,43 @@ class InventoryPlanningService:
         snapshot: list[dict[str, Any]],
         policy: InventoryPlanningPolicy,
     ) -> dict[str, Any]:
-        points = sorted(raw_points, key=lambda item: str(item["forecast_date"]))
+        try:
+            points = sorted(raw_points, key=lambda item: str(item["forecast_date"]))
+        except (KeyError, TypeError) as exc:
+            raise InventoryPlanningError("planning_forecast_points_invalid") from exc
         required_days = max(
             policy.supplier_lead_days + policy.review_period_days,
             policy.maximum_stock_days,
         )
         if len(points) < required_days:
             raise InventoryPlanningError("planning_forecast_horizon_insufficient")
-        dates = [date.fromisoformat(str(item["forecast_date"])) for item in points]
+        try:
+            dates = [date.fromisoformat(str(item["forecast_date"])) for item in points]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise InventoryPlanningError("planning_forecast_dates_invalid") from exc
         if len(dates) != len(set(dates)) or any(
             current != previous + timedelta(days=1)
             for previous, current in zip(dates, dates[1:])
         ):
             raise InventoryPlanningError("planning_forecast_dates_invalid")
-        for point in points:
-            p50, p80, p95 = (_number(point[key]) for key in ("p50", "p80", "p95"))
-            if p50 < 0 or not p50 <= p80 <= p95:
-                raise InventoryPlanningError("planning_forecast_quantiles_invalid")
-        quantile = "p50" if policy.service_level <= Decimal("0.50") else (
-            "p80" if policy.service_level <= Decimal("0.80") else "p95"
-        )
+        try:
+            for point in points:
+                p50, p80, p95 = (
+                    _number(point[key]) for key in ("p50", "p80", "p95")
+                )
+                if p50 < 0 or not p50 <= p80 <= p95:
+                    raise InventoryPlanningError("planning_forecast_quantiles_invalid")
+        except (KeyError, TypeError) as exc:
+            raise InventoryPlanningError("planning_forecast_points_invalid") from exc
+        quantile = SERVICE_LEVEL_QUANTILES[policy.service_level]
         demand = [_number(point[quantile]) for point in points]
         on_hand = sum((_number(item["on_hand"]) for item in snapshot), Decimal("0"))
         reserved = sum((_number(item["reserved"]) for item in snapshot), Decimal("0"))
         inbound = sum((_number(item["inbound"]) for item in snapshot), Decimal("0"))
-        available, future_supply = on_hand - reserved, on_hand - reserved + inbound
+        net_available = on_hand - reserved
+        reservation_shortfall = max(Decimal("0"), -net_available)
+        available = max(Decimal("0"), net_available)
+        future_supply = available + inbound
         lead = sum(demand[: policy.supplier_lead_days], Decimal("0"))
         lead_review = sum(
             demand[: policy.supplier_lead_days + policy.review_period_days], Decimal("0")
@@ -345,7 +564,7 @@ class InventoryPlanningService:
             + policy.minimum_safety_stock
         )
         capacity = max(Decimal("0"), maximum_stock - future_supply)
-        recommended = after_multiple
+        recommended: Decimal | None = after_multiple
         if recommended > capacity:
             recommended = (
                 (capacity / policy.order_multiple).to_integral_value(rounding=ROUND_FLOOR)
@@ -353,22 +572,67 @@ class InventoryPlanningService:
             )
             if Decimal("0") < recommended < policy.minimum_order_qty:
                 recommended = Decimal("0")
-        stockout_dates = InventoryPlanningService._stockout_dates(points, future_supply)
-        overstock_risk = future_supply > maximum_stock
-        risk_level = (
-            "critical" if future_supply <= 0 or stockout_dates["p50"] else
-            "high" if stockout_dates["p80"] else
-            "medium" if stockout_dates["p95"] or overstock_risk else "low"
+        stockout_dates, stockout_days = InventoryPlanningService._stockout_evidence(
+            points, future_supply
         )
+        overstock_risk = future_supply > maximum_stock
+        selected_stockout_day = stockout_days[quantile]
+        if future_supply <= 0:
+            risk_level, risk_reason = "critical", "no_future_supply"
+        elif (
+            selected_stockout_day is not None
+            and selected_stockout_day <= policy.supplier_lead_days
+        ):
+            risk_level = "critical"
+            risk_reason = "selected_quantile_depletion_within_lead_time"
+        elif (
+            selected_stockout_day is not None
+            and selected_stockout_day
+            <= policy.supplier_lead_days + policy.review_period_days
+        ):
+            risk_level = "high"
+            risk_reason = "selected_quantile_depletion_within_review_period"
+        elif selected_stockout_day is not None:
+            risk_level = "medium"
+            risk_reason = "selected_quantile_depletion_after_review_within_horizon"
+        elif overstock_risk:
+            risk_level, risk_reason = "medium", "future_supply_above_maximum_stock"
+        else:
+            risk_level = "low"
+            risk_reason = "no_selected_quantile_depletion_or_overstock"
+        quantity_withheld = policy.warehouse_id is not None
+        if quantity_withheld:
+            recommended = None
+            quantity_status = "withheld"
+            quantity_reason = "warehouse_allocation_not_computed"
+        else:
+            quantity_status = "advisory"
+            quantity_reason = None
         values = {
             "selected_quantile": quantile,
             "on_hand": _text(on_hand), "reserved": _text(reserved),
             "inbound": _text(inbound), "available": _text(available),
+            "reservation_shortfall": _text(reservation_shortfall),
             "future_supply": _text(future_supply), "lead_time_demand": _text(lead),
             "lead_review_demand": _text(lead_review), "reorder_point": _text(reorder),
             "target_stock": _text(target), "maximum_stock": _text(maximum_stock),
-            "recommended_order_qty": _text(recommended), "stockout_dates": stockout_dates,
+            "recommended_order_qty": None if recommended is None else _text(recommended),
+            "quantity_status": quantity_status, "quantity_reason": quantity_reason,
+            "stockout_dates": stockout_dates,
             "risk_level": risk_level, "overstock_risk": overstock_risk,
+        }
+        values["risk_evidence"] = {
+            "basis": "selected_service_quantile_time_to_stockout",
+            "selected_quantile": quantile,
+            "selected_quantile_stockout_day": selected_stockout_day,
+            "stockout_day_by_quantile": stockout_days,
+            "supplier_lead_days": policy.supplier_lead_days,
+            "review_period_days": policy.review_period_days,
+            "classification_reason": risk_reason,
+            "scope": (
+                "warehouse_supply_diagnostic_only"
+                if quantity_withheld else "store_aggregate"
+            ),
         }
         values["allocation_boundary"] = {
             "demand_scope": "store_sku",
@@ -378,12 +642,17 @@ class InventoryPlanningService:
             "warehouse_ids": [str(item["warehouse_id"]) for item in snapshot],
             "demand_copy_count": 1,
             "warehouse_allocation": "not_computed",
+            "quantity_recommendation": (
+                "withheld" if quantity_withheld else "store_aggregate_only"
+            ),
         }
-        values["calculation_steps"] = [
+        calculation_steps = [
             {
                 "step": "inventory_aggregation",
                 "on_hand": _text(on_hand), "reserved": _text(reserved),
-                "inbound": _text(inbound), "output": _text(future_supply),
+                "inbound": _text(inbound), "available": _text(available),
+                "reservation_shortfall": _text(reservation_shortfall),
+                "output": _text(future_supply),
             },
             {
                 "step": "quantile_demand", "quantile": quantile,
@@ -397,35 +666,60 @@ class InventoryPlanningService:
                 "minimum": _text(policy.minimum_safety_stock),
                 "reorder_output": _text(reorder), "output": _text(target),
             },
-            {
-                "step": "minimum_order_quantity", "input": _text(raw_order),
-                "minimum": _text(policy.minimum_order_qty), "output": _text(after_moq),
-            },
-            {
-                "step": "order_multiple", "input": _text(after_moq),
-                "multiple": _text(policy.order_multiple), "rounding": "ceiling",
-                "output": _text(after_multiple),
-            },
-            {
-                "step": "maximum_stock_days", "input": _text(after_multiple),
-                "maximum_stock": _text(maximum_stock), "capacity": _text(capacity),
-                "rounding": "floor_to_order_multiple", "output": _text(recommended),
-            },
         ]
+        if quantity_withheld:
+            calculation_steps.extend(
+                {
+                    "step": step,
+                    "status": "not_applied",
+                    "reason": "warehouse_allocation_not_computed",
+                    "output": None,
+                }
+                for step in (
+                    "minimum_order_quantity", "order_multiple", "maximum_stock_days"
+                )
+            )
+        else:
+            calculation_steps.extend(
+                [
+                    {
+                        "step": "minimum_order_quantity", "input": _text(raw_order),
+                        "minimum": _text(policy.minimum_order_qty),
+                        "output": _text(after_moq),
+                    },
+                    {
+                        "step": "order_multiple", "input": _text(after_moq),
+                        "multiple": _text(policy.order_multiple), "rounding": "ceiling",
+                        "output": _text(after_multiple),
+                    },
+                    {
+                        "step": "maximum_stock_days", "input": _text(after_multiple),
+                        "maximum_stock": _text(maximum_stock),
+                        "capacity": _text(capacity),
+                        "rounding": "floor_to_order_multiple",
+                        "output": _text(recommended),
+                    },
+                ]
+            )
+        values["calculation_steps"] = calculation_steps
         return values
 
     @staticmethod
-    def _stockout_dates(
+    def _stockout_evidence(
         points: list[dict[str, Any]], future_supply: Decimal
-    ) -> dict[str, str | None]:
-        results: dict[str, str | None] = {}
+    ) -> tuple[dict[str, str | None], dict[str, int | None]]:
+        dates: dict[str, str | None] = {}
+        days: dict[str, int | None] = {}
         for quantile in ("p50", "p80", "p95"):
             cumulative = Decimal("0")
-            depletion = None
-            for point in points:
+            depletion_date = None
+            depletion_day = None
+            for day_number, point in enumerate(points, start=1):
                 cumulative += _number(point[quantile])
                 if future_supply <= 0 or cumulative >= future_supply:
-                    depletion = str(point["forecast_date"])
+                    depletion_date = str(point["forecast_date"])
+                    depletion_day = day_number
                     break
-            results[quantile] = depletion
-        return results
+            dates[quantile] = depletion_date
+            days[quantile] = depletion_day
+        return dates, days
