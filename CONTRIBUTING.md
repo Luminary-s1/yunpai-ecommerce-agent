@@ -279,7 +279,7 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | 27 | 闫睿涵 | M4 / 已合并进 `main` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已合并 |
 | 28 | M5-R | Traffic Lab / `main` | creative asset、listing revision、metric bucket、experiment/window/analysis run | 已合并（WP1–WP5） |
 | **29** | M6-R | Forecasting / `main` | demand fact、forecast policy/run/backtest/point/anomaly | WP1–WP2 已合并；WP5 Eval 留待后续 |
-| **30** | M6-R | Inventory Planning / 待建实现分支 | planning policy、inventory plan | 已预留，未实现 |
+| **30** | M6-R | Inventory Planning / `codex/m6r-wp3-inventory-planning` | planning policy、inventory plan | 已预留，待合并 |
 | 31+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
