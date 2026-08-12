@@ -362,3 +362,183 @@ P2-1/P2-2/P2-3 **不阻断本机候选**，但应在合入评审里明示；**�
 
 停在本会话，等下一条追问或是否要把 P2 当合入前必修。
 
+## Round 2 — fixes, independent re-verification, and final verdict
+
+### Codex prompt (verbatim)
+
+~~~text
+继续同一个 M6-R WP1–WP5 独立对抗验收会话，不得另开会话，也不要把开发者陈述当成证据。
+
+你首轮报告了 P2-1（inventory_plans 损坏 JSON 导致两个 GET 500）、P2-2（WP5 覆盖率单侧，下降序列零宽仍过门）、P2-3（forecast_policies 同时间戳缺显式 rowid tie-break）。我已按 evidence-first 先补失败测试，再做最小修复，当前 HEAD 为 d3b8e57822df5d228cb69e0ecda33af7578b7515，提交为：
+d3b8e57 fix(forecasting): close adversarial review gaps
+
+开发者红态证据（请独立复验，不要直接采信）：
+1. 零宽过预报反例：期望 P80/P95 coverage=0，修复前实际 1.0/1.0，失败。
+2. INSERT 损坏 stockout_dates_json 后，latest inventory-plan GET 修复前为 HTTP 500，失败。
+3. 同 active_from/created_at 插入 older=zzz、newer=aaa，并增加合法索引改变扫描顺序及 ANALYZE；修复前 resolve 返回 older zzz，失败。
+首次合跑结果为 2 failed, 1 passed；补强同戳反例单跑为 1 failed。
+
+实现：
+- InventoryPlanningService.get_plan 对 8 个 JSON 证据字段统一做 json.loads + 预期 list/dict 类型校验，失败抛 inventory_plan_evidence_invalid；/v1/forecasting/risks 改为复用统一 call() 映射，因此两个读 API 应为 409。
+- ForecastRunService.resolve_policy 在 active_from DESC, created_at DESC 后显式增加 rowid DESC。
+- WP5 保留 P80/P95“上分位需求”的单侧覆盖语义，但增加 sharpness 反证：若 backtest 存在非零误差且生产区间宽度 <= 0，该 level 的 coverage 直接为 0。没有采用 abs(actual-predicted)<=width，因为那会把上分位数偷换成双侧置信带；实际扩展回归证明这种改法令 promotion_spikes P95 从 0.964 降为 0.714，并使两个 Eval 测试失败。
+
+开发者绿态证据（仍请独立复验）：
+- 三项定点：3 passed。
+- forecasting engine/run/inventory/WP4/WP5 五文件：54 passed。
+- git diff --check 通过；修复提交 120 additions / 14 deletions，小于 500 行。
+- 提交后工作树干净。
+
+请现在在本会话内独立完成修复复验并给最终裁决：
+1. 审阅 d3b8e57 相对 1d4fa83 的完整 diff，检查修复是否引入 API 契约、schema、路由、自动动作、租户隔离或证据类型回归。
+2. 独立重做三项原始复现，尤其：
+   - 损坏 inventory_plans JSON 时 inventory-plan 与 /risks 两个路径都必须是 409，detail 精确为 inventory_plan_evidence_invalid；再试一个“合法 JSON 但错误结构类型”的字段。
+   - 用不同有效索引/扫描顺序扰动同戳策略解析，必须仍选择最新 rowid；同时确认 SKU override 仍优先于 store default。
+   - 把存在系统性过预报的 P80/P95 压到 P50，必须使 coverage Gate 失败；干净十场景 runner 必须仍 PASS。请主动攻击“非零但极小宽度”“完全无误差时零宽”两边，判断 sharpness 约束是否真正双向可证伪；若你认为样本内覆盖仍构成阻断，请给出可执行反例和严重度，不要只重复首轮描述。
+3. 独立运行相关聚焦门禁、Eval runner、compileall、git diff --check、project-to-act --validate，并用规定断网代理环境重新运行全量 pytest：
+NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost ALL_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 .venv/bin/python -m pytest -q
+4. 确认首轮五项 mutation 已还原、当前工作树干净，并自行做至少一个针对本轮修复的新 mutation；mutation 必须先让对应门禁失败，随后还原并复验。
+5. 最终回复请完整列出：独立命令/原始结果摘要、新 probe/mutation、剩余发现及严重度、明确 PASS/FAIL。若 PASS，明确区分“代码级本机候选/可进入合入评审”与尚未豁免的 main 合入、服务器 v30、真实数据、长稳、生产放行；若 FAIL，给出最小失败证据和必须修复项。
+
+不要替我改代码或提交；停留在这个同一会话等待后续追问。
+~~~
+
+### Grok response (verbatim)
+
+# M6-R WP1–WP5 修复复验 · 最终裁决
+
+修复提交 `d3b8e57` 相对 `1d4fa83` 的代码已独立审阅并复验。本轮没有采信开发者红/绿叙述；红态是把生产文件退回 `1d4fa83` 后自己跑出来的。
+
+**HEAD 说明（非本验收人操作）：** 复验开始时 HEAD 为 `d3b8e57`。红态还原后发现分支上多了一个 `aaadb46 docs(forecasting): preserve Grok review round one`（作者 LuckyE），只新增 `docs/works/14-feature-m6r-forecast-eval/GROK_INDEPENDENT_REVIEW.md`。`src/`、`scripts/`、`tests/` 与 `d3b8e57` 的 diff 为空。当前工作树干净。未切分支、未改代码、未提交。
+
+---
+
+## 1. `d3b8e57` vs `1d4fa83` 审阅
+
+7 文件，+120 / −14。生产改动只有四处：
+
+| 文件 | 行为 |
+|---|---|
+| `planning.py` | `get_plan` 对 8 个 JSON 字段 `loads` + `list`/`dict` 类型校验，失败 `inventory_plan_evidence_invalid` |
+| `forecasting_api.py` | `GET /risks` 改走统一 `call()` |
+| `run_service.py` | `resolve_policy` 增加 `rowid DESC` |
+| `forecast_eval_runtime.py` | 有非零误差且 width≤0 时该 level coverage=0 |
+
+未改 schema、依赖、LangGraph/intent/prompt、模块登记、采购/付款/库存写路径。成功读路径的响应形状不变；失败路径从 500 收成 409，是错误契约补全，不是成功契约破坏。租户过滤仍在 `tenant_id=?` 查询上。
+
+---
+
+## 2. 红态独立复验（生产退回 `1d4fa83`，测试留在修复后）
+
+`git checkout 1d4fa83 --` 四个生产文件后：
+
+```text
+3 failed in 1.34s
+```
+
+| 测试 | 修复前实测 |
+|---|---|
+| `test_interval_coverage_rejects_zero_width_overforecast` | `{'p80': 1.0, 'p95': 1.0}` ≠ `{0.0, 0.0}` |
+| `test_forecasting_api_rejects_corrupt_inventory_plan_as_domain_error` | **HTTP 500** ≠ 409 |
+| `test_policy_resolution_breaks_equal_timestamps_by_newest_rowid` | resolve 得到 **`forecast-same-time-zzz`**（older） |
+
+随后 `git checkout HEAD --` 四个文件，工作树恢复干净。这与“先补失败测试”一致；最终测试集对旧实现是 **3 failed**（比开发者第一次合跑的 2 failed / 1 passed 更严，因为同戳用例后来加了索引扰动）。
+
+---
+
+## 3. 绿态三项原始复现 + 额外攻击
+
+### P2-1 损坏 JSON / 错误结构
+
+独立探针 INSERT 后 GET（`raise_server_exceptions=False`）：
+
+| 载荷 | latest inventory-plan | `/risks` |
+|---|---|---|
+| `stockout_dates_json='{'` | **409** `inventory_plan_evidence_invalid` | **409** 同 detail |
+| 合法 JSON、错误类型 `stockout_dates_json='[]'`（期望 dict） | **409** 同 detail | **409** 同 detail |
+| `assumptions_json='[1]'`（期望 dict） | **409** 同 detail | — |
+
+定点测试：`3 passed in 1.17s`。
+
+### P2-3 同戳 + 扫序
+
+在 store default + older `zzz` + newer `aaa`（同一 `active_from/created_at`）上建 `policy_version ASC` **和** `DESC` 索引并 `ANALYZE`。`EXPLAIN QUERY PLAN` 走了 `probe_scan_policy_version_asc`，但有 `USE TEMP B-TREE FOR ORDER BY`，最终仍选 **`forecast-same-time-aaa` / 28 天**。无 SKU override 的 SKU 仍落到 store default。SKU 优先未被 `rowid DESC` 破坏。
+
+### P2-2 覆盖率 sharpness
+
+| 情形 | 独立 `_interval_coverage` |
+|---|---|
+| 过预报 + P80/P95=P50（width=0） | **p80=0, p95=0**（Gate 会失败） |
+| 欠预报 + 零宽 | **0 / 0** |
+| 完全无误差 + 零宽 | **1.0 / 1.0**（应通过） |
+| 过预报 + width=`1e-15` | **仍 1.0 / 1.0** |
+
+干净十场景 CLI：`exit 0`，`passed=true`，10/10，32 次生产调用，overlap=[]。`promotion_spikes` P95 仍为 **0.964**（未改成双侧 `abs`）。
+
+**sharpness 是否双向可证伪：**
+- 有误差 × 零宽 → 失败：可证伪。
+- 无误差 × 零宽 → 通过：可证伪。
+- 有误差 × **非零但极小正宽度**：单侧过预报仍 100% 覆盖。这不是“零宽过预报仍过门”的回归，而是 tripwire 只卡 `width<=0`。生产宽度来自残差分位，有非零 \|残差\| 时不会塌成 0。**不构成阻断。** 标 P3 残余，见下。
+
+样本内单侧覆盖仍是上分位需求语义，不是双侧 CI。首轮那个可执行反例（零宽过预报过门）已被新 Gate 抓住；没有新的阻断级反例。
+
+---
+
+## 4. 独立命令与原始结果
+
+| 命令 | 结果 |
+|---|---|
+| 旧生产 × 三项新测试 | **3 failed**（红态） |
+| 三项定点（修复后） | **3 passed in 1.17s** |
+| engine + run + inventory + WP4 + WP5 | **54 passed in 11.22s** |
+| CLI `scripts/run_forecast_eval.py evals/forecasting/forecast_eval_v1.json /tmp/m6r_rereview_cli.sqlite3` | **exit 0**，`passed=true` |
+| `compileall -q src scripts/run_forecast_eval.py scripts/forecast_eval_runtime.py` | exit 0 |
+| `git diff --check` | exit 0 |
+| `project-to-act --validate` | `valid=true`，`issues=[]` |
+| **全量** 规定代理 pytest | **730 passed, 1 xfailed in 296.80s**（首轮 727 + 本轮 3 个新测试） |
+
+首轮五项 mutation 未留在树里：相对 `d3b8e57` 的 `src/scripts/tests` 无脏 diff；当前 `git status --porcelain` 空。
+
+---
+
+## 5. 本轮新 mutation
+
+去掉 sharpness 分支（保留单侧 `actual <= predicted + width`）：
+
+```text
+test_interval_coverage_rejects_zero_width_overforecast
+assert {'p80': 1.0, 'p95': 1.0} == {'p80': 0.0, 'p95': 0.0}
+1 failed
+```
+
+`git checkout -- scripts/forecast_eval_runtime.py` 后同测试 + WP5 总 Gate：**2 passed**。工作树再次干净。
+
+---
+
+## 6. 剩余发现
+
+| 级 | 项 | 结论 |
+|---|---|---|
+| — | P2-1 / P2-2 / P2-3 | **已关闭**（独立红/绿 + 探针） |
+| **P3** | 过预报 + 极小正宽度仍 100% 覆盖 | sharpness 只卡 `width<=0`。不阻断本机候选或合入评审。若以后要加强，应对 `width` 相对 \|误差\| 设下限，而不是改成 `abs` 双侧带。 |
+| P3 | HEAD 现为文档提交 `aaadb46` | 不改变裁决；生产代码仍是 `d3b8e57`。 |
+
+无 P0/P1。无新的 API/schema/路由/自动动作回归。
+
+---
+
+## 7. 最终裁决：**PASS**
+
+| 层 | 状态 |
+|---|---|
+| 1. M6-R 代码级本机候选 | **PASS**（WP1–WP5 + 本轮三项对抗修复） |
+| 2. 可进入合入评审 | **可以**（与未入 main 的 WP4 **整链**一起） |
+| 3. main 合入 | **未授权 / 未豁免** |
+| 4. 服务器 schema v30 | **未验证 / 未豁免** |
+| 5. 真实数据 | **未验证 / 未豁免** |
+| 6. 24/72h 长稳 | **未验证 / 未豁免** |
+| 7. 生产放行 | **未授权** |
+
+必须修复项：**无。**
+
+停在本会话，等后续追问。
