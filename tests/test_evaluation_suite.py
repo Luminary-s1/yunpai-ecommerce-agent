@@ -34,10 +34,10 @@ def test_questions_have_required_fields() -> None:
 
 
 def test_run_evaluation_returns_report(svc: GraphRetrievalService) -> None:
-    """评测返回报告，通过率 ≥ 0.5。"""
+    """评测返回报告，通过率 ≥ 0.9（对齐 scheduler 门禁，不再 0.5 松闸）。"""
     report = run_evaluation(svc)
     assert report["total"] >= 30
-    assert report["pass_rate"] >= 0.5, f"通过率 {report['pass_rate']} 过低"
+    assert report["pass_rate"] >= 0.9, f"通过率 {report['pass_rate']} 过低"
 
 
 def test_evaluation_has_negative_cases() -> None:

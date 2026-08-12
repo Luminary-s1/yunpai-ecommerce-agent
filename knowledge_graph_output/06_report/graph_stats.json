@@ -6,7 +6,7 @@
     "attribute": 107,
     "policy": 9,
     "script": 52,
-    "faq": 60,
+    "faq": 63,
     "rule": 9,
     "rule_extended": 8
   },
@@ -17,6 +17,6 @@
     "refers_to": 64,
     "related_to": 52
   },
-  "total_nodes": 307,
+  "total_nodes": 310,
   "total_rels": 285
 }

@@ -2,14 +2,14 @@
 #
 # 用法：
 #   docker compose up -d            # 启动 Neo4j
-#   docker compose exec neo4j bin/cypher-shell -u neo4j -p yunpai123 \
+#   docker compose exec neo4j bin/cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-change-me} \
 #     -f /var/lib/neo4j/import/kg/00_setup.cypher
 #   （依次执行 01_load_nodes.cypher → 02_load_rels.cypher）
 #
 # 连接参数：
 #   HTTP:  http://localhost:7474
 #   Bolt:  bolt://localhost:7687
-#   账号:  neo4j / yunpai123（仅本地开发；生产请改 NEO4J_AUTH）
+#   账号:  neo4j / ${NEO4J_PASSWORD:-change-me}（与 .env NEO4J_PASSWORD 同源）
 #
 # 导入文件挂载：knowledge_graph_output/04_import → /var/lib/neo4j/import/kg
 # （Cypher 里 file:///kg/... 即指向该目录）
@@ -19,8 +19,9 @@ services:
     image: neo4j:5-community
     container_name: yunpai-neo4j
     environment:
-      # 本地开发密码；生产/验收请通过 .env 或环境变量覆盖
-      - NEO4J_AUTH=neo4j/yunpai123
+      # 密码统一走 .env（NEO4J_PASSWORD），compose 与 Settings 同源；
+      # 本地开发默认 change-me，生产/验收必须通过 .env 覆盖
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-change-me}
       - NEO4J_server_memory_heap_initial__size=256m
       - NEO4J_server_memory_heap_max__size=512m
     ports:

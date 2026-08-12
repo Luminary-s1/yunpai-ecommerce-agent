@@ -13,7 +13,7 @@
 | 属性 Attribute | 107 | SPU 级 + SKU 级（含真实商品属性枚举） |
 | 售后政策 Policy | 9 | warranty/return/logistics/price_protection |
 | 客服话术 Script | 52 | 知识源 SOP 直接映射 |
-| 常见问答 FAQ | 60 | 话术 52 + 种子 4 + 人工补充 4 |
+| 常见问答 FAQ | 63 | 话术 52 + 种子 4 + 人工补充 7 |
 | 行业规则 Rule | 17 | rule 9 + rule_extended 8 |
 | **核心实体合计** | **71** | **覆盖率分母（§6.3，已更新含真实商品）** |
 

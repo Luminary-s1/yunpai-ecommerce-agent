@@ -1,24 +1,24 @@
 round,rel_type,source,target,expected,evidence,annotation,verifier,verified_at,confidence,generated_by
-1,BELONGS_TO,REAL-APP-02,apparel,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,QC-KT-17,electric_kettle,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,X-M1-BLACK,digital_audio,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,REAL-HUM-01,humidifier,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,REAL-FAN-01,air_circulation_fan,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,Y-D01-L,apparel,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,QC-VC-A1,cordless_vacuum,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,Y-D01-S,apparel,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,REAL-AUD-01,digital_audio,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,BELONGS_TO,Y-D01-M,apparel,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,REAL-APP-02,apparel,TRUE,product.json: REAL-APP-02（服饰）→ category apparel（服饰），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,QC-KT-17,electric_kettle,TRUE,product.json: QC-KT-17（电热水壶）→ category electric_kettle（电热水壶），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,X-M1-BLACK,digital_audio,TRUE,product.json: X-M1-BLACK（数码音频）→ category digital_audio（数码音频），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,REAL-HUM-01,humidifier,TRUE,product.json: REAL-HUM-01（加湿器）→ category humidifier（加湿器），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,REAL-FAN-01,air_circulation_fan,TRUE,product.json: REAL-FAN-01（循环风扇）→ category air_circulation_fan（循环风扇），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,Y-D01-L,apparel,TRUE,product.json: Y-D01-L（服饰）→ category apparel（服饰），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,QC-VC-A1,cordless_vacuum,TRUE,product.json: QC-VC-A1（无线吸尘器）→ category cordless_vacuum（无线吸尘器），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,Y-D01-S,apparel,TRUE,product.json: Y-D01-S（服饰）→ category apparel（服饰），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,REAL-AUD-01,digital_audio,TRUE,product.json: REAL-AUD-01（数码音频）→ category digital_audio（数码音频），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,BELONGS_TO,Y-D01-M,apparel,TRUE,product.json: Y-D01-M（服饰）→ category apparel（服饰），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,HAS_ATTR,SPU-AUD-02,SPU-AUD-02|brand,TRUE,network,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,HAS_ATTR,SPU-APP-01,SPU-APP-01|brand,TRUE,network,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,HAS_ATTR,X-P2-BLACK,X-P2-BLACK|battery_mah,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,X-P2-BLACK,X-P2-BLACK|battery_mah,TRUE,attribute.json: X-P2-BLACK|battery_mah 属性定义（battery_mah），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,HAS_ATTR,X-SPU-M1,X-SPU-M1|brand,TRUE,manual,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,HAS_ATTR,QC-SPU-VC1,QC-SPU-VC1|warranty_months,TRUE,fixture,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,HAS_ATTR,QC-KT-17,QC-KT-17|capacity_l,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,QC-KT-17,QC-KT-17|capacity_l,TRUE,attribute.json: QC-KT-17|capacity_l 属性定义（capacity_l），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,HAS_ATTR,X-SPU-M1,X-SPU-M1|warranty_months,TRUE,manual,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,HAS_ATTR,REAL-KET-01,REAL-KET-01|capacity_l,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,REAL-KET-01,REAL-KET-01|capacity_l,TRUE,attribute.json: REAL-KET-01|capacity_l 属性定义（capacity_l），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,HAS_ATTR,SPU-KET-01,SPU-KET-01|brand,TRUE,network,人工审核通过,人工审核,2026-08-12,1.0,rule
-1,HAS_ATTR,Y-D01-L,Y-D01-L|color,TRUE,,人工审核通过,人工审核,2026-08-12,1.0,rule
+1,HAS_ATTR,Y-D01-L,Y-D01-L|color,TRUE,attribute.json: Y-D01-L|color 属性定义（color），rule 生成,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,APPLIES_TO,RETURN-38e401d2,apparel,TRUE,jianghu.taobao.com/detail/47301_58660388 | 七天无理由退货,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,APPLIES_TO,RETURN-38e401d2,digital_audio,TRUE,jianghu.taobao.com/detail/47301_58660388 | 七天无理由退货,人工审核通过,人工审核,2026-08-12,1.0,rule
 1,APPLIES_TO,LOGISTICS-70a98f4b,digital_power,TRUE,rule.suning.com/ruleInfo/ruleInfoDetail/GZ100004233.htm | 发货时效与延迟赔付,人工审核通过,人工审核,2026-08-12,1.0,rule

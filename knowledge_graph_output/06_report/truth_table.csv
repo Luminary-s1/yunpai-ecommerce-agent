@@ -7,6 +7,22 @@ fixture,QC-SPU-FN1,Product(SPU),,,SPU QC-SPU-FN1（晴川循环净化风扇 D1�
 manual,X-SPU-M1,Product(SPU),,,SPU X-SPU-M1（星脉蓝牙耳机 X-M1 云白色，价格 299.00）
 manual,X-SPU-P2,Product(SPU),,,SPU X-SPU-P2（星脉充电宝 X-P2 10000mAh 黑色，价格 129.00）
 manual,Y-SPU-D01,Product(SPU),,,SPU Y-SPU-D01（云织羽绒服 Y-D01 黑色 S 码，价格 599.00）
+network,SPU-AFR-01,Product(SPU),,,SPU SPU-AFR-01（格兰仕 Galanz KZ40-108，价格 329.00）
+network,SPU-AFR-02,Product(SPU),,,SPU SPU-AFR-02（美的 Midea KZ25E101，价格 249.00）
+network,SPU-VAC-01,Product(SPU),,,SPU SPU-VAC-01（戴森 Dyson V15 Detect Fluffy，价格 3490.00）
+network,SPU-VAC-02,Product(SPU),,,SPU SPU-VAC-02（德尔玛 Deerma DX700，价格 299.00）
+network,SPU-HUM-01,Product(SPU),,,SPU SPU-HUM-01（德尔玛 Deerma F628S，价格 169.00）
+network,SPU-HUM-02,Product(SPU),,,SPU SPU-HUM-02（小熊 Bear JSQ-C30Q1，价格 129.00）
+network,SPU-KET-01,Product(SPU),,,SPU SPU-KET-01（苏泊尔 SUPOR SW-17J63B，价格 159.00）
+network,SPU-KET-02,Product(SPU),,,SPU SPU-KET-02（美的 Midea MK-SH15Colour102，价格 79.00）
+network,SPU-FAN-01,Product(SPU),,,SPU SPU-FAN-01（格力 GREE FXDZ-2307Bg5，价格 499.00）
+network,SPU-FAN-02,Product(SPU),,,SPU SPU-FAN-02（美的 Midea SAC35CR，价格 199.00）
+network,SPU-AUD-01,Product(SPU),,,SPU SPU-AUD-01（捷波朗 Jabra Elite 7 Active，价格 1299.00）
+network,SPU-AUD-02,Product(SPU),,,SPU SPU-AUD-02（QCY QCY H3，价格 299.00）
+network,SPU-PWR-01,Product(SPU),,,SPU SPU-PWR-01（小米 Xiaomi 移动电源 3 20000mAh，价格 129.00）
+network,SPU-PWR-02,Product(SPU),,,SPU SPU-PWR-02（罗马仕 ROMOSS 10000mAh 22.5W，价格 59.00）
+network,SPU-APP-01,Product(SPU),,,SPU SPU-APP-01（雪中飞 雪中飞 XZF2155，价格 499.00）
+network,SPU-APP-02,Product(SPU),,,SPU SPU-APP-02（茵曼 茵曼 INMAN W2302，价格 499.00）
 fixture,QC-AF5-WHITE,SKU,,,SKU QC-AF5-WHITE（归属 QC-SPU-AF5，品类 空气炸锅）
 fixture,QC-AF5-GREEN,SKU,,,SKU QC-AF5-GREEN（归属 QC-SPU-AF5，品类 空气炸锅）
 fixture,QC-VC-A1,SKU,,,SKU QC-VC-A1（归属 QC-SPU-VC1，品类 无线吸尘器）
@@ -19,6 +35,22 @@ manual,X-P2-BLACK,SKU,,,SKU X-P2-BLACK（归属 X-SPU-P2，品类 数码电源�
 manual,Y-D01-S,SKU,,,SKU Y-D01-S（归属 Y-SPU-D01，品类 服饰）
 manual,Y-D01-M,SKU,,,SKU Y-D01-M（归属 Y-SPU-D01，品类 服饰）
 manual,Y-D01-L,SKU,,,SKU Y-D01-L（归属 Y-SPU-D01，品类 服饰）
+network,REAL-AFR-01,SKU,,,SKU REAL-AFR-01（归属 SPU-AFR-01，品类 空气炸锅）
+network,REAL-AFR-02,SKU,,,SKU REAL-AFR-02（归属 SPU-AFR-02，品类 空气炸锅）
+network,REAL-VAC-01,SKU,,,SKU REAL-VAC-01（归属 SPU-VAC-01，品类 吸尘器）
+network,REAL-VAC-02,SKU,,,SKU REAL-VAC-02（归属 SPU-VAC-02，品类 吸尘器）
+network,REAL-HUM-01,SKU,,,SKU REAL-HUM-01（归属 SPU-HUM-01，品类 加湿器）
+network,REAL-HUM-02,SKU,,,SKU REAL-HUM-02（归属 SPU-HUM-02，品类 加湿器）
+network,REAL-KET-01,SKU,,,SKU REAL-KET-01（归属 SPU-KET-01，品类 电水壶）
+network,REAL-KET-02,SKU,,,SKU REAL-KET-02（归属 SPU-KET-02，品类 电水壶）
+network,REAL-FAN-01,SKU,,,SKU REAL-FAN-01（归属 SPU-FAN-01，品类 循环风扇）
+network,REAL-FAN-02,SKU,,,SKU REAL-FAN-02（归属 SPU-FAN-02，品类 循环风扇）
+network,REAL-AUD-01,SKU,,,SKU REAL-AUD-01（归属 SPU-AUD-01，品类 蓝牙耳机）
+network,REAL-AUD-02,SKU,,,SKU REAL-AUD-02（归属 SPU-AUD-02，品类 蓝牙耳机）
+network,REAL-PWR-01,SKU,,,SKU REAL-PWR-01（归属 SPU-PWR-01，品类 移动电源）
+network,REAL-PWR-02,SKU,,,SKU REAL-PWR-02（归属 SPU-PWR-02，品类 移动电源）
+network,REAL-APP-01,SKU,,,SKU REAL-APP-01（归属 SPU-APP-01，品类 羽绒服）
+network,REAL-APP-02,SKU,,,SKU REAL-APP-02（归属 SPU-APP-02，品类 羽绒服）
 catalog,home_appliance,Category,,,品类 home_appliance（小家电，父级 无）
 catalog,air_fryer,Category,,,品类 air_fryer（空气炸锅，父级 home_appliance）
 catalog,cordless_vacuum,Category,,,品类 cordless_vacuum（无线吸尘器，父级 home_appliance）
@@ -34,7 +66,7 @@ fixture,WARR-00ca880e,Policy,,,政策 WARR-00ca880e（warranty，24个月整机�
 network,RETURN-38e401d2,Policy,,,政策 RETURN-38e401d2（return，七天无理由退货）
 network,PRICE-cf259e1c,Policy,,,政策 PRICE-cf259e1c（price_protection，价格保护（分场景））
 network,WARR-1a256956,Policy,,,政策 WARR-1a256956（warranty，小家电整机保修1年）
-network,RETURN-a041c044,Policy,,,政策 RETURN-a041c044（return，数码商品退换货）
+network,RETURN-9d637afd,Policy,,,政策 RETURN-9d637afd（return，数码商品退换货）
 network,RETURN-2d243e76,Policy,,,政策 RETURN-2d243e76（return，服饰鞋帽退换货）
 network,LOGISTICS-70a98f4b,Policy,,,政策 LOGISTICS-70a98f4b（logistics，发货时效与延迟赔付）
 manual,WARR-b17b433a,Policy,,,政策 WARR-b17b433a（warranty，数码产品整机保修1年）
