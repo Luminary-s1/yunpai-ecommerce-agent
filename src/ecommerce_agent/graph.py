@@ -344,6 +344,13 @@ def build_graph(
         }
 
     def retrieve(state: AgentState) -> dict[str, Any]:
+        # M6 基线：代词轮继承上轮 trusted subject（对齐 origin/main retrieve）
+        effective_context = dict(state.get("context") or {})
+        previous_subject = contexts.latest_subject(
+            state["tenant_id"], state["session_id"]
+        )
+        for key, value in previous_subject.items():
+            effective_context.setdefault(key, value)
         # P1-2 可观测性：记录检索耗时
         from .knowledge_engine.observability import get_observer
         observer = get_observer()
@@ -355,7 +362,7 @@ def build_graph(
         if not scope_decision.allowed:
             observer.record_search(
                 tenant_id=state["tenant_id"],
-                store_id=state["context"].get("store_id") or state["context"].get("shop_id") or "",
+                store_id=effective_context.get("store_id") or effective_context.get("shop_id") or "",
                 query=state["normalized_input"],
                 hits=0,
                 guard_blocks=0,
@@ -378,14 +385,14 @@ def build_graph(
                 min_score=settings.rag_min_score,
                 intent=None,
                 tenant_id=state["tenant_id"],
-                store_id=state["context"].get("store_id") or state["context"].get("shop_id"),
-                sku_id=state["context"].get("sku_id"),
+                store_id=effective_context.get("store_id") or effective_context.get("shop_id"),
+                sku_id=effective_context.get("sku_id"),
                 rollout_unit=state["session_id"],
             )
         except Exception as exc:
             observer.record_search(
                 tenant_id=state["tenant_id"],
-                store_id=state["context"].get("store_id") or state["context"].get("shop_id") or "",
+                store_id=effective_context.get("store_id") or effective_context.get("shop_id") or "",
                 query=state["normalized_input"],
                 hits=0,
                 failed=True,
@@ -459,6 +466,7 @@ def build_graph(
         )
         return {
             "route": "build_decision_context",
+            "context": effective_context,
             "retrieved": documents,
             "citations": [document["id"] for document in documents],
             "trace": [
