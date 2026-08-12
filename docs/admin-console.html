@@ -252,6 +252,7 @@
         <button class="active" data-view="overview">经营总览</button>
         <button data-view="service">智能客服</button>
         <button data-view="commerce">商品库存</button>
+        <button data-view="forecasting">需求预测</button>
         <button data-view="orders">订单售后</button>
         <button data-view="competitive">竞品分析</button>
         <button data-view="ops">运营辅助</button>
@@ -355,6 +356,27 @@
           <div class="grid kpis" id="commerceKpis"></div>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>商品事实</h3><span class="muted" id="catalogAsOf"></span></div><div class="table-wrap"><table><thead><tr><th>SKU</th><th>商品</th><th>店铺</th><th>售价</th><th>状态</th><th>版本</th><th>数据时间</th></tr></thead><tbody id="catalogRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>库存风险</h3></div><div class="table-wrap"><table><thead><tr><th>SKU</th><th>仓库</th><th>可售</th><th>覆盖天数</th><th>风险</th><th>建议补货</th><th>数据时间</th></tr></thead><tbody id="inventoryRows"></tbody></table></div></article>
+        </section>
+
+        <section class="view" id="view-forecasting">
+          <div class="section-head">
+            <div><h2>需求预测与库存风险</h2><p>读取固化需求、区间预测、回测与 advisory 库存计划</p></div>
+            <div class="toolbar"><input class="input" id="forecastStore" value="virtual-shop-001" placeholder="店铺 ID"><input class="input" id="forecastSku" value="YP-SKU-001" placeholder="SKU"><button class="button" id="loadForecastEvidence">查询证据</button><button class="button primary" id="runForecast">显式运行预测</button></div>
+          </div>
+          <div class="notice">页面加载与查询只读取固化证据；预测与库存计划仅在管理员点击“显式运行预测”后生成，不执行采购、付款或库存调整。</div>
+          <div class="grid kpis" id="forecastKpis"></div>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>历史日需求</h3><span class="muted" data-forecast-field="data_quality" id="forecastDemandQuality">尚无数据</span></div>
+            <div class="table-wrap"><table><thead><tr><th data-forecast-field="historical_demand">业务日 / 需求</th><th>订单</th><th>库存截断</th><th>质量标记</th><th>事实版本</th></tr></thead><tbody id="forecastDemandRows"></tbody></table></div>
+          </article>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>逐日预测区间与库存线</h3><span class="muted" id="forecastRunEvidence">尚无固化 run</span></div>
+            <div class="table-wrap"><table><thead><tr><th>预测日</th><th data-forecast-field="forecast_interval">P50 / P80 / P95</th><th data-forecast-field="inventory_line">预测库存线</th><th data-forecast-field="stockout_date">预计缺货日期</th></tr></thead><tbody id="forecastPointRows"></tbody></table></div>
+          </article>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel"><div class="panel-head"><h3 data-forecast-field="backtest">Rolling backtest</h3></div><div class="table-wrap"><table><thead><tr><th>模型 / Origin</th><th>训练截止</th><th>预测窗口</th><th>指标 / 失败理由</th></tr></thead><tbody id="forecastBacktestRows"></tbody></table></div></article>
+            <article class="panel"><div class="panel-head"><h3 data-forecast-field="recommended_quantity">库存建议与风险</h3></div><div class="panel-body stack" data-forecast-field="data_quality" id="forecastRiskDetail"><div class="empty">暂无固化库存计划</div></div></article>
+          </div>
         </section>
 
         <section class="view" id="view-orders">
@@ -847,6 +869,10 @@
       simulationReport: null,
       trafficInsights: null,
       trafficExperimentDetail: null,
+      forecastDemand: null,
+      forecastRun: null,
+      forecastPlan: null,
+      forecastRisks: [],
       opsRecords: [],
       opsReport: null,
       opsCopy: null,
@@ -855,7 +881,7 @@
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
 
-    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
+    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', forecasting: '需求预测', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
     const sourceLabels = { api:'API 会话', channel:'渠道会话', simulation:'虚拟验收', evaluation:'隔离评测' };
     const $ = (id) => document.getElementById(id);
 
@@ -1849,6 +1875,59 @@
       }));
     }
 
+    function renderForecasting() {
+      const facts = state.forecastDemand?.facts || [], forecast = state.forecastRun, plan = state.forecastPlan;
+      const quality = state.forecastDemand?.quality_summary || {};
+      $('forecastKpis').innerHTML = [
+        ['历史日', facts.length, `demand-v1 · ${quality.degraded ? '降级' : '标准'}`],
+        ['预测状态', forecast?.status || '未运行', forecast?.champion_model || '无 champion'],
+        ['计划质量', plan?.plan_quality || '无计划', plan?.quantity_status || '无建议'],
+        ['风险', plan?.risk_level || '-', `${state.forecastRisks.length} 个 SKU/仓级最新计划`]
+      ].map(([label,value,meta]) => `<div class="kpi"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(value)}</span><span class="meta">${escapeHtml(meta)}</span></div>`).join('');
+      $('forecastDemandQuality').textContent = facts.length ? `${quality.degraded ? 'degraded' : 'standard'} · ${(quality.issue_codes || []).join(', ') || '无质量问题'}` : '尚无数据';
+      $('forecastDemandRows').innerHTML = facts.length ? facts.map((item) => `<tr><td><strong>${escapeHtml(item.business_date)}</strong><div>${escapeHtml(item.eligible_units ?? '-')} 件</div></td><td>${escapeHtml(item.order_count ?? '-')}</td><td>${escapeHtml(item.stockout_flag)}<div class="muted">可售 ${escapeHtml(item.available_stock ?? '未知')}</div></td><td>${(item.quality_flags || []).map(escapeHtml).join('<br>') || '-'}</td><td>${escapeHtml(item.demand_policy_version)} / ${escapeHtml(item.fact_version)}</td></tr>`).join('') : '<tr><td colspan="5"><div class="empty">暂无历史需求事实</div></td></tr>';
+      $('forecastRunEvidence').textContent = forecast ? `${forecast.run_id} · ${forecast.forecast_policy_version} · ${forecast.status}` : '尚无固化 run';
+      const stockoutDates = plan?.stockout_dates || {};
+      const inventoryQuantile = plan?.risk_evidence?.selected_quantile || 'p80';
+      const futureSupply = Number(plan?.future_supply);
+      let cumulativeDemand = 0;
+      $('forecastPointRows').innerHTML = forecast?.points?.length ? forecast.points.map((point) => {
+        const crossings = Object.entries(stockoutDates).filter(([, value]) => value === point.forecast_date).map(([key]) => key.toUpperCase());
+        cumulativeDemand += Number(point[inventoryQuantile] ?? 0);
+        const projectedInventory = Number.isFinite(futureSupply) ? futureSupply - cumulativeDemand : '-';
+        return `<tr><td>${escapeHtml(point.forecast_date)}</td><td>${escapeHtml(point.p50)} / ${escapeHtml(point.p80)} / ${escapeHtml(point.p95)}</td><td>${escapeHtml(projectedInventory)}<div class="muted">${escapeHtml(inventoryQuantile.toUpperCase())} · 快照 ${escapeHtml(plan?.inventory_as_of || '-')}</div></td><td>${crossings.length ? crossings.map(escapeHtml).join(' / ') : '-'}</td></tr>`;
+      }).join('') : '<tr><td colspan="4"><div class="empty">暂无固化预测点</div></td></tr>';
+      $('forecastBacktestRows').innerHTML = forecast?.backtests?.length ? forecast.backtests.map((row) => `<tr><td><strong>${escapeHtml(row.model_name)}</strong><div class="muted">${escapeHtml(row.origin_date)}</div></td><td>${escapeHtml(row.training_end)}</td><td>${escapeHtml(row.forecast_start)} — ${escapeHtml(row.forecast_end)}</td><td>${row.failure_reason ? escapeHtml(row.failure_reason) : escapeHtml(prettyJson(row.metrics))}</td></tr>`).join('') : '<tr><td colspan="4"><div class="empty">暂无 rolling backtest</div></td></tr>';
+      $('forecastRiskDetail').innerHTML = plan ? `<div><strong>建议量</strong> ${escapeHtml(plan.recommended_order_qty ?? 'withheld')} · ${escapeHtml(plan.quantity_status)}</div><div><strong>库存</strong> on hand ${escapeHtml(plan.on_hand)} / reserved ${escapeHtml(plan.reserved)} / inbound ${escapeHtml(plan.inbound)} / available ${escapeHtml(plan.available)}</div><div><strong>预计缺货</strong> P50 ${escapeHtml(stockoutDates.p50 || '-')} / P80 ${escapeHtml(stockoutDates.p80 || '-')} / P95 ${escapeHtml(stockoutDates.p95 || '-')}</div><div><strong>风险</strong> ${escapeHtml(plan.risk_level)} · overstock ${plan.overstock_risk ? '是' : '否'}</div><div><strong>证据</strong> ${escapeHtml(plan.forecast_run_id)} / ${escapeHtml(plan.inventory_snapshot_hash)} / ${escapeHtml(plan.planning_policy_version)}</div><div><strong>质量</strong> ${escapeHtml(plan.plan_quality)} · ${(plan.quality_issues || []).map((item) => escapeHtml(item.code)).join(', ') || '无问题'}</div><details><summary>完整解释链</summary><pre class="json-view">${escapeHtml(prettyJson({ calculation_steps:plan.calculation_steps, assumptions:plan.assumptions, allocation_boundary:plan.allocation_boundary, forecast_evidence:plan.forecast_evidence, risk_evidence:plan.risk_evidence }))}</pre></details>` : '<div class="empty">暂无固化库存计划</div>';
+    }
+
+    async function loadForecasting() {
+      const store = $('forecastStore').value.trim(), sku = $('forecastSku').value.trim();
+      if (!store || !sku) return toast('请输入店铺 ID 和 SKU');
+      state.forecastDemand = await api(`/v1/forecasting/demand?store_id=${encodeURIComponent(store)}&sku_id=${encodeURIComponent(sku)}`);
+      const [forecast, plan, risks] = await Promise.allSettled([
+        api(`/v1/forecasting/skus/${encodeURIComponent(sku)}/forecast?store_id=${encodeURIComponent(store)}`),
+        api(`/v1/forecasting/skus/${encodeURIComponent(sku)}/inventory-plan?store_id=${encodeURIComponent(store)}`),
+        api(`/v1/forecasting/risks?store_id=${encodeURIComponent(store)}&sku_id=${encodeURIComponent(sku)}`)
+      ]);
+      state.forecastRun = forecast.status === 'fulfilled' ? forecast.value : null;
+      state.forecastPlan = plan.status === 'fulfilled' ? plan.value : null;
+      state.forecastRisks = risks.status === 'fulfilled' ? risks.value : [];
+      renderForecasting();
+    }
+
+    async function runForecasting() {
+      const store = $('forecastStore').value.trim(), sku = $('forecastSku').value.trim();
+      if (!store || !sku) return toast('请输入店铺 ID 和 SKU');
+      const button = $('runForecast'); button.disabled = true;
+      try {
+        const result = await api('/v1/forecasting/runs', { method:'POST', body:JSON.stringify({ store_id:store, sku_id:sku }) });
+        toast(result.inventory_plan_status === 'created' ? '预测与库存计划已固化' : `预测已固化，库存计划不可用：${result.inventory_plan_error}`);
+        await loadForecasting();
+      } catch (error) { toast(error.message); }
+      finally { button.disabled = false; }
+    }
+
     const trafficNumber = (value) => value === null || value === undefined ? '-' : Number(value).toLocaleString('zh-CN', { maximumSignificantDigits:5 });
 
     function trafficEvidenceRows() {
@@ -1920,7 +1999,7 @@
       customer_service:'智能客服', order_agent:'订单 Agent', handoff_dispatch:'人工派单',
       admin_console:'后台管理', tenant_isolation:'租户隔离', connector_contract:'连接器',
       customer_service_evaluation:'客服评测', marketing:'营销投放', finance:'利润对账',
-      ops_assistant:'运营辅助', traffic_lab:'流量实验'
+      ops_assistant:'运营辅助', traffic_lab:'流量实验', forecasting:'需求预测'
     };
     const simulationStatusNames = { not_run:'未运行', passed:'通过', failed:'失败', skipped:'跳过' };
     const prettyJson = (value) => JSON.stringify(value, null, 2);
@@ -2201,6 +2280,7 @@
       if (view === 'overview') return loadOverview();
       if (view === 'service') return Promise.all([loadConversations(), loadHandoffs()]);
       if (view === 'commerce') return loadCommerce();
+      if (view === 'forecasting') return loadForecasting();
       if (view === 'orders') return loadOrders();
       if (view === 'competitive') return loadCompetitive();
       if (view === 'ops') return loadOpsAssistant();
@@ -2375,6 +2455,8 @@
       finally { button.disabled = false; }
     });
     $('runVirtualSimulation').addEventListener('click', () => runVirtualSimulation());
+    $('loadForecastEvidence').addEventListener('click', () => loadForecasting().catch((error) => toast(error.message)));
+    $('runForecast').addEventListener('click', () => runForecasting());
     $('loadTrafficInsights').addEventListener('click', () => loadTrafficLab().catch((error) => toast(error.message)));
     $('analyzeTrafficExperiment').addEventListener('click', () => analyzeTrafficExperiment());
     $('overviewScope').addEventListener('change', () => loadOverview().catch((error) => toast(error.message)));
