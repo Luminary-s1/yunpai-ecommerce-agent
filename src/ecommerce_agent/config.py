@@ -43,6 +43,7 @@ class Settings:
     rag_min_score: float
     rag_direct_approved_answer: bool
     rag_direct_approved_min_score: float
+    handoff_confidence_threshold: float  # M6 基线：低置信度 answer → 转人工（对齐 origin/main）
     max_input_chars: int
     session_history_limit: int
     admin_api_key: str
@@ -166,6 +167,9 @@ class Settings:
             ),
             rag_direct_approved_min_score=float(
                 os.getenv("RAG_DIRECT_APPROVED_MIN_SCORE", "0.6")
+            ),
+            handoff_confidence_threshold=float(
+                os.getenv("HANDOFF_CONFIDENCE_THRESHOLD", "0.6")
             ),
             rag_scene_prompts=_as_bool(os.getenv("RAG_SCENE_PROMPTS"), default=True),
             kg_import_enabled=_as_bool(os.getenv("KG_IMPORT_ENABLED"), default=True),

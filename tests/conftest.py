@@ -34,6 +34,7 @@ def make_settings(data_dir: Path) -> Settings:
         rag_min_score=0.08,
         rag_direct_approved_answer=True,
         rag_direct_approved_min_score=0.6,
+        handoff_confidence_threshold=0.6,
         max_input_chars=2000,
         session_history_limit=6,
         admin_api_key="test-admin-key-123456",

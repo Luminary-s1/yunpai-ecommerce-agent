@@ -112,14 +112,19 @@ def persist_response(
     safe_user, persist_redacted = redact_sensitive(state["normalized_input"])
     user_redacted = bool(state.get("input_redacted")) or persist_redacted
     safe_answer, answer_redacted = redact_sensitive(state["answer"])
+    # 护栏脱敏标志并入：检索文档被 inspect_item 脱敏时，answer 已是脱敏文本，
+    # redact_sensitive 判定 False，但内容确实被脱敏过 → redacted 应置 1
+    if any(doc.get("_guard_sanitized") for doc in state.get("retrieved", [])):
+        answer_redacted = True
     with db._write_lock, db.connect() as conn:
         conn.execute(
             """
             INSERT OR IGNORE INTO messages(
                 id, trace_id, session_id, role, content, intent, risk_level,
                 route_reason, sources_json, model_fallback, created_at,
-                tenant_id, client_id, redacted, context_snapshot_id
-            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL)
+                tenant_id, client_id, redacted, context_snapshot_id,
+                customer_intent, intent_confidence, intent_method
+            ) VALUES (?, ?, ?, 'user', ?, NULL, NULL, NULL, '[]', 0, ?, ?, ?, ?, NULL, ?, ?, ?)
             """,
             (
                 user_message_id,
@@ -130,6 +135,9 @@ def persist_response(
                 state["tenant_id"],
                 state["client_id"],
                 int(user_redacted),
+                state.get("customer_intent"),
+                state.get("intent_confidence"),
+                state.get("intent_method"),
             ),
         )
         conn.execute(
@@ -137,8 +145,9 @@ def persist_response(
             INSERT OR IGNORE INTO messages(
                 id, trace_id, session_id, role, content, intent, risk_level,
                 route_reason, sources_json, model_fallback, created_at,
-                tenant_id, client_id, redacted, context_snapshot_id
-            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tenant_id, client_id, redacted, context_snapshot_id,
+                customer_intent, intent_confidence, intent_method
+            ) VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 state["message_id"],
@@ -155,6 +164,9 @@ def persist_response(
                 state["client_id"],
                 int(answer_redacted),
                 state.get("context_snapshot_id"),
+                state.get("customer_intent"),
+                state.get("intent_confidence"),
+                state.get("intent_method"),
             ),
         )
         invocation_id = state.get("invocation_id")
@@ -395,6 +407,10 @@ def build_graph(
                 # 丢弃污染/敏感条目（记录到 trace，不阻塞其他正常条目）
                 _guard_blocks += 1
                 continue
+            if result.status == "sanitized":
+                # 护栏已脱敏该条 answer（内容已改），把标志带给 persist，
+                # 否则 persist 里 redact_sensitive 扫已脱敏文本返回 False → redacted=0 丢失
+                _doc_dict["_guard_sanitized"] = True
             _clean_docs.append(_doc_dict)
         documents = _clean_docs
         # A2：店铺长期记忆并入检索（记忆默认隔离，这里主动召回作为补充证据）
@@ -627,6 +643,14 @@ def build_graph(
         if business_action and route not in {"act", "handoff", "refuse", "finish"}:
             route = "handoff"
             reason = "business_action_requires_verified_execution"
+        # M6 基线：低置信度 answer/finish → 转人工（对齐 origin/main decision_gate）
+        if (
+            decision.confidence < settings.handoff_confidence_threshold
+            and route in {"answer", "finish"}
+            and decision.reason != "approved_knowledge_reuse"
+        ):
+            route = "handoff"
+            reason = "low_confidence_handoff"
         shadow = state.get("execution_mode") == "shadow"
         active_sop = None
         if not shadow:
@@ -741,6 +765,8 @@ def build_graph(
             if result.status in ("injected", "sensitive"):
                 _guard_blocks += 1
                 continue
+            if result.status == "sanitized":
+                _doc_dict["_guard_sanitized"] = True
             _clean.append(_doc_dict)
         # 可观测：记录精化检索统计
         observer.record_search(
