@@ -1,6 +1,6 @@
 # M6-R WP5 Forecast Eval 与完整对抗评审
 
-日期：2026-08-12
+日期：2026-08-13
 分支：`codex/m6r-wp5-forecast-eval`
 起点：`67222d7cf3493fb4565ef14140dac13b10d57bd2`
 
@@ -119,10 +119,20 @@ git diff --check：exit 0
 project-to-act --validate：valid=true，issues=[]
 ```
 
-开发者结论：WP5 本机代码级候选通过，完整 M6-R 独立对抗评审仍待下节 Grok 会话；
-尚不能据此声明 M6-R 可进入合入评审。
+开发者结论（历史）：WP5 本机代码级候选通过；当时尚不能据此声明 M6-R 可进入合入评审。
 
 ## Grok 独立完整评审（同一长生命周期会话）
 
-待 WP5 开发者门禁全部通过后开始。本节将逐轮保存 Codex 提问、Grok 原文回答、Grok
-独立命令与结果、mutation、修复复验和最终裁决；开发者证据与 Grok 证据保持分开。
+完整逐轮提示、Grok 原文、独立命令、probe、mutation、修复与最终裁决见
+[`GROK_INDEPENDENT_REVIEW.md`](GROK_INDEPENDENT_REVIEW.md)。整个评审只使用会话
+`019ff6bf-f868-7520-bcbd-302682b4adad`，首次审阅、修复复验和最终裁决均在同一 PTY 中继续。
+
+- 首轮独立全量 `727 passed, 1 xfailed`，五项 mutation 均先失败并精确还原；发现计划脏
+  JSON 两个 GET 500、forecast policy 同戳依赖扫描顺序、零宽区间覆盖假阳性三项 P2。
+- 修复提交 `d3b8e57` 先补三项失败测试，再统一计划证据类型化 409、显式 `rowid DESC`
+  和零宽 sharpness 反证；扩展回归 `54 passed`。
+- 二轮 Grok 将四个生产文件退回旧实现，独立得到 `3 failed`；还原后以错误结构 JSON、
+  双索引扫描、零宽双向 probe 和新 sharpness mutation 复验，最终全量
+  `730 passed, 1 xfailed`（296.80 秒）。
+- 最终裁决：**PASS**。M6-R 是代码级本机候选，可与尚未合入 main 的 WP4 整链进入合入
+  评审；main 合入、服务器 schema v30、真实数据、24/72h 长稳与生产放行均未授权或未豁免。

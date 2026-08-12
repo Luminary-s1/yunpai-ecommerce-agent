@@ -106,7 +106,7 @@
 | D-035 | 共享事实单一权威源，测试只断言自身增量 | 计数全等、全量快照和版本精确比对把「当前状态」写成永久不变量，正常新增即挂；同一事实手抄多处已产生真实缺陷（`_validate_schema` 重复键）与大面积文档腐烂 | 枚举/版本/清单单点定义，副本须交叉校验或生成；测试用成员与下界断言，不断言他人不存在；版本化字段必须有读侧；现行文档引用权威源而非写死数字；细则见 CONTRIBUTING 第 11 节 |
 | D-037 | Traffic Lab 流量点直接绑定不可变 listing revision，关系键同时绑定租户 | 仅按 SKU 和时间回推标题、主图或价格会在重叠、乱序和跨租户 ID 猜测时产生歧义 | schema v28 使用 `tenant_id + id` 复合外键；revision 数据库级禁止更新/删除；可归属 metric 与版本化隔离记录按 `tenant_id + source_id` 互斥，缺失/未知/歧义/越界归属不进入分析；窗口重叠/缺口由确定性质量报告暴露 |
 | D-038 | 虚拟推流 ground truth 只存在于 Connector 私有 fixture 生成边界 | 若隐藏权重或预期方向进入 PullRecord、数据库或 Traffic Lab 公共包，后续分析会读取答案而不是从观测恢复方向 | `VirtualTaobaoConnector` 只返回 revision、指标和稳定变更回执；隐藏输入是私有生成函数的局部状态，不作为对象属性、公共导出或持久字段；Traffic Lab importer 只消费标准 `PullRecord` |
-| D-039 | Forecast Eval oracle 与生产预测输入物理分段并审计实际字段 | 若期望类型、方向或阈值在 forecast/plan 调用前混入 observation，评测会变成答案泄漏；只声明“未使用”又不可证伪 | scenario runner 只接收 synthetic input，生产 `ForecastRunService` / `InventoryPlanningService` 完成后才读取独立 oracle；报告记录实际 service/engine/reader/policy 字段、输入 digest 与 oracle overlap，任一 overlap 或未登记调用字段使 Gate 失败 |
+| D-039 | Forecast Eval oracle 与生产预测输入物理分段并审计实际字段 | 若期望类型、方向或阈值在 forecast/plan 调用前混入 observation，评测会变成答案泄漏；只声明“未使用”又不可证伪 | scenario runner 只接收 synthetic input，生产 `ForecastRunService` / `InventoryPlanningService` 完成后才读取独立 oracle；报告记录实际 service/engine/reader/policy 字段、输入 digest 与 oracle overlap，任一 overlap 或未登记调用字段使 Gate 失败；存在非零回测误差时，P80/P95 宽度塌缩为零也必须失败 |
 
 ## 按需读取索引
 
