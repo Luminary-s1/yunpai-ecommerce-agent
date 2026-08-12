@@ -20,6 +20,16 @@ class ForecastRunError(ValueError):
     """Raised when a persisted forecast run cannot be built or read safely."""
 
 
+def _evidence_json(value: Any, expected_type: type[Any]) -> Any:
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError) as exc:
+        raise ForecastRunError("forecast_run_evidence_invalid") from exc
+    if not isinstance(parsed, expected_type):
+        raise ForecastRunError("forecast_run_evidence_invalid")
+    return parsed
+
+
 class DemandFactReader(Protocol):
     def list_facts(
         self,
@@ -286,10 +296,15 @@ class ForecastRunService:
                 (tenant_id, run_id),
             ).fetchall()
         view = dict(run)
-        candidate_evidence = json.loads(view.pop("candidate_models_json"))
+        candidate_evidence = _evidence_json(
+            view.pop("candidate_models_json"), dict
+        )
+        horizon_totals = candidate_evidence.get("horizon_totals")
+        if not isinstance(horizon_totals, dict):
+            raise ForecastRunError("forecast_run_evidence_invalid")
         view["candidate_models"] = candidate_evidence
-        view["champion_reason"] = json.loads(view["champion_reason"])
-        view["horizon_totals"] = candidate_evidence["horizon_totals"]
+        view["champion_reason"] = _evidence_json(view["champion_reason"], dict)
+        view["horizon_totals"] = horizon_totals
         view["backtests"] = [
             {
                 **{
@@ -304,9 +319,9 @@ class ForecastRunService:
                         "failure_reason",
                     )
                 },
-                "actual": json.loads(row["actual_json"]),
-                "forecast": json.loads(row["forecast_json"]),
-                "metrics": json.loads(row["metrics_json"]),
+                "actual": _evidence_json(row["actual_json"], list),
+                "forecast": _evidence_json(row["forecast_json"], list),
+                "metrics": _evidence_json(row["metrics_json"], dict),
             }
             for row in backtests
         ]
@@ -314,7 +329,7 @@ class ForecastRunService:
         view["anomalies"] = [
             {
                 **{key: row[key] for key in ("anomaly_type", "severity", "resolution_status")},
-                "evidence": json.loads(row["evidence_json"]),
+                "evidence": _evidence_json(row["evidence_json"], dict),
             }
             for row in anomalies
         ]

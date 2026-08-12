@@ -311,40 +311,58 @@ def test_forecasting_api_rejects_corrupt_persisted_policy_as_domain_error(
         assert response.json()["detail"] == "forecast_policy_evidence_invalid"
 
 
+def test_forecasting_api_rejects_corrupt_persisted_run_as_domain_error(
+    tmp_path,
+) -> None:
+    app = create_app(make_settings(tmp_path))
+    _prepare_virtual_inputs(app.state.agent)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        run = _configure_and_run(client)["forecast"]
+        with app.state.agent.db.connect() as conn:
+            conn.execute(
+                """UPDATE forecast_runs SET candidate_models_json='{}'
+                WHERE tenant_id=? AND run_id=?""",
+                ("tenant-test", run["run_id"]),
+            )
+
+        for path in (
+            f"/v1/forecasting/runs/{run['run_id']}",
+            f"/v1/forecasting/skus/{SKU}/forecast?store_id={STORE}",
+        ):
+            response = client.get(path, headers=ADMIN)
+            assert response.status_code == 409
+            assert response.json()["detail"] == "forecast_run_evidence_invalid"
+
+
+_FORECASTING_READ_ONLY_TABLES = (
+    "demand_daily_facts",
+    "inventory_balances",
+    "forecast_policies",
+    "forecast_runs",
+    "forecast_backtests",
+    "forecast_points",
+    "forecast_anomalies",
+    "inventory_planning_policies",
+    "inventory_plans",
+)
+
+
 def _evidence_counts(service: AgentService) -> dict[str, int]:
-    tables = (
-        "demand_daily_facts",
-        "inventory_balances",
-        "forecast_policies",
-        "forecast_runs",
-        "forecast_backtests",
-        "forecast_points",
-        "forecast_anomalies",
-        "inventory_planning_policies",
-        "inventory_plans",
-    )
     with service.db.connect() as conn:
         return {
             table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            for table in tables
+            for table in _FORECASTING_READ_ONLY_TABLES
         }
 
 
 def _evidence_snapshot(service: AgentService) -> dict[str, list[tuple[object, ...]]]:
-    tables = (
-        "forecast_runs",
-        "forecast_backtests",
-        "forecast_points",
-        "forecast_anomalies",
-        "inventory_plans",
-    )
     with service.db.connect() as conn:
         return {
             table: [
                 tuple(row)
                 for row in conn.execute(f"SELECT * FROM {table} ORDER BY rowid")
             ]
-            for table in tables
+            for table in _FORECASTING_READ_ONLY_TABLES
         }
 
 
@@ -432,7 +450,31 @@ def test_forecasting_tools_read_only_persisted_evidence_via_dynamic_catalog(tmp_
             )
 
 
-def test_read_only_tool_snapshot_gate_detects_in_place_update(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "statement, params",
+    (
+        (
+            """UPDATE forecast_runs SET champion_model='mutated-model'
+            WHERE tenant_id=? AND store_id=? AND sku_id=?""",
+            (STORE, SKU),
+        ),
+        (
+            """UPDATE forecast_policies SET minimum_history_days=999
+            WHERE tenant_id=? AND store_id=? AND sku_id=?""",
+            (STORE, SKU),
+        ),
+        (
+            """UPDATE inventory_balances SET on_hand='999'
+            WHERE tenant_id=? AND store_id=? AND sku_id=?""",
+            (STORE, SKU),
+        ),
+    ),
+)
+def test_read_only_tool_snapshot_gate_detects_in_place_update(
+    tmp_path,
+    statement: str,
+    params: tuple[str, str],
+) -> None:
     app = create_app(make_settings(tmp_path))
     _prepare_virtual_inputs(app.state.agent)
     with TestClient(app) as client:
@@ -456,11 +498,7 @@ def test_read_only_tool_snapshot_gate_detects_in_place_update(tmp_path) -> None:
 
         def mutating_handler(arguments, context):
             with service.db.connect() as conn:
-                conn.execute(
-                    """UPDATE forecast_runs SET champion_model='mutated-model'
-                    WHERE tenant_id=? AND store_id=? AND sku_id=?""",
-                    (context.tenant_id, STORE, SKU),
-                )
+                conn.execute(statement, (context.tenant_id, *params))
             return original_handler(arguments, context)
 
         with pytest.raises(AssertionError):

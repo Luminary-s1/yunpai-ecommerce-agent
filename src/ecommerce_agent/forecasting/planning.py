@@ -117,7 +117,8 @@ class InventoryPlanningService:
                     """SELECT * FROM inventory_planning_policies
                     WHERE tenant_id=? AND store_id=? AND sku_id=?
                       AND warehouse_id IS NULL
-                    ORDER BY active_from DESC, created_at DESC LIMIT 1""",
+                    ORDER BY active_from DESC, created_at DESC,
+                             rowid DESC LIMIT 1""",
                     (tenant_id, store_id, sku_id),
                 ).fetchone()
             else:
@@ -126,7 +127,8 @@ class InventoryPlanningService:
                     WHERE tenant_id=? AND store_id=? AND sku_id=?
                       AND (warehouse_id=? OR warehouse_id IS NULL)
                     ORDER BY CASE WHEN warehouse_id=? THEN 0 ELSE 1 END,
-                             active_from DESC, created_at DESC LIMIT 1""",
+                             active_from DESC, created_at DESC,
+                             rowid DESC LIMIT 1""",
                     (tenant_id, store_id, sku_id, warehouse_id, warehouse_id),
                 ).fetchone()
         if row is None:

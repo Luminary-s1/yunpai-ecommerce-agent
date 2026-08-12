@@ -414,6 +414,36 @@ def test_warehouse_policy_resolution_inherits_sku_aggregate_then_prefers_overrid
     assert resolved_override.review_period_days == 1
 
 
+def test_policy_resolution_breaks_equal_timestamps_by_newest_rowid(tmp_path) -> None:
+    db, _inventory, service = _service(tmp_path)
+    created_at = "2026-08-12T00:00:00+00:00"
+    older = _policy(
+        supplier_lead_days=5,
+        policy_version="inventory-same-time-v1",
+    )
+    newer = _policy(
+        supplier_lead_days=9,
+        policy_version="inventory-same-time-v2",
+    )
+    with db.connect() as conn:
+        for policy in (older, newer):
+            service._ensure_policy(
+                conn,
+                TENANT,
+                STORE,
+                SKU,
+                policy,
+                service._policy_evidence(policy),
+                created_at,
+            )
+
+    resolved = service.resolve_policy(TENANT, store_id=STORE, sku_id=SKU)
+
+    assert resolved is not None
+    assert resolved.policy_version == "inventory-same-time-v2"
+    assert resolved.supplier_lead_days == 9
+
+
 def test_absolute_wall_clock_staleness_degrades_inventory_plan(tmp_path) -> None:
     now = datetime(2026, 8, 12, 12, tzinfo=timezone.utc)
     _db, inventory, service = _service(tmp_path, now=now)
