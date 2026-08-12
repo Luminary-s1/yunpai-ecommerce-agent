@@ -123,6 +123,19 @@ class KnowledgeManagementService:
         Wiki 编辑传 f"kg-{item_id}" 以覆盖资产层同名词条（编辑即时生效闭环）。
         """
         self._validate_scope(request.layer, request.store_id, request.sku_id)
+        if knowledge_key:
+            # P1-1 唯一性预检：防同 key 双份 active（Wiki 编辑 vs 资产重导冲突）。
+            # 多版本（candidate/retired）不受限——revise 同 key 新版本合法。
+            with self.db.connect() as conn:
+                exists = conn.execute(
+                    "SELECT 1 FROM knowledge WHERE tenant_id=? AND knowledge_key=? "
+                    "AND status='active' LIMIT 1",
+                    (tenant_id, knowledge_key),
+                ).fetchone()
+            if exists:
+                raise KnowledgeLifecycleError(
+                    f"knowledge_key 已有 active 行: {knowledge_key}（同键知识不能重复激活）"
+                )
         item_id = self.knowledge.add_document(
             **request.model_dump(),
             tenant_id=tenant_id,

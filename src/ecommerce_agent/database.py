@@ -2761,6 +2761,26 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v31(conn: sqlite3.Connection) -> None:
+        # P1-1 知识键唯一性：同一 (tenant_id, knowledge_key) 只允许**一行 active**。
+        # 防止 Wiki 编辑（kg- 键空间）与资产导入重导产生双份 active 知识；
+        # 保留多版本语义（candidate/retired 可并存，revise 新版本 + 旧 active 共存）。
+        # 防御：knowledge 表缺失（schema_migrations 撒谎场景）时跳过，
+        # 由 _validate_schema 统一兜底报"schema validation failed"。
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge'"
+        ).fetchone()
+        if exists is None:
+            return
+        conn.executescript(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_key_unique
+                ON knowledge(tenant_id, knowledge_key)
+                WHERE knowledge_key IS NOT NULL AND status='active';
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
