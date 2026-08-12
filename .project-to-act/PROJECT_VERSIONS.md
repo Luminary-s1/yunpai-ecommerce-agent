@@ -5,9 +5,16 @@
 ## 当前版本
 
 - 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5、已合入 main 的 M6-R WP1–WP3，以及已通过独立对抗验收但待合入 main 的 M6-R WP4；生产放行阻塞
-- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变
-- 最后更新：2026-08-12
+- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5、已合入 main 的 M6-R WP1–WP3、已通过独立对抗验收但待合入 main 的 M6-R WP4，以及完成开发者门禁但待完整独立评审的 M6-R WP5；生产放行阻塞
+- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变；WP5 仍沿用 v30，新增纯 Python Eval fixture/runner/report 与 D-039 oracle 边界，不改变依赖、持久 schema、API 或生产路由
+- 最后更新：2026-08-13
+
+## M6-R WP5 Forecast Eval（未单独升版）
+
+- 状态：分支 `codex/m6r-wp5-forecast-eval` 已完成开发者门禁，仍待覆盖 WP1–WP5 的单会话 Grok 独立对抗评审；尚未合入 main。
+- 兼容性：沿用 schema v30 与现有依赖；只新增 `evals/forecasting/` synthetic fixture、可复跑 CLI 和测试。生产 API、Agent 目录、LangGraph/intent/prompt、迁移和自动动作均未改变。
+- Eval：十类序列全部使用 rolling-origin；对 test window 做未来扰动不变性检查，数值评分 WAPE/Bias/P80/P95 覆盖与 baseline fallback；库存场景调用公开 planning service。oracle 只在生产调用后进入 scorer，并以实际字段 overlap/unexpected 调用 Gate 审计。
+- 验证：E-20260813-001；WP1–WP5 聚焦 `58 passed`、全量 `727 passed, 1 xfailed`（249.33 秒），未来泄漏、强选 challenger、oracle 污染和 available 公式四项 mutation 均失败后还原。完整独立评审、合入 main、服务器 v30、真实数据、长稳和生产 Gate 均未豁免。
 
 ## M6-R WP4 API / Agent / Admin（未单独升版）
 
