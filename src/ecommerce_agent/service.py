@@ -836,6 +836,11 @@ class AgentService:
             _kg_import_cache[cache_key] = stats
             return stats
         try:
+            # ⑥ 存量库惰性重租户化：早期版本把所有 kg-* 资产挂在 bootstrap 租户下。
+            # 多租户修复后（P2-1+⑤）general/无店铺资产应为 NULL 全局行——这里做一次性
+            # 幂等迁移：bootstrap 挂载的全局层资产行改 NULL，冲突行（同键已有 NULL
+            # active）置 retired 防撞 v31 唯一索引。有店铺 seller 行保持租户不变。
+            self._retrofit_global_asset_tenants()
             items = load_clean_dir(clean_dir)
             stats = import_to_runtime(
                 items,
@@ -861,6 +866,53 @@ class AgentService:
                      "skipped_existing": 0, "skipped_foreign": 0, "seller_default_store_count": 0}
             _kg_import_cache[cache_key] = stats
             return stats
+
+    def _retrofit_global_asset_tenants(self) -> None:
+        """⑥ 存量库惰性重租户化（一次性幂等迁移）。
+
+        早期版本把 02_clean 资产全部挂 bootstrap 租户；多租户修复（P2-1+⑤）
+        后全局层资产（layer IN platform/industry，及无店铺 seller）应为
+        tenant_id NULL。本迁移把 bootstrap 挂载的全局层 kg-* 行改 NULL；
+        同键已有 NULL active 行时置 retired（防撞 v31 唯一索引）。
+        有店铺 seller 行不动。迁移失败不阻塞启动（下次启动重试）。
+        """
+        try:
+            with self.db._write_lock, self.db.connect() as conn:
+                # 冲突防护：同键已有 NULL active 行的 bootstrap 行 → 置 retired
+                conn.execute(
+                    """
+                    UPDATE knowledge SET status='retired', record_version=record_version+1,
+                        updated_at=?
+                    WHERE tenant_id=? AND id LIKE 'kg-%' AND status='active'
+                      AND layer IN ('platform', 'industry', 'store')
+                      AND store_id IS NULL
+                      AND EXISTS (
+                          SELECT 1 FROM knowledge g
+                          WHERE g.tenant_id IS NULL AND g.knowledge_key=knowledge.knowledge_key
+                            AND g.status='active'
+                      )
+                    """,
+                    (utc_now(), self.settings.bootstrap_tenant_id),
+                )
+                # 无冲突的全局层行 → 改 NULL（全局可见）
+                cursor = conn.execute(
+                    """
+                    UPDATE knowledge SET tenant_id=NULL, record_version=record_version+1,
+                        updated_at=?
+                    WHERE tenant_id=? AND id LIKE 'kg-%' AND status='active'
+                      AND layer IN ('platform', 'industry', 'store')
+                      AND store_id IS NULL
+                    """,
+                    (utc_now(), self.settings.bootstrap_tenant_id),
+                )
+                if cursor.rowcount:
+                    logger.info(
+                        "retrofit: %d 条 bootstrap 挂载的全局资产行已重租户化为 NULL（多租户修复）",
+                        cursor.rowcount,
+                    )
+        except Exception:
+            # 迁移失败不阻塞启动（下次启动幂等重试）
+            logger.exception("retrofit global asset tenants failed (non-fatal)")
 
     def health(self) -> dict[str, Any]:
         model_ok, model_detail = self.model.health()

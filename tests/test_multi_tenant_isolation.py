@@ -223,7 +223,57 @@ def test_tenant_cannot_forget_global_memory(tmp_path) -> None:
     assert memory.forget(global_mem, tenant_id=None), "全局（None）应可删除全局记忆"
 
 
-# ---------- P3-4：load_from_runtime None 语义 ----------
+# ---------- ⑥：存量库惰性重租户化 ----------
+
+def test_retrofit_global_asset_tenants(tmp_path) -> None:
+    """⑥：早期 bootstrap 挂载的全局层资产行 → NULL；冲突行 retired；店铺行不动。"""
+    service = AgentService(make_settings(tmp_path))
+    tenant = service.settings.bootstrap_tenant_id
+
+    # 模拟旧版挂载：bootstrap 租户下的全局层资产行（id 用 kg- 前缀对齐真实资产导入）
+    service.knowledge.add_document(
+        category="行业规则", intent="rule", question="旧全局", answer="旧全局答案",
+        keywords="", risk_level="low", source="kg:test", status="active",
+        review_status="approved", id="kg-OLD-GLOBAL",
+        tenant_id=tenant, knowledge_key="kg-OLD-GLOBAL", layer="platform", store_id=None,
+    )
+    # 同键已有 NULL active 行（模拟修复后重新导入过）→ 冲突
+    service.knowledge.add_document(
+        category="行业规则", intent="rule", question="新全局", answer="新全局答案",
+        keywords="", risk_level="low", source="kg:test", status="active",
+        review_status="approved", id="kg-CONFLICT-N",
+        tenant_id=None, knowledge_key="kg-CONFLICT", layer="platform", store_id=None,
+    )
+    service.knowledge.add_document(
+        category="行业规则", intent="rule", question="冲突旧版", answer="冲突旧答案",
+        keywords="", risk_level="low", source="kg:test", status="active",
+        review_status="approved", id="kg-CONFLICT-T",
+        tenant_id=tenant, knowledge_key="kg-CONFLICT", layer="platform", store_id=None,
+    )
+    # 店铺行（不应被迁移）
+    service.knowledge.add_document(
+        category="常见问答", intent="faq", question="店铺私有", answer="店铺答案",
+        keywords="", risk_level="low", source="kg:test", status="active",
+        review_status="approved", id="kg-STORE-KEEP",
+        tenant_id=tenant, knowledge_key="kg-STORE-KEEP", layer="store", store_id=tenant,
+    )
+
+    service._retrofit_global_asset_tenants()
+
+    with service.db.connect() as conn:
+        old = conn.execute(
+            "SELECT tenant_id FROM knowledge WHERE knowledge_key='kg-OLD-GLOBAL' AND status='active'"
+        ).fetchone()
+        conflict = conn.execute(
+            "SELECT status FROM knowledge WHERE knowledge_key='kg-CONFLICT' AND tenant_id=?"
+            " AND status='active'", (tenant,)
+        ).fetchone()
+        store = conn.execute(
+            "SELECT tenant_id, store_id FROM knowledge WHERE knowledge_key='kg-STORE-KEEP'"
+        ).fetchone()
+    assert old["tenant_id"] is None, "旧全局层行应重租户化为 NULL"
+    assert conflict is None, "冲突行（同键已有 NULL active）应被退休"
+    assert store["tenant_id"] == tenant and store["store_id"] == tenant, "店铺行不得被迁移"
 
 def test_load_from_runtime_none_returns_only_global(tmp_path) -> None:
     """P3-4：tenant_id=None 只返回全局行；传租户返回本租户 + 全局。"""
