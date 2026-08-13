@@ -58,6 +58,9 @@ def _map_scene(intent: str) -> str:
         return "aftersale_policy"
     if intent in {"product", "inventory", "price_promo"}:
         return "product_recommend"
+    if "competitor" in intent:
+        return "competitor_analysis"
+    return "customer_service"
 
 
 # 连续低质回复判定集合（对齐 origin/main：连续 2 次低质 → 强制转人工）
@@ -81,9 +84,6 @@ def _bounded_product_context_ready(state: AgentState) -> bool:
     advisor = (state.get("context_bundle") or {}).get("product_advisor") or {}
     candidates = advisor.get("candidates") or []
     return isinstance(candidates, list) and len(candidates) == 1 and bool(candidates[0])
-    if "competitor" in intent:
-        return "competitor_analysis"
-    return "customer_service"
 
 
 def verify_response(state: AgentState) -> dict[str, Any]:

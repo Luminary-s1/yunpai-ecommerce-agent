@@ -308,6 +308,18 @@ class KnowledgeSecurityGuard:
                     escalate = True
         if hits:
             action = "escalate" if escalate else "block"
+            # 投诉语境降级：legal_boundary 命中"假货/诈骗/刷单"等词时，
+            # 若为"受害/举报"句式（收到/买到/我被/我要投诉/遇到），降为 escalate（转人工），
+            # 而不是 block（拒绝）——消费者投诉是最核心的客服场景，不能直接拒绝。
+            if (
+                action == "block"
+                and "legal_boundary" in hits
+                and re.search(
+                    r"收到|买到了|买到假货|我被|我是受害者|遇到|我要投诉|投诉退款|退货|举报|上当受骗|被骗了",
+                    q,
+                )
+            ):
+                action = "escalate"
             return GuardDecision.block(
                 reason="out_of_scope_request",
                 detail=f"命中超范围请求类别: {', '.join(hits)}",

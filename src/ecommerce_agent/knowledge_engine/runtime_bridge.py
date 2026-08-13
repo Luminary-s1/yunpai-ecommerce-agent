@@ -22,6 +22,7 @@ scope → layer 映射（B1b 核心）：
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .models import (
@@ -31,6 +32,8 @@ from .models import (
     TimelineEntry,
     utc_now_iso,
 )
+
+logger = logging.getLogger("knowledge_engine.runtime_bridge")
 
 
 # scope → layer 映射（B1b：复用运行时已有 layer，不加列）

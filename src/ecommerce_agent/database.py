@@ -2772,6 +2772,24 @@ class Database:
         ).fetchone()
         if exists is None:
             return
+        # 建索引前先清理历史重复 active（若有）：同一 (tenant_id, knowledge_key)
+        # 保留最新一行 active，其余置 retired——否则唯一索引抛 IntegrityError，
+        # 生产库迁移直接崩溃。
+        conn.execute(
+            """
+            UPDATE knowledge SET status='retired', effective_to=COALESCE(effective_to, created_at)
+            WHERE status='active' AND id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY tenant_id, knowledge_key
+                        ORDER BY version DESC, updated_at DESC, rowid DESC
+                    ) AS rn
+                    FROM knowledge
+                    WHERE status='active' AND knowledge_key IS NOT NULL
+                ) WHERE rn = 1
+            )
+            """
+        )
         conn.executescript(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_key_unique

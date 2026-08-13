@@ -21,11 +21,14 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Iterable
 
 from .models import KnowledgeItem, KnowledgeScope, KnowledgeKind, TimelineEntry, utc_now_iso
+
+logger = logging.getLogger("knowledge_engine.dream_cycle")
 
 
 # ---------- 作业① 增量摄取 ----------
