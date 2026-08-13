@@ -307,3 +307,36 @@ def test_wiki_put_rejects_entity_kind(client: TestClient) -> None:
         json={"answer": "尝试编辑商品"},
     )
     assert resp.status_code in (404, 422)  # 资产层商品在无 02_clean 环境 404；有则 422 只读
+
+
+def test_wiki_items_status_filter_lists_candidate_and_retired(client: TestClient) -> None:
+    """P2 遗留：status 参数透传——candidate/retired 可列出，默认仍只看 active。"""
+    app = client.app
+    svc = app.state.agent
+    tenant = svc.settings.bootstrap_tenant_id
+    mgmt = svc.knowledge_management
+    from ecommerce_agent.knowledge_management import KnowledgeCreateRequest
+
+    created = mgmt.create(
+        tenant,
+        KnowledgeCreateRequest(
+            category="常见问答", intent="status-filter", question="状态筛选",
+            answer="状态筛选答案", source="wiki://manual", layer="platform",
+        ),
+        "admin-test",
+        knowledge_key="kg-STATUS-CAND-1",
+    )
+    cand = client.get("/v1/wiki/items?status=candidate&limit=500", headers=ADMIN_HEADERS)
+    assert cand.status_code == 200
+    assert any(i["id"] == "STATUS-CAND-1" for i in cand.json()), "status=candidate 应列出候选词条"
+    default = client.get("/v1/wiki/items?limit=500", headers=ADMIN_HEADERS)
+    assert not any(i["id"] == "STATUS-CAND-1" for i in default.json()), "默认列表只看 active"
+
+    evaluated = mgmt.evaluate(tenant, created["id"],
+        KnowledgeTransitionRequest(expected_record_version=created["record_version"]), "admin-test")
+    approved = mgmt.approve(tenant, evaluated["id"],
+        KnowledgeTransitionRequest(expected_record_version=evaluated["record_version"]), "admin-test")
+    mgmt.retire(tenant, approved["id"],
+        KnowledgeTransitionRequest(expected_record_version=approved["record_version"]), "admin-test")
+    retired = client.get("/v1/wiki/items?status=retired&limit=500", headers=ADMIN_HEADERS)
+    assert any(i["id"] == "STATUS-CAND-1" for i in retired.json()), "status=retired 应列出停用词条"

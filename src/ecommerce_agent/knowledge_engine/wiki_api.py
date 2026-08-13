@@ -171,6 +171,7 @@ class WikiService:
         items = load_merged_items(
             knowledge_base=self.service.knowledge,
             tenant_id=self.service.settings.bootstrap_tenant_id,
+            statuses=(status,) if status else ("active",),
         )
         if kind:
             items = [i for i in items if i["kind"] == kind]
