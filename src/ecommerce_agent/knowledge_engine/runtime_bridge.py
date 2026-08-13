@@ -163,8 +163,9 @@ def import_to_runtime(
                           False 时跳过已存在（默认幂等，启动/测试不变）
 
     返回：
-        {"imported": 导入条数, "updated": 更新条数, "skipped_entity": 留在图谱的实体条数,
-         "skipped_existing": 已存在跳过的条数,
+        {"imported": 导入条数, "updated": 更新条数, "update_failed": 更新失败条数,
+         "skipped_entity": 留在图谱的实体条数, "skipped_existing": 已存在跳过的条数,
+         "skipped_foreign": 被其他租户持有而跳过的条数,
          "seller_default_store_count": 落入 default_store_id 的 seller 条数}
 
     ⚠️ 隔离红线：02_clean 资产层通常无店铺维度字段，seller 知识会落入

@@ -814,7 +814,8 @@ class AgentService:
         KG_IMPORT_ENABLED=false 时跳过（测试提速用）。
         """
         if not self.settings.kg_import_enabled:
-            return {"imported": 0, "skipped_entity": 0, "skipped_existing": 0, "seller_default_store_count": 0}
+            return {"imported": 0, "updated": 0, "update_failed": 0, "skipped_entity": 0,
+                    "skipped_existing": 0, "skipped_foreign": 0, "seller_default_store_count": 0}
         cache_key = str(self.settings.app_db_path)
         cached = _kg_import_cache.get(cache_key)
         if cached is not None:
@@ -830,7 +831,8 @@ class AgentService:
         )
         if not clean_dir.is_dir():
             logger.warning("knowledge assets missing: %s (skip kg-* import)", clean_dir)
-            stats = {"imported": 0, "skipped_entity": 0, "skipped_existing": 0, "seller_default_store_count": 0}
+            stats = {"imported": 0, "updated": 0, "update_failed": 0, "skipped_entity": 0,
+                     "skipped_existing": 0, "skipped_foreign": 0, "seller_default_store_count": 0}
             _kg_import_cache[cache_key] = stats
             return stats
         try:
@@ -852,7 +854,8 @@ class AgentService:
             return stats
         except Exception as exc:
             logger.warning("knowledge assets import failed (non-fatal): %s", exc)
-            stats = {"imported": 0, "skipped_entity": 0, "skipped_existing": 0, "seller_default_store_count": 0}
+            stats = {"imported": 0, "updated": 0, "update_failed": 0, "skipped_entity": 0,
+                     "skipped_existing": 0, "skipped_foreign": 0, "seller_default_store_count": 0}
             _kg_import_cache[cache_key] = stats
             return stats
 
