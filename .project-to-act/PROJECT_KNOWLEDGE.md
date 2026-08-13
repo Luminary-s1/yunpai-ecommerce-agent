@@ -40,7 +40,7 @@
 | 决策 | 内容 | 证据 |
 |---|---|---|
 | D-KB-010 | 意图路由集成链对齐 origin/main（precheck 分类 + knowledge_intent + prompt_variant 全链路） | 6c7cf34~1a6062d；test_intent_routing_integration 18 全绿 |
-| D-KB-011 | knowledge_key active 唯一约束（v31，保留多版本语义）+ 去重迁移 | e3c93e6；test_migrations 17 passed |
+| D-KB-011 | knowledge_key active 唯一约束（v33，保留多版本语义；占号裁定 v31→v33）+ 去重迁移 | e3c93e6；test_migrations 17 passed |
 | D-KB-012 | 热更新 FTS 同步 + _write_lock + record_version + 租户条件 + update_failed | c78eae1/476575b；test_knowledge_runtime_bridge 17 passed |
 | D-KB-013 | 评测门禁硬失效（--eval exit 1） | 59e2059 |
 | D-KB-014 | 投诉语境降级（legal_boundary 投诉句式 escalate 而非 block） | 7a43407；test_security_observability 22 passed |
@@ -73,7 +73,7 @@
 |---|---|---|
 | 终审 P1-门禁退出码恒 0 | scheduler `__main__` 补 `sys.exit(main())` | ✅ 8403a62 |
 | 终审 P1-Wiki 二次编辑预检误拦 | 移除 create 预检（create 全链进 _write_lock 已覆盖竞态） | ✅ fd39257 |
-| 终审 P1-v31 索引 NULL 租户失效 | COALESCE 表达式索引 + retire/approve/rollout 含全局行 | ✅ fd39257 |
+| 终审 P1-v33 索引 NULL 租户失效 | COALESCE 表达式索引 + retire/approve/rollout 含全局行 | ✅ fd39257 |
 | 终审 P2-热更新命中 retired 行 | import 预查只收 active 行 | ✅ d6d40ba |
 | 终审 P2-INSERT 未捕获 IntegrityError | try/except sqlite3.IntegrityError 计 update_failed | ✅ d6d40ba |
 | 终审 P3-7 Wiki 编辑 layer 硬编码 store | put_item 沿用原词条 layer/store_id 防 scope 漂移 | ✅ ad1a741 |

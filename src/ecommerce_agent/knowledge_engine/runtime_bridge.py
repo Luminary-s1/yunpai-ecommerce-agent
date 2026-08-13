@@ -366,7 +366,7 @@ def import_to_runtime(
                 )
             except sqlite3.IntegrityError:
                 # 终审 P2：Wiki 已 create+approve 同键词条（kb-uuid active 同租户）后，
-                # 资产重导 INSERT kg-X active 触发 v31 唯一索引——单条失败不中断整轮
+                # 资产重导 INSERT kg-X active 触发 v33 唯一索引——单条失败不中断整轮
                 logger.exception("kg 资产 %s 插入触发唯一约束（可能已被 Wiki 接管），计 update_failed", target_id)
                 update_failed += 1
                 continue

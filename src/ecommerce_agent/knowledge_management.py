@@ -126,7 +126,7 @@ class KnowledgeManagementService:
         # P3 竞态：插入入 _write_lock（RLock 可重入，add_document 内部持锁不冲突）。
         # 注意：不预检同 key active——create 只建 candidate，Wiki 编辑已生效词条
         # 走此路径是合法语义（新候选版本），approve 时先 retire 旧 active 再由
-        # v31 唯一索引兜底单 active（终审发现：预检曾把 Wiki 二次编辑 100% 拦死）。
+        # v33 唯一索引兜底单 active（终审发现：预检曾把 Wiki 二次编辑 100% 拦死）。
         with self.db._write_lock:
             item_id = self.knowledge.add_document(
                 **request.model_dump(),
@@ -213,7 +213,7 @@ class KnowledgeManagementService:
             # 此前 (tenant_id=? OR tenant_id IS NULL) 会让租户影子编辑 approve 时
             # 退休全局行——租户 A 会"偷走"全局知识导致其他租户不可见。
             # 租户影子行与全局行按 (COALESCE(tenant,''), knowledge_key) 共存合法
-            # （v31 索引只约束同一租户内唯一 active）；租户影子行经检索排序
+            # （v33 索引只约束同一租户内唯一 active）；租户影子行经检索排序
             # shadow 全局行，全局替换留给全局管理员（tenant=None 路径）。
             conn.execute(
                 """

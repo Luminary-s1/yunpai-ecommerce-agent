@@ -839,7 +839,7 @@ class AgentService:
             # ⑥ 存量库惰性重租户化：早期版本把所有 kg-* 资产挂在 bootstrap 租户下。
             # 多租户修复后（P2-1+⑤）general/无店铺资产应为 NULL 全局行——这里做一次性
             # 幂等迁移：bootstrap 挂载的全局层资产行改 NULL，冲突行（同键已有 NULL
-            # active）置 retired 防撞 v31 唯一索引。有店铺 seller 行保持租户不变。
+            # active）置 retired 防撞 v33 唯一索引。有店铺 seller 行保持租户不变。
             self._retrofit_global_asset_tenants()
             items = load_clean_dir(clean_dir)
             stats = import_to_runtime(
@@ -873,7 +873,7 @@ class AgentService:
         早期版本把 02_clean 资产全部挂 bootstrap 租户；多租户修复（P2-1+⑤）
         后全局层资产（layer IN platform/industry，及无店铺 seller）应为
         tenant_id NULL。本迁移把 bootstrap 挂载的全局层 kg-* 行改 NULL；
-        同键已有 NULL active 行时置 retired（防撞 v31 唯一索引）。
+        同键已有 NULL active 行时置 retired（防撞 v33 唯一索引）。
         有店铺 seller 行不动。迁移失败不阻塞启动（下次启动重试）。
         """
         try:
