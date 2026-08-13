@@ -254,3 +254,83 @@ def test_load_from_runtime_none_returns_only_global(tmp_path) -> None:
     tenant_view = load_from_runtime(service.knowledge, tenant_id="tenant-a")
     ids = {item.id for item in tenant_view}
     assert "R-NONE" in ids and "F-NONE" in ids, "租户视图应含本租户 + 全局"
+
+
+# ---------- ③④：Wiki 影子编辑端到端 ----------
+
+def test_wiki_shadow_edit_global_item_tenant_scoped(tmp_path) -> None:
+    """③④ 端到端：租户 A 通过 Wiki 编辑全局词条 → 生成 A 私有版本；
+    A 检索优先见影子版，租户 B 仍见全局版，全局行本身不变。"""
+    from fastapi.testclient import TestClient
+
+    from ecommerce_agent.api import create_app
+    from ecommerce_agent.knowledge_engine.runtime_bridge import import_to_runtime
+
+    settings = make_settings(tmp_path)
+    # 全局词条（02_clean 语义：platform 层 general）——先建 service 导入，再起 app
+    service = AgentService(settings)
+    import_to_runtime(
+        [KnowledgeItem(
+            id="WIKI-GLOBAL-1", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+            compiled_truth="平台通用规则答案",
+            attributes={"question": "平台规则", "layer": "platform"},
+        )],
+        service.knowledge,
+        tenant_id=None,
+    )
+    service.close()
+    del service
+
+    app = create_app(settings)
+    admin_headers = {"X-Admin-Id": "admin-test", "X-Admin-Key": "test-admin-key-123456"}
+    with TestClient(app) as client:
+        # 租户 A admin 编辑全局词条（影子编辑）
+        resp = client.put(
+            "/v1/wiki/items/WIKI-GLOBAL-1",
+            headers=admin_headers,
+            json={"answer": "租户A定制的规则答案"},
+        )
+        assert resp.status_code == 200, resp.text
+        created = resp.json()["created"]
+        created_id = created["id"]
+
+        # 影子版本必须落在编辑租户名下（而非全局 NULL）
+        with app.state.agent.db.connect() as conn:
+            shadow_row = conn.execute(
+                "SELECT tenant_id FROM knowledge WHERE id=?", (created_id,)
+            ).fetchone()
+        assert shadow_row is not None and shadow_row["tenant_id"] == settings.bootstrap_tenant_id, (
+            "影子版本应落在编辑租户名下"
+        )
+
+        # 走完整生命周期（evaluate → approve）——approve 不得退休全局行
+        mgmt = app.state.agent.knowledge_management
+        evaluated = mgmt.evaluate(
+            settings.bootstrap_tenant_id, created_id,
+            KnowledgeTransitionRequest(expected_record_version=1), "admin-a",
+        )
+        mgmt.approve(
+            settings.bootstrap_tenant_id, created_id,
+            KnowledgeTransitionRequest(expected_record_version=evaluated["record_version"]),
+            "admin-a",
+        )
+
+        # 全局行必须仍为 active
+        with app.state.agent.db.connect() as conn:
+            global_row = conn.execute(
+                "SELECT status FROM knowledge WHERE knowledge_key='kg-WIKI-GLOBAL-1' AND tenant_id IS NULL"
+            ).fetchone()
+        assert global_row is not None and global_row["status"] == "active", "影子编辑不得退休全局行"
+
+        # 租户 A（bootstrap）检索优先见影子版
+        hits_a = app.state.agent.knowledge.retrieve(
+            "平台规则", top_k=3, min_score=0.05, tenant_id=settings.bootstrap_tenant_id
+        )
+        assert any(h["answer"] == "租户A定制的规则答案" for h in hits_a), "A 应优先见影子版"
+
+        # 租户 B 仍见全局版
+        hits_b = app.state.agent.knowledge.retrieve(
+            "平台规则", top_k=3, min_score=0.05, tenant_id="tenant-b"
+        )
+        assert any(h["answer"] == "平台通用规则答案" for h in hits_b), "B 应仍见全局版"
+        assert all(h["answer"] != "租户A定制的规则答案" for h in hits_b), "影子版不得泄漏给 B"

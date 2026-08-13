@@ -167,10 +167,13 @@ class WikiService:
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> list[dict[str, Any]]:
+        # ③ 多租户：租户视角过滤（路由层传 admin.tenant_id）；
+        # None 缺省回落 bootstrap 保持向后兼容
         items = load_merged_items(
             knowledge_base=self.service.knowledge,
-            tenant_id=self.service.settings.bootstrap_tenant_id,
+            tenant_id=tenant_id or self.service.settings.bootstrap_tenant_id,
             statuses=(status,) if status else ("active",),
         )
         if kind:
@@ -179,7 +182,7 @@ class WikiService:
             items = [i for i in items if i["attributes"].get("status") == status]
         return items[offset : offset + limit]
 
-    def search(self, q: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    def search(self, q: str, *, limit: int = 20, tenant_id: str | None = None) -> list[dict[str, Any]]:
         """双通道搜索：运行时 knowledge 表为主 + 资产层实体类补充。
 
         - 主通道：service.knowledge.retrieve（SQLite FTS + 本地 embedding 打分）
@@ -189,6 +192,7 @@ class WikiService:
         """
         results: list[dict[str, Any]] = []
         seen: set[str] = set()
+        effective_tenant = tenant_id or self.service.settings.bootstrap_tenant_id
         # R6 修复：Wiki 检索路径也接入观测器（此前 knowledge.retrieve 不被观测）
         from .observability import get_observer
         _obs = get_observer(self.service.db)
@@ -198,10 +202,10 @@ class WikiService:
                 q,
                 top_k=limit,
                 min_score=0.08,
-                tenant_id=self.service.settings.bootstrap_tenant_id,
+                tenant_id=effective_tenant,
             )
             _obs.record_search(
-                tenant_id=self.service.settings.bootstrap_tenant_id,
+                tenant_id=effective_tenant,
                 store_id="",
                 query=q,
                 hits=len(hits),
@@ -210,7 +214,7 @@ class WikiService:
             )
         except Exception:
             _obs.record_search(
-                tenant_id=self.service.settings.bootstrap_tenant_id,
+                tenant_id=effective_tenant,
                 store_id="",
                 query=q,
                 hits=0,
@@ -267,20 +271,20 @@ class WikiService:
                         break
         return results
 
-    def get_item(self, item_id: str) -> dict[str, Any] | None:
+    def get_item(self, item_id: str, *, tenant_id: str | None = None) -> dict[str, Any] | None:
         items = load_merged_items(
             knowledge_base=self.service.knowledge,
-            tenant_id=self.service.settings.bootstrap_tenant_id,
+            tenant_id=tenant_id or self.service.settings.bootstrap_tenant_id,
         )
         for item in items:
             if item["id"] == item_id:
                 return item
         return None
 
-    def stats(self) -> dict[str, Any]:
+    def stats(self, *, tenant_id: str | None = None) -> dict[str, Any]:
         items = load_merged_items(
             knowledge_base=self.service.knowledge,
-            tenant_id=self.service.settings.bootstrap_tenant_id,
+            tenant_id=tenant_id or self.service.settings.bootstrap_tenant_id,
         )
         by_kind: dict[str, int] = {}
         by_source: dict[str, int] = {}
@@ -322,7 +326,9 @@ def build_wiki_router(
         admin: AdminPrincipal = Depends(require_admin),
     ) -> list[dict[str, Any]]:
         """合并词条列表（分页）：运行时 Q&A（默认 active）+ 资产层实体类。"""
-        return _svc().list_items(kind=kind, status=status, limit=limit, offset=offset)
+        # ③ 多租户：按登录 admin 的租户视角
+        return _svc().list_items(kind=kind, status=status, limit=limit, offset=offset,
+                                 tenant_id=admin.tenant_id)
 
     @router.get("/search")
     def search(
@@ -331,7 +337,7 @@ def build_wiki_router(
         admin: AdminPrincipal = Depends(require_admin),
     ) -> list[dict[str, Any]]:
         """双通道搜索：运行时知识表（编辑即时可搜）+ 资产层实体类（不依赖 Neo4j）。"""
-        return _svc().search(q, limit=limit)
+        return _svc().search(q, limit=limit, tenant_id=admin.tenant_id)
 
     @router.put("/items/{item_id}")
     def put_item(
@@ -344,14 +350,23 @@ def build_wiki_router(
         - 复用 KnowledgeManagementService.create（knowledge_key=kg-{item_id}）
         - 返回生命周期下一步（candidate/evaluated/approved 状态）
         - 实体类（商品/SKU/品类/属性）只读不可编辑
+        - ④ 多租户影子编辑：编辑全局词条（platform/industry 层）生成**本租户私有
+          新版本**（tenant_id=admin.tenant_id），其他租户仍见全局版；store_id 只在
+          store/product 层兜底 admin.tenant_id，platform/industry 恒 None
         """
-        item = _svc().get_item(item_id)
+        # ③ 按 admin 租户视角取词条（含全局词条）
+        item = _svc().get_item(item_id, tenant_id=admin.tenant_id)
         if item is None:
             raise HTTPException(status_code=404, detail=f"词条 {item_id} 不存在")
         if item["kind"] not in RUNTIME_KINDS:
             raise HTTPException(status_code=422, detail=f"{item['kind']} 实体类只读，不可编辑")
         try:
             attrs = item.get("attributes") or {}
+            layer = attrs.get("layer") or "store"
+            # ④ 影子编辑：store_id 只在店铺层生效；全局层恒 None（防 scope 漂移）
+            store_id: str | None = None
+            if layer in {"store", "product"}:
+                store_id = attrs.get("store_id") or admin.tenant_id
             create_req = KnowledgeCreateRequest(
                 category=request.category or item.get("category") or "常见问答",
                 intent=request.intent or "wiki-edit",
@@ -360,13 +375,14 @@ def build_wiki_router(
                 keywords=request.keywords or "",
                 risk_level=request.risk_level,  # type: ignore[arg-type]
                 source="wiki://manual",
-                # 终审 P3-7：沿用原词条 layer/store_id（此前硬编码 store 导致平台通用词条
+                # 终审 P3-7：沿用原词条 layer（此前硬编码 store 导致平台通用词条
                 # 编辑后 scope 漂移、其他租户不可见）
-                layer=attrs.get("layer") or "store",
-                store_id=attrs.get("store_id") or admin.tenant_id or service.settings.bootstrap_tenant_id,
+                layer=layer,
+                store_id=store_id,
             )
             created = service.knowledge_management.create(
-                admin.tenant_id or service.settings.bootstrap_tenant_id,
+                # ④ 影子编辑：恒定 admin 租户——全局词条的编辑生成本租户私有版本
+                admin.tenant_id,
                 create_req,
                 actor=admin.admin_id,
                 knowledge_key=f"kg-{item_id}",
