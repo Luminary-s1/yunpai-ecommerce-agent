@@ -179,11 +179,16 @@ class KnowledgeBase:
                     question=row["question"], answer=row["answer"], source=row["source"],
                     version=row["version"], score=round(score, 4),
                     layer=row["layer"], store_id=row["store_id"], sku_id=row["sku_id"],
+                    tenant_id=row["tenant_id"],
                 )
             )
         ranked.sort(
             key=lambda item: (
                 item["score"],
+                # ① 多租户 tiebreak：本租户行优先于全局行（影子编辑生效的前提）。
+                # 此前本租户影子行与全局行同分同 store NULL 同 version 时排序
+                # 不稳定，seen_answers 去重还可能把影子答案丢掉。
+                int(item["tenant_id"] == tenant_id),
                 int(item["sku_id"] is not None),
                 int(item["store_id"] is not None),
                 item["version"],

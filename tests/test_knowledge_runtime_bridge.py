@@ -65,14 +65,22 @@ def test_entity_kinds_skipped() -> None:
     assert to_knowledge_row(prod) is None  # 不导入运行时
 
 
-def test_seller_without_scope_key_defaults_store() -> None:
-    """seller 无 scope_key 时兜底到 default_store_id，保证隔离不失效。"""
+def test_seller_without_scope_key_is_global_visible() -> None:
+    """⑤ 多租户决策：seller 无店铺维度（scope_key 默认 all）与 general 同待遇——
+    store_id=NULL 全局可见；有店铺维度（scope_key 具体店铺）才落店铺隔离。"""
     seller = KnowledgeItem(
         id="F-2", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
         compiled_truth="测试知识",
     )
     row = to_knowledge_row(seller, default_store_id="fallback-store")
-    assert row["store_id"] == "fallback-store"
+    assert row["store_id"] is None, "无店铺 seller 资产归全局（不再兜底到 default_store）"
+
+    scoped = KnowledgeItem(
+        id="F-2S", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
+        compiled_truth="店铺私有知识", scope_key="store-x",
+    )
+    scoped_row = to_knowledge_row(scoped, default_store_id="fallback-store")
+    assert scoped_row["store_id"] == "store-x", "有店铺 seller 仍落店铺隔离"
 
 
 # ---------- 导入运行时 + RAG 检索隔离（端到端） ----------
@@ -274,7 +282,8 @@ def test_load_from_runtime_sees_revise(service) -> None:
         "admin-test",
     )
 
-    loaded = load_from_runtime(service.knowledge)
+    # P3-4：tenant_id=None 只读全局行；本测试词条是租户行，需按租户视角读回
+    loaded = load_from_runtime(service.knowledge, tenant_id=tenant)
     by_id = {item.id: item for item in loaded}
     assert "FAQ-REVISE" in by_id
     assert by_id["FAQ-REVISE"].compiled_truth == "新结论：保修 24 个月", (

@@ -269,7 +269,12 @@ def import_to_runtime(
                 )
                 continue
             if target_id in existing:
-                if update_existing and (group_tenant is not None or allow_global_update):
+                # 全局组热更新授权：调用方本身是全局上下文（tenant_id is None）
+                # 或 appliance 显式传 allow_global_update=True；租户调用方
+                # （tenant_id 非 None 且未传旗标）不得改写全局行（P1-2）
+                if update_existing and (
+                    group_tenant is not None or allow_global_update or tenant_id is None
+                ):
                     # A6：热更新——内容字段更新（不改 id/租户/店铺/status）
                     # search_text / embedding 必须一并刷新，否则 keywords 别名
                     # 修改后检索索引不更新（F-007：热更新假修复）
