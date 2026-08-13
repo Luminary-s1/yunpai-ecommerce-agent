@@ -6,7 +6,8 @@
 
 - 版本号：`0.33.0`
 - 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5，以及已合入 main 的 M6-R WP1–WP5；生产放行阻塞
-- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变；WP5 仍沿用 v30，新增纯 Python Eval fixture/runner/report 与 D-039 oracle 边界，不改变依赖、持久 schema、API 或生产路由
+- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变；WP5 仍沿用 v30，新增纯 Python Eval fixture/runner/report 与 D-039 oracle 边界，不改变依赖、持久 schema、API 或生产路由。F-322 未单独升版，使用 schema **v32**；**v31 已被 origin PR #11 占用**，合并时须保留两段迁移。v32 新增版本化 `(tenant,store)` IANA 业务日历和 nullable experiment 固化证据，并将 Traffic accepted/quarantine 重建为 `(tenant,connector,source_id)`；v30（或合并后的实际前序版本）可前向迁移，accepted 从不可变 revision 回填 connector，quarantine 仅从冻结 payload 读取，缺失写 `legacy_unscoped`。历史实验可读但缺日历证据时分析 blocked。灾备 manifest 继续精确匹配当前 schema：升级前以旧程序完成停机备份，升级后恢复写入前以 v32 程序生成并验证新全量备份；旧归档与匹配程序保留到隔离恢复演练通过。
+- 占号状态：PR #13 已以 `60c8052` 将 v31 workspace 占号通知合入 main；PR #11 的 `_apply_v31` 运行代码尚未合入。F-322 以本地 merge `76c2c85` 保留 v32；PR #10 必须按协调结论改用 v33 后才能进入合入复验。
 - 最后更新：2026-08-13
 
 ## M6-R WP5 Forecast Eval（未单独升版）
@@ -26,22 +27,22 @@
 
 ## M6-R WP3 Inventory Planning（未单独升版）
 
-- 状态：schema v30 planning policy/plan 与确定性库存计划经对抗修复和独立复验后，验收 tip `fb707e4` 已从 `cf886e8` 快进合入 `main`；八个 WP3 提交完整保留，无 squash 或 merge commit。
+- 状态：schema v30 planning policy/plan 与确定性库存计划经对抗修复和独立复验后已合入 `main`；当前未提交修复把 `required_forecast_days=max(lead+review, maximum_stock_days)` 与产品 7/14/30 horizons 做配置/run 联合校验，并阻止 superseded plan 作为 current，见 E-20260813-013。无 schema 升版。
 - 兼容性：v30 仍只新增 `inventory_planning_policies` / `inventory_plans`、索引、复合 tenant/forecast/policy 外键与不可变触发器，v29 可前向迁移且既有表不重建。quantity/quality/risk evidence 在合入 main 前的 v30 定义内补齐，不另占 v31；正式支持路径只有 v29→修正版 v30，旧分支期临时 v30 数据库/备份需从 v29 备份重建。无新依赖、HTTP API、Agent tool、关键词路由或 `forecasting` available 登记。
 - 计算与证据：从 `ForecastRunService.get_run` 和 `InventoryService.list_balances` 的公开投影读取；store+SKU 需求只计算一次；仓级 plan 强制 qty null/withheld。`available=max(0,on_hand-reserved)` 并单列 shortfall；risk 按选定分位缺货日相对 lead/review 分层；forecast degraded/anomaly、inbound day-0、快照混时/陈旧进入 `plan_quality`；service level 仅 0.50/0.80/0.95。
 - 安全边界：结果固定为 `advisory_only`，不会创建采购、付款或库存写入。升级前必须用 v29 程序生成并验证停机备份，升级后恢复业务写入前生成并验证 v30 全量备份；精确 schema 校验会拒绝 v29 `.ypbak`。
 - 验证：E-002/003 为旧 tip 史；E-004 对抗纠偏；E-005 独立复验：WP3 `15`、聚焦 `69`、全量 `705 passed, 1 xfailed`（230.55 秒），三项 P1 mutation 与八项对抗探针通过；合入后验证见 E-20260812-006。
 
-## M6-R WP2 Forecast Engine（未单独升版）
+## M6-R WP2 Forecast Engine（未单独升应用版）
 
-- 状态：`forecast-v1` / `forecast-engine-v1`、七种纯 Python 候选、数值需求类型、rolling-origin backtest、baseline fallback、失败候选隔离及 30 日 P50/P80/P95 已通过两份独立验收并合入 main；代码与治理提交为 `0a85aca`，仍是本机候选、未发布。
+- 状态：`forecast-v1` / `forecast-engine-v1`、七种纯 Python 候选、数值需求类型、rolling-origin backtest、baseline fallback、失败候选隔离及 30 日 P50/P80/P95 已通过两份独立验收并合入 main；当前未提交修复以 `forecast-engine-v2` / `forecast-final-selection-v1` 增加 final-only failure 安全重选与失败证据，见 E-20260813-011。历史 v1 run 保持可读，本机候选未发布。
 - 兼容性：沿用 schema v29 已有 `forecast_policies/runs/backtests/points/anomalies`，未新增迁移、依赖、HTTP API、Agent tool、关键词路由、模块 available 登记、库存计划或自动采购/库存写入。`OperationsService.forecast_runs` additive 接入，既有 `forecasting` Demand Fact 服务保持原契约。
 - 策略与读侧：所有候选共享同一批时间 origins；零需求窗口 WAPE/Bias 返回不可比并使用 RMSE；challenger 只有达到固定相对改进阈值才可替换 baseline。模型、阈值、interval levels 与 policy version 同行固化，同版本内容漂移明确拒绝；逐窗失败原因与候选资格可读回。
 - 验证：开发者候选 E-20260811-006；首份独立验收 E-20260811-007；第二份独立验收与缺日/缺货 `None` 序列门禁补强 E-20260811-008；合入 main 证据 E-20260812-001。合入后聚焦 `39 passed`、全量 `690 passed, 1 xfailed`（253.33 秒）。
 
 ## M6-R WP1 Demand Fact 数据层（未单独升版）
 
-- 状态：`demand-v1`、schema v29 daily facts、全量/增量重建、水位、回补和质量标记完成本机代码级候选；`forecasting` 未登记为 available，未新增 Agent tool、关键词路由、HTTP API、自动采购或库存写入。
+- 状态：`demand-v1`、schema v29 daily facts、全量/增量重建、水位、回补和质量标记已合入；当前未提交修复新增无 schema 的 `demand-sku-universe-v1`，store-wide 只从公开 window orders 与 tenant/store inventory balances 取 SKU 并集并记录来源/count/digest，见 E-20260813-012。未新增自动采购或库存写入。
 - 兼容性：schema v29 在 v28 基线上仅新增 `demand_daily_facts`、forecast policy/run/backtest/point/anomaly 表、索引与 immutable fact triggers；v28 可前向迁移，既有表不重建。需求事实从 `OrderService.demand_source_orders` 与 `InventoryService.list_balances` 的公开投影读取，未绕过领域服务读取或修改订单/库存表。
 - 口径与证据：`demand-v1` 固定 Asia/Shanghai、已支付且未取消订单行、14 日固定回补窗口；重放同一水位不产生新版本，订单取消/更正产生可追溯的新 fact version。无订单真零、来源覆盖缺失和缺货 true/false/unknown 均用独立结构化值或质量标记表达。
 - 灾备：升级前以 v28 程序创建并验证停机备份；升级后、恢复业务写入前立即创建并验证 v29 全量备份。v29 验证器按精确 schema 拒绝 v28 `.ypbak`；旧归档及匹配程序保留到新的隔离恢复演练完成。

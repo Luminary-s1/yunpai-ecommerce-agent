@@ -51,6 +51,48 @@ def test_d16_ops_report_uses_declared_period_when_dataset_has_outside_record(
         service.close()
 
 
+def test_d19_requires_a_quality_gated_statistical_conclusion(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        simulation = VirtualStoreSimulation(service)
+        fixture = simulation._load_fixture()
+        simulation._load_store_data(
+            fixture,
+            tenant_id="tenant-test",
+            actor="admin-test",
+        )
+        output = simulation._verify_traffic_lab(
+            "tenant-test",
+            "admin-test",
+            store_id=fixture["store"]["store_id"],
+        )
+        analysis = output["tool_output"]["insights"][0]["analysis"]
+
+        assert analysis["evidence"]["quality_gate"]["status"] == "passed"
+        assert analysis["evidence"]["quality_gate"]["issues"] == []
+        assert analysis["evidence"]["statistical_conclusion"] == "positive_effect"
+        assert analysis["evidence"]["aa_gate"]["status"] == "passed"
+        tool_output = output["tool_output"]
+        provenance = tool_output["references"]["source_provenance"]
+        capability = service.operations.connectors.get(
+            "virtual_taobao"
+        ).capabilities()
+        assert tool_output["source_type"] == "virtual"
+        assert tool_output["virtual"] is True
+        assert {
+            (item["connector_id"], item["capability_version"], item["virtual"])
+            for item in provenance["connectors"]
+        } >= {
+            (
+                capability.connector_id,
+                capability.capability_version,
+                capability.virtual,
+            )
+        }
+    finally:
+        service.close()
+
+
 def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
     tmp_path,
 ) -> None:
@@ -154,11 +196,26 @@ def test_virtual_store_fixture_runs_all_modules_and_replays_idempotently(
         ] is True
         assert evidence["D19"]["virtual"] is True
         assert evidence["D19"]["analysis_unchanged"] is True
+        assert evidence["D19"]["quality_gate"]["status"] == "passed"
+        assert evidence["D19"]["statistical_conclusion"] == "positive_effect"
         assert evidence["D19"]["tool_output"]["statistics_recomputed"] is False
         assert evidence["D19"]["tool_output"]["platform_weight_claim"] is False
+        assert evidence["D19"]["tool_output"]["source_type"] == "virtual"
+        assert evidence["D19"]["tool_output"]["virtual"] is True
         assert evidence["D20"]["virtual"] is True
         assert evidence["D20"]["evidence_unchanged"] is True
         assert set(evidence["D20"]["tool_kinds"].values()) == {"read"}
+        for tool_name in ("get_demand_forecast", "get_inventory_plan"):
+            tool_output = evidence["D20"]["tool_outputs"][tool_name]
+            assert tool_output["source_type"] == "virtual"
+            assert tool_output["virtual"] is True
+            assert any(
+                item["connector_id"] == "virtual_taobao"
+                and item["virtual"] is True
+                for item in tool_output["references"]["source_provenance"][
+                    "connectors"
+                ]
+            )
         assert evidence["D20"]["inventory_plan"]["action_mode"] == "advisory_only"
         assert evidence["D20"]["automatic_actions"] == []
         assert {

@@ -425,6 +425,7 @@ class OrderService:
                         "currency",
                         "placed_at",
                         "lines",
+                        "connector_id",
                         "source_id",
                         "source_updated_at",
                         "version",

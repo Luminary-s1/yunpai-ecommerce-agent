@@ -10,21 +10,82 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import ValidationError
 
+from ..business_calendar import (
+    STORE_BUSINESS_CALENDAR_POLICY_VERSION,
+    StoreBusinessCalendarService,
+)
+from ..connectors import SourceProvenanceResolver, unknown_source_provenance
 from ..database import Database
+from ..llm import ModelGateway
+from ..traffic_source_identity import LEGACY_UNSCOPED_CONNECTOR_ID
+from .freshness import analysis_input_freshness
 from .models import TrafficAnalysisInterpretation, _TrafficAnalysisRunRecord
 from .service import TrafficLabError, TrafficLabService
 
 
-ANALYSIS_CODE_VERSION = "traffic-analysis-code-v2"
+ANALYSIS_CODE_VERSION = "traffic-analysis-code-v3"
+TRAFFIC_ANALYSIS_PROMPT_VERSION = "traffic-analysis-explain-v1"
+
+_TRAFFIC_ANALYSIS_SYSTEM_PROMPT = """\
+你是 Traffic Lab 的统计结果解释器。确定性代码已经固化统计事实，你没有执行权，且不得修改、替代或重新计算 effect、confidence interval、sample size、quality gate、statistical conclusion 或任何证据引用。
+
+只做三件事：
+1. 用谨慎语言解释已给出的证据与反证；
+2. 把机制描述为待验证假设，不宣称掌握平台内部权重或因果机制；
+3. 提出下一轮单变量实验，每条建议只能改变一个变量。
+
+严格按用户消息中的 output_schema 返回一个 JSON object，不要添加统计字段或模型元数据。\
+"""
 
 
 class TrafficAnalysisInterpreter(Protocol):
     """Optional AI boundary: consume facts and return explanation-only fields."""
 
     def interpret(self, facts: dict[str, Any]) -> Any: ...
+
+
+class TrafficAnalysisModelInterpreter:
+    """Adapt the shared model gateway to the explanation-only Traffic schema."""
+
+    def __init__(self, gateway: ModelGateway) -> None:
+        self.gateway = gateway
+
+    def interpret(self, facts: dict[str, Any]) -> dict[str, Any]:
+        output_schema = TrafficAnalysisInterpretation.model_json_schema()
+        properties = output_schema.get("properties", {})
+        required = output_schema.get("required", [])
+        for field in ("model_provider", "model_name", "prompt_version"):
+            properties.pop(field, None)
+            if field in required:
+                required.remove(field)
+        request = {
+            "statistics_authority": "deterministic_code",
+            "facts": facts,
+            "output_schema": output_schema,
+        }
+        raw = self.gateway.generate_json(
+            [
+                {"role": "system", "content": _TRAFFIC_ANALYSIS_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": json.dumps(request, ensure_ascii=False, sort_keys=True),
+                },
+            ],
+            thinking_enabled=False,
+        )
+        interpretation = dict(raw)
+        interpretation.update(
+            {
+                "model_provider": self.gateway.settings.model_provider,
+                "model_name": self.gateway.settings.model_name,
+                "prompt_version": TRAFFIC_ANALYSIS_PROMPT_VERSION,
+            }
+        )
+        return interpretation
 
 
 @dataclass(frozen=True)
@@ -110,6 +171,8 @@ class TrafficAnalysisEngine:
         *,
         interpreter: TrafficAnalysisInterpreter | None = None,
         interpretation_timeout_seconds: float = 10.0,
+        source_provenance_resolver: SourceProvenanceResolver | None = None,
+        business_calendars: StoreBusinessCalendarService | None = None,
     ) -> None:
         if (
             not math.isfinite(interpretation_timeout_seconds)
@@ -117,9 +180,13 @@ class TrafficAnalysisEngine:
         ):
             raise ValueError("interpretation_timeout_must_be_positive")
         self.db = db
-        self.service = TrafficLabService(db)
+        self.service = TrafficLabService(
+            db,
+            business_calendars=business_calendars,
+        )
         self.interpreter = interpreter
         self.interpretation_timeout_seconds = interpretation_timeout_seconds
+        self.source_provenance_resolver = source_provenance_resolver
 
     def analyze_experiment(
         self,
@@ -139,6 +206,7 @@ class TrafficAnalysisEngine:
         )
         windows = self.service.list_experiment_windows(tenant_id, experiment_id)
         issues: list[dict[str, Any]] = []
+        business_calendar = self._business_calendar_evidence(experiment, issues)
 
         if experiment["status"] != "completed" or experiment["ended_at"] is None:
             self._add_issue(issues, "experiment_not_completed")
@@ -245,20 +313,36 @@ class TrafficAnalysisEngine:
             "issues": issues,
         }
         data_window = self._data_window(experiment, windows, included, excluded)
+        input_snapshot = self._input_snapshot(
+            experiment,
+            control,
+            treatment,
+            windows,
+            included,
+            excluded,
+        )
+        source_provenance = (
+            self.source_provenance_resolver.freeze(
+                (
+                    revision["values"].get("connector_id")
+                    for revision in input_snapshot["revisions"]
+                ),
+                basis="traffic_analysis_input_revisions",
+            )
+            if self.source_provenance_resolver is not None
+            else unknown_source_provenance(
+                basis="traffic_analysis_resolver_not_configured"
+            )
+        )
         evidence = {
             "quality_gate": quality_gate,
             "statistical_conclusion": conclusion,
             "aa_gate": aa_gate,
+            "business_calendar": business_calendar,
             "window_quality": window_quality,
             "control_variables": control_snapshot,
-            "input_snapshot": self._input_snapshot(
-                experiment,
-                control,
-                treatment,
-                windows,
-                included,
-                excluded,
-            ),
+            "input_snapshot": input_snapshot,
+            "source_provenance": source_provenance,
             "statistics_authority": "deterministic_code",
         }
         counter_evidence = {
@@ -334,6 +418,51 @@ class TrafficAnalysisEngine:
         candidate = {"code": code, **details}
         if candidate not in issues:
             issues.append(candidate)
+
+    @classmethod
+    def _business_calendar_evidence(
+        cls,
+        experiment: dict[str, Any],
+        issues: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        calendar_id = experiment.get("business_calendar_id")
+        record_version = experiment.get("business_calendar_version")
+        timezone_name = experiment.get("business_timezone")
+        policy_version = experiment.get("business_calendar_policy_version")
+        if any(
+            value is None
+            for value in (
+                calendar_id,
+                record_version,
+                timezone_name,
+                policy_version,
+            )
+        ):
+            cls._add_issue(issues, "business_timezone_evidence_missing")
+            return {
+                "calendar_id": calendar_id,
+                "record_version": record_version,
+                "timezone": timezone_name,
+                "policy_version": policy_version,
+            }
+        if policy_version != STORE_BUSINESS_CALENDAR_POLICY_VERSION:
+            cls._add_issue(
+                issues,
+                "business_calendar_policy_unsupported",
+                policy_version=policy_version,
+            )
+        try:
+            if int(record_version) < 1:
+                raise ValueError("record version must be positive")
+            ZoneInfo(str(timezone_name))
+        except (TypeError, ValueError, ZoneInfoNotFoundError):
+            cls._add_issue(issues, "business_timezone_evidence_invalid")
+        return {
+            "calendar_id": calendar_id,
+            "record_version": record_version,
+            "timezone": timezone_name,
+            "policy_version": policy_version,
+        }
 
     def _check_control_variables(
         self,
@@ -439,6 +568,33 @@ class TrafficAnalysisEngine:
         windows: list[dict[str, Any]],
         issues: list[dict[str, Any]],
     ) -> None:
+        timezone_name = experiment.get("business_timezone")
+        if any(
+            experiment.get(field) is None
+            for field in (
+                "business_calendar_id",
+                "business_calendar_version",
+                "business_timezone",
+                "business_calendar_policy_version",
+            )
+        ):
+            self._add_issue(issues, "business_timezone_evidence_missing")
+            return
+        if (
+            experiment.get("business_calendar_policy_version")
+            != STORE_BUSINESS_CALENDAR_POLICY_VERSION
+        ):
+            self._add_issue(
+                issues,
+                "business_calendar_policy_unsupported",
+                policy_version=experiment.get("business_calendar_policy_version"),
+            )
+            return
+        try:
+            business_zone = ZoneInfo(str(timezone_name))
+        except (ZoneInfoNotFoundError, ValueError):
+            self._add_issue(issues, "business_timezone_evidence_invalid")
+            return
         ordered = sorted(
             windows,
             key=lambda item: (
@@ -474,12 +630,18 @@ class TrafficAnalysisEngine:
                 control_seconds=duration["control"],
                 treatment_seconds=duration["treatment"],
             )
-        hour_distributions = {
-            assignment: Counter(
-                datetime.fromisoformat(window["window_start"]).hour
+        local_starts = {
+            assignment: [
+                datetime.fromisoformat(window["window_start"]).astimezone(
+                    business_zone
+                )
                 for window in assignment_windows
-            )
+            ]
             for assignment, assignment_windows in grouped.items()
+        }
+        hour_distributions = {
+            assignment: Counter(item.hour for item in starts)
+            for assignment, starts in local_starts.items()
         }
         if hour_distributions["control"] != hour_distributions["treatment"]:
             self._add_issue(
@@ -489,11 +651,8 @@ class TrafficAnalysisEngine:
                 treatment=dict(sorted(hour_distributions["treatment"].items())),
             )
         date_distributions = {
-            assignment: Counter(
-                datetime.fromisoformat(window["window_start"]).date().isoformat()
-                for window in assignment_windows
-            )
-            for assignment, assignment_windows in grouped.items()
+            assignment: Counter(item.date().isoformat() for item in starts)
+            for assignment, starts in local_starts.items()
         }
         if date_distributions["control"] != date_distributions["treatment"]:
             self._add_issue(
@@ -503,11 +662,8 @@ class TrafficAnalysisEngine:
                 treatment=dict(sorted(date_distributions["treatment"].items())),
             )
         weekday_distributions = {
-            assignment: Counter(
-                datetime.fromisoformat(window["window_start"]).weekday()
-                for window in assignment_windows
-            )
-            for assignment, assignment_windows in grouped.items()
+            assignment: Counter(item.weekday() for item in starts)
+            for assignment, starts in local_starts.items()
         }
         if weekday_distributions["control"] != weekday_distributions["treatment"]:
             self._add_issue(
@@ -596,12 +752,14 @@ class TrafficAnalysisEngine:
                 f"""
                 SELECT * FROM traffic_metric_buckets
                 WHERE tenant_id=?
+                  AND connector_id<>?
                   AND listing_revision_id IN ({placeholders})
                   AND metric_end>? AND metric_start<?
                 ORDER BY metric_start ASC, id ASC
                 """,
                 (
                     tenant_id,
+                    LEGACY_UNSCOPED_CONNECTOR_ID,
                     *revision_ids,
                     experiment["started_at"],
                     end,
@@ -1115,137 +1273,18 @@ class TrafficAnalysisEngine:
             and evidence.get("statistical_conclusion") == "no_detectable_effect"
         )
         status = "passed" if passed else "failed"
-        if passed and not self._analysis_inputs_are_current(
+        if passed and not analysis_input_freshness(
+            self.db,
             tenant_id,
             str(row["experiment_id"]),
             evidence,
-        ):
+            analysis_run_id=str(row["analysis_run_id"]),
+        )["usable_as_current"]:
             status = "stale"
         return {
             "status": status,
             "analysis_run_id": row["analysis_run_id"],
         }
-
-    def _analysis_inputs_are_current(
-        self,
-        tenant_id: str,
-        experiment_id: str,
-        evidence: dict[str, Any],
-    ) -> bool:
-        snapshot = evidence.get("input_snapshot")
-        if not isinstance(snapshot, dict):
-            return False
-        experiment_snapshot = snapshot.get("experiment")
-        revision_snapshots = snapshot.get("revisions")
-        window_snapshots = snapshot.get("windows")
-        bucket_snapshots = snapshot.get("buckets")
-        if not (
-            isinstance(experiment_snapshot, dict)
-            and isinstance(revision_snapshots, list)
-            and isinstance(window_snapshots, list)
-            and isinstance(bucket_snapshots, list)
-        ):
-            return False
-        try:
-            expected_revisions = {
-                str(item["revision_id"]): str(item["payload_hash"])
-                for item in revision_snapshots
-            }
-            expected_windows = {
-                str(item["window_id"]): str(item["payload_hash"])
-                for item in window_snapshots
-            }
-            expected_buckets = {
-                str(item["bucket_id"]): (
-                    str(item["payload_hash"]),
-                    int(item["version"]),
-                )
-                for item in bucket_snapshots
-            }
-            if (
-                len(expected_revisions) != len(revision_snapshots)
-                or len(expected_windows) != len(window_snapshots)
-                or len(expected_buckets) != len(bucket_snapshots)
-            ):
-                return False
-        except (KeyError, TypeError, ValueError):
-            return False
-
-        with self.db.connect() as conn:
-            experiment_row = conn.execute(
-                """
-                SELECT * FROM traffic_experiments
-                WHERE tenant_id=? AND experiment_id=?
-                """,
-                (tenant_id, experiment_id),
-            ).fetchone()
-            if experiment_row is None or experiment_row["ended_at"] is None:
-                return False
-            try:
-                snapshot_record_version = int(
-                    experiment_snapshot.get("record_version", -1)
-                )
-            except (TypeError, ValueError):
-                return False
-            if (
-                str(experiment_row["payload_hash"])
-                != str(experiment_snapshot.get("payload_hash"))
-                or int(experiment_row["record_version"])
-                != snapshot_record_version
-            ):
-                return False
-            revision_ids = {
-                str(experiment_row["control_revision_id"]),
-                str(experiment_row["treatment_revision_id"]),
-            }
-            if revision_ids != set(expected_revisions):
-                return False
-            placeholders = ",".join("?" for _ in revision_ids)
-            revision_rows = conn.execute(
-                f"""
-                SELECT id, payload_hash FROM listing_revisions
-                WHERE tenant_id=? AND id IN ({placeholders})
-                """,
-                (tenant_id, *sorted(revision_ids)),
-            ).fetchall()
-            current_revisions = {
-                str(item["id"]): str(item["payload_hash"])
-                for item in revision_rows
-            }
-            if current_revisions != expected_revisions:
-                return False
-            window_rows = conn.execute(
-                """
-                SELECT window_id, payload_hash FROM traffic_experiment_windows
-                WHERE tenant_id=? AND experiment_id=?
-                """,
-                (tenant_id, experiment_id),
-            ).fetchall()
-            current_windows = {
-                str(item["window_id"]): str(item["payload_hash"])
-                for item in window_rows
-            }
-            if current_windows != expected_windows:
-                return False
-            bucket_rows = conn.execute(
-                f"""
-                SELECT id, payload_hash, version FROM traffic_metric_buckets
-                WHERE tenant_id=?
-                  AND listing_revision_id IN ({placeholders})
-                  AND metric_end>? AND metric_start<?
-                """,
-                (
-                    tenant_id,
-                    *sorted(revision_ids),
-                    experiment_row["started_at"],
-                    experiment_row["ended_at"],
-                ),
-            ).fetchall()
-        current_buckets = {
-            str(item["id"]): (str(item["payload_hash"]), int(item["version"]))
-            for item in bucket_rows
-        }
-        return current_buckets == expected_buckets
 
     @staticmethod
     def _statistical_conclusion(
@@ -1365,6 +1404,10 @@ class TrafficAnalysisEngine:
                         "minimum_exposure",
                         "washout_window",
                         "analysis_policy_version",
+                        "business_calendar_id",
+                        "business_calendar_version",
+                        "business_timezone",
+                        "business_calendar_policy_version",
                     )
                 },
             },

@@ -233,13 +233,13 @@ def test_json_import_quarantines_bucket_matching_overlapping_revisions(tmp_path)
     }
 
 
-def test_wp1_metric_hash_stays_stable_when_import_identity_is_not_supplied(tmp_path) -> None:
+def test_revision_only_metric_hash_uses_resolved_v32_identity(tmp_path) -> None:
     db = Database(tmp_path / "traffic-hash-compat.sqlite3")
     db.initialize()
     domain = _seed_revision(db)
-    revision_id = domain.list_revisions("tenant-a", limit=1)[0]["id"]
+    revision = domain.list_revisions("tenant-a", limit=1)[0]
     value = TrafficMetricBucketUpsert(
-        listing_revision_id=revision_id,
+        listing_revision_id=revision["id"],
         metric_start=datetime(2026, 8, 1, 1, 0, tzinfo=UTC),
         metric_end=datetime(2026, 8, 1, 2, 0, tzinfo=UTC),
         bucket_granularity="hour",
@@ -257,11 +257,13 @@ def test_wp1_metric_hash_stays_stable_when_import_identity_is_not_supplied(tmp_p
         data_as_of=datetime(2026, 8, 1, 3, 0, tzinfo=UTC),
         source_id="legacy-wp1-metric-001",
     )
-    legacy_payload = value.model_dump(mode="json")
-    for field in ("connector_id", "store_id", "item_id", "sku_id"):
-        legacy_payload.pop(field)
-    legacy_payload.update(
+    canonical_payload = value.model_dump(mode="json")
+    canonical_payload.update(
         {
+            "connector_id": revision["connector_id"],
+            "store_id": revision["store_id"],
+            "item_id": revision["item_id"],
+            "sku_id": revision["sku_id"],
             "metric_start": value.metric_start.astimezone(UTC).isoformat(),
             "metric_end": value.metric_end.astimezone(UTC).isoformat(),
             "data_as_of": value.data_as_of.astimezone(UTC).isoformat(),
@@ -269,7 +271,8 @@ def test_wp1_metric_hash_stays_stable_when_import_identity_is_not_supplied(tmp_p
     )
 
     result = domain.ingest_metric_bucket("tenant-a", value)
-    assert result["payload_hash"] == payload_digest(legacy_payload)
+    assert result["connector_id"] == revision["connector_id"]
+    assert result["payload_hash"] == payload_digest(canonical_payload)
 
 
 def test_import_rejects_explicit_revision_with_mismatched_listing_identity(tmp_path) -> None:

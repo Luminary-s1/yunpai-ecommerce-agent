@@ -11,6 +11,14 @@ from .base import (
     VerifiedEvent,
 )
 from .registry import ConnectorRegistry
+from .provenance import (
+    SOURCE_PROVENANCE_VERSION,
+    SourceProvenanceError,
+    SourceProvenanceResolver,
+    merge_source_provenance,
+    read_source_provenance,
+    unknown_source_provenance,
+)
 from .virtual_taobao import VirtualTaobaoConnector
 
 __all__ = [
@@ -26,4 +34,10 @@ __all__ = [
     "VerificationResult",
     "VerifiedEvent",
     "VirtualTaobaoConnector",
+    "SOURCE_PROVENANCE_VERSION",
+    "SourceProvenanceError",
+    "SourceProvenanceResolver",
+    "merge_source_provenance",
+    "read_source_provenance",
+    "unknown_source_provenance",
 ]

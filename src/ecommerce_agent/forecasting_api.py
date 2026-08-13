@@ -16,6 +16,7 @@ from .forecasting import (
     ForecastRunError,
     InventoryPlanningError,
     InventoryPlanningPolicy,
+    PRODUCT_FORECAST_HORIZONS,
     SUPPORTED_FORECAST_MODELS,
 )
 from .service import AgentService
@@ -33,7 +34,7 @@ class ForecastPolicyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     policy_version: str = Field(default="forecast-v1", min_length=1, max_length=128)
-    horizons: tuple[int, ...] = (7, 14, 30)
+    horizons: tuple[int, ...] = PRODUCT_FORECAST_HORIZONS
     minimum_history_days: int = Field(default=14, ge=1, le=3650)
     backtest_windows: int = Field(default=4, ge=1, le=100)
     required_relative_improvement: float = Field(default=0.02, ge=0, lt=1)
@@ -87,6 +88,15 @@ def build_forecasting_router(
                 "window": result["window"],
                 "facts_written": result["facts_written"],
                 "facts_idempotent": result["facts_idempotent"],
+                "sku_universe": {
+                    key: result["sku_universe"][key]
+                    for key in (
+                        "policy_version",
+                        "scope",
+                        "sku_count",
+                        "digest",
+                    )
+                },
             },
             admin.tenant_id,
         )
@@ -167,6 +177,9 @@ def build_forecasting_router(
                 "store_id": payload.store_id,
                 "forecast_policy_version": forecast_policy.policy_version,
                 "planning_policy_version": payload.inventory_policy.policy_version,
+                "forecast_planning_contract": result[
+                    "forecast_planning_contract"
+                ],
                 "write_status": {
                     "forecast": result["forecast_policy"]["write_status"],
                     "inventory": result["inventory_policy"]["write_status"],
@@ -187,13 +200,6 @@ def build_forecasting_router(
             store_id=payload.store_id,
             sku_id=payload.sku_id,
         )
-        forecast = call(
-            runs.run,
-            admin.tenant_id,
-            store_id=payload.store_id,
-            sku_id=payload.sku_id,
-            policy=configured_forecast,
-        )
         planning_policy = call(
             plans.resolve_policy,
             admin.tenant_id,
@@ -201,6 +207,18 @@ def build_forecasting_router(
             sku_id=payload.sku_id,
             warehouse_id=payload.warehouse_id,
         ) or InventoryPlanningPolicy(warehouse_id=payload.warehouse_id)
+        call(
+            plans.validate_forecast_contract,
+            configured_forecast or ForecastPolicy(),
+            planning_policy,
+        )
+        forecast = call(
+            runs.run,
+            admin.tenant_id,
+            store_id=payload.store_id,
+            sku_id=payload.sku_id,
+            policy=configured_forecast,
+        )
         try:
             inventory_plan = plans.create_plan(
                 admin.tenant_id, forecast["run_id"], planning_policy

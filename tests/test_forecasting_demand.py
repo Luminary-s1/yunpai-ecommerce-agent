@@ -66,7 +66,7 @@ def _rebuild(
     service: DemandFactService,
     *,
     tenant_id: str = TENANT_A,
-    sku_id: str,
+    sku_id: str | None,
     start_date: date,
     end_date: date,
     coverage_complete: bool,
@@ -197,14 +197,15 @@ def test_demand_v1_uses_shanghai_business_date_and_traces_source_facts(tmp_path)
     }
     assert rows["2026-08-10"]["eligible_units"] == 2
     assert rows["2026-08-11"]["eligible_units"] == 3
-    assert rows["2026-08-10"]["lineage"]["orders"] == [
-        {
-            "order_id": "near-midnight",
-            "source_id": "source-near-midnight",
-            "source_updated_at": "2026-08-10T16:05:00+00:00",
-            "version": 1,
-        }
-    ]
+    order_lineage = rows["2026-08-10"]["lineage"]["orders"]
+    assert len(order_lineage) == 1
+    assert {
+        "connector_id": "forecast-fixture",
+        "order_id": "near-midnight",
+        "source_id": "source-near-midnight",
+        "source_updated_at": "2026-08-10T16:05:00+00:00",
+        "version": 1,
+    }.items() <= order_lineage[0].items()
     assert rows["2026-08-11"]["source_watermark"]["orders"]["count"] == 1
 
 
@@ -346,6 +347,144 @@ def test_demand_facts_distinguish_true_zero_missing_data_and_stockout_states(tmp
     assert "zero_demand" in rows["sku-zero"]["quality_flags"]
     assert rows["sku-missing"]["eligible_units"] is None
     assert "data_coverage_missing" in rows["sku-missing"]["quality_flags"]
+
+
+def test_store_wide_rebuild_uses_inventory_skus_without_crossing_scope(tmp_path) -> None:
+    orders, inventory, facts = _services(tmp_path)
+    orders.upsert(
+        TENANT_A,
+        _order(
+            order_id="store-wide-order-only",
+            sku_id="sku-order-only",
+            quantity=2,
+            placed_at=_at("2026-08-11T04:00:00+00:00"),
+            source_updated_at=_at("2026-08-11T05:00:00+00:00"),
+        ),
+    )
+    inventory.upsert(
+        TENANT_A,
+        InventoryBalanceUpsert(
+            connector_id="forecast-fixture",
+            store_id=STORE,
+            warehouse_id="warehouse-1",
+            sku_id="sku-inventory-only",
+            on_hand=Decimal("8"),
+            reserved=Decimal("1"),
+            source_updated_at=_at("2026-08-10T02:00:00+00:00"),
+            source_id="inventory-only-snapshot",
+        ),
+    )
+    inventory.upsert(
+        TENANT_A,
+        InventoryBalanceUpsert(
+            connector_id="forecast-fixture",
+            store_id="other-store",
+            warehouse_id="warehouse-1",
+            sku_id="sku-other-store-only",
+            on_hand=Decimal("3"),
+            source_updated_at=_at("2026-08-10T02:00:00+00:00"),
+            source_id="other-store-snapshot",
+        ),
+    )
+    inventory.upsert(
+        TENANT_B,
+        InventoryBalanceUpsert(
+            connector_id="forecast-fixture",
+            store_id=STORE,
+            warehouse_id="warehouse-1",
+            sku_id="sku-other-tenant-only",
+            on_hand=Decimal("4"),
+            source_updated_at=_at("2026-08-10T02:00:00+00:00"),
+            source_id="other-tenant-snapshot",
+        ),
+    )
+
+    rebuilt = _rebuild(
+        facts,
+        sku_id=None,
+        start_date=date(2026, 8, 10),
+        end_date=date(2026, 8, 16),
+        coverage_complete=True,
+    )
+    rows = facts.list_facts(TENANT_A, store_id=STORE)
+
+    assert rebuilt["facts_written"] == 14
+    universe = rebuilt["sku_universe"]
+    assert universe["policy_version"] == "demand-sku-universe-v1"
+    assert universe["scope"] == "store_wide"
+    assert universe["sku_count"] == 2
+    assert universe["digest"]
+    assert {
+        "sku_id": "sku-inventory-only",
+        "sources": ["current_inventory_balances"],
+    } in universe["members"]
+    assert {
+        "sku_id": "sku-order-only",
+        "sources": ["window_order_lines"],
+    } in universe["members"]
+    assert {item["sku_id"] for item in rows} == {
+        "sku-inventory-only",
+        "sku-order-only",
+    }
+    inventory_only = [
+        item for item in rows if item["sku_id"] == "sku-inventory-only"
+    ]
+    assert all(item["eligible_units"] == 0 for item in inventory_only)
+    assert all("zero_demand" in item["quality_flags"] for item in inventory_only)
+    assert facts.list_facts(TENANT_A, store_id="other-store") == []
+    assert facts.list_facts(TENANT_B, store_id=STORE) == []
+
+    forecast = ForecastRunService(facts.db, facts=facts).run(
+        TENANT_A,
+        store_id=STORE,
+        sku_id="sku-inventory-only",
+    )
+    assert forecast["candidate_models"]["demand_type"] == "cold_start"
+    assert forecast["points"]
+
+
+def test_inventory_sku_without_confirmed_coverage_remains_missing_not_zero(
+    tmp_path,
+) -> None:
+    _orders, inventory, facts = _services(tmp_path)
+    inventory.upsert(
+        TENANT_A,
+        InventoryBalanceUpsert(
+            connector_id="forecast-fixture",
+            store_id=STORE,
+            warehouse_id="warehouse-1",
+            sku_id="sku-coverage-unknown",
+            on_hand=Decimal("5"),
+            source_updated_at=_at("2026-08-10T02:00:00+00:00"),
+            source_id="coverage-unknown-snapshot",
+        ),
+    )
+
+    rebuilt = _rebuild(
+        facts,
+        sku_id=None,
+        start_date=date(2026, 8, 10),
+        end_date=date(2026, 8, 16),
+        coverage_complete=False,
+    )
+    rows = facts.list_facts(
+        TENANT_A,
+        store_id=STORE,
+        sku_id="sku-coverage-unknown",
+    )
+
+    assert rebuilt["facts_written"] == 7
+    assert all(item["eligible_units"] is None for item in rows)
+    assert all("data_coverage_missing" in item["quality_flags"] for item in rows)
+    with pytest.raises(
+        ValueError,
+        match="forecast_engine_failed:no_observed_demand",
+    ):
+        ForecastRunService(facts.db, facts=facts).run(
+            TENANT_A,
+            store_id=STORE,
+            sku_id="sku-coverage-unknown",
+        )
 
 
 def test_demand_fact_reads_and_writes_are_tenant_isolated(tmp_path) -> None:

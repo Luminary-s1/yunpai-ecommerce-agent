@@ -33,7 +33,6 @@ from .ops_assistant import (
     OpsReportQuery,
 )
 from .orders import OrderService, OrderUpsert
-from .service import OperationsService
 
 __all__ = [
     "CatalogItemUpsert",
@@ -69,3 +68,11 @@ __all__ = [
     "ReconciliationTaskTransition",
     "SettlementStatementUpsert",
 ]
+
+
+def __getattr__(name: str):
+    if name == "OperationsService":
+        from .service import OperationsService
+
+        return OperationsService
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
