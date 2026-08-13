@@ -80,8 +80,38 @@
 | 终审低项-兜底 dict 缺键 | service.py 三处兜底 dict 补 update_failed/skipped_foreign | ✅ 457793f |
 | 终审 P3-5 Wiki 反复编辑 version=1 | Wiki PUT 走 create 新行（同 knowledge_key 多版本），版本号不复用原行 MAX+1，与 revise 口径不一致。**建议**：Wiki PUT 改走 revise（expected_record_version 取自当前 active 行），生命周期一步到位 | ⏸ 待下一迭代 |
 | 终审 P3-6 热更新不刷新 checksum/version | 热更新刷新 search_text/embedding/updated_at/record_version，但不重算 checksum、不递增 version。检索一致性已闭环；checksum 仅用于资产层校验，影响面低 | ⏸ 待下一迭代 |
-| 终审 P3-8 general 资产以 bootstrap 租户导入 | `_import_knowledge_assets` 传 `tenant_id=bootstrap_tenant_id`，general（platform/industry）知识本应 NULL 租户全局。当前单租户部署无影响；多租户上线前必须改为按 scope 分组导入（general→None，seller→店铺租户） | ⏸ 多租户上线前 |
-| 终审 P3-9 memory dedup 缺租户 | record() 幂等去重 SQL 无 tenant_id 条件，跨租户同内容会误判重复；retire_document 不递增 record_version（乐观锁可见性弱于 knowledge_management）。建议：dedup 加租户条件 + retire 补 record_version+1 | ⏸ 待下一迭代 |
+| 终审 P3-8 general 资产以 bootstrap 租户导入 | **已修复**（多租户升级为 P2-1，见 6.2） | ✅ 3f7cb20 |
+| 终审 P3-9 memory dedup 缺租户 | **已修复**（多租户升级，见 6.2） | ✅ 3f7cb20 |
+
+### 6.2 多租户隔离专项修复（2026-08-13 用户确认多租户为当前目标场景）
+
+> 专项审查按多租户基线重审，发现 2 P1 + 1 P2 + 6 P3。用户拍板：**租户影子编辑**（租户编辑全局词条→私有新版本，其他租户仍见全局版）；**无店铺 seller 资产全局可见**。
+
+| 项 | 处置 | commit |
+|---|---|---|
+| P1-1 租户 approve/rollback/complete_rollout 可退休全局行（偷走全局知识） | 三处 retire 条件去 `OR tenant_id IS NULL`，改精确 `tenant_id=?` | ✅ 3f7cb20 |
+| P1-2 租户热更新可越权改写全局行 | import_to_runtime 按有效租户分组 + `allow_global_update` 旗标（仅 appliance 启动导入传 True）+ 热更新租户条件收紧 | ✅ 3f7cb20 |
+| P2-1+⑤ general/无店铺 seller 资产挂 bootstrap（全局不可见） | GENERAL 或 scope_key=all 强制 tenant_id=NULL；无店铺 seller store_id=None | ✅ 3f7cb20 |
+| P3-4 load_from_runtime None 无租户过滤（泄露所有租户） | None → 只读全局行；传租户 → 本租户+全局 | ✅ 3f7cb20 |
+| P3-5 forget 含 NULL 分支（租户可删全局记忆） | 精确租户匹配 | ✅ 3f7cb20 |
+| P3-9 dedup 无租户条件（跨租户记忆被吞） | dedup SQL 加租户条件 | ✅ 3f7cb20 |
+| ① 影子排序无 tiebreak（影子编辑不生效） | RetrievedDocument 加 tenant_id，排序 score 后插本租户优先 | ✅ 01f0ec5 |
+| ③ Wiki 服务写死 bootstrap 租户视角 | WikiService 四方法 + 路由传 admin.tenant_id | ✅ 9be55ad/a9e7f71 |
+| ④ put_item 影子编辑语义 | 恒定 admin.tenant_id + store/product 层兜底 store_id、platform/industry 恒 None | ✅ 9be55ad |
+| ⑥ 存量库资产挂 bootstrap（升级不生效） | 启动导入前幂等重租户化（全局层行→NULL、冲突行 retired、店铺行不动） | ✅ 93a6615 |
+| 低项 next_version 混全局行 / retire_document 不递增版本 | 精确租户 / record_version+1 | ✅ 1ae8d53 |
+| V1（复审发现）Wiki 详情/stats 路由漏传租户（跨租户读泄露） | 两条路由补 admin.tenant_id | ✅ a9e7f71 |
+
+### 6.3 多租户复审遗留（2026-08-13 对抗性复审）
+
+| 项 | 决策 | 状态 |
+|---|---|---|
+| V2 店铺资产归属未决（kg-id first-wins，非 bootstrap 租户拿不到店铺级 seller 知识） | **记账**：需产品层决策——按租户分片 02_clean 或 scope_key→tenant 映射；当前部署以 bootstrap 租户店铺为主，不影响主线 | ⏸ 待产品决策 |
+| P3-1 全局生命周期死路径（_require 传 None 永不匹配；create(None) 留孤儿 candidate） | **记账**：全局行改版仅走 appliance 热更新/retrofit；注释已澄清 | ⏸ 待全局管理员体系 |
+| P3-2 memory.recall(None) 无过滤 | **记账**：API 契约地雷（当前调用方都传租户，无实际泄露） | ⏸ 待下一迭代 |
+| P3-3 evolution get_document(None) 读无过滤 | **记账**：写路径被 retire_document 精确租户兜住，仅读泄露；API 层均传租户 | ⏸ 待下一迭代 |
+| P3-4 load_from_runtime 合并视图版本平局无 tiebreak | **记账**：展示与检索可能不一致（非安全洞） | ⏸ 待下一迭代 |
+| P3-5 product 层 Wiki 编辑必 400（put_item 不传 sku_id） | **记账**：预存在问题 | ⏸ 待下一迭代 |
 
 ## 7. 合入条件核对（负责人 08-12 10:06 终验五条）
 
