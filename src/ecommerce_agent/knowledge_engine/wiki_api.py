@@ -351,6 +351,7 @@ def build_wiki_router(
         if item["kind"] not in RUNTIME_KINDS:
             raise HTTPException(status_code=422, detail=f"{item['kind']} 实体类只读，不可编辑")
         try:
+            attrs = item.get("attributes") or {}
             create_req = KnowledgeCreateRequest(
                 category=request.category or item.get("category") or "常见问答",
                 intent=request.intent or "wiki-edit",
@@ -359,8 +360,10 @@ def build_wiki_router(
                 keywords=request.keywords or "",
                 risk_level=request.risk_level,  # type: ignore[arg-type]
                 source="wiki://manual",
-                layer="store",
-                store_id=admin.tenant_id or service.settings.bootstrap_tenant_id,
+                # 终审 P3-7：沿用原词条 layer/store_id（此前硬编码 store 导致平台通用词条
+                # 编辑后 scope 漂移、其他租户不可见）
+                layer=attrs.get("layer") or "store",
+                store_id=attrs.get("store_id") or admin.tenant_id or service.settings.bootstrap_tenant_id,
             )
             created = service.knowledge_management.create(
                 admin.tenant_id or service.settings.bootstrap_tenant_id,
