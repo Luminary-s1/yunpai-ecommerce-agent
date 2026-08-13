@@ -460,3 +460,12 @@ def test_load_clean_dir_logs_missing_asset_files(tmp_path: Path, caplog) -> None
         items = load_clean_dir(clean_dir)
     assert items == []
     assert any("缺失" in rec.message for rec in caplog.records), "缺文件必须打 warning"
+
+
+def test_coerce_scope_removed_from_public_api() -> None:
+    """死导出守卫：coerce_scope 全仓零调用，必须已删除。"""
+    import ecommerce_agent.knowledge_engine as ke
+    import ecommerce_agent.knowledge_engine.models as km
+
+    assert not hasattr(ke, "coerce_scope"), "coerce_scope 不应再从包级导出"
+    assert not hasattr(km, "coerce_scope"), "coerce_scope 函数应已删除"

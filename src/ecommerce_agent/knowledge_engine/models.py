@@ -142,11 +142,3 @@ def coerce_kind(value: str) -> KnowledgeKind:
         raise ValueError(
             f"未知知识类型: {value!r}（合法值: {[k.value for k in KnowledgeKind]}）"
         ) from None
-
-
-def coerce_scope(value: str) -> KnowledgeScope:
-    """scope 是分层归属，未知值回退通用层可接受（scope 无主键语义）。"""
-    try:
-        return KnowledgeScope(value)
-    except ValueError:
-        return KnowledgeScope.GENERAL  # 未标注回退到通用层

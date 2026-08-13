@@ -20,7 +20,6 @@ from .models import (
     TimelineEntry,
     utc_now_iso,
     coerce_kind,
-    coerce_scope,
 )
 from .loader import (
     load_clean_dir,
@@ -101,7 +100,6 @@ __all__ = [
     "TimelineEntry",
     "utc_now_iso",
     "coerce_kind",
-    "coerce_scope",
     # loader
     "load_clean_dir",
     "load_record",
