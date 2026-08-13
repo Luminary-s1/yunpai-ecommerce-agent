@@ -354,6 +354,10 @@ def import_to_runtime(
                 continue
             # add_document 不接受 None 的 sku_id 之外的可空字段，这里显式剔除
             row = {k: v for k, v in row.items() if v is not None}
+            # 复审决策：全局组 INSERT 不加旗标门禁——内容来自共享 02_clean 目录
+            # （调用方无法注入内容，非投毒面），且幂等 first-wins 保证首个导入者
+            # 写入后其他调用方被 existing 拦截；appliance 是全局内容的**权威刷新者**
+            # （allow_global_update=True 热更新），租户只能 seed 无法改写。
             try:
                 knowledge_base.add_document(
                     **row,
