@@ -30,24 +30,6 @@ from ecommerce_agent.knowledge_engine import (
 
 # ---------- 模型层 ----------
 
-def test_revise_appends_timeline_and_updates_truth() -> None:
-    """revise 更新编译真相，同时把旧结论追加进时间线（不删原文）。"""
-    item = KnowledgeItem(
-        id="POL-1",
-        kind=KnowledgeKind.POLICY,
-        scope=KnowledgeScope.SELLER,
-        compiled_truth="保修 12 个月",
-        timeline=[TimelineEntry(at="2026-01-01T00:00:00+00:00", action="created")],
-    )
-    item.revise("保修 24 个月", note="政策调整")
-
-    assert item.compiled_truth == "保修 24 个月"
-    assert len(item.timeline) == 2  # created + revised，原文保留
-    assert item.timeline[1].action == "revised"
-    assert "保修 12 个月" in item.timeline[1].note  # 旧结论留在时间线
-    # 时间线只追加，原 created 记录不被修改
-    assert item.timeline[0].action == "created"
-
 
 def test_knowledge_item_to_from_dict_roundtrip() -> None:
     """KnowledgeItem 可序列化/反序列化，保证可存储可传输。"""
@@ -469,3 +451,11 @@ def test_coerce_scope_removed_from_public_api() -> None:
 
     assert not hasattr(ke, "coerce_scope"), "coerce_scope 不应再从包级导出"
     assert not hasattr(km, "coerce_scope"), "coerce_scope 函数应已删除"
+
+
+def test_knowledge_item_has_no_revise_method() -> None:
+    """死方法守卫：KnowledgeItem.revise 生产零调用（时间线语义由 runtime_bridge 拼接），必须已删除。"""
+    item = KnowledgeItem(
+        id="X-1", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.GENERAL, compiled_truth="t"
+    )
+    assert not hasattr(item, "revise"), "KnowledgeItem.revise 死方法应已删除"

@@ -83,25 +83,6 @@ class KnowledgeItem:
     attributes: dict[str, Any] = field(default_factory=dict)
     scope_key: str = "all"  # seller 时为 store_id，general 时为 "all"
 
-    def revise(self, new_truth: str, *, note: str = "", source: str = "") -> None:
-        """更新编译真相，并把旧结论追加进时间线（不删原文）。
-
-        对应 gbrain 的 "compiled truth is rewritten, timeline is appended"。
-        """
-        # 无论是否传入 note，都把旧结论记进时间线（证据永不丢）
-        history = f"旧结论：{self.compiled_truth}"
-        if note:
-            history = f"{note} | {history}"
-        self.timeline.append(
-            TimelineEntry(
-                at=utc_now_iso(),
-                action="revised",
-                note=history,
-                source=source,
-            )
-        )
-        self.compiled_truth = new_truth
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
