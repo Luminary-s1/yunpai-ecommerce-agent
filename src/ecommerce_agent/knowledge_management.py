@@ -123,22 +123,11 @@ class KnowledgeManagementService:
         Wiki 编辑传 f"kg-{item_id}" 以覆盖资产层同名词条（编辑即时生效闭环）。
         """
         self._validate_scope(request.layer, request.store_id, request.sku_id)
-        # P3 竞态：预检 + 插入整体入 _write_lock（RLock 可重入，add_document 内部持锁不冲突），
-        # 防并发同 key 双 create 的预检-INSERT 间隙
+        # P3 竞态：插入入 _write_lock（RLock 可重入，add_document 内部持锁不冲突）。
+        # 注意：不预检同 key active——create 只建 candidate，Wiki 编辑已生效词条
+        # 走此路径是合法语义（新候选版本），approve 时先 retire 旧 active 再由
+        # v31 唯一索引兜底单 active（终审发现：预检曾把 Wiki 二次编辑 100% 拦死）。
         with self.db._write_lock:
-            if knowledge_key:
-                # P1-1 唯一性预检：防同 key 双份 active（Wiki 编辑 vs 资产重导冲突）。
-                # 多版本（candidate/retired）不受限——revise 同 key 新版本合法。
-                with self.db.connect() as conn:
-                    exists = conn.execute(
-                        "SELECT 1 FROM knowledge WHERE tenant_id=? AND knowledge_key=? "
-                        "AND status='active' LIMIT 1",
-                        (tenant_id, knowledge_key),
-                    ).fetchone()
-                if exists:
-                    raise KnowledgeLifecycleError(
-                        f"knowledge_key 已有 active 行: {knowledge_key}（同键知识不能重复激活）"
-                    )
             item_id = self.knowledge.add_document(
                 **request.model_dump(),
                 tenant_id=tenant_id,
@@ -220,11 +209,13 @@ class KnowledgeManagementService:
             raise KnowledgeLifecycleError("knowledge version conflict")
         now = utc_now()
         with self.db._write_lock, self.db.connect() as conn:
+            # 终审修复（P1-2）：retire 旧 active 时含全局行（tenant_id IS NULL），
+            # 否则 NULL 租户的旧 active 不被退，与 COALESCE 唯一索引语义脱节
             conn.execute(
                 """
                 UPDATE knowledge
                 SET status='retired', effective_to=?, record_version=record_version+1, updated_at=?
-                WHERE tenant_id=? AND knowledge_key=? AND status='active' AND id<>?
+                WHERE (tenant_id=? OR tenant_id IS NULL) AND knowledge_key=? AND status='active' AND id<>?
                 """,
                 (now, now, tenant_id, current["knowledge_key"], item_id),
             )
@@ -273,7 +264,7 @@ class KnowledgeManagementService:
                 """
                 UPDATE knowledge SET status='retired', effective_to=?,
                     record_version=record_version+1, updated_at=?
-                WHERE tenant_id=? AND knowledge_key=? AND status='active'
+                WHERE (tenant_id=? OR tenant_id IS NULL) AND knowledge_key=? AND status='active'
                 """,
                 (now, now, tenant_id, target["knowledge_key"]),
             )
@@ -308,7 +299,8 @@ class KnowledgeManagementService:
         rollout_id = f"rollout-{uuid.uuid4().hex}"
         with self.db._write_lock, self.db.connect() as conn:
             baseline = conn.execute(
-                "SELECT id FROM knowledge WHERE tenant_id=? AND knowledge_key=? AND status='active'",
+                "SELECT id FROM knowledge WHERE (tenant_id=? OR tenant_id IS NULL) "
+                "AND knowledge_key=? AND status='active'",
                 (tenant_id, candidate["knowledge_key"]),
             ).fetchone()
             try:
@@ -427,7 +419,7 @@ class KnowledgeManagementService:
                 UPDATE knowledge
                 SET status='retired', effective_to=?, record_version=record_version+1,
                     updated_at=?
-                WHERE tenant_id=? AND knowledge_key=? AND status='active' AND id<>?
+                WHERE (tenant_id=? OR tenant_id IS NULL) AND knowledge_key=? AND status='active' AND id<>?
                 """,
                 (now, now, tenant_id, rollout["subject_key"], rollout["candidate_id"]),
             )

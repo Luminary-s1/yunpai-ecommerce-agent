@@ -2774,14 +2774,14 @@ class Database:
             return
         # 建索引前先清理历史重复 active（若有）：同一 (tenant_id, knowledge_key)
         # 保留最新一行 active，其余置 retired——否则唯一索引抛 IntegrityError，
-        # 生产库迁移直接崩溃。
+        # 生产库迁移直接崩溃。COALESCE 使 NULL 租户（全局行）也参与去重。
         conn.execute(
             """
             UPDATE knowledge SET status='retired', effective_to=COALESCE(effective_to, created_at)
             WHERE status='active' AND id NOT IN (
                 SELECT id FROM (
                     SELECT id, ROW_NUMBER() OVER (
-                        PARTITION BY tenant_id, knowledge_key
+                        PARTITION BY COALESCE(tenant_id, ''), knowledge_key
                         ORDER BY version DESC, updated_at DESC, rowid DESC
                     ) AS rn
                     FROM knowledge
@@ -2793,7 +2793,7 @@ class Database:
         conn.executescript(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_key_unique
-                ON knowledge(tenant_id, knowledge_key)
+                ON knowledge(COALESCE(tenant_id, ''), knowledge_key)
                 WHERE knowledge_key IS NOT NULL AND status='active';
             """
         )
