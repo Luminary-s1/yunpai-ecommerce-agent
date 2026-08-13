@@ -174,7 +174,8 @@ class KnowledgeBase:
                 continue
             ranked.append(
                 RetrievedDocument(
-                    id=row["id"], category=row["category"], intent=row["intent"],
+                    id=row["id"], knowledge_key=row["knowledge_key"],
+                    category=row["category"], intent=row["intent"],
                     question=row["question"], answer=row["answer"], source=row["source"],
                     version=row["version"], score=round(score, 4),
                     layer=row["layer"], store_id=row["store_id"], sku_id=row["sku_id"],

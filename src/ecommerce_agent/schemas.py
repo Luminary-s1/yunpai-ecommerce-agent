@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class RetrievedDocument(TypedDict):
     id: str
+    knowledge_key: str
     category: str
     intent: str
     question: str

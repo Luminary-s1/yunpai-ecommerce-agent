@@ -340,3 +340,31 @@ def test_wiki_items_status_filter_lists_candidate_and_retired(client: TestClient
         KnowledgeTransitionRequest(expected_record_version=approved["record_version"]), "admin-test")
     retired = client.get("/v1/wiki/items?status=retired&limit=500", headers=ADMIN_HEADERS)
     assert any(i["id"] == "STATUS-CAND-1" for i in retired.json()), "status=retired 应列出停用词条"
+
+
+def test_wiki_search_hit_id_opens_item_detail(client: TestClient) -> None:
+    """P2 遗留：搜索命中 id 用 knowledge_key 归一化，能经 /v1/wiki/items/{id} 打开详情。"""
+    app = client.app
+    svc = app.state.agent
+    tenant = svc.settings.bootstrap_tenant_id
+    mgmt = svc.knowledge_management
+    from ecommerce_agent.knowledge_management import KnowledgeCreateRequest
+
+    created = mgmt.create(
+        tenant,
+        KnowledgeCreateRequest(
+            category="常见问答", intent="search-key-test", question="搜索键测试问题",
+            answer="搜索键测试答案", source="wiki://manual", layer="platform",
+        ),
+        "admin-test",
+        knowledge_key="kg-SEARCH-KEY-1",
+    )
+    evaluated = mgmt.evaluate(tenant, created["id"],
+        KnowledgeTransitionRequest(expected_record_version=created["record_version"]), "admin-test")
+    mgmt.approve(tenant, evaluated["id"],
+        KnowledgeTransitionRequest(expected_record_version=evaluated["record_version"]), "admin-test")
+    resp = client.get("/v1/wiki/search?q=搜索键测试&limit=10", headers=ADMIN_HEADERS)
+    assert resp.status_code == 200
+    assert any(r["id"] == "SEARCH-KEY-1" for r in resp.json()), "搜索命中 id 应为 knowledge_key 归一化后的词条 id"
+    detail = client.get("/v1/wiki/items/SEARCH-KEY-1", headers=ADMIN_HEADERS)
+    assert detail.status_code == 200, "搜索命中的 id 必须能打开词条详情"

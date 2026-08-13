@@ -221,7 +221,9 @@ class WikiService:
             )
             hits = []
         for h in hits:
-            doc_id = str(h.get("id", "")).removeprefix("kg-")
+            # P2 遗留：命中 id 优先用 knowledge_key（与词条详情 /v1/wiki/items/{id} 同一命名空间），
+            # 行 id（kb-uuid）与详情 id（kg-X 剥离后）此前对不上，搜索命中点进详情 404。
+            doc_id = str(h.get("knowledge_key") or h.get("id", "")).removeprefix("kg-")
             if not doc_id or doc_id in seen:
                 continue
             seen.add(doc_id)
