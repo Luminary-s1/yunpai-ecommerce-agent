@@ -296,10 +296,10 @@ class KnowledgeBase:
         return 0.55 * semantic + 0.45 * lexical + intent_bonus
 
     def next_version(self, intent: str, tenant_id: str | None = None) -> int:
+        # 多租户低项：版本命名空间按租户隔离——租户 evolution 的版本号
+        # 不受全局同 intent 行影响（此前 NULL 分支混入全局行导致跳号/撞号）
         tenant_clause = (
-            "tenant_id IS NULL"
-            if tenant_id is None
-            else "(tenant_id IS NULL OR tenant_id=?)"
+            "tenant_id IS NULL" if tenant_id is None else "tenant_id=?"
         )
         params: tuple[Any, ...] = (intent,) if tenant_id is None else (intent, tenant_id)
         with self.db.connect() as conn:
@@ -333,7 +333,10 @@ class KnowledgeBase:
         )
         with self.db._write_lock, self.db.connect() as conn:
             cursor = conn.execute(
-                f"UPDATE knowledge SET status='retired', effective_to=? "
+                # 多租户低项：retire 递增 record_version（乐观锁可见性，
+                # 对齐 knowledge_management 口径）
+                f"UPDATE knowledge SET status='retired', effective_to=?, "
+                f"record_version=record_version+1 "
                 f"WHERE id=? AND status='active' AND {tenant_clause}",
                 params,
             )
