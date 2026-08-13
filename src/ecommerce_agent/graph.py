@@ -60,6 +60,12 @@ def _map_scene(intent: str) -> str:
         return "product_recommend"
 
 
+# 连续低质回复判定集合（对齐 origin/main：连续 2 次低质 → 强制转人工）
+LOW_QUALITY_ROUTE_REASONS = frozenset(
+    {"model_unavailable", "low_confidence_handoff", "no_evidence"}
+)
+
+
 def _bounded_product_context_ready(state: AgentState) -> bool:
     """唯一候选商品 + 产品咨询场景：决策收敛为单步（对齐 origin/main，merge 时丢失）。
 
@@ -319,6 +325,11 @@ def build_graph(
             "context": sanitize_context(state.get("context", {})),
             "execution_mode": state.get("execution_mode") or "live",
             "intent": "general",
+            "customer_intent": None,
+            "intent_confidence": None,
+            "intent_method": None,
+            "intent_error": None,
+            "intent_routing": {},
             "risk_level": "low",
             "route": "deliberate",
             "route_reason": "pending",
@@ -749,6 +760,14 @@ def build_graph(
         ):
             route = "handoff"
             reason = "low_confidence_handoff"
+        # 连续 2 次低质回复 → 强制转人工（对齐 origin/main：避免反复低质循环）
+        if route not in {"handoff", "refuse"}:
+            recent_reasons = db.recent_assistant_route_reasons(state["session_id"], 2)
+            if len(recent_reasons) == 2 and all(
+                item in LOW_QUALITY_ROUTE_REASONS for item in recent_reasons
+            ):
+                route = "handoff"
+                reason = "consecutive_low_quality"
         shadow = state.get("execution_mode") == "shadow"
         active_sop = None
         if not shadow:
@@ -1267,23 +1286,38 @@ def build_graph(
             business_context["order_id"] = normalize_text(str(order_id))[:128]
         if isinstance(store_id, (str, int)) and not isinstance(store_id, bool):
             business_context["store_id"] = normalize_text(str(store_id))[:128]
+        handoff_payload = {
+            "trace_id": state["trace_id"],
+            # 用 decision_intent（永不 KeyError）而非 state["intent"]（对齐 origin/main，
+            # 此键在直接调 handoff 节点的测试路径/分类失败路径可能不存在）
+            "intent": decision_intent,
+            "risk_level": state["risk_level"],
+            "question": safe_question,
+            "selected_tool": state.get("selected_tool"),
+            "react_step": state.get("react_step", 0),
+            "context_snapshot_id": state.get("context_snapshot_id"),
+            "context_readiness": state.get("context_readiness"),
+            "context_conflicts": state.get("context_conflicts", []),
+            "business_context": business_context,
+        }
+        if model_confirmed_complaint:
+            handoff_payload["priority_flag"] = "complaint"
+        unknown_intent = (
+            state.get("intent_method") == "default" and not model_confirmed_complaint
+        )
+        if unknown_intent:
+            # 分类器无法决断（弃权）≠ 闲聊：不进投诉/紧急队列，
+            # 但避免落入兜底队列最低 SLA（对齐 origin/main guardrails）
+            handoff_payload["priority_flag"] = "intent_unknown"
+            handoff_payload["intent_method"] = "default"
+            handoff_payload["intent_error"] = state.get("intent_error")
         task = handoffs.create(
             tenant_id=state["tenant_id"],
             session_id=state["session_id"],
             message_id=state["message_id"],
             reason=reason,
-            payload={
-                "trace_id": state["trace_id"],
-                "intent": state["intent"],
-                "risk_level": state["risk_level"],
-                "question": safe_question,
-                "selected_tool": state.get("selected_tool"),
-                "react_step": state.get("react_step", 0),
-                "context_snapshot_id": state.get("context_snapshot_id"),
-                "context_readiness": state.get("context_readiness"),
-                "context_conflicts": state.get("context_conflicts", []),
-                "business_context": business_context,
-            },
+            payload=handoff_payload,
+            priority="high" if unknown_intent else None,
         )
         return {
             "answer": answer,

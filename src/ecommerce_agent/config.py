@@ -185,8 +185,9 @@ class Settings:
             intent_classify_timeout_seconds=max(
                 0.001, float(os.getenv("INTENT_CLASSIFY_TIMEOUT_SECONDS", "2.0"))
             ),
-            handoff_confidence_threshold=float(
-                os.getenv("HANDOFF_CONFIDENCE_THRESHOLD", "0.6")
+            handoff_confidence_threshold=max(
+                0.0,
+                min(1.0, float(os.getenv("HANDOFF_CONFIDENCE_THRESHOLD", "0.6"))),
             ),
             rag_scene_prompts=_as_bool(os.getenv("RAG_SCENE_PROMPTS"), default=True),
             kg_import_enabled=_as_bool(os.getenv("KG_IMPORT_ENABLED"), default=True),

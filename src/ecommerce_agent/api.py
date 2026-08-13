@@ -42,6 +42,7 @@ from .outbox import OutboxReconcileRequest
 from .rate_limit import RateLimitError, SlidingWindowRateLimiter
 from .release_api import build_release_router
 from .simulation_api import build_simulation_router
+from .traffic_lab_api import build_traffic_lab_router
 from .schemas import (
     CandidateView,
     ChatMessageRequest,
@@ -190,6 +191,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_release_router(service, require_admin))
     app.include_router(build_evaluation_router(service, require_admin))
     app.include_router(build_simulation_router(service, require_admin))
+    app.include_router(build_traffic_lab_router(service, require_admin))
     app.include_router(build_customer_test_router(service, require_local_customer_test))
     app.include_router(build_chat_sessions_router(service, require_client))
     # M3 知识库路由（graph/wiki）。顶部已 import（深水区6：启动即暴露导入错误）
