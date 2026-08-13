@@ -16,6 +16,7 @@ scope 自动判定规则（对齐三层知识边界）：
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Iterable
 
@@ -27,6 +28,8 @@ from .models import (
     coerce_kind,
     utc_now_iso,
 )
+
+logger = logging.getLogger("knowledge_engine.loader")
 
 
 # 每个 kind 对应的 JSON 文件名（任务6交付物的命名约定）
@@ -183,6 +186,8 @@ def load_clean_dir(clean_dir: str | Path) -> list[KnowledgeItem]:
         for fname in paths:
             path = base / fname
             if not path.exists():
+                # P3：缺失文件打 warning（此前静默跳过，曾有 SKU 被静默漏载的历史教训）
+                logger.warning("02_clean 资产文件缺失，跳过: %s", path)
                 continue  # 某个实体类型缺失不阻塞，尽量加载
             with path.open("r", encoding="utf-8") as fh:
                 records = json.load(fh)

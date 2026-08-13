@@ -447,3 +447,16 @@ def test_apply_consolidation_persists(tmp_path: Path) -> None:
             "SELECT COUNT(*) FROM knowledge WHERE knowledge_key LIKE 'kg-consolidated-%'"
         ).fetchone()[0]
     assert count == first["written"], f"DB 应只有 {first['written']} 条结论行"
+
+
+def test_load_clean_dir_logs_missing_asset_files(tmp_path: Path, caplog) -> None:
+    """P3：02_clean 缺某个实体文件必须打 warning，不再静默跳过。"""
+    import logging
+
+    clean_dir = tmp_path / "02_clean"
+    clean_dir.mkdir()
+    (clean_dir / "faq.json").write_text("[]", encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="knowledge_engine.loader"):
+        items = load_clean_dir(clean_dir)
+    assert items == []
+    assert any("缺失" in rec.message for rec in caplog.records), "缺文件必须打 warning"
