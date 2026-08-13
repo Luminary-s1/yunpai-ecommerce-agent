@@ -49,6 +49,7 @@
 | D-KB-017 | import 预查按租户过滤（skipped_foreign 防跨租户改写） | acccd76 |
 | D-KB-018 | 死代码清理（coerce_scope / KnowledgeItem.revise） | d72fb00/8588035 |
 | D-KB-019 | loader 缺失文件打 warning | 33ed593 |
+| D-KB-020 | 终审闭环：门禁 sys.exit + Wiki 预检移除 + COALESCE 索引 + 热更新 active 过滤 + IntegrityError 捕获 + layer/store_id 沿用 | 8403a62~457793f；三代理终审发现 11 项全部处置（7 修复 + 4 记账） |
 
 ## 6. 遗留问题处置表
 
@@ -65,6 +66,22 @@
 | P3-7 观测 _all_records 不合并内存 | **已核实关闭**：observability.py L117 现役且被 report() L158 消费，旧报告依据版本不适用 | ✅ 无需修复 |
 | P2-3 RAG 线上 feedback 回归 | 等真实负反馈数据（点踩/转人工/修正答案）再标注入评测集 | ⏸ 待数据 |
 | P2-4 知识库账本 | 本文件 | ✅ 本文档 |
+
+### 6.1 终审遗留处置（2026-08-13 三代理终审）
+
+| 问题 | 处置 | 状态 |
+|---|---|---|
+| 终审 P1-门禁退出码恒 0 | scheduler `__main__` 补 `sys.exit(main())` | ✅ 8403a62 |
+| 终审 P1-Wiki 二次编辑预检误拦 | 移除 create 预检（create 全链进 _write_lock 已覆盖竞态） | ✅ fd39257 |
+| 终审 P1-v31 索引 NULL 租户失效 | COALESCE 表达式索引 + retire/approve/rollout 含全局行 | ✅ fd39257 |
+| 终审 P2-热更新命中 retired 行 | import 预查只收 active 行 | ✅ d6d40ba |
+| 终审 P2-INSERT 未捕获 IntegrityError | try/except sqlite3.IntegrityError 计 update_failed | ✅ d6d40ba |
+| 终审 P3-7 Wiki 编辑 layer 硬编码 store | put_item 沿用原词条 layer/store_id 防 scope 漂移 | ✅ ad1a741 |
+| 终审低项-兜底 dict 缺键 | service.py 三处兜底 dict 补 update_failed/skipped_foreign | ✅ 457793f |
+| 终审 P3-5 Wiki 反复编辑 version=1 | Wiki PUT 走 create 新行（同 knowledge_key 多版本），版本号不复用原行 MAX+1，与 revise 口径不一致。**建议**：Wiki PUT 改走 revise（expected_record_version 取自当前 active 行），生命周期一步到位 | ⏸ 待下一迭代 |
+| 终审 P3-6 热更新不刷新 checksum/version | 热更新刷新 search_text/embedding/updated_at/record_version，但不重算 checksum、不递增 version。检索一致性已闭环；checksum 仅用于资产层校验，影响面低 | ⏸ 待下一迭代 |
+| 终审 P3-8 general 资产以 bootstrap 租户导入 | `_import_knowledge_assets` 传 `tenant_id=bootstrap_tenant_id`，general（platform/industry）知识本应 NULL 租户全局。当前单租户部署无影响；多租户上线前必须改为按 scope 分组导入（general→None，seller→店铺租户） | ⏸ 多租户上线前 |
+| 终审 P3-9 memory dedup 缺租户 | record() 幂等去重 SQL 无 tenant_id 条件，跨租户同内容会误判重复；retire_document 不递增 record_version（乐观锁可见性弱于 knowledge_management）。建议：dedup 加租户条件 + retire 补 record_version+1 | ⏸ 待下一迭代 |
 
 ## 7. 合入条件核对（负责人 08-12 10:06 终验五条）
 
