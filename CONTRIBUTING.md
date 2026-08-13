@@ -280,7 +280,8 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | 28 | M5-R | Traffic Lab / `main` | creative asset、listing revision、metric bucket、experiment/window/analysis run | 已合并（WP1–WP5） |
 | **29** | M6-R | Forecasting / `main` | demand fact、forecast policy/run/backtest/point/anomaly | 已合并（WP1–WP2；WP5 Eval 沿用） |
 | **30** | M6-R | Inventory Planning / `main` | planning policy、inventory plan | 已合并（WP3；WP4–WP5 沿用） |
-| 31+ | *（空闲）* | | | |
+| **31** | 缪海南 | 统筹 Agent / `codex/workspace-conversation-history` | `workspace_conversations`、`workspace_messages` 会话持久化与历史恢复 | 已分配，未合并 |
+| 32+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
 若存在尚未同步的其他 v28 分支，不得直接合入，先与模块负责人核对。26–28 已合并，
