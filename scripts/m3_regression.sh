@@ -9,7 +9,7 @@ OUT_DIR=/d/claude-checkpoints
 STAMP=$(date +%Y%m%d-%H%M%S)
 LOG="$OUT_DIR/m3test-$STAMP.log"
 
-# M3 模块测试集（20 个文件：负责人复验 106 套件 + 本轮新增）
+# M3 模块测试集（21 个文件：负责人复验 106 套件 + 本轮新增）
 M3_TESTS="tests/test_intent_routing_integration.py \
 tests/test_service_stream.py \
 tests/test_graph_retrieval.py \
@@ -28,6 +28,7 @@ tests/test_prompt_templates.py \
 tests/test_security_observability.py \
 tests/test_neo4j_client.py \
 tests/test_intent_guardrails.py \
+tests/test_multi_tenant_isolation.py \
 tests/test_import_assets_api.py \
 tests/test_knowledge_rollout.py"
 
