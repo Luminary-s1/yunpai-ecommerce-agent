@@ -123,61 +123,67 @@ class KnowledgeManagementService:
         Wiki 编辑传 f"kg-{item_id}" 以覆盖资产层同名词条（编辑即时生效闭环）。
         """
         self._validate_scope(request.layer, request.store_id, request.sku_id)
-        if knowledge_key:
-            # P1-1 唯一性预检：防同 key 双份 active（Wiki 编辑 vs 资产重导冲突）。
-            # 多版本（candidate/retired）不受限——revise 同 key 新版本合法。
-            with self.db.connect() as conn:
-                exists = conn.execute(
-                    "SELECT 1 FROM knowledge WHERE tenant_id=? AND knowledge_key=? "
-                    "AND status='active' LIMIT 1",
-                    (tenant_id, knowledge_key),
-                ).fetchone()
-            if exists:
-                raise KnowledgeLifecycleError(
-                    f"knowledge_key 已有 active 行: {knowledge_key}（同键知识不能重复激活）"
-                )
-        item_id = self.knowledge.add_document(
-            **request.model_dump(),
-            tenant_id=tenant_id,
-            knowledge_key=knowledge_key or f"knowledge-{uuid.uuid4().hex}",
-            status="candidate",
-            review_status="draft",
-        )
+        # P3 竞态：预检 + 插入整体入 _write_lock（RLock 可重入，add_document 内部持锁不冲突），
+        # 防并发同 key 双 create 的预检-INSERT 间隙
+        with self.db._write_lock:
+            if knowledge_key:
+                # P1-1 唯一性预检：防同 key 双份 active（Wiki 编辑 vs 资产重导冲突）。
+                # 多版本（candidate/retired）不受限——revise 同 key 新版本合法。
+                with self.db.connect() as conn:
+                    exists = conn.execute(
+                        "SELECT 1 FROM knowledge WHERE tenant_id=? AND knowledge_key=? "
+                        "AND status='active' LIMIT 1",
+                        (tenant_id, knowledge_key),
+                    ).fetchone()
+                if exists:
+                    raise KnowledgeLifecycleError(
+                        f"knowledge_key 已有 active 行: {knowledge_key}（同键知识不能重复激活）"
+                    )
+            item_id = self.knowledge.add_document(
+                **request.model_dump(),
+                tenant_id=tenant_id,
+                knowledge_key=knowledge_key or f"knowledge-{uuid.uuid4().hex}",
+                status="candidate",
+                review_status="draft",
+            )
         self.db.audit("knowledge.draft_created", actor, item_id, request.model_dump(), tenant_id)
         return self._require(tenant_id, item_id)
 
     def revise(
         self, tenant_id: str, item_id: str, request: KnowledgeReviseRequest, actor: str
     ) -> dict[str, Any]:
-        current = self._require(tenant_id, item_id)
-        if current["record_version"] != request.expected_record_version:
-            raise KnowledgeLifecycleError("knowledge version conflict")
-        with self.db.connect() as conn:
-            next_version = int(
-                conn.execute(
-                    "SELECT COALESCE(MAX(version), 0) + 1 FROM knowledge "
-                    "WHERE tenant_id=? AND knowledge_key=?",
-                    (tenant_id, current["knowledge_key"]),
-                ).fetchone()[0]
+        # P3 竞态：读当前 + record_version 校验 + MAX(version)+1 分配 + 插入
+        # 整体入 _write_lock，防并发 revise 产生重复版本号（RLock 可重入）
+        with self.db._write_lock:
+            current = self._require(tenant_id, item_id)
+            if current["record_version"] != request.expected_record_version:
+                raise KnowledgeLifecycleError("knowledge version conflict")
+            with self.db.connect() as conn:
+                next_version = int(
+                    conn.execute(
+                        "SELECT COALESCE(MAX(version), 0) + 1 FROM knowledge "
+                        "WHERE tenant_id=? AND knowledge_key=?",
+                        (tenant_id, current["knowledge_key"]),
+                    ).fetchone()[0]
+                )
+            values = request.model_dump(exclude={"expected_record_version"}, exclude_none=True)
+            new_id = self.knowledge.add_document(
+                category=current["category"],
+                intent=current["intent"],
+                question=values.get("question", current["question"]),
+                answer=values.get("answer", current["answer"]),
+                keywords=values.get("keywords", current["keywords"]),
+                risk_level=current["risk_level"],
+                source=values.get("source", current["source"]),
+                version=next_version,
+                status="candidate",
+                tenant_id=tenant_id,
+                knowledge_key=current["knowledge_key"],
+                layer=current["layer"],
+                store_id=current["store_id"],
+                sku_id=current["sku_id"],
+                review_status="draft",
             )
-        values = request.model_dump(exclude={"expected_record_version"}, exclude_none=True)
-        new_id = self.knowledge.add_document(
-            category=current["category"],
-            intent=current["intent"],
-            question=values.get("question", current["question"]),
-            answer=values.get("answer", current["answer"]),
-            keywords=values.get("keywords", current["keywords"]),
-            risk_level=current["risk_level"],
-            source=values.get("source", current["source"]),
-            version=next_version,
-            status="candidate",
-            tenant_id=tenant_id,
-            knowledge_key=current["knowledge_key"],
-            layer=current["layer"],
-            store_id=current["store_id"],
-            sku_id=current["sku_id"],
-            review_status="draft",
-        )
         self.db.audit(
             "knowledge.version_created",
             actor,

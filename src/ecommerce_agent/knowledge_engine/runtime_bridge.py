@@ -270,10 +270,9 @@ def import_to_runtime(
                     if tenant_id is None
                     else "AND (tenant_id IS NULL OR tenant_id=?)"
                 )
-                params: list[Any] = [*updatable.values()]
+                params: list[Any] = [*updatable.values(), target_id]
                 if tenant_id is not None:
                     params.append(tenant_id)
-                params.append(target_id)
                 try:
                     # P3：热更新 UPDATE 必须在 _write_lock 内（对照 rag.add_document 锁模式）
                     with knowledge_base.db._write_lock, knowledge_base.db.connect() as conn:
