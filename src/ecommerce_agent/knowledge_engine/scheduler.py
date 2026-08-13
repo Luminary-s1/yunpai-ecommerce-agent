@@ -256,4 +256,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # P1-3 门禁进程级生效：main() 返回值必须转成进程退出码，
+    # 否则 --eval 低于阈值时 CI/cron 拿到的退出码恒为 0
+    sys.exit(main())
