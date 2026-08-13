@@ -73,11 +73,12 @@ def test_recall_keyword_filter(service: AgentService) -> None:
 
 
 def test_forget(service: AgentService) -> None:
-    """删除记忆。"""
+    """删除记忆（P3-5：精确租户匹配——必须传 record 时相同的 tenant_id）。"""
     mem = KnowledgeMemoryService(service.knowledge)
-    kid = mem.record("store-a", fact="要删除的记忆", tenant_id=service.settings.bootstrap_tenant_id)
-    assert mem.forget(kid) is True
-    rows = mem.recall("store-a", tenant_id=service.settings.bootstrap_tenant_id)
+    tenant = service.settings.bootstrap_tenant_id
+    kid = mem.record("store-a", fact="要删除的记忆", tenant_id=tenant)
+    assert mem.forget(kid, tenant_id=tenant) is True
+    rows = mem.recall("store-a", tenant_id=tenant)
     assert rows == []
 
 

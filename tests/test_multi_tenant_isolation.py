@@ -384,3 +384,71 @@ def test_wiki_shadow_edit_global_item_tenant_scoped(tmp_path) -> None:
         )
         assert any(h["answer"] == "平台通用规则答案" for h in hits_b), "B 应仍见全局版"
         assert all(h["answer"] != "租户A定制的规则答案" for h in hits_b), "影子版不得泄漏给 B"
+
+
+# ---------- V1：Wiki 详情/stats 租户视角（复审修复） ----------
+
+def test_wiki_detail_and_stats_tenant_scoped(tmp_path) -> None:
+    """V1 回归锁：GET /v1/wiki/items/{id} 与 /v1/wiki/stats 按 admin 租户视角——
+    bootstrap 租户的影子编辑内容不得被其他租户 admin 读到。"""
+    from fastapi.testclient import TestClient
+
+    from ecommerce_agent.api import create_app
+    from ecommerce_agent.knowledge_engine.runtime_bridge import import_to_runtime
+
+    settings = make_settings(tmp_path)
+    tenant_a = settings.bootstrap_tenant_id
+    service = AgentService(settings)
+    import_to_runtime(
+        [KnowledgeItem(
+            id="WIKI-V1", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+            compiled_truth="V1全局答案",
+            attributes={"question": "V1问题", "layer": "platform"},
+        )],
+        service.knowledge,
+        tenant_id=None,
+    )
+    # 租户 A 影子编辑（直接建私有行模拟 approve 后状态）
+    service.knowledge.add_document(
+        category="行业规则", intent="rule", question="V1问题",
+        answer="V1租户A影子答案", keywords="", risk_level="low", source="wiki://manual",
+        status="active", review_status="approved",
+        tenant_id=tenant_a, knowledge_key="kg-WIKI-V1", layer="platform", store_id=None,
+    )
+    service.close()
+    del service
+
+    app = create_app(settings)
+    headers_a = {"X-Admin-Id": "admin-test", "X-Admin-Key": "test-admin-key-123456"}
+    # 租户 B admin：另一个 admin 身份（需要先建 operator）
+    service2 = app.state.agent
+    service2.auth.create_admin_operator(
+        tenant_id="tenant-b",
+        request=__import__("ecommerce_agent.auth", fromlist=["AdminOperatorCreateRequest"]).AdminOperatorCreateRequest(
+            admin_id="admin-b", name="B 租户管理员", key="b-admin-key-1234567890123456"
+        ),
+        actor="admin-test",
+    )
+    headers_b = {"X-Admin-Id": "admin-b", "X-Admin-Key": "b-admin-key-1234567890123456"}
+
+    with TestClient(app) as client:
+        # 租户 B 看详情：只能见全局版，不得见 A 的影子答案
+        detail_b = client.get("/v1/wiki/items/WIKI-V1", headers=headers_b)
+        assert detail_b.status_code == 200
+        assert detail_b.json()["compiled_truth"] == "V1全局答案", (
+            "B 的详情不得泄漏 A 的影子答案"
+        )
+
+        # 租户 A 看详情：可见自己的影子版
+        detail_a = client.get("/v1/wiki/items/WIKI-V1", headers=headers_a)
+        assert detail_a.status_code == 200
+        assert detail_a.json()["compiled_truth"] == "V1租户A影子答案", (
+            "A 的详情应见自己的影子版"
+        )
+
+        # stats 也应随租户视角（B 看不到 A 的私有词条计数差异——至少不抛错且结构一致）
+        stats_b = client.get("/v1/wiki/stats", headers=headers_b)
+        assert stats_b.status_code == 200
+        stats_a = client.get("/v1/wiki/stats", headers=headers_a)
+        assert stats_a.status_code == 200
+        assert set(stats_b.json().keys()) == set(stats_a.json().keys())

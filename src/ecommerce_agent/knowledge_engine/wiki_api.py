@@ -402,7 +402,9 @@ def build_wiki_router(
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
         """词条详情：合并后的单条（含 attributes/timeline/source）。"""
-        item = _svc().get_item(item_id)
+        # ③ 多租户：按登录 admin 的租户视角（复审 V1：此前漏传回落 bootstrap，
+        # 租户 B 可读到 bootstrap 租户的影子编辑内容——跨租户读泄露）
+        item = _svc().get_item(item_id, tenant_id=admin.tenant_id)
         if item is None:
             raise HTTPException(status_code=404, detail=f"词条 {item_id} 不存在")
         return item
@@ -410,6 +412,7 @@ def build_wiki_router(
     @router.get("/stats")
     def stats(admin: AdminPrincipal = Depends(require_admin)) -> dict[str, Any]:
         """概览统计：各类型词条数 / 来源分布。"""
-        return _svc().stats()
+        # ③ 多租户：同上，统计按 admin 租户视角
+        return _svc().stats(tenant_id=admin.tenant_id)
 
     return router

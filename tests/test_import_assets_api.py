@@ -73,10 +73,24 @@ def test_import_assets_update_true_updates_content(client: TestClient) -> None:
     assert default.status_code == 200
     assert default.json()["updated"] == 0, "默认应保持幂等（不更新内容）"
 
-    # update=true：更新已存在内容
+    # update=true：更新已存在内容（P1-2 多租户语义：租户端点不得改写全局行——
+    # 全局行内容保持手动修改值不变；本租户行正常热更新）
     upd = client.post(
         "/v1/admin/knowledge/import-assets?update=true", headers=ADMIN_HEADERS
     )
     assert upd.status_code == 200
-    assert upd.json()["updated"] >= 100, "update=true 应更新已存在的 kg-* 行"
-    assert upd.json()["imported"] == 0, "不应新增重复行"
+    body = upd.json()
+    assert body["imported"] == 0, "不应新增重复行"
+    assert body["update_failed"] == 0, "热更新不应报错"
+    # P1-2 验证：目标行是全局行（tenant_id IS NULL），租户端点不得改写——
+    # 手动修改的答案必须保持原样（此前会越权重写回资产层内容）
+    with service.db.connect() as conn:
+        row = conn.execute(
+            "SELECT answer, tenant_id FROM knowledge WHERE id=?", (target_id,)
+        ).fetchone()
+    if row["tenant_id"] is None:
+        assert row["answer"] == "【已修改】保修政策", "全局行不得被租户端点热更新改写"
+    else:
+        # 本租户行：正常热更新（恢复资产层内容）
+        assert row["answer"] != "【已修改】保修政策", "本租户行应被热更新恢复"
+        assert body["updated"] >= 1
