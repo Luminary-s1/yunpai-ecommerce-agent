@@ -374,3 +374,45 @@ def test_faq_platform_layer_maps_to_general(service) -> None:
         assert any(r["source"] == "kg:FAQ-PLATFORM-1" for r in results), (
             f"platform 层 FAQ 应对 {store_id} 可见（F-008）"
         )
+
+
+def test_hot_update_increments_record_version_and_updated_at(service) -> None:
+    """P3：热更新必须 record_version+1 且刷新 updated_at（并发乐观锁可见性）。"""
+    import time
+    items = [KnowledgeItem(id="RULE-VER-1", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+                           compiled_truth="版本计数测试", attributes={"rule_title": "版本计数规则"})]
+    import_to_runtime(items, service.knowledge)
+    with service.db.connect() as conn:
+        before = conn.execute(
+            "SELECT record_version, updated_at FROM knowledge WHERE id='kg-RULE-VER-1'"
+        ).fetchone()
+    time.sleep(0.002)
+    items[0].attributes["keywords"] = "版本别名"
+    stats = import_to_runtime(items, service.knowledge, update_existing=True)
+    assert stats["updated"] == 1
+    with service.db.connect() as conn:
+        after = conn.execute(
+            "SELECT record_version, updated_at FROM knowledge WHERE id='kg-RULE-VER-1'"
+        ).fetchone()
+    assert after["record_version"] == before["record_version"] + 1, "热更新必须递增 record_version"
+    assert after["updated_at"] > before["updated_at"], "热更新必须刷新 updated_at"
+
+
+def test_hot_update_does_not_rewrite_other_tenant_row(service) -> None:
+    """P3：跨租户热更新不得改写他租户行（此前 UPDATE 无 tenant 条件）。"""
+    items = [KnowledgeItem(id="FAQ-XTEN-1", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
+                           compiled_truth="A 店原文", scope_key="store-a",
+                           attributes={"question": "跨租户改写测试"})]
+    import_to_runtime(items, service.knowledge, tenant_id="tenant-a", default_store_id="store-a")
+    items[0].compiled_truth = "B 店试图改写"
+    stats = import_to_runtime(
+        items, service.knowledge, tenant_id="tenant-b",
+        default_store_id="store-a", update_existing=True,
+    )
+    assert stats["updated"] == 0
+    with service.db.connect() as conn:
+        row = conn.execute(
+            "SELECT answer, tenant_id FROM knowledge WHERE id='kg-FAQ-XTEN-1'"
+        ).fetchone()
+    assert row["tenant_id"] == "tenant-a"
+    assert row["answer"] == "A 店原文", "跨租户热更新不得改写他租户行"

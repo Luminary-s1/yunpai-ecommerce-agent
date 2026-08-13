@@ -176,6 +176,7 @@ def import_to_runtime(
     """
     imported = 0
     updated = 0
+    update_failed = 0
     skipped_entity = 0
     skipped_existing = 0
     seller_default_store_count = 0
@@ -232,6 +233,8 @@ def import_to_runtime(
                     "search_text": qa_text,
                     "embedding": vector_to_blob(hash_embedding(emb_text)),
                     "sku_id": row.get("sku_id"),
+                    # P3：热更新必须刷新 updated_at（时间线可溯源）
+                    "updated_at": utc_now_iso(),
                 }
                 if item.scope is KnowledgeScope.GENERAL:
                     # general 知识不得带 store_id（否则常规检索被店铺隔离过滤，
@@ -241,13 +244,27 @@ def import_to_runtime(
                     updatable["store_id"] = row.get("store_id")
                 # None 值需要显式 SET（清除旧值）；其余字段保留
                 set_clause = ", ".join(f"{k}=?" for k in updatable)
-                params = [*updatable.values(), target_id]
+                # P3：热更新递增 record_version（并发乐观锁可见性，对齐 knowledge_management 口径）
+                set_clause += ", record_version=record_version+1"
+                # P3：UPDATE 加租户条件（防跨租户改写他租户行）
+                tenant_clause = (
+                    "AND tenant_id IS NULL"
+                    if tenant_id is None
+                    else "AND (tenant_id IS NULL OR tenant_id=?)"
+                )
+                params: list[Any] = [*updatable.values()]
+                if tenant_id is not None:
+                    params.append(tenant_id)
+                params.append(target_id)
                 try:
-                    with knowledge_base.db.connect() as conn:
-                        conn.execute(
-                            f"UPDATE knowledge SET {set_clause} WHERE id=?",
+                    # P3：热更新 UPDATE 必须在 _write_lock 内（对照 rag.add_document 锁模式）
+                    with knowledge_base.db._write_lock, knowledge_base.db.connect() as conn:
+                        cursor = conn.execute(
+                            f"UPDATE knowledge SET {set_clause} WHERE id=? {tenant_clause}",
                             tuple(params),
                         )
+                        if cursor.rowcount != 1:
+                            raise RuntimeError(f"hot update 无匹配行: {target_id}")
                         # F-007 补全：search_text 已重算，但 UPDATE 不自动同步 FTS 索引
                         # （rag.add_document 只在新增时写 knowledge_fts），
                         # 必须显式重建该行的 FTS 条目，否则热更新后全文检索仍命中旧内容。
@@ -261,10 +278,9 @@ def import_to_runtime(
                         )
                     updated += 1
                 except Exception:
-                    # P1-2：热更新失败不再静默计为 skipped_existing
-                    #（此前上游会以为"跳过=已存在"而掩盖更新失败）
+                    # P1-2/P3：热更新失败计 update_failed（不再伪装成 skipped_existing）
                     logger.exception("热更新失败: %s", target_id)
-                    skipped_existing += 1
+                    update_failed += 1
             else:
                 skipped_existing += 1
             continue
@@ -280,6 +296,7 @@ def import_to_runtime(
     return {
         "imported": imported,
         "updated": updated,
+        "update_failed": update_failed,
         "skipped_entity": skipped_entity,
         "skipped_existing": skipped_existing,
         "seller_default_store_count": seller_default_store_count,
