@@ -177,18 +177,28 @@ def import_to_runtime(
     imported = 0
     updated = 0
     update_failed = 0
+    skipped_foreign = 0
     skipped_entity = 0
     skipped_existing = 0
     seller_default_store_count = 0
     # 幂等：先查已存在的 kg-* id，重复导入跳过（D-014 语义，不报错不重复）
-    # 不修改运行时 KnowledgeBase，直接用其 db 连接查询
+    # P3：预查按租户分组——本租户/全局行进 existing（可幂等跳过/热更新），
+    # 他租户行进 foreign（跳过防跨租户改写）
     existing: set[str] = set()
+    foreign: set[str] = set()
     try:
         with knowledge_base.db.connect() as conn:
             rows = conn.execute(
-                "SELECT id FROM knowledge WHERE id LIKE 'kg-%'"
+                "SELECT id, tenant_id FROM knowledge WHERE id LIKE 'kg-%'"
             ).fetchall()
-            existing = {r["id"] for r in rows}
+            for r in rows:
+                row_tenant = r["tenant_id"]
+                if tenant_id is None:
+                    (existing if row_tenant is None else foreign).add(r["id"])
+                elif row_tenant is None or row_tenant == tenant_id:
+                    existing.add(r["id"])
+                else:
+                    foreign.add(r["id"])
     except Exception:
         # P1-2：预查失败不再静默假装空集合（此前会照常 INSERT，
         # 表缺失/迁移未跑时中途崩溃且无日志）
@@ -205,6 +215,14 @@ def import_to_runtime(
         ):
             seller_default_store_count += 1
         target_id = f"kg-{item.id}"
+        if target_id in foreign:
+            # P3：kg 资产被其他租户持有——跳过（防跨租户改写），与 skipped_existing 区分
+            skipped_foreign += 1
+            logger.warning(
+                "kg 资产 %s 已被其他租户持有，跳过: tenant_id=%s",
+                target_id, tenant_id,
+            )
+            continue
         if target_id in existing:
             if update_existing:
                 # A6：热更新——内容字段更新（不改 id/租户/店铺/status）
@@ -299,6 +317,7 @@ def import_to_runtime(
         "update_failed": update_failed,
         "skipped_entity": skipped_entity,
         "skipped_existing": skipped_existing,
+        "skipped_foreign": skipped_foreign,
         "seller_default_store_count": seller_default_store_count,
     }
 

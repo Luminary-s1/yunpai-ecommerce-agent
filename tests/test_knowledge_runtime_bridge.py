@@ -416,3 +416,38 @@ def test_hot_update_does_not_rewrite_other_tenant_row(service) -> None:
         ).fetchone()
     assert row["tenant_id"] == "tenant-a"
     assert row["answer"] == "A 店原文", "跨租户热更新不得改写他租户行"
+
+
+def test_import_precheck_is_tenant_scoped(service) -> None:
+    """P3：预查按租户过滤——B 租户导入同名 kg 资产不得把 A 租户行当自己已存在。"""
+    items = [KnowledgeItem(id="FAQ-PRE-1", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
+                           compiled_truth="A 店资产", scope_key="store-a",
+                           attributes={"question": "预查租户测试"})]
+    import_to_runtime(items, service.knowledge, tenant_id="tenant-a", default_store_id="store-a")
+    stats = import_to_runtime(
+        items, service.knowledge, tenant_id="tenant-b", default_store_id="store-a"
+    )
+    assert stats["imported"] == 0
+    assert stats.get("skipped_foreign") == 1, "他租户持有的 kg id 必须计 skipped_foreign 而非 skipped_existing"
+    assert stats["skipped_existing"] == 0
+    with service.db.connect() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM knowledge WHERE id='kg-FAQ-PRE-1'").fetchone()[0]
+    assert n == 1, "不得为 B 租户重复插入同 id 行（也不得崩溃）"
+
+
+def test_import_precheck_tenant_scoped_hot_update(service) -> None:
+    """P3：B 租户 update_existing 对 A 租户行不生效（预查即拦截，不进更新路径）。"""
+    items = [KnowledgeItem(id="FAQ-PRE-2", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
+                           compiled_truth="原文", scope_key="store-a",
+                           attributes={"question": "预查热更新测试"})]
+    import_to_runtime(items, service.knowledge, tenant_id="tenant-a", default_store_id="store-a")
+    items[0].compiled_truth = "改文"
+    stats = import_to_runtime(
+        items, service.knowledge, tenant_id="tenant-b",
+        default_store_id="store-a", update_existing=True,
+    )
+    assert stats.get("skipped_foreign") == 1
+    assert stats["updated"] == 0
+    with service.db.connect() as conn:
+        row = conn.execute("SELECT answer FROM knowledge WHERE id='kg-FAQ-PRE-2'").fetchone()
+    assert row["answer"] == "原文"
