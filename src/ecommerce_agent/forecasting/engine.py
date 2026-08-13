@@ -8,7 +8,8 @@ from typing import Callable, Mapping, Sequence
 
 
 Forecaster = Callable[[list[float | None], int], list[float]]
-FORECAST_ENGINE_VERSION = "forecast-engine-v1"
+FORECAST_ENGINE_VERSION = "forecast-engine-v2"
+FINAL_SELECTION_POLICY_VERSION = "forecast-final-selection-v1"
 _BASELINE_ORDER = ("rolling_mean", "last_value", "seasonal_naive_7")
 _BASELINES = frozenset(_BASELINE_ORDER)
 
@@ -102,12 +103,13 @@ _FORECASTERS: dict[str, Forecaster] = {
     "tsb": _tsb,
 }
 SUPPORTED_FORECAST_MODELS = tuple(_FORECASTERS)
+PRODUCT_FORECAST_HORIZONS = (7, 14, 30)
 
 
 @dataclass(frozen=True)
 class ForecastPolicy:
     policy_version: str = "forecast-v1"
-    horizons: tuple[int, ...] = (7, 14, 30)
+    horizons: tuple[int, ...] = PRODUCT_FORECAST_HORIZONS
     minimum_history_days: int = 14
     backtest_windows: int = 4
     required_relative_improvement: float = 0.02
@@ -201,9 +203,28 @@ class ForecastEngine:
         demand_type = self._demand_type(values)
         backtests = self.backtest(list(zip(dates, values, strict=True)))
         ranking = self._rank(backtests)
+        horizon = max(self.policy.horizons)
+        for item in ranking:
+            item["eligible_for_final_forecast"] = bool(
+                item["eligible_for_champion"]
+            )
+            item["final_forecast_status"] = "not_attempted"
+            item["final_forecast_failure_reason"] = None
         if not backtests:
-            champion = next(
-                name for name in _BASELINE_ORDER if name in self.policy.candidate_models
+            cold_start_candidates = [
+                name
+                for name in _BASELINE_ORDER
+                if name in self.policy.candidate_models
+            ]
+            for item in ranking:
+                item["eligible_for_final_forecast"] = (
+                    item["model_name"] in cold_start_candidates
+                )
+            champion, forecast, attempts = self._forecast_cold_start(
+                values,
+                horizon,
+                cold_start_candidates,
+                ranking,
             )
             reason = {
                 "code": "cold_start_baseline",
@@ -213,10 +234,19 @@ class ForecastEngine:
             }
             metrics = self._metrics([], [])
         else:
-            champion, reason = self._select_champion(ranking)
+            champion, reason, forecast, attempts = self._forecast_ranked_candidate(
+                values,
+                horizon,
+                ranking,
+            )
             metrics = next(item["metrics"] for item in ranking if item["model_name"] == champion)
-        horizon = max(self.policy.horizons)
-        forecast = self._validated_forecast(self.forecasters[champion](values, horizon), horizon)
+        reason = {
+            **reason,
+            "selection_policy_version": FINAL_SELECTION_POLICY_VERSION,
+            "initial_champion_model": attempts[0]["model_name"],
+            "fallback_applied": len(attempts) > 1,
+            "final_forecast_attempts": attempts,
+        }
         residuals = [
             abs(actual - predicted)
             for row in backtests
@@ -293,9 +323,12 @@ class ForecastEngine:
         )
 
     def _select_champion(
-        self, ranking: list[dict[str, object]]
+        self,
+        ranking: list[dict[str, object]],
+        *,
+        eligibility_field: str = "eligible_for_champion",
     ) -> tuple[str, dict[str, object]]:
-        usable = [item for item in ranking if item["eligible_for_champion"]]
+        usable = [item for item in ranking if item[eligibility_field]]
         baseline = next((item for item in usable if item["is_baseline"]), None)
         challenger = next((item for item in usable if not item["is_baseline"]), None)
         if baseline is None:
@@ -315,6 +348,96 @@ class ForecastEngine:
             "challenger_model": challenger["model_name"] if challenger else None,
             "required_relative_improvement": self.policy.required_relative_improvement,
         }
+
+    def _forecast_ranked_candidate(
+        self,
+        values: list[float | None],
+        horizon: int,
+        ranking: list[dict[str, object]],
+    ) -> tuple[str, dict[str, object], list[float], list[dict[str, object]]]:
+        attempts: list[dict[str, object]] = []
+        while True:
+            try:
+                champion, reason = self._select_champion(
+                    ranking,
+                    eligibility_field="eligible_for_final_forecast",
+                )
+            except ValueError as exc:
+                if str(exc) != "forecast_baseline_failed":
+                    raise
+                raise ValueError("forecast_final_candidates_failed") from exc
+            item = next(
+                candidate
+                for candidate in ranking
+                if candidate["model_name"] == champion
+            )
+            try:
+                forecast = self._validated_forecast(
+                    self.forecasters[champion](values, horizon),
+                    horizon,
+                )
+            except (ArithmeticError, ValueError, RuntimeError) as exc:
+                failure_reason = f"{type(exc).__name__}:{exc}"
+                item["eligible_for_final_forecast"] = False
+                item["final_forecast_status"] = "failed"
+                item["final_forecast_failure_reason"] = failure_reason
+                attempts.append(
+                    {
+                        "model_name": champion,
+                        "status": "failed",
+                        "failure_reason": failure_reason,
+                    }
+                )
+                continue
+            item["final_forecast_status"] = "selected"
+            attempts.append(
+                {
+                    "model_name": champion,
+                    "status": "selected",
+                    "failure_reason": None,
+                }
+            )
+            return champion, reason, forecast, attempts
+
+    def _forecast_cold_start(
+        self,
+        values: list[float | None],
+        horizon: int,
+        candidates: list[str],
+        ranking: list[dict[str, object]],
+    ) -> tuple[str, list[float], list[dict[str, object]]]:
+        attempts: list[dict[str, object]] = []
+        by_name = {str(item["model_name"]): item for item in ranking}
+        for champion in candidates:
+            item = by_name[champion]
+            try:
+                forecast = self._validated_forecast(
+                    self.forecasters[champion](values, horizon),
+                    horizon,
+                )
+            except (ArithmeticError, ValueError, RuntimeError) as exc:
+                failure_reason = f"{type(exc).__name__}:{exc}"
+                item["eligible_for_final_forecast"] = False
+                item["final_forecast_status"] = "failed"
+                item["final_forecast_failure_reason"] = failure_reason
+                attempts.append(
+                    {
+                        "model_name": champion,
+                        "status": "failed",
+                        "failure_reason": failure_reason,
+                    }
+                )
+                continue
+            item["final_forecast_status"] = "selected"
+            attempts.append(
+                {
+                    "model_name": champion,
+                    "status": "selected",
+                    "failure_reason": None,
+                }
+            )
+            return champion, forecast, attempts
+        raise ValueError("forecast_final_candidates_failed")
 
     def _demand_type(self, values: list[float | None]) -> str:
         observed = _known(values)

@@ -1,19 +1,27 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..connectors import ConnectorRegistry, PullRequest, VirtualTaobaoConnector
+from ..business_calendar import StoreBusinessCalendarService
+from ..connectors import (
+    ConnectorRegistry,
+    PullRequest,
+    SourceProvenanceResolver,
+    VirtualTaobaoConnector,
+    unknown_source_provenance,
+)
 from ..database import Database, utc_now
-from ..forecasting import (
-    DemandFactService,
-    ForecastPolicy,
-    ForecastRunService,
+from ..forecasting.engine import ForecastPolicy
+from ..forecasting.planning import (
+    InventoryPlanningError,
     InventoryPlanningPolicy,
     InventoryPlanningService,
 )
+from ..forecasting.run_service import ForecastRunError, ForecastRunService
+from ..forecasting.service import DemandFactService
 from ..tools import ToolExecutionContext, ToolRegistry, ToolResult, ToolSpec
 from .catalog import CatalogItemUpsert, CatalogService, CatalogStatus
 from .competitive import CompetitiveIntelligenceService, CompetitorObservationCreate
@@ -25,6 +33,9 @@ from .metrics import MetricQuery, MetricsService
 from .ops_assistant import OpsAssistantService
 from .orders import OrderService, OrderUpsert
 from .registry import business_module_catalog
+
+if TYPE_CHECKING:
+    from ..traffic_lab import TrafficAnalysisInterpreter
 
 
 class InventoryRiskToolInput(BaseModel):
@@ -82,30 +93,51 @@ class ForecastEvidenceToolInput(BaseModel):
 
 
 class OperationsService:
-    def __init__(self, db: Database):
+    def __init__(
+        self,
+        db: Database,
+        *,
+        traffic_analysis_interpreter: TrafficAnalysisInterpreter | None = None,
+    ):
         from ..traffic_lab import TrafficAnalysisEngine, TrafficLabIngestionService
 
         self.db = db
+        self.business_calendars = StoreBusinessCalendarService(db)
+        self.connectors = ConnectorRegistry()
+        self.connectors.register(VirtualTaobaoConnector())
+        self.source_provenance = SourceProvenanceResolver(self.connectors)
         self.catalog = CatalogService(db)
         self.orders = OrderService(db)
         self.inventory = InventoryService(db)
         self.forecasting = DemandFactService(
-            db, orders=self.orders, inventory=self.inventory
+            db,
+            orders=self.orders,
+            inventory=self.inventory,
+            source_provenance_resolver=self.source_provenance,
         )
         self.forecast_runs = ForecastRunService(db, facts=self.forecasting)
         self.inventory_plans = InventoryPlanningService(
-            db, forecasts=self.forecast_runs, inventory=self.inventory
+            db,
+            forecasts=self.forecast_runs,
+            inventory=self.inventory,
+            source_provenance_resolver=self.source_provenance,
         )
         self.competitive = CompetitiveIntelligenceService(db)
         self.competitive_report = CompetitiveReportService(db)
         self.marketing = MarketingService(db)
         self.finance = FinanceService(db)
         self.ops_assistant = OpsAssistantService(db)
-        self.traffic_lab = TrafficLabIngestionService(db)
-        self.traffic_analysis = TrafficAnalysisEngine(db)
+        self.traffic_lab = TrafficLabIngestionService(
+            db,
+            business_calendars=self.business_calendars,
+        )
+        self.traffic_analysis = TrafficAnalysisEngine(
+            db,
+            interpreter=traffic_analysis_interpreter,
+            source_provenance_resolver=self.source_provenance,
+            business_calendars=self.business_calendars,
+        )
         self.metrics = MetricsService(db, self.inventory)
-        self.connectors = ConnectorRegistry()
-        self.connectors.register(VirtualTaobaoConnector())
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]
@@ -122,6 +154,12 @@ class OperationsService:
         forecast_policy: ForecastPolicy,
         inventory_policy: InventoryPlanningPolicy,
     ) -> dict[str, Any]:
+        forecast_planning_contract = (
+            self.inventory_plans.validate_forecast_contract(
+                forecast_policy,
+                inventory_policy,
+            )
+        )
         created_at = utc_now()
         forecast_evidence = self.forecast_runs._policy_evidence(forecast_policy)
         inventory_evidence = self.inventory_plans._policy_evidence(inventory_policy)
@@ -148,6 +186,7 @@ class OperationsService:
             "tenant_id": tenant_id,
             "store_id": store_id,
             "sku_id": sku_id,
+            "forecast_planning_contract": forecast_planning_contract,
             "forecast_policy": {
                 "policy_id": forecast_id,
                 **forecast_evidence,
@@ -439,7 +478,7 @@ class OperationsService:
                     kind="read",
                     input_model=ListingTrafficInsightsToolInput,
                     handler=self._listing_traffic_insights_tool,
-                    policy=self._catalog_store_scope_policy,
+                    policy=self._forecast_store_scope_policy,
                     metadata={"domain": "traffic_lab", "risk_level": "L0"},
                 )
             )
@@ -656,7 +695,16 @@ class OperationsService:
             store_id=store_id,
             limit=value.limit,
         )
-        return ToolResult(status="success", output=output)
+        provenance = output["source_provenance"]
+        return ToolResult(
+            status="success",
+            output={
+                **output,
+                "source_type": provenance["source_type"],
+                "virtual": provenance["virtual"],
+                "references": {"source_provenance": provenance},
+            },
+        )
 
     def _demand_forecast_tool(
         self, arguments: BaseModel, context: ToolExecutionContext
@@ -666,12 +714,16 @@ class OperationsService:
         forecast = self.forecast_runs.latest_run(
             context.tenant_id, sku_id=value.sku_id, store_id=store_id
         )
+        provenance = forecast["source_provenance"]
         return ToolResult(
             status="success",
             output={
                 "evidence_source": "forecast_runs",
                 "computed_now": False,
                 "forecast": forecast,
+                "freshness": forecast["freshness"],
+                "source_type": provenance["source_type"],
+                "virtual": provenance["virtual"],
                 "references": {
                     "forecast_run_id": forecast["run_id"],
                     "data_hash": forecast["data_hash"],
@@ -680,6 +732,8 @@ class OperationsService:
                     "model_version": forecast["model_version"],
                     "data_quality": forecast["status"],
                     "anomalies": forecast["anomalies"],
+                    "freshness": forecast["freshness"],
+                    "source_provenance": provenance,
                 },
             },
         )
@@ -689,9 +743,61 @@ class OperationsService:
     ) -> ToolResult:
         value = ForecastEvidenceToolInput.model_validate(arguments.model_dump())
         store_id = value.store_id or self._trusted_store_id(context)
-        plan = self.inventory_plans.latest_plan(
-            context.tenant_id, sku_id=value.sku_id, store_id=store_id
-        )
+        try:
+            plan = self.inventory_plans.latest_plan(
+                context.tenant_id, sku_id=value.sku_id, store_id=store_id
+            )
+        except InventoryPlanningError as exc:
+            reason_code = str(exc)
+            if reason_code not in {
+                "inventory_plan_not_found",
+                "inventory_plan_current_not_found",
+            }:
+                raise
+            try:
+                current_forecast = self.forecast_runs.latest_run(
+                    context.tenant_id,
+                    sku_id=value.sku_id,
+                    store_id=store_id,
+                )
+            except ForecastRunError:
+                current_forecast = None
+            provenance = (
+                current_forecast["source_provenance"]
+                if current_forecast is not None
+                else unknown_source_provenance(
+                    basis="inventory_plan_current_not_found"
+                )
+            )
+            return ToolResult(
+                status="failed",
+                error_code=reason_code,
+                retryable=False,
+                output={
+                    "evidence_source": "inventory_plans",
+                    "computed_now": False,
+                    "action_allowed": False,
+                    "current_plan_available": False,
+                    "inventory_plan": None,
+                    "current_forecast_run_id": (
+                        None
+                        if current_forecast is None
+                        else current_forecast["run_id"]
+                    ),
+                    "reason_code": reason_code,
+                    "source_type": provenance["source_type"],
+                    "virtual": provenance["virtual"],
+                    "references": {
+                        "forecast_freshness": (
+                            None
+                            if current_forecast is None
+                            else current_forecast["freshness"]
+                        ),
+                        "source_provenance": provenance,
+                    },
+                },
+            )
+        provenance = plan["source_provenance"]
         return ToolResult(
             status="success",
             output={
@@ -699,6 +805,9 @@ class OperationsService:
                 "computed_now": False,
                 "action_allowed": False,
                 "inventory_plan": plan,
+                "freshness": plan["freshness"],
+                "source_type": provenance["source_type"],
+                "virtual": provenance["virtual"],
                 "references": {
                     "plan_id": plan["plan_id"],
                     "forecast_run_id": plan["forecast_run_id"],
@@ -708,6 +817,8 @@ class OperationsService:
                     "plan_quality": plan["plan_quality"],
                     "quality_issues": plan["quality_issues"],
                     "action_mode": plan["action_mode"],
+                    "freshness": plan["freshness"],
+                    "source_provenance": provenance,
                 },
             },
         )

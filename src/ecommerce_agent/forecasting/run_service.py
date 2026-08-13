@@ -7,7 +7,13 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any, Protocol
 
+from ..connectors import (
+    SourceProvenanceError,
+    merge_source_provenance,
+    read_source_provenance,
+)
 from ..database import Database, utc_now
+from ..evidence_freshness import evidence_freshness
 from .engine import ForecastEngine, ForecastPolicy
 from .models import DEMAND_V1
 
@@ -131,6 +137,7 @@ class ForecastRunService:
             item
             for item in evaluation["ranking"]
             if item["windows_failed"]
+            or item.get("final_forecast_failure_reason") is not None
         ]
         anomalies = self._anomalies(input_issues, evaluation, model_failures)
         status = (
@@ -139,20 +146,7 @@ class ForecastRunService:
             else "completed"
         )
         policy_evidence = self._policy_evidence(engine.policy)
-        data_hash = hashlib.sha256(
-            _json(
-                {
-                    "facts": [
-                        {
-                            key: item[key]
-                            for key in ("id", "business_date", "fact_version", "payload_hash")
-                        }
-                        for item in facts
-                    ],
-                    "forecast_policy": policy_evidence,
-                }
-            ).encode("utf-8")
-        ).hexdigest()
+        data_hash = self._input_data_hash(facts, policy_evidence)
         run_id = f"forecast-run-{uuid.uuid4().hex}"
         created_at = utc_now()
         candidate_evidence = {
@@ -162,6 +156,19 @@ class ForecastRunService:
             "horizon_totals": evaluation["horizon_totals"],
             "policy": policy_evidence,
         }
+        try:
+            candidate_evidence["source_provenance"] = merge_source_provenance(
+                (
+                    read_source_provenance(
+                        item.get("lineage", {}).get("source_provenance"),
+                        missing_basis="legacy_demand_fact",
+                    )
+                    for item in facts
+                ),
+                basis="forecast_demand_facts",
+            )
+        except SourceProvenanceError as exc:
+            raise ForecastRunError("forecast_source_provenance_invalid") from exc
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             self._ensure_policy(
@@ -299,10 +306,19 @@ class ForecastRunService:
         candidate_evidence = _evidence_json(
             view.pop("candidate_models_json"), dict
         )
+        try:
+            source_provenance = read_source_provenance(
+                candidate_evidence.get("source_provenance"),
+                missing_basis="legacy_forecast_run",
+            )
+        except SourceProvenanceError as exc:
+            raise ForecastRunError("forecast_source_provenance_invalid") from exc
+        candidate_evidence["source_provenance"] = source_provenance
         horizon_totals = candidate_evidence.get("horizon_totals")
         if not isinstance(horizon_totals, dict):
             raise ForecastRunError("forecast_run_evidence_invalid")
         view["candidate_models"] = candidate_evidence
+        view["source_provenance"] = source_provenance
         view["champion_reason"] = _evidence_json(view["champion_reason"], dict)
         view["horizon_totals"] = horizon_totals
         view["backtests"] = [
@@ -333,6 +349,7 @@ class ForecastRunService:
             }
             for row in anomalies
         ]
+        view["freshness"] = self._run_freshness(view, candidate_evidence)
         return view
 
     def latest_run(
@@ -371,7 +388,72 @@ class ForecastRunService:
                 key: run[key] for key in ("wape", "bias", "smape", "rmse")
             },
             "backtests": run["backtests"],
+            "freshness": run["freshness"],
         }
+
+    @staticmethod
+    def _input_data_hash(
+        facts: list[dict[str, Any]], policy_evidence: dict[str, Any]
+    ) -> str:
+        return hashlib.sha256(
+            _json(
+                {
+                    "facts": [
+                        {
+                            key: item[key]
+                            for key in (
+                                "id",
+                                "business_date",
+                                "fact_version",
+                                "payload_hash",
+                            )
+                        }
+                        for item in facts
+                    ],
+                    "forecast_policy": policy_evidence,
+                }
+            ).encode("utf-8")
+        ).hexdigest()
+
+    def _run_freshness(
+        self, run: dict[str, Any], candidate_evidence: dict[str, Any]
+    ) -> dict[str, Any]:
+        evidence_ref = {
+            "forecast_run_id": run["run_id"],
+            "data_hash": run["data_hash"],
+        }
+        policy_evidence = candidate_evidence.get("policy")
+        if not isinstance(policy_evidence, dict):
+            return evidence_freshness(
+                status="stale",
+                reason_codes=["forecast_policy_evidence_missing"],
+                evidence_ref=evidence_ref,
+                current_ref={"data_hash": None},
+            )
+        facts = sorted(
+            self.facts.list_facts(
+                str(run["tenant_id"]),
+                store_id=str(run["store_id"]),
+                sku_id=str(run["sku_id"]),
+            ),
+            key=lambda item: str(item["business_date"]),
+        )
+        try:
+            current_data_hash = self._input_data_hash(facts, policy_evidence)
+        except (KeyError, TypeError, ValueError):
+            return evidence_freshness(
+                status="stale",
+                reason_codes=["current_demand_fact_evidence_invalid"],
+                evidence_ref=evidence_ref,
+                current_ref={"data_hash": None, "fact_count": len(facts)},
+            )
+        changed = current_data_hash != str(run["data_hash"])
+        return evidence_freshness(
+            status="stale" if changed else "current",
+            reason_codes=["demand_facts_changed"] if changed else [],
+            evidence_ref=evidence_ref,
+            current_ref={"data_hash": current_data_hash, "fact_count": len(facts)},
+        )
 
     def _series(
         self, facts: list[dict[str, Any]]
@@ -517,6 +599,24 @@ class ForecastRunService:
                 }
             )
         if model_failures:
+            failures = [
+                {
+                    "model_name": item["model_name"],
+                    "phase": "final_forecast",
+                    "failure_reason": item["final_forecast_failure_reason"],
+                }
+                for item in model_failures
+                if item.get("final_forecast_failure_reason") is not None
+            ]
+            failures.extend(
+                {
+                    "model_name": item["model_name"],
+                    "phase": "backtest",
+                    "windows_failed": item["windows_failed"],
+                }
+                for item in model_failures
+                if item["windows_failed"]
+            )
             anomalies.append(
                 {
                     "anomaly_type": "model_failure",
@@ -524,6 +624,7 @@ class ForecastRunService:
                     "evidence": {
                         "models": [item["model_name"] for item in model_failures],
                         "fallback_available": True,
+                        "failures": failures,
                     },
                 }
             )

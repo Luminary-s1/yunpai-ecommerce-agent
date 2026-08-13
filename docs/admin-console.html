@@ -587,9 +587,10 @@
         <section class="view" id="view-traffic-lab">
           <div class="section-head">
             <div><h2>商品流量实验</h2><p>读取已固化统计证据；仅管理员显式触发分析</p></div>
-            <div class="toolbar"><input class="input" id="trafficStore" value="virtual-shop-001" placeholder="店铺 ID"><input class="input" id="trafficSku" value="YP-SKU-TRAFFIC-001" placeholder="SKU"><input class="input" id="trafficExperiment" placeholder="实验 ID"><button class="button" id="loadTrafficInsights">查询证据</button><button class="button primary" id="analyzeTrafficExperiment" disabled>显式运行分析</button></div>
+            <div class="toolbar"><input class="input" id="trafficStore" value="virtual-shop-001" placeholder="店铺 ID"><input class="input" id="trafficSku" value="YP-SKU-TRAFFIC-001" placeholder="SKU"><input class="input" id="trafficExperiment" placeholder="实验 ID"><button class="button" id="loadTrafficInsights">查询证据</button></div>
           </div>
           <div class="notice">页面加载与查询不会运行分析；分析结果只在点击“显式运行分析”后生成，并保留污染标记与反证。</div>
+          <div class="toolbar" style="margin:14px 0"><select class="input" id="trafficTransitionStatus"><option value="">请先选择实验</option></select><input class="input" id="trafficEndedAt" type="datetime-local" aria-label="实验结束时间" disabled><button class="button" id="transitionTrafficExperiment" disabled>推进实验状态</button><button class="button primary" id="analyzeTrafficExperiment" disabled>显式运行分析</button></div>
           <div class="grid kpis" id="trafficKpis"></div>
           <article class="panel">
             <div class="panel-head"><h3>固化实验分析</h3><span class="muted" id="trafficResultCount">0 项</span></div>
@@ -1934,7 +1935,7 @@
       const rows = [...(state.trafficInsights?.insights || [])];
       const detail = state.trafficExperimentDetail;
       if (!detail?.experiment) return rows;
-      const candidate = { experiment:detail.experiment, windows:detail.windows || [], analysis:(detail.analysis_runs || [])[0] || null };
+      const candidate = { experiment:detail.experiment, windows:detail.windows || [], analysis:(detail.analysis_runs || [])[0] || null, allowed_transitions:detail.allowed_transitions || [] };
       return [candidate, ...rows.filter((item) => item.experiment.experiment_id !== candidate.experiment.experiment_id)];
     }
 
@@ -1961,13 +1962,19 @@
       }).join('') : '<tr><td colspan="10"><div class="empty">暂无固化分析；请先创建实验，管理员再显式运行分析。</div></td></tr>';
       $('trafficRows').closest('.table-wrap').scrollLeft = 0;
       document.querySelectorAll('[data-traffic-experiment]').forEach((node) => node.addEventListener('click', () => {
-        const row = rows.find((item) => item.experiment.experiment_id === node.dataset.trafficExperiment);
         $('trafficExperiment').value = node.dataset.trafficExperiment;
-        state.trafficExperimentDetail = row ? { experiment:row.experiment, windows:row.windows, analysis_runs:row.analysis ? [row.analysis] : [] } : null;
-        renderTrafficLab();
+        loadTrafficLab().catch((error) => toast(error.message));
       }));
-      $('analyzeTrafficExperiment').disabled = !selectedId;
       const selected = rows.find((item) => item.experiment.experiment_id === selectedId) || rows[0];
+      const selectedExperiment = selected?.experiment || null;
+      const transitionLabels = { ready:'准备就绪', running:'开始运行', paused:'暂停', completed:'完成', invalid:'标记无效' };
+      const allowedTransitions = selected?.allowed_transitions || [];
+      $('trafficTransitionStatus').innerHTML = allowedTransitions.length
+        ? allowedTransitions.map((status) => `<option value="${escapeHtml(status)}">${escapeHtml(transitionLabels[status] || status)}</option>`).join('')
+        : '<option value="">无可用状态迁移</option>';
+      $('transitionTrafficExperiment').disabled = !selectedExperiment || !allowedTransitions.length;
+      $('trafficEndedAt').disabled = $('trafficTransitionStatus').value !== 'completed';
+      $('analyzeTrafficExperiment').disabled = selectedExperiment?.status !== 'completed';
       $('trafficDetail').innerHTML = selected ? `<div class="panel-head"><h3>${escapeHtml(selected.experiment.experiment_id)}</h3><span class="status ${statusClass(selected.analysis?.evidence?.quality_gate?.status || selected.experiment.status)}">${escapeHtml(selected.analysis?.evidence?.quality_gate?.status || selected.experiment.status)}</span></div><div class="panel-body"><pre class="json-view">${escapeHtml(prettyJson(selected))}</pre></div>` : '<div class="empty">选择实验查看完整结构化证据</div>';
     }
 
@@ -1989,6 +1996,22 @@
         await api(`/v1/traffic-lab/experiments/${encodeURIComponent(experimentId)}/analyze`, { method:'POST' });
         await loadTrafficLab();
         toast('分析已由管理员显式触发并固化');
+      } catch (error) { toast(error.message); }
+      finally { button.disabled = false; }
+    }
+
+    async function transitionTrafficExperiment() {
+      const experiment = state.trafficExperimentDetail?.experiment;
+      if (!experiment) return toast('请先查询并选择实验');
+      const status = $('trafficTransitionStatus').value;
+      const payload = { status, expected_version:Number(experiment.record_version) };
+      const endedAt = $('trafficEndedAt').value;
+      if (status === 'completed' && endedAt) payload.ended_at = new Date(endedAt).toISOString();
+      const button = $('transitionTrafficExperiment'); button.disabled = true;
+      try {
+        await api(`/v1/traffic-lab/experiments/${encodeURIComponent(experiment.experiment_id)}/transition`, { method:'POST', body:JSON.stringify(payload) });
+        await loadTrafficLab();
+        toast(`实验状态已推进为 ${status}`);
       } catch (error) { toast(error.message); }
       finally { button.disabled = false; }
     }
@@ -2458,6 +2481,8 @@
     $('loadForecastEvidence').addEventListener('click', () => loadForecasting().catch((error) => toast(error.message)));
     $('runForecast').addEventListener('click', () => runForecasting());
     $('loadTrafficInsights').addEventListener('click', () => loadTrafficLab().catch((error) => toast(error.message)));
+    $('trafficTransitionStatus').addEventListener('change', () => { $('trafficEndedAt').disabled = $('trafficTransitionStatus').value !== 'completed'; });
+    $('transitionTrafficExperiment').addEventListener('click', () => transitionTrafficExperiment());
     $('analyzeTrafficExperiment').addEventListener('click', () => analyzeTrafficExperiment());
     $('overviewScope').addEventListener('change', () => loadOverview().catch((error) => toast(error.message)));
     ['simulationModuleFilter','simulationStatusFilter'].forEach((id) => $(id).addEventListener('change', renderSimulation));

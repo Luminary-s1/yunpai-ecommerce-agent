@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from ecommerce_agent.business_calendar import StoreBusinessCalendarUpsert
 from ecommerce_agent.database import Database
 from ecommerce_agent.traffic_lab import (
     CreativeAssetCreate,
@@ -327,6 +328,15 @@ def _analyze_scenario(
 ) -> dict[str, Any]:
     tenant_id = f"eval-{scenario_id}"
     service = TrafficLabService(db)
+    service.business_calendars.upsert_calendar(
+        tenant_id,
+        StoreBusinessCalendarUpsert(
+            store_id="eval-store",
+            timezone="UTC",
+            effective_from=_BASE_TIME - timedelta(days=30),
+            changed_by="traffic-analysis-eval-fixture",
+        ),
+    )
     control, treatment = _seed_revisions(
         service,
         tenant_id,

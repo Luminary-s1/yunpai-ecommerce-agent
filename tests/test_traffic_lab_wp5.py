@@ -43,7 +43,15 @@ def test_traffic_lab_console_has_structured_evidence_and_manual_analysis(tmp_pat
     assert page.status_code == 200
     assert before == after == []
     assert "traffic-lab" in structure.nav_views
-    assert {"trafficSku", "trafficStore", "trafficExperiment", "analyzeTrafficExperiment"} <= structure.ids
+    assert {
+        "trafficSku",
+        "trafficStore",
+        "trafficExperiment",
+        "trafficTransitionStatus",
+        "trafficEndedAt",
+        "transitionTrafficExperiment",
+        "analyzeTrafficExperiment",
+    } <= structure.ids
     assert {
         "control",
         "treatment",

@@ -52,6 +52,7 @@ from .text_utils import redact_sensitive
 from .taobao import TaobaoIntegrationService
 from .sops import SopService
 from .tools import ToolRegistry
+from .traffic_lab import TrafficAnalysisModelInterpreter
 
 
 class AgentService:
@@ -101,7 +102,15 @@ class AgentService:
             )
             self.handoff_dispatch_recovery = self.handoff_dispatch.ensure_pending_jobs()
             self.tools = tool_registry or ToolRegistry()
-            self.operations = OperationsService(self.db)
+            traffic_analysis_interpreter = (
+                TrafficAnalysisModelInterpreter(self.model)
+                if self.settings.model_enabled
+                else None
+            )
+            self.operations = OperationsService(
+                self.db,
+                traffic_analysis_interpreter=traffic_analysis_interpreter,
+            )
             self.operations.register_agent_tools(self.tools)
             if self.settings.model_enabled:
                 # 文案与报告解读可走真实模型；模型异常时服务内部自动降级到模板。

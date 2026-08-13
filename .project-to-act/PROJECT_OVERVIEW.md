@@ -104,9 +104,10 @@
 | D-033 | 运营看板默认只看真实运营来源，虚拟/评测必须显式切换 | 场景验收和评测会产生会话、指标、人工任务和派单 job；混入默认看板会误导业务判断 | schema v22 会话来源分类；默认 `operational` 排除 simulation/evaluation；后台提供 `simulation/evaluation/all` 切换并显示来源标签和引用 |
 | D-034 | 确定性代码不做语义路由，关键词与前置分类只作信号 | 关键词规则、分类标签和分数阈值把分类误差固化成路由误差，模型失去纠错机会；D-010 只约束了拓扑，节点内部同类问题在 2026-08-07 审计中大量确认 | 硬边界仅限安全与可执行性校验；规则/分类输出进 prompt、检索加权与风险标记；gate 只因可验证执行失败向保守方向降级；快速路径仅限已审核且完全匹配内容；细则见 CONTRIBUTING 第 10 节与 `docs/AUDIT_ROUTING_EVOLVABILITY_20260807.md` |
 | D-035 | 共享事实单一权威源，测试只断言自身增量 | 计数全等、全量快照和版本精确比对把「当前状态」写成永久不变量，正常新增即挂；同一事实手抄多处已产生真实缺陷（`_validate_schema` 重复键）与大面积文档腐烂 | 枚举/版本/清单单点定义，副本须交叉校验或生成；测试用成员与下界断言，不断言他人不存在；版本化字段必须有读侧；现行文档引用权威源而非写死数字；细则见 CONTRIBUTING 第 11 节 |
-| D-037 | Traffic Lab 流量点直接绑定不可变 listing revision，关系键同时绑定租户 | 仅按 SKU 和时间回推标题、主图或价格会在重叠、乱序和跨租户 ID 猜测时产生歧义 | schema v28 使用 `tenant_id + id` 复合外键；revision 数据库级禁止更新/删除；可归属 metric 与版本化隔离记录按 `tenant_id + source_id` 互斥，缺失/未知/歧义/越界归属不进入分析；窗口重叠/缺口由确定性质量报告暴露 |
+| D-037 | Traffic Lab 流量点直接绑定不可变 listing revision，来源身份为 `(tenant_id, connector_id, source_id)` | 仅按 SKU/时间回推 revision 会产生归属歧义；仅按 tenant/native source ID 决胜会让不同 connector 冲突或覆盖 | schema v32 accepted/quarantine 均使用三元唯一键并只在同一三元身份间互斥；accepted connector 从不可变 revision 推导并校验显式身份；历史 quarantine 只从冻结 payload 读取 connector，缺失进入显式 `legacy_unscoped`，新写与分析均禁止该隔离身份；source ID 原文和 store scope 不参与身份改写；缺失/未知/歧义/越界归属仍不进入分析 |
 | D-038 | 虚拟推流 ground truth 只存在于 Connector 私有 fixture 生成边界 | 若隐藏权重或预期方向进入 PullRecord、数据库或 Traffic Lab 公共包，后续分析会读取答案而不是从观测恢复方向 | `VirtualTaobaoConnector` 只返回 revision、指标和稳定变更回执；隐藏输入是私有生成函数的局部状态，不作为对象属性、公共导出或持久字段；Traffic Lab importer 只消费标准 `PullRecord` |
 | D-039 | Forecast Eval oracle 与生产预测输入物理分段并审计实际字段 | 若期望类型、方向或阈值在 forecast/plan 调用前混入 observation，评测会变成答案泄漏；只声明“未使用”又不可证伪 | scenario runner 只接收 synthetic input，生产 `ForecastRunService` / `InventoryPlanningService` 完成后才读取独立 oracle；报告记录实际 service/engine/reader/policy 字段、输入 digest 与 oracle overlap，任一 overlap 或未登记调用字段使 Gate 失败；存在非零回测误差时，P80/P95 宽度塌缩为零也必须失败 |
+| D-040 | Switchback 与店铺经营日使用版本化店铺业务日历，缺配置 fail closed | UTC 与店铺本地日期/星期会给出相反质量门；import 时区、服务器时区和 Forecast 全局时区都不是店铺事实 | schema v32 权威记录按 `(tenant_id, store_id)` 保存 IANA timezone、record version、effective time 与审计主体；实验创建时固化 calendar ID/version/timezone/policy；窗口仍存 UTC，hour/date/weekday 用 `ZoneInfo` 转换，duration 保持绝对时间；缺记录拒绝创建，旧实验缺证据分析 blocked；simulate-store 显式写入 fixture timezone，不提供请求覆盖或任何时区回退 |
 
 ## 按需读取索引
 
@@ -125,6 +126,10 @@
 - 2026-07-23：0.22.5 将 GLM Coding Plan 作为显式本机测试模型接入原后台顾客测试页面，使用标准 Chat Completions 非流式请求。修复 SSE 读取超时和模型将空容器输出为 null 导致的结构化决策校验失败；页面实测得到真实模型回答，审计轨迹为 `deliberate:model:answer -> generate:model -> verify:passed`。密钥仅由进程环境提供。226 项全量测试通过。证据 E-20260723-003；生产 Gate 不豁免。
 
 按时间倒序追加：日期、决定、原因、影响、确认来源。
+
+- 2026-08-13：F-322 已在未提交 worktree 实施 schema v32。D-040 新增单一版本化店铺业务日历服务，实验固化证据，switchback 使用 IANA 本地 hour/date/weekday，缺配置与 legacy 缺证据 fail closed；D19 改用 fixture 声明店铺并由 simulate-store 写入该店日历。D-037 accepted/quarantine 改为 `(tenant, connector, source_id)`，accepted 由 revision 校验/推导 connector，legacy quarantine 缺 connector 进入 `legacy_unscoped` 且分析显式排除；迁移逐项校验 count/hash/version/FK/双态冲突。日历旧实现红测 `8 failed`，三元身份旧实现红测 `5 failed, 1 passed`；修复后新契约 `16 passed`、Traffic 相邻 `74 passed`、迁移/灾备 `48 passed`、规定 14 文件加 provenance `135 passed`，静态检查与台账校验见 E-20260813-018。未运行仓库全量、真实数据或长稳，不构成生产放行。
+
+- 2026-08-13：产品裁定两项 M5-R 契约，实现尚未开始。Switchback 采用版本化店铺业务日历（D-040），缺配置 fail closed，否决每实验显式时区与正式 UTC 日历。D-037 身份键裁定改为 `(tenant_id, connector_id, source_id)`，缺 connector 的历史隔离行进入 `legacy_unscoped` 且禁止分析，否决 canonical 字符串命名空间与“Connector 自称 tenant-global”。schema 使用 **v32**：origin PR #11 已占用 v31（统筹 Agent 会话表）；PR #12 不新增 schema。本决策只锁定契约与占号，不把日历或三元身份写成已落地。来源：用户确认选择 A/A，并要求按最新 PR 占号改用 v32；详见 `docs/M5R_TRAFFIC_LAB_PENDING_DECISIONS_20260813.md` 与 `docs/tasks/M5R_TRAFFIC_LAB_V32_CODEX_HANDOFF.md`。
 
 - 2026-07-22：0.22.2 将后台客服与派单数据默认收敛到真实运营范围。schema v22 为 sessions 增加来源分类和来源引用，后台默认 `operational` 排除 simulation/evaluation，同时允许显式切换模拟、评测和全部数据；智能客服详情显示来源标签、Mock 模型状态、决策模式、工具、上下文和轨迹。最终 221 项全量测试、20/20 安全评测、compileall/JS、8104 health/ready、HTTP 场景 13/13 和 Edge 页面通过；生产 Gate 不豁免。证据 E-20260722-011。
 

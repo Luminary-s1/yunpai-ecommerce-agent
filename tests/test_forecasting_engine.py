@@ -75,7 +75,7 @@ def test_sequence_types_and_intervals_are_deterministic(
     replay = engine.evaluate(_series(values))
 
     assert first == replay
-    assert first["model_version"] == "forecast-engine-v1"
+    assert first["model_version"] == "forecast-engine-v2"
     assert first["demand_type"] == expected_type
     if expected_type == "intermittent" and max(values) > 0:
         assert first["champion_reason"]["code"] == "challenger_improved"
@@ -100,6 +100,61 @@ def test_failed_candidate_does_not_block_available_models() -> None:
     assert ewma["eligible_for_champion"] is False
     assert result["champion_model"] != "ewma"
     assert len(result["points"]) == 30
+
+
+def test_final_forecast_failure_reselects_with_the_authoritative_policy() -> None:
+    values: list[int | None] = [1, 2, 3, 4, 5, 6, 7] * 9
+    values[-1] = None
+
+    result = ForecastEngine().evaluate(_series(values))
+
+    assert result["champion_model"] == "rolling_mean"
+    reason = result["champion_reason"]
+    assert reason["initial_champion_model"] == "seasonal_naive_7"
+    assert reason["fallback_applied"] is True
+    assert reason["final_forecast_attempts"] == [
+        {
+            "model_name": "seasonal_naive_7",
+            "status": "failed",
+            "failure_reason": "ValueError:complete_seven_day_season_required",
+        },
+        {
+            "model_name": "rolling_mean",
+            "status": "selected",
+            "failure_reason": None,
+        },
+    ]
+    seasonal = next(
+        item for item in result["ranking"]
+        if item["model_name"] == "seasonal_naive_7"
+    )
+    assert seasonal["eligible_for_champion"] is True
+    assert seasonal["eligible_for_final_forecast"] is False
+    assert seasonal["final_forecast_failure_reason"] == (
+        "ValueError:complete_seven_day_season_required"
+    )
+    assert len(result["points"]) == 30
+
+
+def test_run_fails_only_after_every_policy_usable_final_candidate_fails() -> None:
+    def fail_only_on_final(
+        values: list[float | None], horizon: int
+    ) -> list[float]:
+        if len(values) == 56:
+            raise RuntimeError("injected_final_failure")
+        return [1.0] * horizon
+
+    policy = ForecastPolicy(candidate_models=("last_value", "rolling_mean"))
+    engine = ForecastEngine(
+        policy=policy,
+        forecaster_overrides={
+            "last_value": fail_only_on_final,
+            "rolling_mean": fail_only_on_final,
+        },
+    )
+
+    with pytest.raises(ValueError, match="^forecast_final_candidates_failed$"):
+        engine.evaluate(_series([1] * 56))
 
 
 def test_zero_actual_windows_make_wape_incomparable_without_division_by_zero() -> None:

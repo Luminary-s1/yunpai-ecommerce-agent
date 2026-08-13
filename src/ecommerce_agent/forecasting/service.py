@@ -8,6 +8,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
+from ..business.source_versioning import payload_digest
+from ..connectors import SourceProvenanceResolver, unknown_source_provenance
 from ..database import Database, utc_now
 from .models import DEMAND_V1, DemandFactRebuild
 
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
 
 _POLICY_TIMEZONE = ZoneInfo(DEMAND_V1.timezone)
 _CENT = Decimal("0.01")
+SKU_UNIVERSE_POLICY_VERSION = "demand-sku-universe-v1"
 
 
 def _json(value: Any) -> str:
@@ -45,10 +48,12 @@ class DemandFactService:
         *,
         orders: OrderService,
         inventory: InventoryService,
+        source_provenance_resolver: SourceProvenanceResolver | None = None,
     ):
         self.db = db
         self.orders = orders
         self.inventory = inventory
+        self.source_provenance_resolver = source_provenance_resolver
 
     def rebuild(self, tenant_id: str, request: DemandFactRebuild) -> dict[str, Any]:
         current_date = datetime.now(_POLICY_TIMEZONE).date()
@@ -68,9 +73,20 @@ class DemandFactService:
             end_date=end_date,
             sku_id=request.sku_id,
         )
-        sku_ids = {sku for _business_date, sku in grouped}
-        if request.sku_id is not None:
-            sku_ids.add(request.sku_id)
+        sku_universe = self._sku_universe(
+            source_orders,
+            balances,
+            requested_sku_id=request.sku_id,
+        )
+        sku_ids = set(sku_universe["sku_ids"])
+        dataset_provenance = {
+            sku_id: self._dataset_source_provenance(
+                source_orders,
+                balances,
+                sku_id=sku_id,
+            )
+            for sku_id in sku_ids
+        }
         records = [
             self._fact_record(
                 tenant_id=tenant_id,
@@ -80,6 +96,7 @@ class DemandFactService:
                 entries=grouped[(business_date, sku_id)],
                 balances=balances,
                 coverage_complete=request.coverage_complete,
+                source_provenance=dataset_provenance[sku_id],
             )
             for business_date in self._date_range(start_date, end_date)
             for sku_id in sorted(sku_ids)
@@ -100,6 +117,7 @@ class DemandFactService:
             "window": {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
             "coverage_complete": request.coverage_complete,
             "demand_policy": DEMAND_V1.evidence(),
+            "sku_universe": sku_universe,
             "facts_written": written,
             "facts_idempotent": idempotent,
         }
@@ -187,9 +205,8 @@ class DemandFactService:
         entries: list[tuple[dict[str, Any], dict[str, Any]]],
         balances: list[dict[str, Any]],
         coverage_complete: bool,
+        source_provenance: dict[str, Any],
     ) -> dict[str, Any]:
-        from ..business.source_versioning import payload_digest
-
         stockout_flag, available_stock, stockout_evidence, inventory_lineage = (
             self._stockout_evidence(balances, sku_id=sku_id, business_date=business_date)
         )
@@ -203,7 +220,11 @@ class DemandFactService:
             "orders": self._watermark(order_lineage),
             "inventory": self._watermark(inventory_lineage),
         }
-        lineage = {"orders": order_lineage, "inventory": inventory_lineage}
+        lineage = {
+            "orders": order_lineage,
+            "inventory": inventory_lineage,
+            "source_provenance": source_provenance,
+        }
         payload = {
             "tenant_id": tenant_id,
             "store_id": store_id,
@@ -224,6 +245,40 @@ class DemandFactService:
             "lineage": lineage,
         }
         return {**payload, "payload_hash": payload_digest(payload)}
+
+    @staticmethod
+    def _sku_universe(
+        source_orders: list[dict[str, Any]],
+        balances: list[dict[str, Any]],
+        *,
+        requested_sku_id: str | None,
+    ) -> dict[str, Any]:
+        sources_by_sku: dict[str, set[str]] = defaultdict(set)
+        for order in source_orders:
+            for line in order["lines"]:
+                sources_by_sku[str(line["sku_id"])].add("window_order_lines")
+        for balance in balances:
+            sources_by_sku[str(balance["sku_id"])].add(
+                "current_inventory_balances"
+            )
+        if requested_sku_id is not None:
+            sources = sources_by_sku.get(requested_sku_id, set())
+            sources_by_sku = {requested_sku_id: {*sources, "explicit_request"}}
+        members = [
+            {"sku_id": sku_id, "sources": sorted(sources_by_sku[sku_id])}
+            for sku_id in sorted(sources_by_sku)
+        ]
+        evidence = {
+            "policy_version": SKU_UNIVERSE_POLICY_VERSION,
+            "scope": "explicit_sku" if requested_sku_id is not None else "store_wide",
+            "members": members,
+        }
+        return {
+            **evidence,
+            "sku_ids": [item["sku_id"] for item in members],
+            "sku_count": len(members),
+            "digest": payload_digest(evidence),
+        }
 
     @staticmethod
     def _demand_values(
@@ -283,6 +338,7 @@ class DemandFactService:
                 "balance_id": item["id"],
                 "warehouse_id": item["warehouse_id"],
                 "source_id": item["source_id"],
+                "connector_id": item["connector_id"],
                 "source_updated_at": item["source_updated_at"],
                 "version": item["version"],
             }
@@ -326,12 +382,39 @@ class DemandFactService:
             str(order["id"]): {
                 "order_id": order["order_id"],
                 "source_id": order["source_id"],
+                "connector_id": order["connector_id"],
                 "source_updated_at": order["source_updated_at"],
                 "version": order["version"],
             }
             for order, _line in entries
         }
         return [by_order[key] for key in sorted(by_order)]
+
+    def _dataset_source_provenance(
+        self,
+        source_orders: list[dict[str, Any]],
+        balances: list[dict[str, Any]],
+        *,
+        sku_id: str,
+    ) -> dict[str, Any]:
+        connector_ids = {
+            str(order["connector_id"])
+            for order in source_orders
+            if any(str(line["sku_id"]) == sku_id for line in order["lines"])
+        }
+        connector_ids.update(
+            str(balance["connector_id"])
+            for balance in balances
+            if str(balance["sku_id"]) == sku_id
+        )
+        if self.source_provenance_resolver is None:
+            return unknown_source_provenance(
+                basis="demand_fact_resolver_not_configured"
+            )
+        return self.source_provenance_resolver.freeze(
+            connector_ids,
+            basis="demand_rebuild_sku_window",
+        )
 
     @staticmethod
     def _watermark(lineage: list[dict[str, Any]]) -> dict[str, Any]:

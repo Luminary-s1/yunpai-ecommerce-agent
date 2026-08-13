@@ -647,6 +647,13 @@ def test_header_and_manifest_validation_rejects_each_trust_boundary() -> None:
         ],
     }
     assert _validate_manifest(manifest, header)["archive_id"] == archive_id
+    pre_v32_manifest = deepcopy(manifest)
+    pre_v32_manifest["schema_version"] = 30
+    with pytest.raises(
+        DisasterRecoveryError,
+        match="backup schema is not supported by this application",
+    ):
+        _validate_manifest(pre_v32_manifest, header)
     invalid_manifests = []
     for field, value in (
         ("format", "other"),

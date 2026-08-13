@@ -1,4 +1,8 @@
-from .analysis import TrafficAnalysisEngine, TrafficAnalysisInterpreter
+from .analysis import (
+    TrafficAnalysisEngine,
+    TrafficAnalysisInterpreter,
+    TrafficAnalysisModelInterpreter,
+)
 from .ingestion import TrafficLabIngestionService
 from .features import (
     SemanticFeatureOutput,
@@ -33,6 +37,7 @@ __all__ = [
     "TrafficAnalysisEngine",
     "TrafficAnalysisInterpretation",
     "TrafficAnalysisInterpreter",
+    "TrafficAnalysisModelInterpreter",
     "TrafficExperimentCreate",
     "TrafficExperimentTransition",
     "TrafficExperimentWindowCreate",

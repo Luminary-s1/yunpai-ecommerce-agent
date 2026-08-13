@@ -280,12 +280,15 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | 28 | M5-R | Traffic Lab / `main` | creative asset、listing revision、metric bucket、experiment/window/analysis run | 已合并（WP1–WP5） |
 | **29** | M6-R | Forecasting / `main` | demand fact、forecast policy/run/backtest/point/anomaly | 已合并（WP1–WP2；WP5 Eval 沿用） |
 | **30** | M6-R | Inventory Planning / `main` | planning policy、inventory plan | 已合并（WP3；WP4–WP5 沿用） |
-| 31+ | *（空闲）* | | | |
+| **31** | 统筹 Agent | origin PR #11 / `codex/workspace-conversation-history` | `workspace_conversations`、`workspace_messages` | 已占用，PR 开发中 |
+| **32** | M5-R | F-322 / 本分支 | 店铺业务日历 + Traffic metric 三元身份 | 已占用，开发中 |
+| 33+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
 若存在尚未同步的其他 v28 分支，不得直接合入，先与模块负责人核对。26–28 已合并，
 29 的 WP1–WP2 与 30 的 WP3 已合并进 `main`；M6-R WP4–WP5 整链也已合并，且未新增
-schema 版本或迁移。
+schema 版本或迁移。31 已由 origin PR #11 的统筹 Agent 会话表占用；32 由 F-322
+店铺业务日历与 Traffic metric 三元身份占用；下一空闲号从 33 起。
 
 **并行占号的分支合并时，`database.py` 必然在三处
 冲突**（2026-08-06 实测：26 对 27 就是这三处，已按下面的解法合入）：

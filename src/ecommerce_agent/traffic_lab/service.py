@@ -6,8 +6,16 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from ..business_calendar import (
+    StoreBusinessCalendarError,
+    StoreBusinessCalendarService,
+)
 from ..business.source_versioning import SourceVersionError, decide_write, payload_digest
+from ..connectors import merge_source_provenance, read_source_provenance
 from ..database import Database, utc_now
+from ..evidence_freshness import evidence_freshness
+from ..traffic_source_identity import LEGACY_UNSCOPED_CONNECTOR_ID
+from .freshness import analysis_input_freshness
 from .models import (
     BucketGranularity,
     CreativeAssetCreate,
@@ -38,12 +46,32 @@ def _json_load(value: str) -> Any:
     return json.loads(value)
 
 
+_METRIC_REVISION_IDENTITY_FIELDS = ("connector_id", "store_id", "item_id", "sku_id")
+
+
 def _metric_payload(value: TrafficMetricBucketUpsert) -> dict[str, Any]:
     payload = value.model_dump(mode="json")
-    for field in ("connector_id", "store_id", "item_id", "sku_id"):
+    for field in _METRIC_REVISION_IDENTITY_FIELDS:
         if payload[field] is None:
             payload.pop(field)
     return payload
+
+
+def _metric_payload_hash_candidates(payload: dict[str, Any]) -> set[str]:
+    candidates: set[str] = set()
+    field_count = len(_METRIC_REVISION_IDENTITY_FIELDS)
+    for omission_mask in range(1 << field_count):
+        omitted = {
+            field
+            for index, field in enumerate(_METRIC_REVISION_IDENTITY_FIELDS)
+            if omission_mask & (1 << index)
+        }
+        candidates.add(
+            payload_digest(
+                {key: value for key, value in payload.items() if key not in omitted}
+            )
+        )
+    return candidates
 
 
 class TrafficLabService:
@@ -62,8 +90,14 @@ class TrafficLabService:
         "invalid": set(),
     }
 
-    def __init__(self, db: Database):
+    def __init__(
+        self,
+        db: Database,
+        *,
+        business_calendars: StoreBusinessCalendarService | None = None,
+    ):
         self.db = db
+        self.business_calendars = business_calendars or StoreBusinessCalendarService(db)
 
     def register_asset(self, tenant_id: str, value: CreativeAssetCreate) -> dict[str, Any]:
         payload = value.model_dump(mode="json")
@@ -359,15 +393,6 @@ class TrafficLabService:
         metric_start = _canonical_time(value.metric_start)
         metric_end = _canonical_time(value.metric_end)
         data_as_of = _canonical_time(value.data_as_of)
-        payload = _metric_payload(value)
-        payload.update(
-            {
-                "metric_start": metric_start,
-                "metric_end": metric_end,
-                "data_as_of": data_as_of,
-            }
-        )
-        payload_hash = payload_digest(payload)
         quality_flags = self._metric_quality_flags(value)
         write_status = "applied"
         if value.listing_revision_id is None:
@@ -380,31 +405,51 @@ class TrafficLabService:
             ).fetchone()
             if revision is None:
                 raise TrafficLabError("listing_revision_not_found")
+            value = self._metric_with_revision_identity(value, dict(revision))
+            connector_id = str(value.connector_id)
+            payload = _metric_payload(value)
+            payload.update(
+                {
+                    "metric_start": metric_start,
+                    "metric_end": metric_end,
+                    "data_as_of": data_as_of,
+                }
+            )
+            payload_hash = payload_digest(payload)
+            compatible_payload_hashes = _metric_payload_hash_candidates(payload)
             if metric_start < str(revision["active_from"]) or (
                 revision["active_to"] is not None
                 and metric_end > str(revision["active_to"])
             ):
                 raise TrafficLabError("metric_outside_revision_window")
             accepted_existing = conn.execute(
-                "SELECT * FROM traffic_metric_buckets WHERE tenant_id=? AND source_id=?",
-                (tenant_id, value.source_id),
+                """
+                SELECT * FROM traffic_metric_buckets
+                WHERE tenant_id=? AND connector_id=? AND source_id=?
+                """,
+                (tenant_id, connector_id, value.source_id),
             ).fetchone()
             quarantine_existing = conn.execute(
                 """
                 SELECT * FROM traffic_metric_quarantine
-                WHERE tenant_id=? AND source_id=?
+                WHERE tenant_id=? AND connector_id=? AND source_id=?
                 """,
-                (tenant_id, value.source_id),
+                (tenant_id, connector_id, value.source_id),
             ).fetchone()
             if accepted_existing is not None and quarantine_existing is not None:
                 raise TrafficLabError("metric_source_state_conflict")
             source_existing = accepted_existing or quarantine_existing
             if source_existing is not None:
+                existing_payload_hash = str(source_existing["payload_hash"])
                 decision = decide_write(
                     existing_source_time=str(source_existing["data_as_of"]),
-                    existing_payload_hash=str(source_existing["payload_hash"]),
+                    existing_payload_hash=existing_payload_hash,
                     incoming_source_time=data_as_of,
-                    incoming_payload_hash=payload_hash,
+                    incoming_payload_hash=(
+                        existing_payload_hash
+                        if existing_payload_hash in compatible_payload_hashes
+                        else payload_hash
+                    ),
                 )
                 bucket_id = (
                     str(accepted_existing["id"])
@@ -431,14 +476,14 @@ class TrafficLabService:
                 conn.execute(
                     """
                     INSERT INTO traffic_metric_buckets(
-                        id, tenant_id, listing_revision_id, metric_start, metric_end,
-                        bucket_granularity, traffic_source, impressions, clicks,
-                        visitors, favorites, cart_adds, orders, sales_amount,
-                        ad_spend, search_impressions, recommend_impressions,
-                        data_as_of, source_id, payload_hash, quality_flags_json,
-                        version, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(tenant_id, source_id) DO UPDATE SET
+                        id, tenant_id, connector_id, listing_revision_id,
+                        metric_start, metric_end, bucket_granularity, traffic_source,
+                        impressions, clicks, visitors, favorites, cart_adds, orders,
+                        sales_amount, ad_spend, search_impressions,
+                        recommend_impressions, data_as_of, source_id, payload_hash,
+                        quality_flags_json, version, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(tenant_id, connector_id, source_id) DO UPDATE SET
                         listing_revision_id=excluded.listing_revision_id,
                         metric_start=excluded.metric_start,
                         metric_end=excluded.metric_end,
@@ -463,6 +508,7 @@ class TrafficLabService:
                     (
                         bucket_id,
                         tenant_id,
+                        connector_id,
                         value.listing_revision_id,
                         metric_start,
                         metric_end,
@@ -491,9 +537,9 @@ class TrafficLabService:
                     conn.execute(
                         """
                         DELETE FROM traffic_metric_quarantine
-                        WHERE tenant_id=? AND source_id=?
+                        WHERE tenant_id=? AND connector_id=? AND source_id=?
                         """,
-                        (tenant_id, value.source_id),
+                        (tenant_id, connector_id, value.source_id),
                     )
         result = self.get_metric_bucket(tenant_id, bucket_id)
         result["write_status"] = write_status
@@ -520,6 +566,21 @@ class TrafficLabService:
     ) -> dict[str, Any]:
         if reason_code not in self._METRIC_QUARANTINE_REASONS:
             raise TrafficLabError("metric_quarantine_reason_invalid")
+        revision_resolved = False
+        if value.listing_revision_id is not None:
+            with self.db.connect() as conn:
+                revision = conn.execute(
+                    "SELECT * FROM listing_revisions WHERE tenant_id=? AND id=?",
+                    (tenant_id, value.listing_revision_id),
+                ).fetchone()
+            if revision is not None:
+                value = self._metric_with_revision_identity(value, dict(revision))
+                revision_resolved = True
+        connector_id = value.connector_id
+        if connector_id is None:
+            raise TrafficLabError("metric_connector_required")
+        if connector_id == LEGACY_UNSCOPED_CONNECTOR_ID:
+            raise TrafficLabError("legacy_metric_connector_forbidden")
         data_as_of = _canonical_time(value.data_as_of)
         payload = _metric_payload(value)
         payload.update(
@@ -530,32 +591,42 @@ class TrafficLabService:
             }
         )
         payload_hash = payload_digest(payload)
+        compatible_payload_hashes = (
+            _metric_payload_hash_candidates(payload)
+            if revision_resolved
+            else {payload_hash}
+        )
         write_status = "applied"
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             quarantine_existing = conn.execute(
                 """
                 SELECT * FROM traffic_metric_quarantine
-                WHERE tenant_id=? AND source_id=?
+                WHERE tenant_id=? AND connector_id=? AND source_id=?
                 """,
-                (tenant_id, value.source_id),
+                (tenant_id, connector_id, value.source_id),
             ).fetchone()
             accepted_existing = conn.execute(
                 """
                 SELECT * FROM traffic_metric_buckets
-                WHERE tenant_id=? AND source_id=?
+                WHERE tenant_id=? AND connector_id=? AND source_id=?
                 """,
-                (tenant_id, value.source_id),
+                (tenant_id, connector_id, value.source_id),
             ).fetchone()
             if accepted_existing is not None and quarantine_existing is not None:
                 raise TrafficLabError("metric_source_state_conflict")
             source_existing = quarantine_existing or accepted_existing
             if source_existing is not None:
+                existing_payload_hash = str(source_existing["payload_hash"])
                 decision = decide_write(
                     existing_source_time=str(source_existing["data_as_of"]),
-                    existing_payload_hash=str(source_existing["payload_hash"]),
+                    existing_payload_hash=existing_payload_hash,
                     incoming_source_time=data_as_of,
-                    incoming_payload_hash=payload_hash,
+                    incoming_payload_hash=(
+                        existing_payload_hash
+                        if existing_payload_hash in compatible_payload_hashes
+                        else payload_hash
+                    ),
                 )
                 quarantine_id = (
                     str(quarantine_existing["quarantine_id"])
@@ -582,11 +653,11 @@ class TrafficLabService:
                 conn.execute(
                     """
                     INSERT INTO traffic_metric_quarantine(
-                        quarantine_id, tenant_id, source_id, reason_code,
-                        payload_json, data_as_of, payload_hash, version,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(tenant_id, source_id) DO UPDATE SET
+                        quarantine_id, tenant_id, connector_id, source_id,
+                        reason_code, payload_json, data_as_of, payload_hash,
+                        version, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(tenant_id, connector_id, source_id) DO UPDATE SET
                         reason_code=excluded.reason_code,
                         payload_json=excluded.payload_json,
                         data_as_of=excluded.data_as_of,
@@ -597,6 +668,7 @@ class TrafficLabService:
                     (
                         quarantine_id,
                         tenant_id,
+                        connector_id,
                         value.source_id,
                         reason_code,
                         _json_dump(payload),
@@ -611,9 +683,9 @@ class TrafficLabService:
                     conn.execute(
                         """
                         DELETE FROM traffic_metric_buckets
-                        WHERE tenant_id=? AND source_id=?
+                        WHERE tenant_id=? AND connector_id=? AND source_id=?
                         """,
-                        (tenant_id, value.source_id),
+                        (tenant_id, connector_id, value.source_id),
                     )
         result = self.get_metric_quarantine(tenant_id, quarantine_id)
         result["write_status"] = write_status
@@ -668,8 +740,8 @@ class TrafficLabService:
         bucket_granularity: BucketGranularity | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        conditions = ["tenant_id=?"]
-        params: list[Any] = [tenant_id]
+        conditions = ["tenant_id=?", "connector_id<>?"]
+        params: list[Any] = [tenant_id, LEGACY_UNSCOPED_CONNECTOR_ID]
         if listing_revision_id is not None:
             conditions.append("listing_revision_id=?")
             params.append(listing_revision_id)
@@ -721,8 +793,27 @@ class TrafficLabService:
     ) -> dict[str, Any]:
         started_at = _canonical_time(value.started_at)
         ended_at = _canonical_time(value.ended_at) if value.ended_at is not None else None
+        try:
+            calendar = self.business_calendars.get_effective(
+                tenant_id,
+                value.store_id,
+                at=value.started_at,
+            )
+        except StoreBusinessCalendarError as exc:
+            if exc.code == "store_business_calendar_not_found":
+                raise TrafficLabError("store_business_timezone_required") from exc
+            raise
         payload = value.model_dump(mode="json")
-        payload.update({"started_at": started_at, "ended_at": ended_at})
+        payload.update(
+            {
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "business_calendar_id": calendar["calendar_id"],
+                "business_calendar_version": calendar["record_version"],
+                "business_timezone": calendar["timezone"],
+                "business_calendar_policy_version": calendar["policy_version"],
+            }
+        )
         payload_hash = payload_digest(payload)
         experiment_id = f"experiment-{uuid.uuid4().hex}"
         with self.db._write_lock, self.db.connect() as conn:
@@ -748,8 +839,13 @@ class TrafficLabService:
                     primary_metric, status, started_at, ended_at,
                     control_revision_id, treatment_revision_id, minimum_exposure,
                     washout_window, analysis_policy_version, payload_hash,
-                    record_version, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    record_version, business_calendar_id,
+                    business_calendar_version, business_timezone,
+                    business_calendar_policy_version, created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, 1,
+                    ?, ?, ?, ?, ?, ?
+                )
                 """,
                 (
                     experiment_id,
@@ -766,6 +862,10 @@ class TrafficLabService:
                     value.washout_window,
                     value.analysis_policy_version,
                     payload_hash,
+                    calendar["calendar_id"],
+                    calendar["record_version"],
+                    calendar["timezone"],
+                    calendar["policy_version"],
                     now,
                     now,
                 ),
@@ -835,6 +935,16 @@ class TrafficLabService:
             elif value.status not in self._TRANSITIONS[current_status]:
                 raise TrafficLabError("invalid_experiment_transition")
             else:
+                if value.status == "ready" and any(
+                    existing[field] is None
+                    for field in (
+                        "business_calendar_id",
+                        "business_calendar_version",
+                        "business_timezone",
+                        "business_calendar_policy_version",
+                    )
+                ):
+                    raise TrafficLabError("business_timezone_evidence_missing")
                 ended_at = (
                     _canonical_time(value.ended_at)
                     if value.ended_at is not None
@@ -862,6 +972,13 @@ class TrafficLabService:
         result = self.get_experiment(tenant_id, experiment_id)
         result["write_status"] = write_status
         return result
+
+    @classmethod
+    def allowed_experiment_transitions(cls, status: str) -> list[str]:
+        transitions = cls._TRANSITIONS.get(status)
+        if transitions is None:
+            raise TrafficLabError("experiment_status_invalid")
+        return sorted(transitions)
 
     def add_experiment_window(
         self,
@@ -1203,6 +1320,15 @@ class TrafficLabService:
         insights = []
         for raw in rows:
             row = dict(raw)
+            analysis = self._analysis_view(row)
+            freshness = analysis_input_freshness(
+                self.db,
+                tenant_id,
+                str(row["experiment_id"]),
+                analysis["evidence"],
+                analysis_run_id=str(row["analysis_run_id"]),
+            )
+            analysis["freshness"] = freshness
             insights.append(
                 {
                     "experiment": {
@@ -1220,9 +1346,51 @@ class TrafficLabService:
                     "windows": self.list_experiment_windows(
                         tenant_id, str(row["experiment_id"])
                     ),
-                    "analysis": self._analysis_view(row),
+                    "analysis": analysis,
+                    "freshness": freshness,
                 }
             )
+        stale_reasons = [
+            reason
+            for insight in insights
+            for reason in insight["freshness"]["reason_codes"]
+        ]
+        aggregate_freshness = evidence_freshness(
+            status=(
+                "current"
+                if insights and all(
+                    insight["freshness"]["usable_as_current"] for insight in insights
+                )
+                else "stale"
+            ),
+            reason_codes=(
+                [] if insights and not stale_reasons else (
+                    stale_reasons or ["analysis_evidence_not_found"]
+                )
+            ),
+            evidence_ref={
+                "analysis_run_ids": [
+                    insight["analysis"]["analysis_run_id"] for insight in insights
+                ]
+            },
+            current_ref={
+                "current_analysis_run_ids": [
+                    insight["analysis"]["analysis_run_id"]
+                    for insight in insights
+                    if insight["freshness"]["usable_as_current"]
+                ]
+            },
+        )
+        source_provenance = merge_source_provenance(
+            (
+                read_source_provenance(
+                    insight["analysis"]["evidence"].get("source_provenance"),
+                    missing_basis="legacy_traffic_analysis_run",
+                )
+                for insight in insights
+            ),
+            basis="traffic_analysis_runs",
+        )
         return {
             "sku_id": sku_id,
             "store_id": store_id,
@@ -1231,6 +1399,8 @@ class TrafficLabService:
             "evidence_source": "traffic_analysis_runs",
             "statistics_recomputed": False,
             "platform_weight_claim": False,
+            "freshness": aggregate_freshness,
+            "source_provenance": source_provenance,
         }
 
     def _get_experiment_window(self, tenant_id: str, window_id: str) -> dict[str, Any]:
@@ -1254,6 +1424,23 @@ class TrafficLabService:
         if value.orders == 0 and value.sales_amount > 0:
             flags.append("sales_without_orders")
         return flags
+
+    @staticmethod
+    def _metric_with_revision_identity(
+        value: TrafficMetricBucketUpsert,
+        revision: dict[str, Any],
+    ) -> TrafficMetricBucketUpsert:
+        resolved_identity: dict[str, str] = {}
+        for field in _METRIC_REVISION_IDENTITY_FIELDS:
+            revision_value = str(revision[field])
+            supplied = getattr(value, field)
+            if supplied is not None and supplied != revision_value:
+                raise TrafficLabError("listing_revision_identity_mismatch")
+            resolved_identity[field] = revision_value
+        connector_id = resolved_identity["connector_id"]
+        if connector_id == LEGACY_UNSCOPED_CONNECTOR_ID:
+            raise TrafficLabError("legacy_metric_connector_forbidden")
+        return value.model_copy(update=resolved_identity)
 
     @staticmethod
     def _asset_view(row: dict[str, Any]) -> dict[str, Any]:
@@ -1296,6 +1483,7 @@ class TrafficLabService:
     def _metric_view(row: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": row["id"],
+            "connector_id": row["connector_id"],
             "listing_revision_id": row["listing_revision_id"],
             "metric_start": row["metric_start"],
             "metric_end": row["metric_end"],
@@ -1324,6 +1512,7 @@ class TrafficLabService:
     def _metric_quarantine_view(row: dict[str, Any]) -> dict[str, Any]:
         return {
             "quarantine_id": row["quarantine_id"],
+            "connector_id": row["connector_id"],
             "source_id": row["source_id"],
             "reason_code": row["reason_code"],
             "payload": _json_load(row["payload_json"]),
@@ -1350,6 +1539,12 @@ class TrafficLabService:
             "minimum_exposure": row["minimum_exposure"],
             "washout_window": row["washout_window"],
             "analysis_policy_version": row["analysis_policy_version"],
+            "business_calendar_id": row["business_calendar_id"],
+            "business_calendar_version": row["business_calendar_version"],
+            "business_timezone": row["business_timezone"],
+            "business_calendar_policy_version": row[
+                "business_calendar_policy_version"
+            ],
             "payload_hash": row["payload_hash"],
             "record_version": row["record_version"],
             "created_at": row["created_at"],

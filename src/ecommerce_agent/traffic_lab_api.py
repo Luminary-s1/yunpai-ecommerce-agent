@@ -12,6 +12,7 @@ from .traffic_lab import (
     CreativeAssetCreate,
     ListingRevisionCreate,
     TrafficExperimentCreate,
+    TrafficExperimentTransition,
     TrafficExperimentWindowCreate,
     TrafficLabError,
 )
@@ -30,6 +31,10 @@ class TrafficHypothesisRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     analysis_run_id: str = Field(min_length=1, max_length=128)
+
+
+class TrafficExperimentTransitionRequest(TrafficExperimentTransition):
+    expected_version: int = Field(ge=1)
 
 
 def build_traffic_lab_router(
@@ -123,6 +128,32 @@ def build_traffic_lab_router(
         })
         return result
 
+    @router.post("/experiments/{experiment_id}/transition")
+    def transition_experiment(
+        experiment_id: str,
+        payload: TrafficExperimentTransitionRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        result = call(
+            domain.transition_experiment,
+            admin.tenant_id,
+            experiment_id,
+            payload,
+        )
+        audit(
+            "traffic_lab.experiment.transitioned",
+            admin,
+            experiment_id,
+            {
+                "status": result["status"],
+                "expected_version": payload.expected_version,
+                "record_version": result["record_version"],
+                "ended_at": result["ended_at"],
+                "write_status": result["write_status"],
+            },
+        )
+        return result
+
     @router.post("/experiments/{experiment_id}/windows")
     def add_experiment_window(
         experiment_id: str,
@@ -148,6 +179,9 @@ def build_traffic_lab_router(
         experiment = call(domain.get_experiment, admin.tenant_id, experiment_id)
         return {
             "experiment": experiment,
+            "allowed_transitions": domain.allowed_experiment_transitions(
+                str(experiment["status"])
+            ),
             "windows": domain.list_experiment_windows(admin.tenant_id, experiment_id),
             "window_quality": domain.experiment_window_quality(
                 admin.tenant_id, experiment_id

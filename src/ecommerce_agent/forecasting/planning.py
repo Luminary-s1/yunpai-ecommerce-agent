@@ -9,7 +9,16 @@ from typing import Any, Callable, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from ..connectors import (
+    SourceProvenanceError,
+    SourceProvenanceResolver,
+    merge_source_provenance,
+    read_source_provenance,
+    unknown_source_provenance,
+)
 from ..database import Database, utc_now
+from ..evidence_freshness import evidence_freshness
+from .engine import PRODUCT_FORECAST_HORIZONS, ForecastPolicy
 
 
 def _json(value: Any) -> str:
@@ -86,9 +95,20 @@ class InventoryPlanningPolicy(BaseModel):
             raise ValueError("planning_policy_number_invalid")
         return value
 
+    @property
+    def required_forecast_days(self) -> int:
+        return max(
+            self.supplier_lead_days + self.review_period_days,
+            self.maximum_stock_days,
+        )
+
 
 class ForecastRunReader(Protocol):
     def get_run(self, tenant_id: str, run_id: str) -> dict[str, Any]: ...
+
+    def latest_run(
+        self, tenant_id: str, *, sku_id: str, store_id: str
+    ) -> dict[str, Any]: ...
 
 
 class InventoryBalanceReader(Protocol):
@@ -107,11 +127,38 @@ class InventoryPlanningService:
         forecasts: ForecastRunReader,
         inventory: InventoryBalanceReader,
         clock: Callable[[], str] = utc_now,
+        source_provenance_resolver: SourceProvenanceResolver | None = None,
     ) -> None:
         self.db = db
         self.forecasts = forecasts
         self.inventory = inventory
         self._clock = clock
+        self.source_provenance_resolver = source_provenance_resolver
+
+    @staticmethod
+    def validate_forecast_contract(
+        forecast_policy: ForecastPolicy,
+        planning_policy: InventoryPlanningPolicy,
+    ) -> dict[str, Any]:
+        configured = set(forecast_policy.horizons)
+        missing = [
+            horizon
+            for horizon in PRODUCT_FORECAST_HORIZONS
+            if horizon not in configured
+        ]
+        if missing:
+            raise InventoryPlanningError(
+                "planning_forecast_required_horizons_missing"
+            )
+        maximum_forecast_days = max(forecast_policy.horizons)
+        if maximum_forecast_days < planning_policy.required_forecast_days:
+            raise InventoryPlanningError("planning_forecast_horizon_insufficient")
+        return {
+            "required_product_horizons": list(PRODUCT_FORECAST_HORIZONS),
+            "configured_horizons": list(forecast_policy.horizons),
+            "maximum_forecast_days": maximum_forecast_days,
+            "planning_required_days": planning_policy.required_forecast_days,
+        }
 
     def resolve_policy(
         self,
@@ -221,6 +268,36 @@ class InventoryPlanningService:
             )
         }
         forecast_evidence["anomalies"] = forecast.get("anomalies", [])
+        try:
+            forecast_source_provenance = read_source_provenance(
+                forecast.get("source_provenance"),
+                missing_basis="legacy_forecast_run",
+            )
+            inventory_source_provenance = (
+                self.source_provenance_resolver.freeze(
+                    (item.get("connector_id") for item in snapshot),
+                    basis="inventory_plan_snapshot",
+                )
+                if self.source_provenance_resolver is not None
+                else unknown_source_provenance(
+                    basis="inventory_plan_resolver_not_configured"
+                )
+            )
+            plan_source_provenance = merge_source_provenance(
+                [forecast_source_provenance, inventory_source_provenance],
+                basis="inventory_plan_inputs",
+            )
+        except SourceProvenanceError as exc:
+            raise InventoryPlanningError(
+                "planning_source_provenance_invalid"
+            ) from exc
+        forecast_evidence["forecast_source_provenance"] = (
+            forecast_source_provenance
+        )
+        forecast_evidence["inventory_source_provenance"] = (
+            inventory_source_provenance
+        )
+        forecast_evidence["source_provenance"] = plan_source_provenance
         inventory_hash = hashlib.sha256(_json(snapshot).encode()).hexdigest()
         input_hash = hashlib.sha256(
             _json(
@@ -360,7 +437,10 @@ class InventoryPlanningService:
             ).fetchone()
         if row is None:
             raise InventoryPlanningError("inventory_plan_not_found")
-        return self.get_plan(tenant_id, str(row["plan_id"]))
+        plan = self.get_plan(tenant_id, str(row["plan_id"]))
+        if plan["freshness"]["status"] == "superseded":
+            raise InventoryPlanningError("inventory_plan_current_not_found")
+        return plan
 
     def list_risks(
         self,
@@ -395,6 +475,9 @@ class InventoryPlanningService:
                 continue
             seen.add(key)
             if risk_level is not None and row["risk_level"] != risk_level:
+                continue
+            plan = self.get_plan(tenant_id, str(row["plan_id"]))
+            if plan["freshness"]["status"] == "superseded":
                 continue
             latest.append(str(row["plan_id"]))
             if len(latest) >= limit:
@@ -438,7 +521,102 @@ class InventoryPlanningService:
             ("calculation_steps_json", "calculation_steps", list),
         ):
             result[exposed] = _evidence_json(result.pop(stored), expected_type)
+        try:
+            result["source_provenance"] = read_source_provenance(
+                result["forecast_evidence"].get("source_provenance"),
+                missing_basis="legacy_inventory_plan",
+            )
+        except SourceProvenanceError as exc:
+            raise InventoryPlanningError(
+                "planning_source_provenance_invalid"
+            ) from exc
+        result["freshness"] = self._plan_freshness(result)
+        result["effective_plan_quality"] = (
+            result["plan_quality"]
+            if result["freshness"]["usable_as_current"]
+            else "degraded"
+        )
         return result
+
+    def _plan_freshness(self, plan: dict[str, Any]) -> dict[str, Any]:
+        evidence_ref = {
+            "plan_id": plan["plan_id"],
+            "forecast_run_id": plan["forecast_run_id"],
+            "inventory_snapshot_hash": plan["inventory_snapshot_hash"],
+            "created_at": plan["created_at"],
+        }
+        current_ref: dict[str, Any] = {}
+        reasons: list[str] = []
+        now = self._evidence_time(self._clock(), "planning_clock_invalid")
+        created_at = self._evidence_time(
+            plan["created_at"], "inventory_plan_evidence_invalid"
+        )
+        if now < created_at:
+            reasons.append("freshness_clock_precedes_plan")
+        elif now - created_at > timedelta(hours=PLANNING_EVIDENCE_MAX_AGE_HOURS):
+            reasons.append("inventory_plan_age_exceeded")
+
+        try:
+            balances = self.inventory.list_balances(
+                str(plan["tenant_id"]),
+                store_id=str(plan["store_id"]),
+                sku_id=str(plan["sku_id"]),
+            )
+            snapshot, _snapshot_times = self._validated_snapshot(
+                balances,
+                store_id=str(plan["store_id"]),
+                sku_id=str(plan["sku_id"]),
+            )
+            if plan["warehouse_id"] is not None:
+                snapshot = [
+                    item
+                    for item in snapshot
+                    if item["warehouse_id"] == plan["warehouse_id"]
+                ]
+            current_inventory_hash = (
+                hashlib.sha256(_json(snapshot).encode()).hexdigest()
+                if snapshot
+                else None
+            )
+        except (InventoryPlanningError, TypeError, ValueError):
+            current_inventory_hash = None
+        current_ref["inventory_snapshot_hash"] = current_inventory_hash
+        if current_inventory_hash != str(plan["inventory_snapshot_hash"]):
+            reasons.append("inventory_snapshot_changed")
+
+        superseded = False
+        latest_run = getattr(self.forecasts, "latest_run", None)
+        if callable(latest_run):
+            try:
+                current_forecast = latest_run(
+                    str(plan["tenant_id"]),
+                    store_id=str(plan["store_id"]),
+                    sku_id=str(plan["sku_id"]),
+                )
+            except ValueError:
+                current_forecast = None
+            current_ref["forecast_run_id"] = (
+                None if current_forecast is None else current_forecast.get("run_id")
+            )
+            if current_forecast is None:
+                reasons.append("current_forecast_unavailable")
+            elif str(current_forecast.get("run_id")) != str(plan["forecast_run_id"]):
+                superseded = True
+                reasons.append("newer_forecast_run_available")
+            elif not current_forecast.get("freshness", {}).get(
+                "usable_as_current", True
+            ):
+                reasons.append("linked_forecast_not_current")
+        else:
+            current_ref["forecast_run_id"] = plan["forecast_run_id"]
+
+        return evidence_freshness(
+            status="superseded" if superseded else "stale" if reasons else "current",
+            reason_codes=reasons,
+            evidence_ref=evidence_ref,
+            current_ref=current_ref,
+            max_age_hours=PLANNING_EVIDENCE_MAX_AGE_HOURS,
+        )
 
     @staticmethod
     def _snapshot_time(value: Any) -> datetime:
@@ -705,10 +883,7 @@ class InventoryPlanningService:
             points = sorted(raw_points, key=lambda item: str(item["forecast_date"]))
         except (KeyError, TypeError) as exc:
             raise InventoryPlanningError("planning_forecast_points_invalid") from exc
-        required_days = max(
-            policy.supplier_lead_days + policy.review_period_days,
-            policy.maximum_stock_days,
-        )
+        required_days = policy.required_forecast_days
         if len(points) < required_days:
             raise InventoryPlanningError("planning_forecast_horizon_insufficient")
         try:

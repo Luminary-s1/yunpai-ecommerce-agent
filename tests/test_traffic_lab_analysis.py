@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from threading import Event
 import time
 
 import pytest
 
+from ecommerce_agent.business_calendar import StoreBusinessCalendarUpsert
 from ecommerce_agent.database import Database
+from ecommerce_agent.llm import ModelGateway
+from ecommerce_agent.service import AgentService
+from ecommerce_agent.tools import ToolExecutionContext
 from ecommerce_agent.traffic_lab import (
     CreativeAssetCreate,
     ListingRevisionCreate,
@@ -17,6 +22,8 @@ from ecommerce_agent.traffic_lab import (
     TrafficLabService,
     TrafficMetricBucketUpsert,
 )
+
+from conftest import make_settings
 
 
 BASE_TIME = datetime(2026, 8, 1, 0, 0, tzinfo=UTC)
@@ -36,10 +43,21 @@ def _seed_revisions(
     db: Database,
     tenant_id: str,
     *,
+    store_id: str = "store-001",
+    sku_id: str = "sku-001",
     attributes: dict[str, object] | None = None,
     treatment_attributes: dict[str, object] | None = None,
 ) -> tuple[dict[str, object], dict[str, object]]:
     service = TrafficLabService(db)
+    service.business_calendars.upsert_calendar(
+        tenant_id,
+        StoreBusinessCalendarUpsert(
+            store_id=store_id,
+            timezone="UTC",
+            effective_from=BASE_TIME - timedelta(days=30),
+            changed_by="traffic-analysis-test-fixture",
+        ),
+    )
     control_asset = service.register_asset(
         tenant_id,
         CreativeAssetCreate(
@@ -55,9 +73,9 @@ def _seed_revisions(
     control_attributes = CONTROL_ATTRIBUTES if attributes is None else attributes
     common = {
         "connector_id": "virtual_taobao",
-        "store_id": "store-001",
+        "store_id": store_id,
         "item_id": "item-001",
-        "sku_id": "sku-001",
+        "sku_id": sku_id,
         "sale_price": "109.00",
         "active_from": BASE_TIME - timedelta(days=2),
         "active_to": BASE_TIME + timedelta(days=10),
@@ -140,6 +158,8 @@ def _seed_experiment(
     minimum_exposure: int = 2_000,
     overlap: bool = False,
     analysis_policy_version: str = "traffic-analysis-v2",
+    store_id: str = "store-001",
+    sku_id: str = "sku-001",
 ) -> dict[str, object]:
     service = TrafficLabService(db)
     end = start + timedelta(days=1, hours=7)
@@ -147,8 +167,8 @@ def _seed_experiment(
     experiment = service.create_experiment(
         tenant_id,
         TrafficExperimentCreate(
-            store_id="store-001",
-            sku_id="sku-001",
+            store_id=store_id,
+            sku_id=sku_id,
             experiment_type=experiment_type,
             primary_metric=primary_metric,
             started_at=start,
@@ -469,7 +489,7 @@ def test_aa_then_switchback_produce_code_owned_effect_ci_lag_and_input_snapshot(
     }
     assert excluded[switchback["washout_bucket_id"]]["payload_hash"]
     assert excluded[switchback["washout_bucket_id"]]["version"] == 1
-    assert run["analysis_code_version"] == "traffic-analysis-code-v2"
+    assert run["analysis_code_version"] == "traffic-analysis-code-v3"
 
 
 def test_switchback_requires_a_prior_clean_aa_gate(tmp_path) -> None:
@@ -682,6 +702,358 @@ def test_ai_interpreter_can_add_explanations_but_cannot_override_statistics(
         "status": "unavailable",
         "reason": "interpreter_error",
     }
+
+
+def test_agent_service_assembles_the_enabled_model_as_traffic_interpreter(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def generate_json(
+        gateway: ModelGateway,
+        messages: list[dict[str, str]],
+        **kwargs: object,
+    ) -> dict[str, object]:
+        calls.append({"messages": messages, "kwargs": kwargs})
+        assert gateway.settings.model_enabled is True
+        assert kwargs["thinking_enabled"] is False
+        assert "statistics_authority" in messages[-1]["content"]
+        return {
+            "summary": "A/A 未显示可检测差异，统计事实保持由确定性代码所有。",
+            "evidence_explanation": ["质量门与区间来自已固化统计事实。"],
+            "counter_evidence_explanation": ["机制解释仍只是待验证假设。"],
+            "mechanism_hypotheses": [
+                {
+                    "claim": "当前采集链未显示稳定假阳性。",
+                    "evidence_refs": ["quality_gate", "confidence_interval"],
+                    "counter_evidence_refs": ["analysis_limitations"],
+                }
+            ],
+            "next_experiments": [
+                {
+                    "variable": "title",
+                    "change": "下一轮只改变标题",
+                    "expected_observation": "观察 CTR 与推荐曝光 lag",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(ModelGateway, "generate_json", generate_json)
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="traffic-analysis-test-key",
+    )
+    service = AgentService(settings)
+    try:
+        tenant_id = "tenant-agent-service-interpreter"
+        control, treatment = _seed_revisions(service.db, tenant_id)
+        aa = _seed_experiment(
+            service.db,
+            tenant_id,
+            control,
+            treatment,
+            experiment_type="aa",
+            start=BASE_TIME,
+            control_ctr=0.05,
+            treatment_ctr=0.05,
+        )
+
+        run = service.operations.traffic_analysis.analyze_experiment(
+            tenant_id, str(aa["experiment_id"])
+        )
+
+        assert len(calls) == 1
+        assert run["hypotheses"]["status"] == "generated"
+        assert run["model_provider"] == settings.model_provider
+        assert run["model_name"] == settings.model_name
+        assert run["prompt_version"] == "traffic-analysis-explain-v1"
+        assert run["effect_estimate"]["absolute"] == pytest.approx(0.0)
+        assert run["sample_size"]["control"]["impressions"] == 4_000
+        assert run["confidence_interval"]["includes_zero"] is True
+        assert run["evidence"]["quality_gate"]["status"] == "passed"
+        assert run["evidence"]["statistics_authority"] == "deterministic_code"
+    finally:
+        service.close()
+
+
+def test_assembled_traffic_interpreter_rejects_model_owned_statistics(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def attempted_override(
+        gateway: ModelGateway,
+        messages: list[dict[str, str]],
+        **kwargs: object,
+    ) -> dict[str, object]:
+        del gateway, messages, kwargs
+        return {
+            "summary": "尝试覆盖代码拥有的统计事实。",
+            "effect_estimate": {"absolute": 99},
+            "quality_gate": {"status": "blocked"},
+        }
+
+    monkeypatch.setattr(ModelGateway, "generate_json", attempted_override)
+    service = AgentService(
+        replace(
+            make_settings(tmp_path),
+            model_enabled=True,
+            model_mock_mode=False,
+            model_api_key="traffic-analysis-test-key",
+        )
+    )
+    try:
+        tenant_id = "tenant-agent-service-override"
+        control, treatment = _seed_revisions(service.db, tenant_id)
+        aa = _seed_experiment(
+            service.db,
+            tenant_id,
+            control,
+            treatment,
+            experiment_type="aa",
+            start=BASE_TIME,
+            control_ctr=0.05,
+            treatment_ctr=0.05,
+        )
+
+        run = service.operations.traffic_analysis.analyze_experiment(
+            tenant_id, str(aa["experiment_id"])
+        )
+
+        assert run["hypotheses"] == {
+            "status": "rejected",
+            "reason": "invalid_interpretation_schema",
+        }
+        assert run["effect_estimate"]["absolute"] == pytest.approx(0.0)
+        assert run["evidence"]["quality_gate"]["status"] == "passed"
+        assert run["model_provider"] is None
+        assert run["model_name"] is None
+    finally:
+        service.close()
+
+
+def test_assembled_traffic_interpreter_errors_and_timeouts_degrade_explicitly(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = replace(
+        make_settings(tmp_path),
+        model_enabled=True,
+        model_mock_mode=False,
+        model_api_key="traffic-analysis-test-key",
+    )
+    service = AgentService(settings)
+    release = Event()
+    try:
+        error_tenant = "tenant-agent-service-error"
+        control, treatment = _seed_revisions(service.db, error_tenant)
+        error_aa = _seed_experiment(
+            service.db,
+            error_tenant,
+            control,
+            treatment,
+            experiment_type="aa",
+            start=BASE_TIME,
+            control_ctr=0.05,
+            treatment_ctr=0.05,
+        )
+
+        def provider_error(
+            gateway: ModelGateway,
+            messages: list[dict[str, str]],
+            **kwargs: object,
+        ) -> dict[str, object]:
+            del gateway, messages, kwargs
+            raise RuntimeError("provider unavailable")
+
+        monkeypatch.setattr(ModelGateway, "generate_json", provider_error)
+        error_run = service.operations.traffic_analysis.analyze_experiment(
+            error_tenant, str(error_aa["experiment_id"])
+        )
+        assert error_run["hypotheses"] == {
+            "status": "unavailable",
+            "reason": "interpreter_error",
+        }
+        assert error_run["effect_estimate"]["absolute"] == pytest.approx(0.0)
+
+        timeout_tenant = "tenant-agent-service-timeout"
+        control, treatment = _seed_revisions(service.db, timeout_tenant)
+        timeout_aa = _seed_experiment(
+            service.db,
+            timeout_tenant,
+            control,
+            treatment,
+            experiment_type="aa",
+            start=BASE_TIME,
+            control_ctr=0.05,
+            treatment_ctr=0.05,
+        )
+
+        def provider_timeout(
+            gateway: ModelGateway,
+            messages: list[dict[str, str]],
+            **kwargs: object,
+        ) -> dict[str, object]:
+            del gateway, messages, kwargs
+            release.wait(timeout=1)
+            return {"summary": "超时结果不得覆盖已固化统计。"}
+
+        monkeypatch.setattr(ModelGateway, "generate_json", provider_timeout)
+        service.operations.traffic_analysis.interpretation_timeout_seconds = 0.02
+        timeout_run = service.operations.traffic_analysis.analyze_experiment(
+            timeout_tenant, str(timeout_aa["experiment_id"])
+        )
+        assert timeout_run["hypotheses"] == {
+            "status": "unavailable",
+            "reason": "interpreter_timeout",
+        }
+        assert timeout_run["effect_estimate"]["absolute"] == pytest.approx(0.0)
+        assert timeout_run["evidence"]["quality_gate"]["status"] == "passed"
+    finally:
+        release.set()
+        service.close()
+
+
+def test_disabled_agent_service_does_not_call_the_traffic_interpreter(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def forbidden_call(*args: object, **kwargs: object) -> dict[str, object]:
+        del args, kwargs
+        raise AssertionError("disabled model must not be called")
+
+    monkeypatch.setattr(ModelGateway, "generate_json", forbidden_call)
+    service = AgentService(make_settings(tmp_path))
+    try:
+        tenant_id = "tenant-agent-service-disabled"
+        control, treatment = _seed_revisions(service.db, tenant_id)
+        aa = _seed_experiment(
+            service.db,
+            tenant_id,
+            control,
+            treatment,
+            experiment_type="aa",
+            start=BASE_TIME,
+            control_ctr=0.05,
+            treatment_ctr=0.05,
+        )
+        run = service.operations.traffic_analysis.analyze_experiment(
+            tenant_id, str(aa["experiment_id"])
+        )
+        assert run["hypotheses"] == {
+            "status": "not_generated",
+            "reason": "model_not_configured",
+        }
+        assert run["evidence"]["quality_gate"]["status"] == "passed"
+    finally:
+        service.close()
+
+
+def test_listing_traffic_tool_requires_and_enforces_a_single_store_scope(
+    tmp_path,
+) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        tenant_id = "tenant-traffic-tool-scope"
+        sku_id = "sku-shared-across-stores"
+        for store_id in ("store-a", "store-b"):
+            control, treatment = _seed_revisions(
+                service.db,
+                tenant_id,
+                store_id=store_id,
+                sku_id=sku_id,
+            )
+            aa = _seed_experiment(
+                service.db,
+                tenant_id,
+                control,
+                treatment,
+                experiment_type="aa",
+                start=BASE_TIME,
+                control_ctr=0.05,
+                treatment_ctr=0.05,
+                store_id=store_id,
+                sku_id=sku_id,
+            )
+            service.operations.traffic_analysis.analyze_experiment(
+                tenant_id, str(aa["experiment_id"])
+            )
+
+        def context(
+            suffix: str, *, trusted_store_id: str | None = None
+        ) -> ToolExecutionContext:
+            return ToolExecutionContext(
+                tenant_id=tenant_id,
+                client_id="client-traffic-tool-scope",
+                session_id=f"session-{suffix}",
+                trace_id=f"trace-{suffix}",
+                trusted_context=(
+                    {"store_id": trusted_store_id} if trusted_store_id else {}
+                ),
+            )
+
+        with pytest.raises(
+            ValueError, match="tool_policy_denied:store_scope_required"
+        ):
+            service.tools.validate_selection(
+                name="get_listing_traffic_insights",
+                arguments={"sku_id": sku_id},
+                requested_mode="observe",
+                context=context("unscoped"),
+            )
+
+        explicit_spec, explicit_arguments = service.tools.validate_selection(
+            name="get_listing_traffic_insights",
+            arguments={"sku_id": sku_id, "store_id": "store-a"},
+            requested_mode="observe",
+            context=context("explicit"),
+        )
+        explicit = service.tools.execute(
+            spec=explicit_spec,
+            arguments=explicit_arguments,
+            context=context("explicit"),
+        )
+        assert explicit.status == "success"
+        assert explicit.output["store_id"] == "store-a"
+        assert explicit.output["analysis_count"] == 1
+        assert {
+            insight["experiment"]["store_id"]
+            for insight in explicit.output["insights"]
+        } == {"store-a"}
+
+        trusted_context = context("trusted", trusted_store_id="store-b")
+        trusted_spec, trusted_arguments = service.tools.validate_selection(
+            name="get_listing_traffic_insights",
+            arguments={"sku_id": sku_id},
+            requested_mode="observe",
+            context=trusted_context,
+        )
+        trusted = service.tools.execute(
+            spec=trusted_spec,
+            arguments=trusted_arguments,
+            context=trusted_context,
+        )
+        assert trusted.status == "success"
+        assert trusted.output["store_id"] == "store-b"
+        assert trusted.output["analysis_count"] == 1
+        assert {
+            insight["experiment"]["store_id"]
+            for insight in trusted.output["insights"]
+        } == {"store-b"}
+
+        with pytest.raises(
+            ValueError, match="tool_policy_denied:store_scope_mismatch"
+        ):
+            service.tools.validate_selection(
+                name="get_listing_traffic_insights",
+                arguments={"sku_id": sku_id, "store_id": "store-b"},
+                requested_mode="observe",
+                context=context("conflict", trusted_store_id="store-a"),
+            )
+    finally:
+        service.close()
 
 
 def test_cvr_direction_is_recovered_after_a_metric_specific_aa_gate(tmp_path) -> None:

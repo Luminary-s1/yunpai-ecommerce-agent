@@ -48,7 +48,7 @@ class _RecordingEngine(ForecastEngine):
         return super().evaluate(self.received_series)
 
 
-def _facts(values: list[int]) -> list[dict]:
+def _facts(values: list[int | None]) -> list[dict]:
     start = date(2026, 1, 1)
     return [
         {
@@ -165,6 +165,40 @@ def test_failed_candidate_is_persisted_without_blocking_the_run(tmp_path) -> Non
     assert len(result["points"]) == 30
 
 
+def test_final_forecast_fallback_selection_and_failure_are_persisted(tmp_path) -> None:
+    values: list[int | None] = [1, 2, 3, 4, 5, 6, 7] * 9
+    values[-1] = None
+    _db, service = _service(tmp_path, _facts(values))
+
+    result = service.run(TENANT, store_id=STORE, sku_id=SKU)
+
+    assert result["champion_model"] == "rolling_mean"
+    assert result["champion_reason"]["initial_champion_model"] == (
+        "seasonal_naive_7"
+    )
+    assert result["champion_reason"]["fallback_applied"] is True
+    failures = result["champion_reason"]["final_forecast_attempts"]
+    assert failures[0]["model_name"] == "seasonal_naive_7"
+    assert failures[0]["failure_reason"] == (
+        "ValueError:complete_seven_day_season_required"
+    )
+    persisted_ranking = result["candidate_models"]["ranking"]
+    seasonal = next(
+        item for item in persisted_ranking
+        if item["model_name"] == "seasonal_naive_7"
+    )
+    assert seasonal["eligible_for_final_forecast"] is False
+    model_failure = next(
+        item for item in result["anomalies"]
+        if item["anomaly_type"] == "model_failure"
+    )
+    assert {
+        "model_name": "seasonal_naive_7",
+        "phase": "final_forecast",
+        "failure_reason": "ValueError:complete_seven_day_season_required",
+    }.items() <= model_failure["evidence"]["failures"][0].items()
+
+
 def test_get_run_is_tenant_isolated(tmp_path) -> None:
     _db, service = _service(tmp_path, _facts([4] * 56))
     run = service.run(TENANT, store_id=STORE, sku_id=SKU)
@@ -261,5 +295,8 @@ def test_all_failed_candidates_return_an_explicit_engine_failure(tmp_path) -> No
     )
     _db, service = _service(tmp_path, _facts([5] * 56), engine=engine)
 
-    with pytest.raises(ForecastRunError, match="forecast_engine_failed:forecast_baseline_failed"):
+    with pytest.raises(
+        ForecastRunError,
+        match="forecast_engine_failed:forecast_final_candidates_failed",
+    ):
         service.run(TENANT, store_id=STORE, sku_id=SKU)

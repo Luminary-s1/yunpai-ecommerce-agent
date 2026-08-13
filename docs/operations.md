@@ -112,6 +112,8 @@ yunpai-agent backup-prune --backup-dir D:\yunpai-backups --keep 14 --apply
 
 每次 schema 升级都必须在维护窗口内先用旧版本程序创建并验证停机备份；迁移完成后、恢复业务写入前，立即用新版本程序重新执行一次完整 `backup --require-stopped` 和 `backup-verify`。验证器按 `Database.SCHEMA_VERSION` 精确匹配，因此升级后的程序会拒绝升级前生成的 `.ypbak`；旧归档及其匹配程序必须保留到新 schema 归档完成验证和隔离恢复演练后，期间不得被保留策略提前清理。
 
+升级到 v32 时，升级前应使用当时实际运行的旧程序（v30，或合并后实际前序版本）完成并验证停机备份；v32 迁移完成后，在恢复业务写入前创建并验证新的全量归档。v32 程序会拒绝旧 schema 的 `.ypbak`，因此旧归档和对应旧程序必须保留到 v32 归档完成隔离恢复演练，并核对店铺业务日历、Traffic metric 三元身份及 `legacy_unscoped` 隔离行后再进入常规清理。
+
 ### 恢复演练与正式恢复
 
 1. 先使用当前运行实例执行最后一次在线备份并验证。

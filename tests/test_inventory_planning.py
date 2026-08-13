@@ -31,6 +31,14 @@ class _ForecastReader:
             raise ValueError("forecast_run_not_found")
         return deepcopy(self.run)
 
+    def latest_run(
+        self, tenant_id: str, *, sku_id: str, store_id: str
+    ) -> dict:
+        assert tenant_id == self.run["tenant_id"]
+        assert sku_id == self.run["sku_id"]
+        assert store_id == self.run["store_id"]
+        return deepcopy(self.run)
+
 
 class _StaticInventoryReader:
     def __init__(self, balances: list[dict]):
@@ -497,6 +505,82 @@ def test_fresh_plan_is_not_reused_after_evidence_crosses_staleness_threshold(
     } <= {issue["code"] for issue in stale["quality_issues"]}
 
 
+def test_reading_a_plan_after_48_hours_marks_it_stale_without_mutating_history(
+    tmp_path,
+) -> None:
+    db, inventory, service = _service(
+        tmp_path,
+        now=datetime(2026, 8, 12, 12, tzinfo=timezone.utc),
+    )
+    _balance(
+        inventory,
+        warehouse_id="warehouse-a",
+        on_hand="12",
+        reserved="2",
+        inbound="0",
+    )
+    created = service.create_plan(TENANT, "forecast-run-planning", _policy())
+    assert created["plan_quality"] == "standard"
+    assert created["freshness"]["status"] == "current"
+    assert created["effective_plan_quality"] == "standard"
+    with db.connect() as conn:
+        stored_before = tuple(
+            conn.execute(
+                "SELECT * FROM inventory_plans WHERE tenant_id=? AND plan_id=?",
+                (TENANT, created["plan_id"]),
+            ).fetchone()
+        )
+
+    service._clock = lambda: "2026-08-14T13:00:00+00:00"
+    latest = service.latest_plan(TENANT, store_id=STORE, sku_id=SKU)
+    historical = service.get_plan(TENANT, created["plan_id"])
+
+    assert latest["plan_id"] == historical["plan_id"] == created["plan_id"]
+    assert latest["plan_quality"] == historical["plan_quality"] == "standard"
+    assert latest["effective_plan_quality"] == "degraded"
+    assert latest["freshness"]["status"] == "stale"
+    assert latest["freshness"]["usable_as_current"] is False
+    assert "inventory_plan_age_exceeded" in latest["freshness"]["reason_codes"]
+    with db.connect() as conn:
+        stored_after = tuple(
+            conn.execute(
+                "SELECT * FROM inventory_plans WHERE tenant_id=? AND plan_id=?",
+                (TENANT, created["plan_id"]),
+            ).fetchone()
+        )
+    assert stored_after == stored_before
+
+
+def test_latest_plan_does_not_return_a_plan_for_a_superseded_forecast(
+    tmp_path,
+) -> None:
+    _db, inventory, service = _service(tmp_path)
+    _balance(
+        inventory,
+        warehouse_id="warehouse-a",
+        on_hand="12",
+        reserved="2",
+        inbound="0",
+    )
+    old_plan = service.create_plan(TENANT, "forecast-run-planning", _policy())
+    service.forecasts.run["run_id"] = "forecast-run-new-without-plan"
+
+    historical = service.get_plan(TENANT, old_plan["plan_id"])
+
+    assert historical["plan_id"] == old_plan["plan_id"]
+    assert historical["plan_quality"] == old_plan["plan_quality"]
+    assert historical["freshness"]["status"] == "superseded"
+    assert historical["freshness"]["current_ref"]["forecast_run_id"] == (
+        "forecast-run-new-without-plan"
+    )
+    assert "newer_forecast_run_available" in historical["freshness"]["reason_codes"]
+    with pytest.raises(
+        InventoryPlanningError, match="inventory_plan_current_not_found"
+    ):
+        service.latest_plan(TENANT, store_id=STORE, sku_id=SKU)
+    assert service.list_risks(TENANT, store_id=STORE, sku_id=SKU) == []
+
+
 def test_maximum_stock_cap_and_invalid_inputs_fail_explicitly(tmp_path) -> None:
     _db, inventory, service = _service(tmp_path)
     _balance(inventory, warehouse_id="warehouse-a", on_hand="0", reserved="0", inbound="0")
@@ -527,7 +611,18 @@ def test_maximum_stock_cap_and_invalid_inputs_fail_explicitly(tmp_path) -> None:
     )
     assert overstock["plan_id"] != capped["plan_id"]
     assert overstock["overstock_risk"] is True
-    assert service.get_plan(TENANT, capped["plan_id"]) == capped
+    historical_capped = service.get_plan(TENANT, capped["plan_id"])
+    assert historical_capped["plan_id"] == capped["plan_id"]
+    assert historical_capped["input_hash"] == capped["input_hash"]
+    assert historical_capped["recommended_order_qty"] == capped[
+        "recommended_order_qty"
+    ]
+    assert historical_capped["plan_quality"] == capped["plan_quality"]
+    assert historical_capped["freshness"]["status"] == "stale"
+    assert "inventory_snapshot_changed" in historical_capped["freshness"][
+        "reason_codes"
+    ]
+    assert historical_capped["effective_plan_quality"] == "degraded"
 
     with pytest.raises(InventoryPlanningError, match="planning_forecast_horizon_insufficient"):
         service.create_plan(

@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from ..business_calendar import StoreBusinessCalendarService
 from ..business.source_versioning import payload_digest
 from ..connectors import PullRecord
 from ..database import Database
@@ -114,9 +115,17 @@ class _ListingRevisionResourcePayload(BaseModel):
 
 
 class TrafficLabIngestionService:
-    def __init__(self, db: Database):
+    def __init__(
+        self,
+        db: Database,
+        *,
+        business_calendars: StoreBusinessCalendarService | None = None,
+    ):
         self.db = db
-        self.domain = TrafficLabService(db)
+        self.domain = TrafficLabService(
+            db,
+            business_calendars=business_calendars,
+        )
 
     def import_metrics(
         self,
