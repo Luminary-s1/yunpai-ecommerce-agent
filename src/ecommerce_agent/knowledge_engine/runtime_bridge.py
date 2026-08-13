@@ -23,6 +23,7 @@ scope → layer 映射（B1b 核心）：
 from __future__ import annotations
 
 import logging
+import sqlite3
 from typing import Any
 
 from .models import (
@@ -189,7 +190,9 @@ def import_to_runtime(
     try:
         with knowledge_base.db.connect() as conn:
             rows = conn.execute(
-                "SELECT id, tenant_id FROM knowledge WHERE id LIKE 'kg-%'"
+                # 终审 P2：预查只收 active 行——retired 的 kg-X 行不应让热更新
+                # 打在 invisible 行上（Wiki 接管后 active 是 kb-uuid 行）
+                "SELECT id, tenant_id FROM knowledge WHERE id LIKE 'kg-%' AND status='active'"
             ).fetchall()
             for r in rows:
                 row_tenant = r["tenant_id"]
@@ -303,11 +306,18 @@ def import_to_runtime(
             continue
         # add_document 不接受 None 的 sku_id 之外的可空字段，这里显式剔除
         row = {k: v for k, v in row.items() if v is not None}
-        knowledge_base.add_document(
-            **row,
-            tenant_id=tenant_id,
-            knowledge_key=f"kg-{item.id}",
-        )
+        try:
+            knowledge_base.add_document(
+                **row,
+                tenant_id=tenant_id,
+                knowledge_key=f"kg-{item.id}",
+            )
+        except sqlite3.IntegrityError:
+            # 终审 P2：Wiki 已 create+approve 同键词条（kb-uuid active 同租户）后，
+            # 资产重导 INSERT kg-X active 触发 v31 唯一索引——单条失败不中断整轮
+            logger.exception("kg 资产 %s 插入触发唯一约束（可能已被 Wiki 接管），计 update_failed", target_id)
+            update_failed += 1
+            continue
         existing.add(target_id)
         imported += 1
     return {
