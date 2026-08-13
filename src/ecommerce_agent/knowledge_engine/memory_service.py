@@ -68,13 +68,21 @@ class KnowledgeMemoryService:
         if ttl_days <= 0:
             raise ValueError("ttl_days 必须为正数")
         # 幂等去重（防呆）：同店铺同内容不重复写，返回已有 id
+        # 多租户修复（P3-9）：去重必须带租户条件——此前跨租户同 store 同内容
+        # 会被误判重复，后写入租户的记忆被静默吞掉（返回他人 knowledge_key）
+        dedup_sql = (
+            "SELECT knowledge_key FROM knowledge "
+            "WHERE layer=? AND store_id=? AND answer=? AND status='active' "
+        )
+        dedup_params: list[Any] = [MEMORY_LAYER, store_id, fact.strip()]
+        if tenant_id is None:
+            dedup_sql += " AND tenant_id IS NULL"
+        else:
+            dedup_sql += " AND tenant_id=?"
+            dedup_params.append(tenant_id)
+        dedup_sql += " LIMIT 1"
         with self.knowledge.db.connect() as conn:
-            existing_row = conn.execute(
-                "SELECT knowledge_key FROM knowledge "
-                "WHERE layer=? AND store_id=? AND answer=? AND status='active' "
-                "LIMIT 1",
-                (MEMORY_LAYER, store_id, fact.strip()),
-            ).fetchone()
+            existing_row = conn.execute(dedup_sql, tuple(dedup_params)).fetchone()
             if existing_row:
                 return str(existing_row["knowledge_key"])
         category_label = MEMORY_CATEGORIES.get(category, category)
@@ -156,8 +164,13 @@ class KnowledgeMemoryService:
         """
         where = "(id=? OR knowledge_key=?)"
         params: list[Any] = [memory_id, memory_id]
-        if tenant_id:
-            where += " AND (tenant_id IS NULL OR tenant_id=?)"
+        # 多租户修复（P3-5）：精确租户匹配——租户只能删本租户记忆；
+        # 全局记忆只可由全局（tenant_id=None）删除。此前 NULL 分支让
+        # 任意租户（知道 memory_id 时）可删全局记忆。
+        if tenant_id is None:
+            where += " AND tenant_id IS NULL"
+        else:
+            where += " AND tenant_id=?"
             params.append(tenant_id)
         with self.knowledge.db.connect() as conn:
             cur = conn.execute(f"DELETE FROM knowledge WHERE {where}", tuple(params))

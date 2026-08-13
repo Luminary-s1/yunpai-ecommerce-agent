@@ -209,13 +209,17 @@ class KnowledgeManagementService:
             raise KnowledgeLifecycleError("knowledge version conflict")
         now = utc_now()
         with self.db._write_lock, self.db.connect() as conn:
-            # 终审修复（P1-2）：retire 旧 active 时含全局行（tenant_id IS NULL），
-            # 否则 NULL 租户的旧 active 不被退，与 COALESCE 唯一索引语义脱节
+            # 多租户修复（P1-1）：retire 旧 active 只限本租户行（tenant_id=?）。
+            # 此前 (tenant_id=? OR tenant_id IS NULL) 会让租户影子编辑 approve 时
+            # 退休全局行——租户 A 会"偷走"全局知识导致其他租户不可见。
+            # 租户影子行与全局行按 (COALESCE(tenant,''), knowledge_key) 共存合法
+            # （v31 索引只约束同一租户内唯一 active）；租户影子行经检索排序
+            # shadow 全局行，全局替换留给全局管理员（tenant=None 路径）。
             conn.execute(
                 """
                 UPDATE knowledge
                 SET status='retired', effective_to=?, record_version=record_version+1, updated_at=?
-                WHERE (tenant_id=? OR tenant_id IS NULL) AND knowledge_key=? AND status='active' AND id<>?
+                WHERE tenant_id=? AND knowledge_key=? AND status='active' AND id<>?
                 """,
                 (now, now, tenant_id, current["knowledge_key"], item_id),
             )
@@ -260,11 +264,12 @@ class KnowledgeManagementService:
             raise KnowledgeLifecycleError("knowledge version conflict")
         now = utc_now()
         with self.db._write_lock, self.db.connect() as conn:
+            # 多租户修复（P1-1）：rollback 同 approve——只退本租户 active 行
             conn.execute(
                 """
                 UPDATE knowledge SET status='retired', effective_to=?,
                     record_version=record_version+1, updated_at=?
-                WHERE (tenant_id=? OR tenant_id IS NULL) AND knowledge_key=? AND status='active'
+                WHERE tenant_id=? AND knowledge_key=? AND status='active'
                 """,
                 (now, now, tenant_id, target["knowledge_key"]),
             )
@@ -419,7 +424,7 @@ class KnowledgeManagementService:
                 UPDATE knowledge
                 SET status='retired', effective_to=?, record_version=record_version+1,
                     updated_at=?
-                WHERE (tenant_id=? OR tenant_id IS NULL) AND knowledge_key=? AND status='active' AND id<>?
+                WHERE tenant_id=? AND knowledge_key=? AND status='active' AND id<>?
                 """,
                 (now, now, tenant_id, rollout["subject_key"], rollout["candidate_id"]),
             )

@@ -842,6 +842,9 @@ class AgentService:
                 self.knowledge,
                 tenant_id=self.settings.bootstrap_tenant_id,
                 default_store_id=self.settings.bootstrap_tenant_id,
+                # 多租户（P1-2）：appliance 自身是全局知识的唯一写入口，
+                # 允许热更新全局行；租户端点（import-assets API）不传此旗标
+                allow_global_update=True,
             )
             logger.info(
                 "knowledge assets imported: imported=%d skipped_entity=%d skipped_existing=%d seller_default_store=%d",
