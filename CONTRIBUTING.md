@@ -281,7 +281,7 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | **29** | M6-R | Forecasting / `main` | demand fact、forecast policy/run/backtest/point/anomaly | 已合并（WP1–WP2；WP5 Eval 沿用） |
 | **30** | M6-R | Inventory Planning / `main` | planning policy、inventory plan | 已合并（WP3；WP4–WP5 沿用） |
 | **31** | 缪海南 | 统筹 Agent / `codex/workspace-conversation-history` | `workspace_conversations`、`workspace_messages` 会话持久化与历史恢复 | 已分配，未合并 |
-| **32** | M5-R | F-322 / 本分支 | 店铺业务日历 + Traffic metric 三元身份 | 已占用，开发中 |
+| **32** | M5-R | Traffic Lab / `main` | 店铺业务日历 + Traffic metric 三元身份 | 已合并（F-322） |
 | 33+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
