@@ -30,7 +30,7 @@ class QualityReviewRequest(BaseModel):
 
 
 class QualityService:
-    RULESET_VERSION = "qa-rules-v1"
+    RULESET_VERSION = "qa-rules-v2"
     PENALTIES = {"critical": 40, "high": 25, "medium": 12, "low": 5}
 
     def __init__(self, db: Database):
@@ -160,8 +160,9 @@ class QualityService:
                 raise QualityError("agent conversation not found")
             messages = conn.execute(
                 """
-                SELECT id, risk_level, route_reason, sources_json, model_fallback, redacted
-                FROM messages WHERE session_id=? AND tenant_id=? AND role='assistant'
+                SELECT id, role, risk_level, route_reason, sources_json, model_fallback,
+                       redacted
+                FROM messages WHERE session_id=? AND tenant_id=?
                 ORDER BY created_at, rowid
                 """,
                 (conversation_id, tenant_id),
@@ -175,6 +176,10 @@ class QualityService:
             }
         issues: list[dict[str, str]] = []
         for message in messages:
+            if message["redacted"]:
+                issues.append(self._issue("sensitive_data_redacted", "low", message["id"]))
+            if message["role"] != "assistant":
+                continue
             try:
                 sources = json.loads(message["sources_json"] or "[]")
             except ValueError:
@@ -185,9 +190,15 @@ class QualityService:
                 issues.append(self._issue("model_fallback", "medium", message["id"]))
             if message["risk_level"] == "high" and message["id"] not in handoffs:
                 issues.append(self._issue("missed_handoff", "critical", message["id"]))
-            if message["redacted"]:
-                issues.append(self._issue("sensitive_data_redacted", "low", message["id"]))
-        return issues, str(messages[-1]["id"]) if messages else None
+        last_assistant_id = next(
+            (
+                str(message["id"])
+                for message in reversed(messages)
+                if message["role"] == "assistant"
+            ),
+            None,
+        )
+        return issues, last_assistant_id
 
     def _inspect_channel(
         self, tenant_id: str, conversation_id: str

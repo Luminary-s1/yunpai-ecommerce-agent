@@ -246,6 +246,65 @@ def test_quality_run_review_summary_and_admin_api_contracts(tmp_path) -> None:
         assert client.get("/v1/admin/voc/overview", headers=headers).status_code == 200
 
 
+def test_quality_marks_redacted_user_messages(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    try:
+        session_id = service.db.resolve_session(
+            tenant_id="tenant-test",
+            client_id="client-test",
+            external_session_id="qa-redacted-user-session",
+            subject_hash="subject-redacted-user",
+        )
+        now = "2026-08-11T12:00:00+00:00"
+        with service.db.connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO messages(
+                    id, trace_id, session_id, role, content, intent, risk_level,
+                    route_reason, sources_json, model_fallback, created_at,
+                    tenant_id, client_id, redacted
+                ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, '[]', 0, ?,
+                          'tenant-test', 'client-test', ?)
+                """,
+                [
+                    (
+                        "qa-redacted-user",
+                        "qa-redacted-user-trace",
+                        session_id,
+                        "user",
+                        "我的手机号是 138****5678",
+                        now,
+                        1,
+                    ),
+                    (
+                        "qa-redacted-user-answer",
+                        "qa-redacted-user-trace",
+                        session_id,
+                        "assistant",
+                        "已收到。",
+                        now,
+                        0,
+                    ),
+                ],
+            )
+
+        result = service.quality.run(
+            "tenant-test",
+            QualityRunRequest(conversation_type="agent", conversation_id=session_id),
+            "qa-bot",
+        )
+
+        assert result["issues"] == [
+            {
+                "code": "sensitive_data_redacted",
+                "severity": "low",
+                "evidence_id": "qa-redacted-user",
+            }
+        ]
+    finally:
+        service.close()
+
+
 def test_quality_rules_cover_evidence_risk_redaction_and_channel_failures(tmp_path) -> None:
     service = AgentService(make_settings(tmp_path))
     try:

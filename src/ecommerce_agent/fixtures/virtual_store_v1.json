@@ -208,8 +208,8 @@
     "quality_samples": [
       {
         "kind": "agent",
-        "key": "privacy-redaction",
-        "question": "虚拟展示客服热线是多少？",
+        "key": "privacy-redaction-v2",
+        "question": "虚拟展示客服热线是 13800138000 吗？",
         "context": {"shop_id": "qingchuan-flagship-001"},
         "expected_issue_codes": ["sensitive_data_redacted"]
       },
