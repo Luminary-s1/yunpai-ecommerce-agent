@@ -279,16 +279,35 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | 27 | 闫睿涵 | M4 / 已合并进 `main` | `messages` 新增 `customer_intent`、`intent_confidence`、`intent_method`（D13 意图分类） | 已合并 |
 | 28 | M5-R | Traffic Lab / `main` | creative asset、listing revision、metric bucket、experiment/window/analysis run | 已合并（WP1–WP5） |
 | **29** | M6-R | Forecasting / `main` | demand fact、forecast policy/run/backtest/point/anomaly | WP1–WP2 已合并；WP5 Eval 留待后续 |
-| **30** | M6-R | Inventory Planning / `codex/m6r-wp3-inventory-planning` | planning policy、inventory plan | 已预留，待合并 |
-| **31** | PR #11 | 统一工作区会话持久化 | `_apply_v31` 归 PR #11（统一工作区会话持久化） | 占用中 |
-| **32** | 负责人分支 | F-322 | 已占，本 PR 不得使用 | 占用中 |
-| **33** | 云湃 M3 | `feature/m3-knowledge-base`（PR #10） | knowledge_key active 唯一索引（COALESCE 表达式索引） | 占用中 |
+| **30** | M6-R | Inventory Planning / `main` | planning policy、inventory plan | 已合并（WP3） |
+| **31** | PR #11 | 统一工作区会话持久化 / `codex/workspace-conversation-history` | `workspace_conversations` / `workspace_messages`（`_apply_v31`） | **占用中，未合并** |
+| **32** | M5-R | Traffic Lab / `main` | 店铺业务日历 + Traffic metric 三元身份 | 已合并（F-322 / PR #14） |
+| **33** | M3 | 知识库 / `main` | knowledge_key active 唯一索引 + `retrieval_logs` | 已合并（PR #10 / `1906365`） |
+| 34+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
-若存在尚未同步的其他 v28 分支，不得直接合入，先与模块负责人核对。26–28 已合并，
-29 的 WP1–WP2 与 30 的 WP3 已合并进 `main`；M6-R WP4–WP5 整链也已合并，且未新增
-schema 版本或迁移。31 已由 origin PR #11 的统筹 Agent 会话表占用；32 由 F-322
-店铺业务日历与 Traffic metric 三元身份占用；下一空闲号从 33 起。
+26–30、32、33 已在 `main`。**31 仍只属于开放中的 PR #11**，`main` 的 `initialize()` 目前是 30→32→33，故意没有 `_apply_v31`。下一空闲号从 **34** 起。
+
+### 合并 PR #11 前必扫（PR #10 合入后）
+
+扫描词：`PR #11`、`_apply_v31`、`MERGE-GATE PR-11`、`workspace_conversations`、`不得覆盖 v32`、`不得覆盖 v33`。
+
+`main` 已有 `_apply_v32`（F-322）和 `_apply_v33`（M3 knowledge_key 唯一索引 + retrieval_logs）。PR #11 自带另一套 `_apply_v31`（workspace 会话表），且分支里也带了 v32。合 #11 时 `database.py` **必然交叉**。
+
+**禁止**整块接受 ours/theirs，丢掉已在 `main` 的 v32 或 v33。那会重演同名方法静默覆盖事故。
+
+合入时必须同时成立：
+
+1. `SCHEMA_VERSION` 取较大值，结果必须是 **33**（不是 31）。
+2. `initialize()` **三块都保留**，按号排序：`if 31`（#11 workspace）+ `if 32`（日历/身份）+ `if 33`（knowledge 唯一索引 + retrieval_logs）。
+3. 三个方法都在且语义不混：`_apply_v31` 只建 workspace 表；`_apply_v32` 只日历/身份；`_apply_v33` 只 knowledge 索引 + `retrieval_logs`。
+4. 合后自检：
+   ```bash
+   git grep -n "def _apply_v3[123]" -- src/ecommerce_agent/database.py
+   ```
+   必须同时打出 31、32、33。缺任一号即合坏。
+5. 测试只断言自己的成员/表（`31 in migrations`、workspace 表存在），**不要** `schema_version() == 31`。
+6. 已知合成失败不在合 #11 时用 ours 抹掉 #10：workspace 测试里的旧 stream URL、Forecasting 控制台应打 `/admin/advanced`。这两条是页面断言，修好测试即可，不要回退 schema。
 
 **并行占号的分支合并时，`database.py` 必然在三处
 冲突**（2026-08-06 实测：26 对 27 就是这三处，已按下面的解法合入）：
