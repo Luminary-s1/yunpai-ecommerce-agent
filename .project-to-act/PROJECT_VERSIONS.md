@@ -4,9 +4,12 @@
 
 ## 当前版本
 
-- 版本号：`0.33.0`
-- 发布状态：工作台渠道与灰度可视化、M5-R WP1–WP5，以及已合入 main 的 M6-R WP1–WP5；生产放行阻塞
-- 兼容性说明（0.33.0 + 未升版补丁）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变；WP5 仍沿用 v30，新增纯 Python Eval fixture/runner/report 与 D-039 oracle 边界，不改变依赖、持久 schema、API 或生产路由。F-322 未单独升版，使用 schema **v32**；**v31 已被 origin PR #11 占用**，合并时须保留两段迁移。v32 新增版本化 `(tenant,store)` IANA 业务日历和 nullable experiment 固化证据，并将 Traffic accepted/quarantine 重建为 `(tenant,connector,source_id)`；v30（或合并后的实际前序版本）可前向迁移，accepted 从不可变 revision 回填 connector，quarantine 仅从冻结 payload 读取，缺失写 `legacy_unscoped`。历史实验可读但缺日历证据时分析 blocked。灾备 manifest 继续精确匹配当前 schema：升级前以旧程序完成停机备份，升级后恢复写入前以 v32 程序生成并验证新全量备份；旧归档与匹配程序保留到隔离恢复演练通过。
+- 版本号：`0.30.0`。权威来源为 `pyproject.toml` 的 `[project].version` 与
+  `src/ecommerce_agent/__init__.py::__version__`；两处必须一致。
+- 发布状态：`main` 已包含 0.30.0 之后的客服、M5-R、M6-R、F-322 和知识库增量，但这些
+  提交没有同步提升运行时包版本，因此不得把历史内部候选标签 `0.31.0`～`0.33.0` 写成
+  当前运行时版本。生产放行继续阻塞。
+- 兼容性说明（0.30.0 运行时 + main 未升包增量）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变；WP5 仍沿用 v30，新增纯 Python Eval fixture/runner/report 与 D-039 oracle 边界，不改变依赖、持久 schema、API 或生产路由。F-322 未单独升版，使用 schema **v32**；**v31 已被 origin PR #11 占用**，合并时须保留两段迁移。v32 新增版本化 `(tenant,store)` IANA 业务日历和 nullable experiment 固化证据，并将 Traffic accepted/quarantine 重建为 `(tenant,connector,source_id)`；v30（或合并后的实际前序版本）可前向迁移，accepted 从不可变 revision 回填 connector，quarantine 仅从冻结 payload 读取，缺失写 `legacy_unscoped`。历史实验可读但缺日历证据时分析 blocked。灾备 manifest 继续精确匹配当前 schema：升级前以旧程序完成停机备份，升级后恢复写入前以 v32 程序生成并验证新全量备份；旧归档与匹配程序保留到隔离恢复演练通过。
 - 占号状态：PR #10 已合入 main `1906365`，schema **v33** 在 `main`（knowledge_key 唯一索引 + retrieval_logs）。F-322 **v32** 已在 main。PR #11 的 `_apply_v31`（workspace 会话表）仍占用中、未合入。合 #11 时必须 31+32+33 三块并存，扫描 `MERGE-GATE PR-11`。下一空闲号 **34**。
 - 最后更新：2026-08-14
 
@@ -117,78 +120,30 @@
 - 验证：聚焦 `199 passed / 1 xfailed`，全量 `603 passed / 1 xfailed`，compileall 与 whitespace 通过；冻结 50 例 mock/live gate 均 passed（mock `0.940 / severe 3`；live `0.900 / severe 1`）；但当前 40 条泄漏意图回归总体 `29/40=72.5%`，投诉平衡集 recall `45%`，均不足以重新签署
 - 证据：E-20260807-002；`docs/works/13-feature-m4-customer-service/README.md` D23
 
-## 上一版本
+## 历史候选标签说明
 
-- 版本号：`0.32.0`
-- 发布状态：夜间值守与 SOP 级发布策略本机候选；生产放行阻塞
-- 兼容性说明（0.32.0 增量）：沿用 schema v25，为 `release_policies` 增加 4 个可空列（additive 前向迁移；与 0.29.0 的 `ops_operation_records` 同版本号共存，两组迁移均为幂等追加，从 v24 升级会同时应用）；`assignment()` 返回的 policy 增加 `configured_mode` / `night_watch_active`，`mode` 为生效模式（未配置夜间窗时与原值一致）；策略创建请求新增可选 night / sop_allowlist 字段，旧请求不受影响
-- 最后更新：2026-07-31
-
-## 前一版本
-
-- 版本号：`0.31.0`
-- 发布状态：SSE 流式客服接口本机候选；生产放行阻塞
-- 兼容性说明（0.31.0 增量）：无 schema 变化（沿用 v25）；新增 `POST /v1/chat/stream` 端点与 SSE 事件协议；`ModelGateway` 新增 `stream_generate`，原 `_stream_request` 行为不变；`verify` 与 `persist` 抽为可复用步骤，图内节点改为调用同一实现，编排拓扑与既有非流式 `/v1/chat` 契约零变化
-- 最后更新：2026-07-31
-
-## 更前一版本
-
-- 版本号：`0.30.0`
-- 发布状态：会话 Token 预算与生命周期本机候选；生产放行阻塞
-- 兼容性说明（0.30.0 增量）：无 schema 变化；新增 `MODEL_CONTEXT_LIMIT_TOKENS`、`CONTEXT_BUDGET_RATIO`、`SESSION_IDLE_TIMEOUT_MINUTES` 三个环境变量（均有默认值，未设置时行为等价于按 `session_history_limit` 条数截断的既有语义）；新增 `/v1/chat/sessions*` 四个客户侧端点；context bundle 新增 `recent_history_meta` 段与 `history_window` 证据类型
-- 最后更新：2026-07-31
-
-## 再前一版本
-
-- 版本号：`0.29.0`
-- 发布状态：运营辅助与文案生成模块本机候选；生产放行阻塞
-- 兼容性说明（0.29.0 增量）：schema v25 新增 `ops_operation_records` 表（additive，可从任意历史版本前向迁移）；新增 `/v1/ops-assistant/*` 管理端点；业务模块注册表新增 `ops_assistant` 条目；`simulation-evidence-v1` 契约由 15 项扩展到 16 项
-- 最后更新：2026-07-30
-
-## 历史版本
-
-### `0.27.0`
-- 发布状态：知识与 SOP 灰度发布本机候选；生产放行阻塞
-- 兼容性说明（0.27.0 增量）：无 schema 变化（沿用 v24）；`SopService.resolve_for_session` 在无固定 run 时按灰度分桶可解析候选版本（无灰度时行为不变）；新增 `/v1/admin/sop-versions/{id}/rollouts` 与 `/v1/admin/sop-rollouts*` 端点
-- 最后更新：2026-07-27
-
-## 再前一版本
-
-- 版本号：`0.26.0`
-- 发布状态：知识灰度发布本机候选；生产放行阻塞
-- 兼容性说明（0.26.0 增量）：schema v24 新增 `staged_rollouts` 表（additive，可从任意历史版本前向迁移）；`KnowledgeBase.retrieve` 新增可选 `rollout_unit`（默认 None 时行为与 0.25.0 完全一致）；知识审批/退役/回滚既有 API 不变，新增 `/v1/admin/knowledge/{id}/rollouts` 与 `/v1/admin/knowledge-rollouts*` 管理端点
-- 最后更新：2026-07-27
-
-## 前一版本
-
-- 版本号：`0.25.0`
-- 发布状态：统一渠道会话与多消息类型信封本机候选；生产放行阻塞
-- 兼容性说明（0.25.0 增量）：schema v23 不变，无迁移；`InboundEnvelope` 新增 `message_kind` 字段（默认 `text`，向后兼容），适配器协议新增 `message_kind()`；淘宝奇门非文本 contentType 由 400 拒收改为记录 + 脱敏占位符（文本消息行为不变），运行时对不可读类型直接确权转人工并以 `unsupported_message_kind` 标记任务；mockchat 载荷 `text` 字段仅文本类型必填。API、outbox、草稿、归属契约不变
-- 最后更新：2026-07-27
-
-## 上一版本
-
-- 版本号：`0.24.0`
-- 发布状态：通用渠道适配器 SDK 本机候选；生产放行阻塞
-- 兼容性说明：Python 3.11+、单机 SQLite schema v23 不变，无迁移；新增 `channel_sdk` 包（契约版本 `1.0.0`）：标准入站信封、发送命令/回执、错误分类、能力与限流声明、共享入站落库/草稿/归属实现和适配器注册表。淘宝行为兼容：奇门验签/事件/任务事务、草稿、归属、outbox 契约与既有 API 不变，仅错误对象新增 `kind` 分类；`ChannelAgentRuntime` 改为按 platform 经注册表路由（淘宝任务行为不变）；outbox claim 增加平台隔离（无平台声明的旧实例行为不变）；新增只读 `GET /v1/channels/adapters`；mockchat 模拟渠道默认关闭，仅显式 `MOCKCHAT_ENABLED=true` 且配置密钥后可用。营销/利润、后台、顾客直测边界与 0.23.0 相同
-- 最后更新：2026-07-26
+`0.31.0`、`0.32.0`、`0.33.0` 曾用于合并过程中的内部候选编号，但没有同步修改
+`pyproject.toml` 和包 `__version__`，因此不是当前运行时包版本。其功能与证据继续保留在下方
+历史表及对应功能台账中；后续发布不得只改本文，必须在同一变更中同步两个运行时权威点。
 
 ## 下一版本计划
 
-- 目标版本：`0.26.0`（候选）
-- 计划内容：首个客户脱敏多轮标注集与真实模型基线、客服主管组织/周期及节假日班次/技能/容量和队列/SLA 校准、客户同款标注与分品类阈值、合法竞品/口碑源、24 小时渠道与派单任务长稳、强杀/断电/磁盘/锁/时钟故障演练、异机恢复与设备密钥托管、真实业务工具读回/补偿、语义 VOC 和真实渠道 shadow/assist
-- 发布条件：真实或脱敏客户数据回归通过；长稳、异机恢复、设备安全和平台 Gate 有证据；业务 RPO/RTO 经签收；真实发送可停止、核对、补偿和审计
+- 目标版本：待发布负责人确认。不得沿用已经发布过的 `0.26.0`，也不得把 M7-R～M10-R
+  里程碑编号直接当成包版本。
+- 计划内容：先把 main 上 0.30.0 之后的已合入能力、兼容性和生产阻塞整理成一次明确发布
+  范围；M7-R～M10-R 仍是产品开发里程碑，只有实际实现并达到发布 Gate 的部分才进入版本。
+- 发布条件：在同一提交中更新 `pyproject.toml`、`src/ecommerce_agent/__init__.py` 和本文；
+  完成升级/回退说明、全量测试、灾备兼容和适用生产 Gate 后，才能声明新运行时版本。
 
 ## 版本历史
 
 | 版本 | 状态 | 主要变更 | 验证证据 |
 |---|---|---|---|
-| `0.32.0` | 当前本机候选 | schema v25 夜间值守时间窗/夜间模式与 SOP 白名单；assignment 生效模式；mockchat 窗口内自动、窗口外草稿端到端 | E-20260727-005：6 项专项 + v24→v25 迁移 + 84 项发布/渠道/迁移/灾备回归 |
-| `0.31.0` | 本机候选 | SSE 流式客服接口；两段式生成保持拓扑零改动；断连重试复用既有幂等键 | E-20260731-002：流式与服务层专项、编排/网关/接口回归 |
-| `0.30.0` | 本机候选 | Token 预算截断替代条数截断；会话 CRUD 四端点与游标分页；空闲超时独立配置 | E-20260731-001：预算/会话/超时专项 16 项、回归 40 项 |
-| `0.29.0` | 本机候选 | 运营辅助与文案生成模块；schema v25；D16 虚拟店铺场景 | E-20260730-001：全量 313 通过，含门禁双反证 |
-| `0.33.0` | 当前本机候选 | 工作台：适配器能力面板、知识/SOP 灰度状态面板、夜间值守与 SOP 白名单策略创建/展示 | E-20260727-006：后台 5 项测试、页面单脚本 JS 解析、浏览器渲染检查 |
-| `0.29.0` | 历史本机候选 | schema v25 夜间值守时间窗/夜间模式与 SOP 白名单；assignment 生效模式；mockchat 窗口内自动、窗口外草稿端到端 | E-20260727-005：6 项专项 + v24→v25 迁移 + 84 项发布/渠道/迁移/灾备回归 |
+| `0.33.0` | 历史内部候选标签；未升包版本 | 工作台：适配器能力面板、知识/SOP 灰度状态面板、夜间值守与 SOP 白名单策略创建/展示 | E-20260727-006：后台 5 项测试、页面单脚本 JS 解析、浏览器渲染检查 |
+| `0.32.0` | 历史内部候选标签；未升包版本 | schema v25 夜间值守时间窗/夜间模式与 SOP 白名单；assignment 生效模式；mockchat 窗口内自动、窗口外草稿端到端 | E-20260727-005：6 项专项 + v24→v25 迁移 + 84 项发布/渠道/迁移/灾备回归 |
+| `0.31.0` | 历史内部候选标签；未升包版本 | SSE 流式客服接口；两段式生成保持拓扑零改动；断连重试复用既有幂等键 | E-20260731-002：流式与服务层专项、编排/网关/接口回归 |
+| `0.30.0` | 当前运行时包版本；生产放行阻塞 | Token 预算截断替代条数截断；会话 CRUD 四端点与游标分页；空闲超时独立配置；后续 main 增量尚未升包 | E-20260731-001；`pyproject.toml` 与包 `__version__` |
+| `0.29.0` | 历史本机候选 | 运营辅助与文案生成模块；schema v25；D16 虚拟店铺场景 | E-20260730-001：全量 313 通过，含门禁双反证 |
 | `0.28.0` | 历史本机候选 | `product_advisor` 商品实体识别/推荐/对比；稳定版本化证据 ID 进入 bundle 与 evidence；店铺/租户隔离 | E-20260727-004：4 项专项、36 项上下文/Agent/图/渠道回归 |
 | `0.27.0` | 历史本机候选 | SOP 渠道灰度：已批准候选按会话分桶解析并被 run 固定；原子完成与一步回滚；管理 API | E-20260727-003：3 项灰度专项、39 项治理/SOP/图回归 |
 | `0.26.0` | 历史本机候选 | schema v24 通用 `staged_rollouts`；知识灰度 begin/调量/complete/rollback 生命周期；检索按会话稳定分桶仲裁 baseline/candidate；无分桶单元路径固定基线；管理 API | E-20260727-002：18 项灰度/迁移测试、43 项治理/检索/Agent/灾备回归、chat 会话分桶一致性 |
@@ -197,7 +152,7 @@
 | `0.23.0` | 历史本机候选 | schema v23 版本化营销日指标、内容草稿有限事实检查、费用与结算单；提供投放诊断、管理利润估算、差异任务人工流转、两个 Agent 只读工具、控制台工作台和 D14/D15 真实输入输出 | E-20260723-005：15/15 虚拟场景、营销/财务 API 回归、后台/API 定向 10 项测试、页面 JS 解析 |
 | `0.22.6` | 历史本机候选 | 约束后台内容区、概览内容流、表格、会话、消息和测试结果的尺寸与内部滚动；390px 导航保持滑动且隐藏原生滚动条 | E-20260723-004：后台/API 定向 7 项测试、桌面/390px 浏览器与 console 0 error/warning |
 | `0.22.5` | 历史本机候选 | GLM Coding Plan 通过标准 Chat Completions 非流式调用接入原后台顾客直测；`AgentDecision` 兼容空容器 null，其他无效结构仍拒绝 | E-20260723-003：23 项定向测试、226 项全量测试、健康检查、原后台保修/发货真实模型回复与审计轨迹 |
-| `0.22.4` | 当前本地候选 | 原后台智能客服对话测试改走仅回环、默认关闭的本机测试 API；移除客户端 ID/主体/密钥输入，预置店铺上下文，显示实际回答、风险、接管、会话/追踪和来源；会话固定归入 simulation，正式 `/v1/chat` 鉴权未改变 | E-20260723-002：223 tests、JS、后台浏览器保修案例真实发送、无客户端密钥控件 |
+| `0.22.4` | 历史本地候选 | 原后台智能客服对话测试改走仅回环、默认关闭的本机测试 API；移除客户端 ID/主体/密钥输入，预置店铺上下文，显示实际回答、风险、接管、会话/追踪和来源；会话固定归入 simulation，正式 `/v1/chat` 鉴权未改变 | E-20260723-002：223 tests、JS、后台浏览器保修案例真实发送、无客户端密钥控件 |
 | `0.22.3` | 历史本地候选 | 默认关闭、仅回环的独立顾客测试页面/API；五个静态案例与自定义顾客问题复用实际客服链路；实际回答、来源、风险、转人工和原始 JSON 可见；会话固定归入 simulation，默认运营视图不受影响 | E-20260723-001：223 tests、compileall/JS、health/ready、HTTP 5 案例接口和真实对话、浏览器无 console error/warning |
 | `0.22.2` | 历史本地候选 | schema v22 会话来源分类，后台默认运营数据隔离，智能客服/人工任务/派单范围切换，来源标签、Mock 状态和决策详情，场景验收保持真实输入输出 | E-20260722-011：221 tests、20/20 安全评测、HTTP 场景 13/13、默认运营 0 会话/消息/人工任务、模拟 17 会话/34 消息/13 人工任务、Edge 页面通过 |
 | `0.22.1` | 历史版本 | `simulation-evidence-v1` 逐场景输入/预期/断言/完整输出，兼容旧 detail；后台手动运行、筛选、模块覆盖和响应式证据明细 | E-20260722-009：218 tests、源码 86% branch coverage、20/20 安全评测、真实 HTTP 13/13、1280/390px 浏览器和运行完整性 |

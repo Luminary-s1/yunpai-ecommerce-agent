@@ -1,6 +1,8 @@
 # 项目功能
 
 > 功能范围与状态的唯一清单。功能变化后同步进度；未验证的功能不得标记为已完成。
+> 运行时包版本以 `PROJECT_VERSIONS.md` 的“当前版本”、`pyproject.toml` 和包
+> `__version__` 为准；历史功能记录中的 `0.31.0`～`0.33.0` 是未升包的内部候选标签。
 
 ## 状态定义
 
@@ -78,14 +80,23 @@
 | F-320 M6-R Forecasting API / Agent / Admin | P0 | 已完成 | F-301、F-310、F-317 至 F-319、D-030、D-034、D-035 | 九个管理员 API、两项动态目录只读工具、D20 virtual 场景与预测/库存风险后台完成；GET 与工具对 forecast/plan 回显同一 `evidence-freshness-v1`，旧 forecast/plan 不静默冒充当前；Traffic/Forecast/Plan 工具从固化 evidence 回显同一 `source-provenance-v1`，不以 wrapper 或会话来源猜测 virtual；租户/店铺范围、原子 policy、脏证据领域错误、审计、策略继承/排序、九表只读快照、后台 Decimal 投影和显式运行保持 | `src/ecommerce_agent/forecasting_api.py`、`business/{registry,service}.py`、`forecasting/{run_service,planning}.py`、`simulation.py`、`docs/admin-console.html`、`tests/test_forecasting_wp4.py`、E-20260812-007/008、E-20260813-004/E-20260813-009/E-20260813-010；沿用 schema v30、无新依赖/迁移/关键词路由/自动采购付款或库存调整 |
 | F-321 M6-R Forecast Eval | P0 | 已完成 | F-317 至 F-320、D-035、D-039 | 十类 synthetic demand 与 WP3 库存决策场景经真实 forecast/plan service 运行；独立 oracle 在生产调用后评分，数值 Gate 覆盖 rolling-origin 未来不变性、候选/champion/fallback、WAPE 可比性、signed Bias、P80/P95 覆盖与库存公式；报告审计实际生产字段和 oracle overlap；独立对抗补强零宽区间反证、计划脏证据类型化错误与同戳 policy 稳定决胜 | `evals/forecasting/forecast_eval_v1.json`、`scripts/{forecast_eval_runtime,run_forecast_eval}.py`、`tests/test_forecasting_eval.py`、`docs/works/14-feature-m6r-forecast-eval/{README,GROK_INDEPENDENT_REVIEW}.md`、E-20260813-001/002/003/004；Grok 4.6 xhigh 明确批准后，`03d3b85` 已快进合入并推送 main；不代表服务器 v30、真实数据、长稳或生产放行 |
 | F-322 Traffic Lab 店铺业务日历与 metric 三元身份 | P0 | 已完成 | F-312、F-315、D-037、D-040、schema v32 | 版本化 `(tenant, store)` 业务日历，实验固化 IANA timezone/version，缺配置或 legacy 缺证据 fail closed；Traffic accepted/quarantine 身份为 `(tenant, connector, source_id)`，历史缺 connector 进入 `legacy_unscoped` 且禁止分析；revision-only 与显式身份使用同一 canonical hash，出窗隔离复用 revision 身份；v30 可迁移、旧 hash 可重放、双态冲突拒绝、备份 manifest 精确版本策略保持。Forecast/business 包导出按需加载，避免 eval CLI 循环导入 | `src/ecommerce_agent/business_calendar.py`、`traffic_source_identity.py`、`traffic_lab/{service,analysis,freshness}.py`、`database.py`、`simulation.py`、`forecasting/__init__.py`、`business/__init__.py`、`tests/test_traffic_{lab_business_calendar,metric_identity_v32}.py`、E-20260813-019/020/021/022/023/024/025；已通过 PR #14 合入 main `ee5e443` 并在精确 merge tip 通过全量；开放 PR #10 改号与 PR #11 实际代码集成仍须分别闭合，不代表真实数据/长稳/生产放行 |
-| F-323 M7-R 只读经营数据与 Demo 事实底座 | P0 | 已规划 | F-202、F-208、F-303、F-305 至 F-309、D-041 | 订单/商品/库存/履约物流/经营指标/推广/退款/收入报表经字段白名单、脱敏、版本 manifest、逐行隔离和公开领域服务可重放导入；平台 SKU、商家编码和料号可解释映射；`actual/manual/demo/missing` 在 API、页面和报告一致，缺失不转零，默认经营视图不混入 Demo | `docs/tasks/M7R_READONLY_DATA_WORKBENCH.md`；当前仅规划，未实现导入或声明真实平台接入 |
-| F-324 M8-R 销售与售后客服闭环 | P0 | 已规划 | F-104、F-117、F-124 至 F-126、F-306、F-323、D-034、D-041 | 复用 M4 在只读影子模式跑通销售与售后多轮建议回复；批准话术、商品/订单/库存/物流事实、来源和新鲜度可追溯；缺事实追问/转人工；零平台发送、退款、赔付或订单写动作；独立客服 Eval 通过 | `docs/tasks/M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md`；主动营销与真实渠道留待后续 Gate |
-| F-325 M9-R 商品流量与生命周期经营 | P0 | 已规划 | F-304、F-312 至 F-316、F-323、D-037 至 D-041 | 建立 Listing/SKU 经营读模型，复用 M5-R 输出流量诊断、证据/反证和生命周期建议；存量标题/主图默认保持，建议需人工确认且无商品/价格/广告/活动写动作；机制 Eval 同时能识别真实方向和拒绝污染/无效方向 | `docs/tasks/M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md`；当前仅规划，不声明平台算法权重或真实因果 |
+| F-323 M7-R 只读经营数据与 Demo 事实底座 | P0 | 已规划 | F-202、F-208、F-303、F-305 至 F-309、D-041 | 订单/商品/库存/履约物流快照/经营指标/推广/退款/收入报表经字段白名单、脱敏、版本 manifest、逐行隔离和公开领域服务可重放导入；平台 SKU、商家编码和料号可解释映射；字段证据状态为 `actual/manual/demo/missing`，实际来源类型仅为 `actual/manual/demo`，`missing` 不生成导入记录；缺失不转零，默认经营视图不混入 Demo | `docs/tasks/M7R_READONLY_DATA_WORKBENCH.md`；当前仅规划，未实现导入或声明真实平台接入 |
+| F-324 M8-R 销售与售后客服闭环 | P0 | 已规划 | F-104、F-117、F-124 至 F-126、F-306、F-323、D-034、D-041 | 复用 M4 在只读影子模式跑通销售与售后多轮建议回复；批准话术、商品/订单/库存及履约物流快照、来源和新鲜度可追溯，回复只描述截至导出时间的状态，不冒充实时轨迹；缺事实追问/转人工；零平台发送、退款、赔付或订单写动作；独立客服 Eval 通过 | `docs/tasks/M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md`；主动营销与真实渠道留待后续 Gate |
+| F-325 M9-R 商品流量与生命周期经营 | P0 | 已规划 | F-304、F-312 至 F-316、F-323、D-037 至 D-041 | 建立保留原始粒度的 Listing/SKU 经营读模型；当前真实导出只展示 SKU 交易/库存、店铺级流量背景和准备度，禁止把店铺流量拆成 SKU；隔离 Demo 以模拟 SKU 流量、revision 和窗口跑通 M5-R 诊断及生命周期建议；存量标题/主图默认保持，建议人工确认且无商品/价格/广告/活动写动作 | `docs/tasks/M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md`；当前仅规划，Demo 不代表真实店铺流量、平台权重或真实因果 |
 | F-326 M10-R 预测补货与订购单闭环 | P0 | 已规划 | F-303、F-317 至 F-323、D-039、D-041、D-042 | 分层接入预测目标、候选信号、库存/供货约束和料号主数据，复用 M6-R 产生可追溯 forecast/plan；缺供货参数时降级；按料号生成订购单 draft，人工确认并收集/跟踪供应商交期，零采购、付款、ERP、库存或生产工单写动作 | `docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；当前仅规划，演示参数不得冒充真实供货事实 |
-| F-327 M10-R 利润准备度与经营决策台 | P0 | 已规划 | F-307 至 F-309、F-323、F-325、F-326、D-041、D-042 | 版本化 canonical 费用底账和财务政策覆盖收入、平台/广告/物流/退货/入库/采购/整备等域；必需费用缺失时正式净利润不可用，Demo 只显示“净利润试算（演示参数）”；决策台展示依据、缺口、风险和人工确认，不提供自动经营动作 | `docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；财务最终字段待批准政策，当前未实现或验收 |
+| F-327 M10-R 利润准备度与经营决策台 | P0 | 已规划 | F-307 至 F-309、F-323、F-325、F-326、D-041、D-042 | 按签收确认收入，版本化 canonical ledger 和财务政策覆盖采购、包装/分拣、平台扣点、运费险、坑位/服务、佣金、赠品/公益、广告、物流、退款/入库/整备等域；共用底账分销售利润、经营利润、财务最终净利润，缺必需费用时对应正式层级不可用，Demo 只显示试算标签；财务最终净利润仅授权视图可见，决策台无自动经营动作 | `docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；财务政策仍待实现与验收 |
 
 ## 功能变更历史
 
+- 2026-08-14：按 D-043 重排 M7-R～M10-R 责任矩阵。每个 M 的 WP1～WP4 由一名负责人
+  完整开发：谢良璇/M7-R、闫睿涵/M8-R、胡磊/M9-R、缪海南/M10-R；WP5 分别由缪海南、
+  谢良璇、闫睿涵、胡磊交叉独立验收。验收人不得参与该 M 的功能实现，失败必须退回开发
+  负责人修复后复验。此次只修改规划和验收治理，F-323～F-327 仍为“已规划”。
+- 2026-08-14：按项目负责人确认修订 F-323/F-325/F-327。D-041 分离证据四态与来源三类；
+  M9-R 用隔离模拟 SKU 流量和 revision/时窗跑通 Demo，真实导出保留店铺级流量粒度并
+  阻断 SKU 结论；M10-R 按签收确认收入，利润分销售/经营/财务最终三层并补齐杨总模板
+  费用域，财务最终净利润仅授权且完整时展示；履约和订购单运输状态均按快照/人工证据。
+  本次仍只更新规划，不把 F-323 至 F-327 标记为实现或完成。
 - 2026-08-14：新增并规划 F-323 至 F-327，将后续产品路线拆为 M7-R 只读数据底座、M8-R 销售/售后客服、M9-R 商品流量/生命周期和 M10-R 预测补货/订购单/利润决策；明确千牛只看不动、来源四态、缺失不补零、订购单人工确认、正式净利润完整度 Gate 和纯电商非生产边界。当前仅完成任务书与分工，不代表功能开发、真实渠道或生产放行。
 - 2026-08-14：M3 知识库 PR #10 合入 main `1906365`（schema v33）。知识图谱/Wiki API、knowledge_key active 唯一索引、retrieval_logs 与多租户隔离回归进入 main。开放 PR #11 仍占用 v31；合入时不得覆盖已在 main 的 v32/v33，扫描 `MERGE-GATE PR-11`。见 E-20260814-001。
 - 2026-08-13：F-322 经 PR #14 合入 main `ee5e443`。精确 merge tip 的日历/身份/迁移/灾备 `51 passed`、全量 `770 passed, 1 xfailed`，静态与台账门禁通过；PR #11 已收到继续使用 v31 并保留 v31/v32 的提醒。PR #10 v33 改号和 PR #11 完成后的实际集成仍待各自闭合，见 E-20260813-025。
