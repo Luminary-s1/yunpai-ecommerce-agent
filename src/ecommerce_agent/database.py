@@ -169,6 +169,9 @@ class Database:
             if 30 not in applied:
                 self._apply_v30(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (30, ?)", (utc_now(),))
+            # MERGE-GATE PR-11: main 有 v32+v33、没有 _apply_v31。
+            # 合 PR #11 时必须补上 if 31 / _apply_v31（workspace 表），
+            # 并保留下面两块。SCHEMA_VERSION 保持 33。不得覆盖 v32 / 不得覆盖 v33。
             if 32 not in applied:
                 self._apply_v32(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (32, ?)", (utc_now(),))

@@ -81,6 +81,7 @@
 
 ## 功能变更历史
 
+- 2026-08-14：M3 知识库 PR #10 合入 main `1906365`（schema v33）。知识图谱/Wiki API、knowledge_key active 唯一索引、retrieval_logs 与多租户隔离回归进入 main。开放 PR #11 仍占用 v31；合入时不得覆盖已在 main 的 v32/v33，扫描 `MERGE-GATE PR-11`。见 E-20260814-001。
 - 2026-08-13：F-322 经 PR #14 合入 main `ee5e443`。精确 merge tip 的日历/身份/迁移/灾备 `51 passed`、全量 `770 passed, 1 xfailed`，静态与台账门禁通过；PR #11 已收到继续使用 v31 并保留 v31/v32 的提醒。PR #10 v33 改号和 PR #11 完成后的实际集成仍待各自闭合，见 E-20260813-025。
 - 2026-08-13：按指定顺序将 docs-only PR #13 以 `60c8052` 合入 main，使 v31 workspace 占号先进入权威表；F-322 再以本地 merge `76c2c85` 保留 v32，表中下一空闲为 v33。日历/身份/迁移/灾备 `51 passed`、全量 `770 passed, 1 xfailed`，静态与台账门禁通过。main 此时只有 v31 占号通知、没有 PR #11 运行迁移；PR #10 改号及 E-023 的实际 v31/v32 页面整合仍待闭合。见 E-20260813-024。
 - 2026-08-13：刷新全部远端与 origin PR refs 后，确认 `origin/main=dbf2027` 未前移、F-322 对 main 合并干净且 v32 仅本分支占用；同时发现开放 PR #10 与 #11 分别定义不同用途的 `_apply_v31`。PR #11 + F-322 临时合成按规则保留 v31/v32，交叉 `62 passed`；全量 `805 passed, 1 xfailed, 2 failed`，两项均定位为 admin 页面测试整合，临时对齐断言后 `2 passed`，但未写回分支或冒充合成全量通过。见 E-20260813-023。
