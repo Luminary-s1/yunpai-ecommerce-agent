@@ -1,0 +1,98 @@
+[
+ {
+  "rule_code": "RULE-INVOICE-ISSUE",
+  "rule_title": "电商发票开具规范",
+  "authority": "国家税务总局",
+  "theme": "发票开具",
+  "content_summary": "销售商品提供劳务应向购买方开具发票。网络购物中，商家应依法为消费者开具发票（含电子发票），不得以任何理由拒开。发票开具时限：发生经营业务确认营业收入时开具。消费者索要发票的，经营者必须出具，不得加收费用。电子发票与纸质发票具有同等法律效力。",
+  "source": "network",
+  "source_url": "www.chinatax.gov.cn",
+  "captured_at": "2026-08-05",
+  "raw_file": "S11-invoice.md",
+  "keywords": "发票 开票 电子发票 怎么开发票 发票怎么开 抬头"
+ },
+ {
+  "rule_code": "RULE-PRICE-LABELING",
+  "rule_title": "明码标价和禁止价格欺诈规定",
+  "authority": "市场监管总局",
+  "theme": "价格合规",
+  "content_summary": "经营者销售商品应当明码标价，不得在标价之外加价出售商品，不得收取任何未予标明的费用。禁止下列价格欺诈行为：虚假优惠折价（虚构原价）、谎称降价或即将提价、不履行或者不完全履行价格承诺、使用欺骗性或者误导性的文字图片标价、以低价招徕顾客以高价进行结算。",
+  "source": "network",
+  "source_url": "www.samr.gov.cn",
+  "captured_at": "2026-08-05",
+  "raw_file": "S12-pricelabel.md",
+  "keywords": "明码标价 价格欺诈 标价 价格"
+ },
+ {
+  "rule_code": "RULE-ONLINE-TRANSACTION",
+  "rule_title": "网络交易监督管理办法（消费者保护条款）",
+  "authority": "市场监管总局",
+  "theme": "网络交易",
+  "content_summary": "网络交易经营者应当全面、真实、准确、及时地披露商品或者服务信息，保障消费者知情权和选择权。不得以虚构交易、编造用户评价等方式进行虚假或者引人误解的商业宣传。网络交易经营者收集使用消费者个人信息，应当遵循合法、正当、必要原则。不得默认勾选或强制消费者同意捆绑搭售。",
+  "source": "network",
+  "source_url": "www.samr.gov.cn",
+  "captured_at": "2026-08-05",
+  "raw_file": "S13-transaction.md",
+  "keywords": "网络交易 消费者 保护 七天"
+ },
+ {
+  "rule_code": "RULE-REFUND-TIMELINESS",
+  "rule_title": "电商平台退款时效规则",
+  "authority": "淘宝平台",
+  "theme": "退款时效",
+  "content_summary": "买家申请退款后，商家应在规定时间内处理：未发货订单申请退款，商家应在48小时内处理；已发货订单申请仅退款，商家应在72小时内处理；退货退款申请，商家应在收到退货后48小时内确认退款。超时未处理系统自动退款。退款金额原则上原路退回。",
+  "source": "network",
+  "source_url": "rule.taobao.com",
+  "captured_at": "2026-08-05",
+  "raw_file": "S14-refund.md",
+  "keywords": "退款 时效 多久到账 退款时间"
+ },
+ {
+  "rule_code": "RULE-LOGISTICS-COMPLAINT",
+  "rule_title": "快递物流服务投诉处理规定",
+  "authority": "国家邮政局",
+  "theme": "物流投诉",
+  "content_summary": "经营快递业务的企业应当及时处理用户投诉。用户对快递服务质量不满意，可向快递企业投诉；企业应在7日内答复。用户投诉后未得到答复或对处理结果不满意，可向邮政管理部门申诉。快件延误、丢失、损毁的，企业应按合同约定或有关规定赔偿。",
+  "source": "network",
+  "source_url": "www.spb.gov.cn",
+  "captured_at": "2026-08-05",
+  "raw_file": "S15-logistics.md",
+  "keywords": "物流 投诉 快递 延误 丢失 申诉"
+ },
+ {
+  "rule_code": "RULE-FOOD-SAFETY-ONLINE",
+  "rule_title": "网络食品安全违法行为查处办法",
+  "authority": "市场监管总局",
+  "theme": "食品安全",
+  "content_summary": "入网食品经营者应当依法取得食品经营许可证。网络食品交易第三方平台应当对入网食品经营者进行实名登记，审查其食品生产经营许可证。入网食品经营者不得经营法律法规禁止经营的食品，应当如实公示食品名称、配料表、生产日期等信息。",
+  "source": "network",
+  "source_url": "www.samr.gov.cn",
+  "captured_at": "2026-08-05",
+  "raw_file": "S16-food.md",
+  "keywords": "食品 安全 网络 违法 查处"
+ },
+ {
+  "rule_code": "RULE-ELECTRONIC-COMMERCE-LAW",
+  "rule_title": "电子商务法（经营者义务核心条款）",
+  "authority": "全国人大常委会",
+  "theme": "电商经营者义务",
+  "content_summary": "电子商务经营者应当依法办理市场主体登记，并在首页显著位置持续公示营业执照信息。应当全面、真实、准确、及时地披露商品信息。电子商务经营者销售商品或者提供服务应当依法出具纸质发票或者电子发票等购货凭证。不得以格式条款等方式作出对消费者不公平、不合理的规定。",
+  "source": "network",
+  "source_url": "www.npc.gov.cn",
+  "captured_at": "2026-08-05",
+  "raw_file": "S17-ec-law.md",
+  "keywords": "电子商务法 经营者 义务 电商法"
+ },
+ {
+  "rule_code": "RULE-GIFT-QUALITY",
+  "rule_title": "赠品促销质量责任规定",
+  "authority": "消费者权益保护法实施条例",
+  "theme": "赠品质量",
+  "content_summary": "经营者以广告、产品说明、实物样品或者其他方式表明商品或者服务的质量状况的，应当保证其提供的商品或者服务的实际质量与表明的质量状况相符。赠送的商品同样适用质量担保责任，不得以'赠品概不负责'为由免除质量责任。赠品存在质量问题的，消费者有权要求修理、更换、退货。",
+  "source": "network",
+  "source_url": "www.12315.cn",
+  "captured_at": "2026-08-05",
+  "raw_file": "S18-gift.md",
+  "keywords": "赠品 质量 促销 责任"
+ }
+]

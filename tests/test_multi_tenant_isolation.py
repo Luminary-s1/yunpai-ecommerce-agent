@@ -1,0 +1,454 @@
+"""M3 多租户隔离测试（专项审查 P1×2 + P2×1 + P3×6 修复的回归锁）。
+
+核心语义：NULL 租户行 = 全局知识，只可被 appliance 自身（启动导入）写；
+租户 API 永远只能写本租户行。租户影子编辑：租户编辑全局词条 → 生成该租户
+私有新版本，其他租户仍见全局版。
+
+覆盖（对应修复计划 v2）：
+- P1-1 租户 approve/rollback/complete_rollout 不得退休全局行
+- 影子编辑：租户 A 编辑全局词条 approve 后，A 优先见影子版、B 仍见全局版
+- P1-2 租户 import-assets 热更新不得改写全局行
+- P2-1 general/无店铺 seller 资产导入后 tenant_id IS NULL
+- P3-9 跨租户同 store 同 fact 记忆各自落库
+- P3-5 forget 精确租户（租户删不掉全局记忆）
+- P3-4 load_from_runtime(None) 只返回全局行
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from ecommerce_agent.knowledge_engine import (
+    KnowledgeItem,
+    KnowledgeKind,
+    KnowledgeScope,
+    import_to_runtime,
+    load_from_runtime,
+)
+from ecommerce_agent.knowledge_management import (
+    KnowledgeCreateRequest,
+    KnowledgeTransitionRequest,
+)
+from ecommerce_agent.service import AgentService
+
+from conftest import make_settings, principal_for
+
+
+# ---------- P1-1：租户不得退休全局行 ----------
+
+def _create_global_active(service: AgentService, key: str, answer: str = "全局规则答案") -> str:
+    """建一条全局（tenant_id IS NULL）active 行，模拟 02_clean 全局资产。"""
+    return service.knowledge.add_document(
+        category="行业规则", intent="rule", question="全局规则问题",
+        answer=answer, keywords="", risk_level="low", source="kg:test",
+        version=1, status="active", review_status="approved",
+        tenant_id=None, knowledge_key=f"kg-{key}", layer="platform",
+        store_id=None, sku_id=None,
+    )
+
+
+def test_tenant_approve_does_not_retire_global_row(tmp_path) -> None:
+    """P1-1：租户 A 影子编辑全局词条 approve 后，全局 active 行必须仍在。"""
+    service = AgentService(make_settings(tmp_path))
+    mgmt = service.knowledge_management
+    tenant = "tenant-a"
+
+    _create_global_active(service, "GLOBAL-X")
+
+    # 租户 A 影子编辑：同 knowledge_key 建私有 candidate（layer=platform 无 store）
+    created = mgmt.create(
+        tenant,
+        KnowledgeCreateRequest(
+            category="行业规则", intent="rule", question="全局规则问题",
+            answer="租户A定制答案", source="wiki://manual", layer="platform",
+        ),
+        "admin-a",
+        knowledge_key="kg-GLOBAL-X",
+    )
+    evaluated = mgmt.evaluate(
+        tenant, created["id"], KnowledgeTransitionRequest(expected_record_version=1), "reviewer-a"
+    )
+    mgmt.approve(
+        tenant, created["id"],
+        KnowledgeTransitionRequest(expected_record_version=evaluated["record_version"]),
+        "reviewer-a",
+    )
+
+    # 全局行必须仍为 active（不被租户 A 退休）
+    with service.db.connect() as conn:
+        row = conn.execute(
+            "SELECT status FROM knowledge WHERE knowledge_key='kg-GLOBAL-X' AND tenant_id IS NULL"
+        ).fetchone()
+    assert row is not None and row["status"] == "active", "租户 approve 不得退休全局行"
+
+
+def test_shadow_edit_tenant_a_preferred_but_tenant_b_sees_global(tmp_path) -> None:
+    """影子编辑：A 检索优先命中私有版；B 检索仍命中全局版。"""
+    service = AgentService(make_settings(tmp_path))
+    mgmt = service.knowledge_management
+    tenant_a = "tenant-a"
+    tenant_b = "tenant-b"
+
+    _create_global_active(service, "GLOBAL-Y")
+
+    created = mgmt.create(
+        tenant_a,
+        KnowledgeCreateRequest(
+            category="行业规则", intent="rule", question="全局规则问题",
+            answer="租户A定制答案", source="wiki://manual", layer="platform",
+        ),
+        "admin-a",
+        knowledge_key="kg-GLOBAL-Y",
+    )
+    evaluated = mgmt.evaluate(
+        tenant_a, created["id"], KnowledgeTransitionRequest(expected_record_version=1), "reviewer-a"
+    )
+    mgmt.approve(
+        tenant_a, created["id"],
+        KnowledgeTransitionRequest(expected_record_version=evaluated["record_version"]),
+        "reviewer-a",
+    )
+
+    hits_a = service.knowledge.retrieve("全局规则", top_k=3, min_score=0.05, tenant_id=tenant_a)
+    assert any(h["answer"] == "租户A定制答案" for h in hits_a), "租户 A 应优先命中影子版"
+
+    hits_b = service.knowledge.retrieve("全局规则", top_k=3, min_score=0.05, tenant_id=tenant_b)
+    assert any(h["answer"] == "全局规则答案" for h in hits_b), "租户 B 应仍见全局版"
+    assert all(h["answer"] != "租户A定制答案" for h in hits_b), "影子版不得泄漏给租户 B"
+
+
+# ---------- P1-2：租户 import-assets 不得改写全局行 ----------
+
+def test_tenant_import_hot_update_cannot_rewrite_global_row(tmp_path) -> None:
+    """P1-2：租户 admin 调 import_to_runtime(update_existing=True) 全局行内容不变。"""
+    service = AgentService(make_settings(tmp_path))
+    tenant = "tenant-a"
+
+    # 全局资产（导入时 tenant_id=None）
+    import_to_runtime(
+        [KnowledgeItem(
+            id="GLOBAL-Z", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+            compiled_truth="全局原始答案", attributes={"question": "全局规则问题"},
+        )],
+        service.knowledge,
+        tenant_id=None,
+    )
+
+    # 租户 A 用同内容资产热更新（模拟 import-assets?update=true 传 admin.tenant_id）
+    stats = import_to_runtime(
+        [KnowledgeItem(
+            id="GLOBAL-Z", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+            compiled_truth="被租户改写的答案", attributes={"question": "全局规则问题"},
+        )],
+        service.knowledge,
+        tenant_id=tenant,
+        update_existing=True,
+    )
+
+    # 全局行内容必须不变；改写行必须不落库为 NULL（应被 foreign/skip 拦截）
+    hits = service.knowledge.retrieve("全局规则", top_k=3, min_score=0.05, tenant_id=tenant)
+    assert any(h["answer"] == "全局原始答案" for h in hits), "全局行内容不得被租户热更新改写"
+    assert all(h["answer"] != "被租户改写的答案" for h in hits), "租户改写内容不得出现"
+    assert stats["update_failed"] == 0 and stats["skipped_foreign"] == 0, "general 项应走全局路径而非越权改写"
+
+
+# ---------- P2-1 + ⑤：general/无店铺 seller 资产全局化 ----------
+
+def test_general_and_storeless_seller_assets_import_as_global(tmp_path) -> None:
+    """P2-1+⑤：general 与 scope_key=all 的 seller 资产落 tenant_id IS NULL。"""
+    service = AgentService(make_settings(tmp_path))
+    tenant = "tenant-a"
+
+    import_to_runtime(
+        [
+            KnowledgeItem(
+                id="R-GEN", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+                compiled_truth="通用规则答案", attributes={"question": "规则问题"},
+            ),
+            KnowledgeItem(
+                id="F-ALL", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
+                scope_key="all", compiled_truth="无店铺FAQ答案",
+                attributes={"question": "FAQ问题"},
+            ),
+            KnowledgeItem(
+                id="F-STORE", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
+                scope_key="store-a", compiled_truth="店铺私有答案",
+                attributes={"question": "私有问题"},
+            ),
+        ],
+        service.knowledge,
+        tenant_id=tenant,
+        default_store_id=tenant,
+    )
+
+    with service.db.connect() as conn:
+        gen = conn.execute("SELECT tenant_id, store_id FROM knowledge WHERE id='kg-R-GEN'").fetchone()
+        all_ = conn.execute("SELECT tenant_id, store_id FROM knowledge WHERE id='kg-F-ALL'").fetchone()
+        store = conn.execute("SELECT tenant_id, store_id FROM knowledge WHERE id='kg-F-STORE'").fetchone()
+    assert gen["tenant_id"] is None and gen["store_id"] is None, "general 必须全局 NULL"
+    assert all_["tenant_id"] is None and all_["store_id"] is None, "无店铺 seller 必须全局 NULL"
+    assert store["tenant_id"] == tenant and store["store_id"] == "store-a", "有店铺 seller 保留租户与店铺"
+
+    # 另一租户能检索到全局知识
+    hits = service.knowledge.retrieve("FAQ问题", top_k=3, min_score=0.05, tenant_id="tenant-b")
+    assert any(h["source"] == "kg:F-ALL" for h in hits), "无店铺 FAQ 应对其他租户可见"
+
+
+# ---------- P3-9：memory dedup 租户条件 ----------
+
+def test_memory_dedup_is_tenant_scoped(tmp_path) -> None:
+    """P3-9：跨租户同 store 同 fact 记忆各自落库（不被去重吞掉）。"""
+    service = AgentService(make_settings(tmp_path))
+    memory = service.memory
+
+    first = memory.record("store-x", fact="同一事实", tenant_id="tenant-a")
+    second = memory.record("store-x", fact="同一事实", tenant_id="tenant-b")
+    assert first != second, "跨租户同内容记忆不得被去重吞掉"
+
+    a = memory.recall("store-x", tenant_id="tenant-a")
+    b = memory.recall("store-x", tenant_id="tenant-b")
+    assert any(r["knowledge_key"] == first for r in a), "A 的记忆应可 recall"
+    assert any(r["knowledge_key"] == second for r in b), "B 的记忆应可 recall"
+
+
+# ---------- P3-5：forget 精确租户 ----------
+
+def test_tenant_cannot_forget_global_memory(tmp_path) -> None:
+    """P3-5：租户 admin 删不掉全局记忆；全局（None）可删。"""
+    service = AgentService(make_settings(tmp_path))
+    memory = service.memory
+
+    global_mem = memory.record("store-g", fact="全局记忆", tenant_id=None)
+    assert not memory.forget(global_mem, tenant_id="tenant-a"), "租户不得删除全局记忆"
+    assert memory.forget(global_mem, tenant_id=None), "全局（None）应可删除全局记忆"
+
+
+# ---------- ⑥：存量库惰性重租户化 ----------
+
+def test_retrofit_global_asset_tenants(tmp_path) -> None:
+    """⑥：早期 bootstrap 挂载的全局层资产行 → NULL；冲突行 retired；店铺行不动。"""
+    service = AgentService(make_settings(tmp_path))
+    tenant = service.settings.bootstrap_tenant_id
+
+    # 模拟旧版挂载：bootstrap 租户下的全局层资产行（id 用 kg- 前缀对齐真实资产导入）
+    service.knowledge.add_document(
+        category="行业规则", intent="rule", question="旧全局", answer="旧全局答案",
+        keywords="", risk_level="low", source="kg:test", status="active",
+        review_status="approved", id="kg-OLD-GLOBAL",
+        tenant_id=tenant, knowledge_key="kg-OLD-GLOBAL", layer="platform", store_id=None,
+    )
+    # 同键已有 NULL active 行（模拟修复后重新导入过）→ 冲突
+    service.knowledge.add_document(
+        category="行业规则", intent="rule", question="新全局", answer="新全局答案",
+        keywords="", risk_level="low", source="kg:test", status="active",
+        review_status="approved", id="kg-CONFLICT-N",
+        tenant_id=None, knowledge_key="kg-CONFLICT", layer="platform", store_id=None,
+    )
+    service.knowledge.add_document(
+        category="行业规则", intent="rule", question="冲突旧版", answer="冲突旧答案",
+        keywords="", risk_level="low", source="kg:test", status="active",
+        review_status="approved", id="kg-CONFLICT-T",
+        tenant_id=tenant, knowledge_key="kg-CONFLICT", layer="platform", store_id=None,
+    )
+    # 店铺行（不应被迁移）
+    service.knowledge.add_document(
+        category="常见问答", intent="faq", question="店铺私有", answer="店铺答案",
+        keywords="", risk_level="low", source="kg:test", status="active",
+        review_status="approved", id="kg-STORE-KEEP",
+        tenant_id=tenant, knowledge_key="kg-STORE-KEEP", layer="store", store_id=tenant,
+    )
+
+    service._retrofit_global_asset_tenants()
+
+    with service.db.connect() as conn:
+        old = conn.execute(
+            "SELECT tenant_id FROM knowledge WHERE knowledge_key='kg-OLD-GLOBAL' AND status='active'"
+        ).fetchone()
+        conflict = conn.execute(
+            "SELECT status FROM knowledge WHERE knowledge_key='kg-CONFLICT' AND tenant_id=?"
+            " AND status='active'", (tenant,)
+        ).fetchone()
+        store = conn.execute(
+            "SELECT tenant_id, store_id FROM knowledge WHERE knowledge_key='kg-STORE-KEEP'"
+        ).fetchone()
+    assert old["tenant_id"] is None, "旧全局层行应重租户化为 NULL"
+    assert conflict is None, "冲突行（同键已有 NULL active）应被退休"
+    assert store["tenant_id"] == tenant and store["store_id"] == tenant, "店铺行不得被迁移"
+
+def test_load_from_runtime_none_returns_only_global(tmp_path) -> None:
+    """P3-4：tenant_id=None 只返回全局行；传租户返回本租户 + 全局。"""
+    service = AgentService(make_settings(tmp_path))
+    import_to_runtime(
+        [
+            KnowledgeItem(
+                id="R-NONE", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+                compiled_truth="全局规则", attributes={"question": "规则"},
+            ),
+            KnowledgeItem(
+                id="F-NONE", kind=KnowledgeKind.FAQ, scope=KnowledgeScope.SELLER,
+                scope_key="store-a", compiled_truth="店铺私有",
+                attributes={"question": "私有"},
+            ),
+        ],
+        service.knowledge,
+        tenant_id="tenant-a",
+        default_store_id="store-a",
+    )
+
+    globals_only = load_from_runtime(service.knowledge, tenant_id=None)
+    assert all(item.attributes.get("tenant_id") is None for item in globals_only), (
+        "None 应只返回全局行"
+    )
+    assert all(item.id != "F-NONE" for item in globals_only), "私有行不得出现在 None 视图"
+
+    tenant_view = load_from_runtime(service.knowledge, tenant_id="tenant-a")
+    ids = {item.id for item in tenant_view}
+    assert "R-NONE" in ids and "F-NONE" in ids, "租户视图应含本租户 + 全局"
+
+
+# ---------- ③④：Wiki 影子编辑端到端 ----------
+
+def test_wiki_shadow_edit_global_item_tenant_scoped(tmp_path) -> None:
+    """③④ 端到端：租户 A 通过 Wiki 编辑全局词条 → 生成 A 私有版本；
+    A 检索优先见影子版，租户 B 仍见全局版，全局行本身不变。"""
+    from fastapi.testclient import TestClient
+
+    from ecommerce_agent.api import create_app
+    from ecommerce_agent.knowledge_engine.runtime_bridge import import_to_runtime
+
+    settings = make_settings(tmp_path)
+    # 全局词条（02_clean 语义：platform 层 general）——先建 service 导入，再起 app
+    service = AgentService(settings)
+    import_to_runtime(
+        [KnowledgeItem(
+            id="WIKI-GLOBAL-1", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+            compiled_truth="平台通用规则答案",
+            attributes={"question": "平台规则", "layer": "platform"},
+        )],
+        service.knowledge,
+        tenant_id=None,
+    )
+    service.close()
+    del service
+
+    app = create_app(settings)
+    admin_headers = {"X-Admin-Id": "admin-test", "X-Admin-Key": "test-admin-key-123456"}
+    with TestClient(app) as client:
+        # 租户 A admin 编辑全局词条（影子编辑）
+        resp = client.put(
+            "/v1/wiki/items/WIKI-GLOBAL-1",
+            headers=admin_headers,
+            json={"answer": "租户A定制的规则答案"},
+        )
+        assert resp.status_code == 200, resp.text
+        created = resp.json()["created"]
+        created_id = created["id"]
+
+        # 影子版本必须落在编辑租户名下（而非全局 NULL）
+        with app.state.agent.db.connect() as conn:
+            shadow_row = conn.execute(
+                "SELECT tenant_id FROM knowledge WHERE id=?", (created_id,)
+            ).fetchone()
+        assert shadow_row is not None and shadow_row["tenant_id"] == settings.bootstrap_tenant_id, (
+            "影子版本应落在编辑租户名下"
+        )
+
+        # 走完整生命周期（evaluate → approve）——approve 不得退休全局行
+        mgmt = app.state.agent.knowledge_management
+        evaluated = mgmt.evaluate(
+            settings.bootstrap_tenant_id, created_id,
+            KnowledgeTransitionRequest(expected_record_version=1), "admin-a",
+        )
+        mgmt.approve(
+            settings.bootstrap_tenant_id, created_id,
+            KnowledgeTransitionRequest(expected_record_version=evaluated["record_version"]),
+            "admin-a",
+        )
+
+        # 全局行必须仍为 active
+        with app.state.agent.db.connect() as conn:
+            global_row = conn.execute(
+                "SELECT status FROM knowledge WHERE knowledge_key='kg-WIKI-GLOBAL-1' AND tenant_id IS NULL"
+            ).fetchone()
+        assert global_row is not None and global_row["status"] == "active", "影子编辑不得退休全局行"
+
+        # 租户 A（bootstrap）检索优先见影子版
+        hits_a = app.state.agent.knowledge.retrieve(
+            "平台规则", top_k=3, min_score=0.05, tenant_id=settings.bootstrap_tenant_id
+        )
+        assert any(h["answer"] == "租户A定制的规则答案" for h in hits_a), "A 应优先见影子版"
+
+        # 租户 B 仍见全局版
+        hits_b = app.state.agent.knowledge.retrieve(
+            "平台规则", top_k=3, min_score=0.05, tenant_id="tenant-b"
+        )
+        assert any(h["answer"] == "平台通用规则答案" for h in hits_b), "B 应仍见全局版"
+        assert all(h["answer"] != "租户A定制的规则答案" for h in hits_b), "影子版不得泄漏给 B"
+
+
+# ---------- V1：Wiki 详情/stats 租户视角（复审修复） ----------
+
+def test_wiki_detail_and_stats_tenant_scoped(tmp_path) -> None:
+    """V1 回归锁：GET /v1/wiki/items/{id} 与 /v1/wiki/stats 按 admin 租户视角——
+    bootstrap 租户的影子编辑内容不得被其他租户 admin 读到。"""
+    from fastapi.testclient import TestClient
+
+    from ecommerce_agent.api import create_app
+    from ecommerce_agent.knowledge_engine.runtime_bridge import import_to_runtime
+
+    settings = make_settings(tmp_path)
+    tenant_a = settings.bootstrap_tenant_id
+    service = AgentService(settings)
+    import_to_runtime(
+        [KnowledgeItem(
+            id="WIKI-V1", kind=KnowledgeKind.RULE, scope=KnowledgeScope.GENERAL,
+            compiled_truth="V1全局答案",
+            attributes={"question": "V1问题", "layer": "platform"},
+        )],
+        service.knowledge,
+        tenant_id=None,
+    )
+    # 租户 A 影子编辑（直接建私有行模拟 approve 后状态）
+    service.knowledge.add_document(
+        category="行业规则", intent="rule", question="V1问题",
+        answer="V1租户A影子答案", keywords="", risk_level="low", source="wiki://manual",
+        status="active", review_status="approved",
+        tenant_id=tenant_a, knowledge_key="kg-WIKI-V1", layer="platform", store_id=None,
+    )
+    service.close()
+    del service
+
+    app = create_app(settings)
+    headers_a = {"X-Admin-Id": "admin-test", "X-Admin-Key": "test-admin-key-123456"}
+    # 租户 B admin：另一个 admin 身份（需要先建 operator）
+    service2 = app.state.agent
+    service2.auth.create_admin_operator(
+        tenant_id="tenant-b",
+        request=__import__("ecommerce_agent.auth", fromlist=["AdminOperatorCreateRequest"]).AdminOperatorCreateRequest(
+            admin_id="admin-b", name="B 租户管理员", key="b-admin-key-1234567890123456"
+        ),
+        actor="admin-test",
+    )
+    headers_b = {"X-Admin-Id": "admin-b", "X-Admin-Key": "b-admin-key-1234567890123456"}
+
+    with TestClient(app) as client:
+        # 租户 B 看详情：只能见全局版，不得见 A 的影子答案
+        detail_b = client.get("/v1/wiki/items/WIKI-V1", headers=headers_b)
+        assert detail_b.status_code == 200
+        assert detail_b.json()["compiled_truth"] == "V1全局答案", (
+            "B 的详情不得泄漏 A 的影子答案"
+        )
+
+        # 租户 A 看详情：可见自己的影子版
+        detail_a = client.get("/v1/wiki/items/WIKI-V1", headers=headers_a)
+        assert detail_a.status_code == 200
+        assert detail_a.json()["compiled_truth"] == "V1租户A影子答案", (
+            "A 的详情应见自己的影子版"
+        )
+
+        # stats 也应随租户视角（B 看不到 A 的私有词条计数差异——至少不抛错且结构一致）
+        stats_b = client.get("/v1/wiki/stats", headers=headers_b)
+        assert stats_b.status_code == 200
+        stats_a = client.get("/v1/wiki/stats", headers=headers_a)
+        assert stats_a.status_code == 200
+        assert set(stats_b.json().keys()) == set(stats_a.json().keys())

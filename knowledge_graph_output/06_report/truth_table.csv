@@ -1,0 +1,204 @@
+doc_id,entity_key,entity_type,relation_key,relation_type,expected_value
+fixture,QC-SPU-AF5,Product(SPU),,,SPU QC-SPU-AF5（晴川空气炸锅 5L 云白款，价格 499.00）
+fixture,QC-SPU-VC1,Product(SPU),,,SPU QC-SPU-VC1（晴川无线吸尘器 A1，价格 899.00）
+fixture,QC-SPU-HM3,Product(SPU),,,SPU QC-SPU-HM3（晴川静音加湿器 3L，价格 239.00）
+fixture,QC-SPU-KT17,Product(SPU),,,SPU QC-SPU-KT17（晴川恒温电热水壶 1.7L，价格 159.00）
+fixture,QC-SPU-FN1,Product(SPU),,,SPU QC-SPU-FN1（晴川循环净化风扇 D1，价格 699.00）
+manual,X-SPU-M1,Product(SPU),,,SPU X-SPU-M1（星脉蓝牙耳机 X-M1 云白色，价格 299.00）
+manual,X-SPU-P2,Product(SPU),,,SPU X-SPU-P2（星脉充电宝 X-P2 10000mAh 黑色，价格 129.00）
+manual,Y-SPU-D01,Product(SPU),,,SPU Y-SPU-D01（云织羽绒服 Y-D01 黑色 S 码，价格 599.00）
+network,SPU-AFR-01,Product(SPU),,,SPU SPU-AFR-01（格兰仕 Galanz KZ40-108，价格 329.00）
+network,SPU-AFR-02,Product(SPU),,,SPU SPU-AFR-02（美的 Midea KZ25E101，价格 249.00）
+network,SPU-VAC-01,Product(SPU),,,SPU SPU-VAC-01（戴森 Dyson V15 Detect Fluffy，价格 3490.00）
+network,SPU-VAC-02,Product(SPU),,,SPU SPU-VAC-02（德尔玛 Deerma DX700，价格 299.00）
+network,SPU-HUM-01,Product(SPU),,,SPU SPU-HUM-01（德尔玛 Deerma F628S，价格 169.00）
+network,SPU-HUM-02,Product(SPU),,,SPU SPU-HUM-02（小熊 Bear JSQ-C30Q1，价格 129.00）
+network,SPU-KET-01,Product(SPU),,,SPU SPU-KET-01（苏泊尔 SUPOR SW-17J63B，价格 159.00）
+network,SPU-KET-02,Product(SPU),,,SPU SPU-KET-02（美的 Midea MK-SH15Colour102，价格 79.00）
+network,SPU-FAN-01,Product(SPU),,,SPU SPU-FAN-01（格力 GREE FXDZ-2307Bg5，价格 499.00）
+network,SPU-FAN-02,Product(SPU),,,SPU SPU-FAN-02（美的 Midea SAC35CR，价格 199.00）
+network,SPU-AUD-01,Product(SPU),,,SPU SPU-AUD-01（捷波朗 Jabra Elite 7 Active，价格 1299.00）
+network,SPU-AUD-02,Product(SPU),,,SPU SPU-AUD-02（QCY QCY H3，价格 299.00）
+network,SPU-PWR-01,Product(SPU),,,SPU SPU-PWR-01（小米 Xiaomi 移动电源 3 20000mAh，价格 129.00）
+network,SPU-PWR-02,Product(SPU),,,SPU SPU-PWR-02（罗马仕 ROMOSS 10000mAh 22.5W，价格 59.00）
+network,SPU-APP-01,Product(SPU),,,SPU SPU-APP-01（雪中飞 雪中飞 XZF2155，价格 499.00）
+network,SPU-APP-02,Product(SPU),,,SPU SPU-APP-02（茵曼 茵曼 INMAN W2302，价格 499.00）
+fixture,QC-AF5-WHITE,SKU,,,SKU QC-AF5-WHITE（归属 QC-SPU-AF5，品类 空气炸锅）
+fixture,QC-AF5-GREEN,SKU,,,SKU QC-AF5-GREEN（归属 QC-SPU-AF5，品类 空气炸锅）
+fixture,QC-VC-A1,SKU,,,SKU QC-VC-A1（归属 QC-SPU-VC1，品类 无线吸尘器）
+fixture,QC-HM-3L,SKU,,,SKU QC-HM-3L（归属 QC-SPU-HM3，品类 加湿器）
+fixture,QC-KT-17,SKU,,,SKU QC-KT-17（归属 QC-SPU-KT17，品类 电热水壶）
+fixture,QC-FN-D1,SKU,,,SKU QC-FN-D1（归属 QC-SPU-FN1，品类 循环风扇）
+manual,X-M1-WHITE,SKU,,,SKU X-M1-WHITE（归属 X-SPU-M1，品类 数码音频）
+manual,X-M1-BLACK,SKU,,,SKU X-M1-BLACK（归属 X-SPU-M1，品类 数码音频）
+manual,X-P2-BLACK,SKU,,,SKU X-P2-BLACK（归属 X-SPU-P2，品类 数码电源）
+manual,Y-D01-S,SKU,,,SKU Y-D01-S（归属 Y-SPU-D01，品类 服饰）
+manual,Y-D01-M,SKU,,,SKU Y-D01-M（归属 Y-SPU-D01，品类 服饰）
+manual,Y-D01-L,SKU,,,SKU Y-D01-L（归属 Y-SPU-D01，品类 服饰）
+network,REAL-AFR-01,SKU,,,SKU REAL-AFR-01（归属 SPU-AFR-01，品类 空气炸锅）
+network,REAL-AFR-02,SKU,,,SKU REAL-AFR-02（归属 SPU-AFR-02，品类 空气炸锅）
+network,REAL-VAC-01,SKU,,,SKU REAL-VAC-01（归属 SPU-VAC-01，品类 吸尘器）
+network,REAL-VAC-02,SKU,,,SKU REAL-VAC-02（归属 SPU-VAC-02，品类 吸尘器）
+network,REAL-HUM-01,SKU,,,SKU REAL-HUM-01（归属 SPU-HUM-01，品类 加湿器）
+network,REAL-HUM-02,SKU,,,SKU REAL-HUM-02（归属 SPU-HUM-02，品类 加湿器）
+network,REAL-KET-01,SKU,,,SKU REAL-KET-01（归属 SPU-KET-01，品类 电水壶）
+network,REAL-KET-02,SKU,,,SKU REAL-KET-02（归属 SPU-KET-02，品类 电水壶）
+network,REAL-FAN-01,SKU,,,SKU REAL-FAN-01（归属 SPU-FAN-01，品类 循环风扇）
+network,REAL-FAN-02,SKU,,,SKU REAL-FAN-02（归属 SPU-FAN-02，品类 循环风扇）
+network,REAL-AUD-01,SKU,,,SKU REAL-AUD-01（归属 SPU-AUD-01，品类 蓝牙耳机）
+network,REAL-AUD-02,SKU,,,SKU REAL-AUD-02（归属 SPU-AUD-02，品类 蓝牙耳机）
+network,REAL-PWR-01,SKU,,,SKU REAL-PWR-01（归属 SPU-PWR-01，品类 移动电源）
+network,REAL-PWR-02,SKU,,,SKU REAL-PWR-02（归属 SPU-PWR-02，品类 移动电源）
+network,REAL-APP-01,SKU,,,SKU REAL-APP-01（归属 SPU-APP-01，品类 羽绒服）
+network,REAL-APP-02,SKU,,,SKU REAL-APP-02（归属 SPU-APP-02，品类 羽绒服）
+catalog,home_appliance,Category,,,品类 home_appliance（小家电，父级 无）
+catalog,air_fryer,Category,,,品类 air_fryer（空气炸锅，父级 home_appliance）
+catalog,cordless_vacuum,Category,,,品类 cordless_vacuum（无线吸尘器，父级 home_appliance）
+catalog,humidifier,Category,,,品类 humidifier（加湿器，父级 home_appliance）
+catalog,electric_kettle,Category,,,品类 electric_kettle（电热水壶，父级 home_appliance）
+catalog,air_circulation_fan,Category,,,品类 air_circulation_fan（循环风扇，父级 home_appliance）
+catalog,digital,Category,,,品类 digital（数码，父级 无）
+catalog,digital_audio,Category,,,品类 digital_audio（数码音频，父级 digital）
+catalog,digital_power,Category,,,品类 digital_power（数码电源，父级 digital）
+catalog,apparel,Category,,,品类 apparel（服饰，父级 无）
+fixture,WARR-94d58a5b,Policy,,,政策 WARR-94d58a5b（warranty，12个月整机保修）
+fixture,WARR-00ca880e,Policy,,,政策 WARR-00ca880e（warranty，24个月整机保修）
+network,RETURN-38e401d2,Policy,,,政策 RETURN-38e401d2（return，七天无理由退货）
+network,PRICE-cf259e1c,Policy,,,政策 PRICE-cf259e1c（price_protection，价格保护（分场景））
+network,WARR-1a256956,Policy,,,政策 WARR-1a256956（warranty，小家电整机保修1年）
+network,RETURN-9d637afd,Policy,,,政策 RETURN-9d637afd（return，数码商品退换货）
+network,RETURN-2d243e76,Policy,,,政策 RETURN-2d243e76（return，服饰鞋帽退换货）
+network,LOGISTICS-70a98f4b,Policy,,,政策 LOGISTICS-70a98f4b（logistics，发货时效与延迟赔付）
+manual,WARR-b17b433a,Policy,,,政策 WARR-b17b433a（warranty，数码产品整机保修1年）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-001,FAQ,,,FAQ FAQ-SCRIPT-001（你好）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-002,FAQ,,,FAQ FAQ-SCRIPT-002（这个商品有什么功能）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-003,FAQ,,,FAQ FAQ-SCRIPT-003（这是什么材质）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-004,FAQ,,,FAQ FAQ-SCRIPT-004（尺码怎么选）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-005,FAQ,,,FAQ FAQ-SCRIPT-005（实物有色差吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-006,FAQ,,,FAQ FAQ-SCRIPT-006（这个能适配吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-007,FAQ,,,FAQ FAQ-SCRIPT-007（是正品吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-008,FAQ,,,FAQ FAQ-SCRIPT-008（保质期多久）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-009,FAQ,,,FAQ FAQ-SCRIPT-009（怎么清洗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-010,FAQ,,,FAQ FAQ-SCRIPT-010（保修多久）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-011,FAQ,,,FAQ FAQ-SCRIPT-011（现在有货吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-012,FAQ,,,FAQ FAQ-SCRIPT-012（什么时候补货）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-013,FAQ,,,FAQ FAQ-SCRIPT-013（实际多少钱）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-014,FAQ,,,FAQ FAQ-SCRIPT-014（最近有什么活动）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-015,FAQ,,,FAQ FAQ-SCRIPT-015（优惠券怎么领）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-016,FAQ,,,FAQ FAQ-SCRIPT-016（刚买就降价怎么办）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-017,FAQ,,,FAQ FAQ-SCRIPT-017（直播间为什么更便宜）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-018,FAQ,,,FAQ FAQ-SCRIPT-018（预售什么时候发）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-019,FAQ,,,FAQ FAQ-SCRIPT-019（为什么支付失败）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-020,FAQ,,,FAQ FAQ-SCRIPT-020（可以开发票吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-021,FAQ,,,FAQ FAQ-SCRIPT-021（我的订单怎么样了）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-022,FAQ,,,FAQ FAQ-SCRIPT-022（怎么取消订单）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-023,FAQ,,,FAQ FAQ-SCRIPT-023（收货地址写错了）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-024,FAQ,,,FAQ FAQ-SCRIPT-024（什么时候发货）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-025,FAQ,,,FAQ FAQ-SCRIPT-025（能加急发货吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-026,FAQ,,,FAQ FAQ-SCRIPT-026（发什么快递）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-027,FAQ,,,FAQ FAQ-SCRIPT-027（偏远地区能发吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-028,FAQ,,,FAQ FAQ-SCRIPT-028（快递到哪里了）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-029,FAQ,,,FAQ FAQ-SCRIPT-029（快递怎么还没到）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-030,FAQ,,,FAQ FAQ-SCRIPT-030（包裹丢了怎么办）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-031,FAQ,,,FAQ FAQ-SCRIPT-031（显示签收但没收到）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-032,FAQ,,,FAQ FAQ-SCRIPT-032（支持七天无理由吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-033,FAQ,,,FAQ FAQ-SCRIPT-033（拆封了还能退吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-034,FAQ,,,FAQ FAQ-SCRIPT-034（退货运费谁出）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-035,FAQ,,,FAQ FAQ-SCRIPT-035（可以换个尺码吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-036,FAQ,,,FAQ FAQ-SCRIPT-036（退款多久到账）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-037,FAQ,,,FAQ FAQ-SCRIPT-037（怎么申请退款）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-038,FAQ,,,FAQ FAQ-SCRIPT-038（少发了一件）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-039,FAQ,,,FAQ FAQ-SCRIPT-039（商品有质量问题）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-040,FAQ,,,FAQ FAQ-SCRIPT-040（售后要提供什么证据）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-041,FAQ,,,FAQ FAQ-SCRIPT-041（你们要怎么赔）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-042,FAQ,,,FAQ FAQ-SCRIPT-042（我要投诉）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-043,FAQ,,,FAQ FAQ-SCRIPT-043（转人工）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-044,FAQ,,,FAQ FAQ-SCRIPT-044（需要提供身份证吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-045,FAQ,,,FAQ FAQ-SCRIPT-045（客服让我发验证码）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-046,FAQ,,,FAQ FAQ-SCRIPT-046（能加微信处理吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-047,FAQ,,,FAQ FAQ-SCRIPT-047（好评返现吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-048,FAQ,,,FAQ FAQ-SCRIPT-048（下单有赠品吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-049,FAQ,,,FAQ FAQ-SCRIPT-049（包安装吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-050,FAQ,,,FAQ FAQ-SCRIPT-050（可以定制吗）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-051,FAQ,,,FAQ FAQ-SCRIPT-051（客服几点上班）
+builtin:ecommerce-sop-v1,FAQ-SCRIPT-052,FAQ,,,FAQ FAQ-SCRIPT-052（告诉我竞品真实销量）
+fixture,FAQ-SEED-ca01,FAQ,,,FAQ FAQ-SEED-ca01（晴川空气炸锅保修多久？）
+fixture,FAQ-SEED-ed51,FAQ,,,FAQ FAQ-SEED-ed51（订单物流异常怎么办？）
+fixture,FAQ-SEED-028a,FAQ,,,FAQ FAQ-SEED-028a（商品降价可以申请价保吗？）
+fixture,FAQ-SEED-3070,FAQ,,,FAQ FAQ-SEED-3070（未拆封商品如何退货？）
+manual,FAQ-MANUAL-5584,FAQ,,,FAQ FAQ-MANUAL-5584（星脉蓝牙耳机保修多久？）
+manual,FAQ-MANUAL-8fbb,FAQ,,,FAQ FAQ-MANUAL-8fbb（数码产品激活后还能退货吗？）
+manual,FAQ-MANUAL-a72c,FAQ,,,FAQ FAQ-MANUAL-a72c（羽绒服吊牌剪了还能退吗？）
+manual,FAQ-MANUAL-51a5,FAQ,,,FAQ FAQ-MANUAL-51a5（云织羽绒服充绒量是多少？）
+manual,FAQ-MANUAL-RETURN-HOW,FAQ,,,FAQ FAQ-MANUAL-RETURN-HOW（怎么退货？）
+manual,FAQ-MANUAL-SHIPPING-TIME,FAQ,,,FAQ FAQ-MANUAL-SHIPPING-TIME（多久发货？）
+manual,FAQ-MANUAL-LOGISTICS-COMPLAINT,FAQ,,,FAQ FAQ-MANUAL-LOGISTICS-COMPLAINT（物流投诉怎么处理？）
+builtin:ecommerce-sop-v1,SCRIPT-001,Script,,,话术 SCRIPT-001（接待）
+builtin:ecommerce-sop-v1,SCRIPT-002,Script,,,话术 SCRIPT-002（商品）
+builtin:ecommerce-sop-v1,SCRIPT-003,Script,,,话术 SCRIPT-003（商品）
+builtin:ecommerce-sop-v1,SCRIPT-004,Script,,,话术 SCRIPT-004（商品）
+builtin:ecommerce-sop-v1,SCRIPT-005,Script,,,话术 SCRIPT-005（商品）
+builtin:ecommerce-sop-v1,SCRIPT-006,Script,,,话术 SCRIPT-006（商品）
+builtin:ecommerce-sop-v1,SCRIPT-007,Script,,,话术 SCRIPT-007（商品）
+builtin:ecommerce-sop-v1,SCRIPT-008,Script,,,话术 SCRIPT-008（商品）
+builtin:ecommerce-sop-v1,SCRIPT-009,Script,,,话术 SCRIPT-009（商品）
+builtin:ecommerce-sop-v1,SCRIPT-010,Script,,,话术 SCRIPT-010（商品）
+builtin:ecommerce-sop-v1,SCRIPT-011,Script,,,话术 SCRIPT-011（库存）
+builtin:ecommerce-sop-v1,SCRIPT-012,Script,,,话术 SCRIPT-012（库存）
+builtin:ecommerce-sop-v1,SCRIPT-013,Script,,,话术 SCRIPT-013（价格）
+builtin:ecommerce-sop-v1,SCRIPT-014,Script,,,话术 SCRIPT-014（活动）
+builtin:ecommerce-sop-v1,SCRIPT-015,Script,,,话术 SCRIPT-015（活动）
+builtin:ecommerce-sop-v1,SCRIPT-016,Script,,,话术 SCRIPT-016（活动）
+builtin:ecommerce-sop-v1,SCRIPT-017,Script,,,话术 SCRIPT-017（活动）
+builtin:ecommerce-sop-v1,SCRIPT-018,Script,,,话术 SCRIPT-018（预售）
+builtin:ecommerce-sop-v1,SCRIPT-019,Script,,,话术 SCRIPT-019（支付）
+builtin:ecommerce-sop-v1,SCRIPT-020,Script,,,话术 SCRIPT-020（发票）
+builtin:ecommerce-sop-v1,SCRIPT-021,Script,,,话术 SCRIPT-021（订单）
+builtin:ecommerce-sop-v1,SCRIPT-022,Script,,,话术 SCRIPT-022（订单）
+builtin:ecommerce-sop-v1,SCRIPT-023,Script,,,话术 SCRIPT-023（订单）
+builtin:ecommerce-sop-v1,SCRIPT-024,Script,,,话术 SCRIPT-024（发货）
+builtin:ecommerce-sop-v1,SCRIPT-025,Script,,,话术 SCRIPT-025（发货）
+builtin:ecommerce-sop-v1,SCRIPT-026,Script,,,话术 SCRIPT-026（发货）
+builtin:ecommerce-sop-v1,SCRIPT-027,Script,,,话术 SCRIPT-027（发货）
+builtin:ecommerce-sop-v1,SCRIPT-028,Script,,,话术 SCRIPT-028（物流）
+builtin:ecommerce-sop-v1,SCRIPT-029,Script,,,话术 SCRIPT-029（物流）
+builtin:ecommerce-sop-v1,SCRIPT-030,Script,,,话术 SCRIPT-030（物流）
+builtin:ecommerce-sop-v1,SCRIPT-031,Script,,,话术 SCRIPT-031（物流）
+builtin:ecommerce-sop-v1,SCRIPT-032,Script,,,话术 SCRIPT-032（售后）
+builtin:ecommerce-sop-v1,SCRIPT-033,Script,,,话术 SCRIPT-033（售后）
+builtin:ecommerce-sop-v1,SCRIPT-034,Script,,,话术 SCRIPT-034（售后）
+builtin:ecommerce-sop-v1,SCRIPT-035,Script,,,话术 SCRIPT-035（售后）
+builtin:ecommerce-sop-v1,SCRIPT-036,Script,,,话术 SCRIPT-036（退款）
+builtin:ecommerce-sop-v1,SCRIPT-037,Script,,,话术 SCRIPT-037（退款）
+builtin:ecommerce-sop-v1,SCRIPT-038,Script,,,话术 SCRIPT-038（售后）
+builtin:ecommerce-sop-v1,SCRIPT-039,Script,,,话术 SCRIPT-039（售后）
+builtin:ecommerce-sop-v1,SCRIPT-040,Script,,,话术 SCRIPT-040（售后）
+builtin:ecommerce-sop-v1,SCRIPT-041,Script,,,话术 SCRIPT-041（赔付）
+builtin:ecommerce-sop-v1,SCRIPT-042,Script,,,话术 SCRIPT-042（投诉）
+builtin:ecommerce-sop-v1,SCRIPT-043,Script,,,话术 SCRIPT-043（人工）
+builtin:ecommerce-sop-v1,SCRIPT-044,Script,,,话术 SCRIPT-044（隐私）
+builtin:ecommerce-sop-v1,SCRIPT-045,Script,,,话术 SCRIPT-045（安全）
+builtin:ecommerce-sop-v1,SCRIPT-046,Script,,,话术 SCRIPT-046（安全）
+builtin:ecommerce-sop-v1,SCRIPT-047,Script,,,话术 SCRIPT-047（评价）
+builtin:ecommerce-sop-v1,SCRIPT-048,Script,,,话术 SCRIPT-048（赠品）
+builtin:ecommerce-sop-v1,SCRIPT-049,Script,,,话术 SCRIPT-049（安装）
+builtin:ecommerce-sop-v1,SCRIPT-050,Script,,,话术 SCRIPT-050（定制）
+builtin:ecommerce-sop-v1,SCRIPT-051,Script,,,话术 SCRIPT-051（服务）
+builtin:ecommerce-sop-v1,SCRIPT-052,Script,,,话术 SCRIPT-052（边界）
+network,RULE-TAOBAO-7DAYS,Rule,,,规则 RULE-TAOBAO-7DAYS（淘宝七天无理由退货规范）
+network,RULE-NATIONAL-3BAO,Rule,,,规则 RULE-NATIONAL-3BAO（部分商品修理更换退货责任规定（三包））
+network,RULE-CONSUMER-25,Rule,,,规则 RULE-CONSUMER-25（消费者权益保护法/七日无理由退货）
+network,RULE-PRICE-PROTECT,Rule,,,规则 RULE-PRICE-PROTECT（淘宝价格保护规则）
+network,RULE-SHIPPING-TIMELINESS,Rule,,,规则 RULE-SHIPPING-TIMELINESS（电商平台发货时效与延迟发货规则）
+network,RULE-CCC-DIRECTORY,Rule,,,规则 RULE-CCC-DIRECTORY（强制性产品认证（3C）目录）
+network,RULE-SMALL-APPLIANCE-WARRANTY,Rule,,,规则 RULE-SMALL-APPLIANCE-WARRANTY（小家电保修政策）
+network,RULE-DIGITAL-RETURN,Rule,,,规则 RULE-DIGITAL-RETURN（手机数码类商品退换货细则）
+network,RULE-APPAREL-RETURN,Rule,,,规则 RULE-APPAREL-RETURN（服饰鞋帽眼镜类商品退换货细则）
+network,RULE-INVOICE-ISSUE,Rule,,,规则 RULE-INVOICE-ISSUE（电商发票开具规范）
+network,RULE-PRICE-LABELING,Rule,,,规则 RULE-PRICE-LABELING（明码标价和禁止价格欺诈规定）
+network,RULE-ONLINE-TRANSACTION,Rule,,,规则 RULE-ONLINE-TRANSACTION（网络交易监督管理办法（消费者保护条款））
+network,RULE-REFUND-TIMELINESS,Rule,,,规则 RULE-REFUND-TIMELINESS（电商平台退款时效规则）
+network,RULE-LOGISTICS-COMPLAINT,Rule,,,规则 RULE-LOGISTICS-COMPLAINT（快递物流服务投诉处理规定）
+network,RULE-FOOD-SAFETY-ONLINE,Rule,,,规则 RULE-FOOD-SAFETY-ONLINE（网络食品安全违法行为查处办法）
+network,RULE-ELECTRONIC-COMMERCE-LAW,Rule,,,规则 RULE-ELECTRONIC-COMMERCE-LAW（电子商务法（经营者义务核心条款））
+network,RULE-GIFT-QUALITY,Rule,,,规则 RULE-GIFT-QUALITY（赠品促销质量责任规定）

@@ -260,6 +260,7 @@
         <button data-view="marketing">营销投放</button>
         <button data-view="finance">利润对账</button>
         <button data-view="knowledge">知识与 SOP</button>
+        <button data-view="wiki">知识库</button>
         <button data-view="quality">质检 VOC</button>
         <button data-view="evaluations">客服评测</button>
         <button data-view="simulation">场景验收</button>
@@ -528,6 +529,60 @@
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>租户知识版本</h3></div><div class="table-wrap"><table><thead><tr><th>层级</th><th>问题与答案</th><th>范围</th><th>版本</th><th>状态</th><th>操作</th></tr></thead><tbody id="knowledgeRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>SOP 定义</h3></div><div class="table-wrap"><table><thead><tr><th>名称</th><th>意图</th><th>风险</th><th>活动版本</th><th>版本状态</th><th>操作</th></tr></thead><tbody id="sopRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>SOP 运行与人工恢复</h3><span class="muted">审批、不确定态核对和补偿均使用乐观锁</span></div><div class="table-wrap"><table><thead><tr><th>流程</th><th>运行状态</th><th>当前步骤</th><th>尝试</th><th>错误</th><th>操作</th></tr></thead><tbody id="sopRunRows"></tbody></table></div></article>
+        </section>
+
+        <section class="view" id="view-wiki">
+          <div class="section-head"><div><h2>知识库</h2><p>词条浏览、演化历史与搜索（M3 交付物接前端）</p></div><div class="toolbar"><input class="input" id="wikiSearch" placeholder="搜索知识（如：保修/退货）"><button class="button primary" id="wikiSearchBtn">搜索</button><button class="button" id="refreshWiki">刷新</button></div></div>
+          <div class="grid kpis" id="wikiKpis"></div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel">
+              <div class="panel-head"><h3>词条导航</h3><span class="muted">按类型浏览</span></div>
+              <div class="panel-body stack" id="wikiNav"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3 id="wikiListTitle">全部词条</h3><span class="muted" id="wikiListMeta"></span></div>
+              <div class="table-wrap"><table><thead><tr><th>类型</th><th>当前结论</th><th>层级</th><th>状态</th></tr></thead><tbody id="wikiRows"></tbody></table></div>
+              <div class="panel-body" style="display:flex;gap:8px;align-items:center;border-top:1px solid var(--line, #dce1e5)">
+                <button class="button" id="wikiPrevPage">上一页</button>
+                <button class="button" id="wikiNextPage">下一页</button>
+                <span class="muted" id="wikiPageInfo"></span>
+              </div>
+            </article>
+          </div>
+          <article class="panel" style="margin-top:14px" id="wikiDetailPanel">
+            <div class="panel-head"><h3 id="wikiDetailTitle">词条详情</h3><span class="muted" id="wikiDetailMeta"></span></div>
+            <div class="panel-body stack" id="wikiDetail"></div>
+          </article>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>店铺长期记忆</h3><span class="muted">按店铺记录偏好/高频问题/决策（P1-2 接入；检索默认隔离，需显式召回）</span></div>
+            <div class="panel-body stack">
+              <div class="grid two">
+                <div class="stack">
+                  <label class="muted">记录记忆</label>
+                  <input class="input" id="memoryStoreId" placeholder="店铺 ID（如 qinchuan）">
+                  <input class="input" id="memoryFact" placeholder="记忆内容（如：本店退货高峰在周三）">
+                  <select class="input" id="memoryCategory">
+                    <option value="frequent_issue">高频问题</option>
+                    <option value="buyer_preference">买家偏好</option>
+                    <option value="decision_note">决策记录</option>
+                  </select>
+                  <button class="button primary" id="memoryRecordBtn">记录记忆</button>
+                </div>
+                <div class="stack">
+                  <label class="muted">召回记忆</label>
+                  <input class="input" id="memoryQueryStoreId" placeholder="店铺 ID">
+                  <input class="input" id="memoryQuery" placeholder="关键词（空=全部）">
+                  <button class="button" id="memoryRecallBtn">召回</button>
+                  <button class="button" id="memoryRefreshBtn">刷新</button>
+                </div>
+              </div>
+              <div class="table-wrap"><table><thead><tr><th>类别</th><th>记忆内容</th><th>来源</th><th>时间</th><th>操作</th></tr></thead><tbody id="memoryRows"></tbody></table></div>
+            </div>
+          </article>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>图谱视图</h3><span class="muted">D3 力导向图（静态快照，知识更新后需重跑导出）</span></div>
+            <div class="panel-body"><button class="button" id="wikiOpenGraph">在新标签打开图谱</button><span class="muted" id="wikiGraphHint" style="margin-left:10px"></span></div>
+          </article>
         </section>
 
         <section class="view" id="view-quality">
@@ -1609,6 +1664,189 @@
       $('competitiveAsOf').textContent = data.data_as_of ? `数据截至 ${formatTime(data.data_as_of)}` : '';
     }
 
+    // ---------- 知识库（M3：词条浏览/搜索/分页/详情 + 店铺长期记忆 + 图谱视图） ----------
+    let wikiPage = 0;           // 当前页码（0 起）
+    const WIKI_PAGE_SIZE = 50;  // 每页 50 条（分页修复：不再一次拉 200 截断）
+    let wikiKindFilter = null;  // 当前类型筛选
+    let memoryStoreFilter = '';
+
+    async function loadWiki() {
+      const [stats] = await Promise.all([
+        api('/v1/wiki/stats'),
+      ]);
+      renderWikiKpis(stats);
+      renderWikiNav();
+      await fetchWikiPage(0);
+      // 搜索命中切换：不自动改列表，仅提示可点搜索
+      $('wikiSearch').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') doWikiSearch();
+      });
+      $('wikiSearchBtn').addEventListener('click', doWikiSearch);
+      $('refreshWiki').addEventListener('click', () => loadWiki().then(() => toast('知识库已刷新')));
+      $('wikiPrevPage').addEventListener('click', () => { if (wikiPage > 0) fetchWikiPage(wikiPage - 1); });
+      $('wikiNextPage').addEventListener('click', () => fetchWikiPage(wikiPage + 1));
+      $('wikiOpenGraph').addEventListener('click', async () => {
+        // /kg.html 已加 admin 鉴权，浏览器直开会 401；用 fetch(带 header) 取 Blob 再开
+        try {
+          const resp = await fetch('/kg.html', {
+            headers: { 'X-Admin-Id': state.adminId, 'X-Admin-Key': state.adminKey }
+          });
+          if (!resp.ok) throw new Error(`图谱加载失败 (${resp.status})`);
+          const blob = await resp.blob();
+          window.open(URL.createObjectURL(blob), '_blank');
+        } catch (error) {
+          toast(error.message || '图谱加载失败');
+        }
+      });
+      wireMemoryEvents();  // A5：店铺记忆面板事件（每次进知识库视图绑定一次）
+      // 图谱滞后提示：图谱是静态快照，知识与它可能不同步
+      try {
+        const graphStats = await api('/v1/graph/stats');
+        const wikiTotal = stats.total || 0;
+        const graphNodes = graphStats.total_nodes || 0;
+        if (Math.abs(graphNodes - wikiTotal) > 3) {
+          $('wikiGraphHint').textContent = `提示：图谱 ${graphNodes} 节点 vs 知识库 ${wikiTotal} 词条，差异较大，可能需要重跑导出（export_graph.py）`;
+        } else {
+          $('wikiGraphHint').textContent = `图谱 ${graphNodes} 节点，与知识库基本一致`;
+        }
+      } catch (error) {
+        $('wikiGraphHint').textContent = '图谱服务暂不可用（Neo4j 未启动？）——列表/详情不受影响';
+      }
+    }
+
+    function renderWikiKpis(stats) {
+      const kinds = stats.by_kind || {};
+      const total = stats.total || 0;
+      const chips = Object.entries(kinds).map(([k, v]) => `${k}: ${v}`).join(' · ');
+      $('wikiKpis').innerHTML = `<div class="kpi"><span class="label">词条总数</span><span class="value">${total}</span><span class="meta">${chips}</span></div>
+        <div class="kpi"><span class="label">数据来源</span><span class="value">${(stats.by_source && stats.by_source.runtime) || 0}</span><span class="meta">运行时知识（可编辑）</span></div>
+        <div class="kpi"><span class="label">资产层词条</span><span class="value">${(stats.by_source && stats.by_source.asset) || 0}</span><span class="meta">只读资产（02_clean）</span></div>
+        <div class="kpi"><span class="label">编辑通道</span><span class="value">生命周期</span><span class="meta">/v1/admin/knowledge</span></div>`;
+    }
+
+    function renderWikiNav() {
+      const kinds = ['rule', 'policy', 'script', 'faq', 'product', 'category', 'sku', 'attribute'];
+      const labels = { rule: '行业规则', policy: '售后政策', script: '客服话术', faq: '常见问答', product: '商品', category: '品类', sku: 'SKU', attribute: '属性' };
+      $('wikiNav').innerHTML = kinds.map((k) => `<button class="button" data-wiki-kind="${k}">${labels[k] || k}</button>`).join('');
+      document.querySelectorAll('[data-wiki-kind]').forEach((node) => node.addEventListener('click', async () => {
+        const kind = node.dataset.wikiKind;
+        wikiKindFilter = kind;
+        wikiPage = 0;
+        await fetchWikiPage(0, kind);
+      }));
+    }
+
+    async function fetchWikiPage(page, kind) {
+      const kindParam = kind || wikiKindFilter;
+      const url = `/v1/wiki/items?limit=${WIKI_PAGE_SIZE}&offset=${page * WIKI_PAGE_SIZE}${kindParam ? `&kind=${kindParam}` : ''}`;
+      const items = await api(url);
+      const labels = { rule: '行业规则', policy: '售后政策', script: '客服话术', faq: '常见问答', product: '商品', category: '品类', sku: 'SKU', attribute: '属性' };
+      const title = kindParam ? (labels[kindParam] || kindParam) : '全部词条';
+      renderWikiRows(items, title, `第 ${page + 1} 页 · 每页 ${WIKI_PAGE_SIZE} 条 · 当前 ${items.length} 条`);
+      // 分页按钮状态
+      $('wikiPrevPage').disabled = page <= 0;
+      $('wikiNextPage').disabled = items.length < WIKI_PAGE_SIZE;
+    }
+
+    function renderWikiRows(items, title, meta) {
+      $('wikiListTitle').textContent = title;
+      $('wikiListMeta').textContent = meta;
+      const kindLabels = { rule: '行业规则', policy: '售后政策', script: '客服话术', faq: '常见问答', product: '商品', category: '品类', sku: 'SKU', attribute: '属性' };
+      const rows = items.map((item) => `<tr data-wiki-id="${item.id}" style="cursor:pointer"><td>${kindLabels[item.kind] || item.kind}</td><td>${escapeHtml(item.compiled_truth)}</td><td>${escapeHtml(item.scope)}</td><td><span class="status ${item.attributes.status === 'active' ? 'ok' : 'warn'}">${escapeHtml(item.attributes.status || 'active')}</span></td></tr>`).join('');
+      $('wikiRows').innerHTML = rows || '<tr><td colspan="4" class="empty">无词条</td></tr>';
+      document.querySelectorAll('[data-wiki-id]').forEach((node) => node.addEventListener('click', async () => {
+        const id = node.dataset.wikiId;
+        const item = await api(`/v1/wiki/items/${encodeURIComponent(id)}`);
+        renderWikiDetail(item);
+      }));
+    }
+
+    function renderWikiDetail(item) {
+      $('wikiDetailTitle').textContent = item.compiled_truth || item.id;
+      $('wikiDetailMeta').textContent = `${item.id} · ${item.kind} · ${item.scope}${item.scope_key !== 'all' ? ' · ' + item.scope_key : ''} · 来源 ${item.source}`;
+      const attrs = item.attributes || {};
+      const attrRows = Object.entries(attrs).filter(([k]) => !['question', 'answer', 'content', 'canonical_answer', 'content_summary', 'search_text', 'embedding'].includes(k)).map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>`).join('');
+      const timeline = (item.timeline || []).map((e) => `<div class="activity"><span class="dot"></span><div><span class="mono">${escapeHtml(e.at)}</span> <strong>${escapeHtml(e.action)}</strong>${e.note ? ' — ' + escapeHtml(e.note) : ''}${e.source ? ' <span class="muted">(' + escapeHtml(e.source) + ')</span>' : ''}</div></div>`).join('') || '<span class="muted">只读资产，无演化历史</span>';
+      $('wikiDetail').innerHTML = `
+        <div><h3 style="margin:0 0 6px">当前结论</h3><p style="margin:0;line-height:1.7">${escapeHtml(item.compiled_truth)}</p></div>
+        <div><h3 style="margin:0 0 6px">属性</h3><div class="table-wrap"><table><thead><tr><th>字段</th><th>值</th></tr></thead><tbody>${attrRows || '<tr><td colspan="2" class="empty">无属性</td></tr>'}</tbody></table></div></div>
+        <div><h3 style="margin:0 0 6px">演化历史</h3>${timeline}</div>`;
+      $('wikiDetailPanel').style.display = '';
+    }
+
+    async function doWikiSearch() {
+      const q = $('wikiSearch').value.trim();
+      if (!q) return;
+      try {
+        // 双通道搜索：运行时知识表（编辑即时可搜）+ 资产层实体类，不依赖 Neo4j
+        const results = await api(`/v1/wiki/search?q=${encodeURIComponent(q)}&limit=20`);
+        const kindLabels = { rule: '行业规则', policy: '售后政策', script: '客服话术', faq: '常见问答', product: '商品', category: '品类', sku: 'SKU', attribute: '属性' };
+        const rows = results.map((r) => `<tr data-wiki-search-id="${r.id}" style="cursor:pointer"><td>${escapeHtml(kindLabels[r.kind] || r.kind || r.category || '')}</td><td>${escapeHtml(r.compiled_truth || r.id)}</td></tr>`).join('');
+        $('wikiListTitle').textContent = `搜索「${q}」`;
+        $('wikiListMeta').textContent = `${results.length} 条（运行时知识表）`;
+        $('wikiRows').innerHTML = rows || '<tr><td colspan="4" class="empty">无结果（试试其他关键词）</td></tr>';
+        document.querySelectorAll('[data-wiki-search-id]').forEach((node) => node.addEventListener('click', async () => {
+          const id = node.dataset.wikiSearchId;
+          const item = await api(`/v1/wiki/items/${encodeURIComponent(id)}`);
+          renderWikiDetail(item);
+        }));
+      } catch (error) {
+        toast('知识搜索暂不可用：' + error.message);
+      }
+    }
+
+    async function loadMemory() {
+      const storeId = $('memoryQueryStoreId').value.trim() || memoryStoreFilter;
+      if (!storeId) return;
+      try {
+        const result = await api(`/v1/admin/knowledge/memory?store_id=${encodeURIComponent(storeId)}&limit=50`);
+        const categoryLabels = { buyer_preference: '买家偏好', frequent_issue: '高频问题', decision_note: '决策记录' };
+        const rows = (result.items || []).map((m) => {
+          const cat = (m.category || '').replace('记忆·', '');
+          const catLabel = categoryLabels[m.intent && m.intent.replace('memory-', '')] || cat;
+          return `<tr data-memory-id="${m.id}"><td>${escapeHtml(catLabel)}</td><td>${escapeHtml(m.answer)}</td><td>${escapeHtml(m.source || '')}</td><td>${escapeHtml((m.created_at || '').slice(0, 16))}</td><td><button class="button danger" data-memory-delete="${m.id}">删除</button></td></tr>`;
+        }).join('');
+        $('memoryRows').innerHTML = rows || '<tr><td colspan="5" class="empty">该店铺暂无记忆（先在上方记录）</td></tr>';
+        document.querySelectorAll('[data-memory-delete]').forEach((node) => node.addEventListener('click', async () => {
+          if (!confirm('确定删除这条记忆？')) return;
+          try {
+            await api(`/v1/admin/knowledge/memory/${encodeURIComponent(node.dataset.memoryDelete)}`, { method: 'DELETE' });
+            toast('记忆已删除');
+            await loadMemory();
+          } catch (error) { toast(error.message); }
+        }));
+      } catch (error) {
+        $('memoryRows').innerHTML = `<tr><td colspan="5" class="empty">记忆加载失败：${escapeHtml(error.message)}</td></tr>`;
+      }
+    }
+
+    function wireMemoryEvents() {
+      $('memoryRecordBtn').addEventListener('click', async () => {
+        const storeId = $('memoryStoreId').value.trim();
+        const fact = $('memoryFact').value.trim();
+        if (!storeId || !fact) return toast('店铺 ID 和记忆内容必填');
+        try {
+          const result = await api('/v1/admin/knowledge/memory', {
+            method: 'POST',
+            body: JSON.stringify({ store_id: storeId, fact, category: $('memoryCategory').value })
+          });
+          toast(`记忆已记录（${result.memory_id}）`);
+          $('memoryFact').value = '';
+          memoryStoreFilter = storeId;
+          $('memoryQueryStoreId').value = storeId;
+          await loadMemory();
+        } catch (error) { toast(error.message); }
+      });
+      $('memoryRecallBtn').addEventListener('click', async () => {
+        memoryStoreFilter = $('memoryQueryStoreId').value.trim();
+        if (memoryStoreFilter) await loadMemory();
+      });
+      $('memoryRefreshBtn').addEventListener('click', async () => {
+        memoryStoreFilter = $('memoryQueryStoreId').value.trim();
+        if (memoryStoreFilter) await loadMemory();
+      });
+    }
+
     async function loadGovernance() {
       const [knowledge, definitions, sopRuns] = await Promise.all([
         api('/v1/admin/knowledge?limit=200'),
@@ -2311,6 +2549,7 @@
       if (view === 'marketing') return loadMarketing();
       if (view === 'finance') return loadFinance();
       if (view === 'knowledge') return loadGovernance();
+      if (view === 'wiki') return loadWiki();
       if (view === 'quality') return loadQuality();
       if (view === 'evaluations') return loadEvaluations();
       if (view === 'simulation') return loadSimulation();

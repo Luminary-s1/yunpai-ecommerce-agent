@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class RetrievedDocument(TypedDict):
     id: str
+    knowledge_key: str
     category: str
     intent: str
     question: str
@@ -18,6 +19,9 @@ class RetrievedDocument(TypedDict):
     layer: str
     store_id: str | None
     sku_id: str | None
+    # ① 多租户：检索行租户维度（排序 tiebreak：本租户行优先于全局行，
+    # 保证租户影子编辑生效；NULL=全局行）
+    tenant_id: str | None
 
 
 class AgentState(TypedDict, total=False):

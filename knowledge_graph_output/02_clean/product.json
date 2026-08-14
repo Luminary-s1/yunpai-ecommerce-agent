@@ -1,0 +1,919 @@
+[
+  {
+    "item_id": "QC-SPU-AF5",
+    "sku_id": "QC-AF5-WHITE",
+    "title": "晴川空气炸锅 5L 云白款",
+    "model": "AF5",
+    "status": "active",
+    "sale_price": "499.00",
+    "warranty_months": 12,
+    "category": "air_fryer",
+    "category_name": "空气炸锅",
+    "spu_attributes": {
+      "brand": "晴川",
+      "model": "AF5",
+      "warranty_months": 12
+    },
+    "sku_attributes": {
+      "capacity_l": 5,
+      "color": "云白"
+    },
+    "selling_points": [
+      "5L 大容量",
+      "一键预设菜单",
+      "可视化烹饪窗口",
+      "易清洗"
+    ],
+    "source": "fixture"
+  },
+  {
+    "item_id": "QC-SPU-AF5",
+    "sku_id": "QC-AF5-GREEN",
+    "title": "晴川空气炸锅 5L 松绿色",
+    "model": "AF5",
+    "status": "active",
+    "sale_price": "529.00",
+    "warranty_months": 12,
+    "category": "air_fryer",
+    "category_name": "空气炸锅",
+    "spu_attributes": {
+      "brand": "晴川",
+      "model": "AF5",
+      "warranty_months": 12
+    },
+    "sku_attributes": {
+      "capacity_l": 5,
+      "color": "松绿"
+    },
+    "selling_points": [
+      "5L 大容量",
+      "一键预设菜单",
+      "可视化烹饪窗口",
+      "易清洗"
+    ],
+    "source": "fixture"
+  },
+  {
+    "item_id": "QC-SPU-VC1",
+    "sku_id": "QC-VC-A1",
+    "title": "晴川无线吸尘器 A1",
+    "model": "VC-A1",
+    "status": "active",
+    "sale_price": "899.00",
+    "warranty_months": 24,
+    "category": "cordless_vacuum",
+    "category_name": "无线吸尘器",
+    "spu_attributes": {
+      "brand": "晴川",
+      "model": "VC-A1",
+      "warranty_months": 24
+    },
+    "sku_attributes": {
+      "runtime_min": 45
+    },
+    "selling_points": [
+      "45分钟超长续航",
+      "无线自由清洁",
+      "大吸力深度除尘"
+    ],
+    "source": "fixture"
+  },
+  {
+    "item_id": "QC-SPU-HM3",
+    "sku_id": "QC-HM-3L",
+    "title": "晴川静音加湿器 3L",
+    "model": "HM-3L",
+    "status": "active",
+    "sale_price": "239.00",
+    "warranty_months": 12,
+    "category": "humidifier",
+    "category_name": "加湿器",
+    "spu_attributes": {
+      "brand": "晴川",
+      "model": "HM-3L",
+      "warranty_months": 12
+    },
+    "sku_attributes": {
+      "capacity_l": 3
+    },
+    "selling_points": [
+      "3L 静音加湿",
+      "适用大空间",
+      "缺水自动断电"
+    ],
+    "source": "fixture"
+  },
+  {
+    "item_id": "QC-SPU-KT17",
+    "sku_id": "QC-KT-17",
+    "title": "晴川恒温电热水壶 1.7L",
+    "model": "KT-17",
+    "status": "active",
+    "sale_price": "159.00",
+    "warranty_months": 12,
+    "category": "electric_kettle",
+    "category_name": "电热水壶",
+    "spu_attributes": {
+      "brand": "晴川",
+      "model": "KT-17",
+      "warranty_months": 12
+    },
+    "sku_attributes": {
+      "capacity_l": 1.7
+    },
+    "selling_points": [
+      "1.7L 大容量",
+      "恒温精准控温",
+      "316不锈钢内胆"
+    ],
+    "source": "fixture"
+  },
+  {
+    "item_id": "QC-SPU-FN1",
+    "sku_id": "QC-FN-D1",
+    "title": "晴川循环净化风扇 D1",
+    "model": "FN-D1",
+    "status": "active",
+    "sale_price": "699.00",
+    "warranty_months": 24,
+    "category": "air_circulation_fan",
+    "category_name": "循环风扇",
+    "spu_attributes": {
+      "brand": "晴川",
+      "model": "FN-D1",
+      "warranty_months": 24
+    },
+    "sku_attributes": {
+      "filter": "H13"
+    },
+    "selling_points": [
+      "H13 HEPA 滤网净化",
+      "循环送风全屋覆盖",
+      "24小时定时"
+    ],
+    "source": "fixture"
+  },
+  {
+    "item_id": "X-SPU-M1",
+    "sku_id": "X-M1-WHITE",
+    "title": "星脉蓝牙耳机 X-M1 云白色",
+    "model": "X-M1",
+    "status": "active",
+    "sale_price": "299.00",
+    "warranty_months": 12,
+    "category": "digital_audio",
+    "category_name": "数码音频",
+    "spu_attributes": {
+      "brand": "星脉",
+      "model": "X-M1",
+      "warranty_months": 12
+    },
+    "sku_attributes": {
+      "color": "云白",
+      "battery_mah": 350
+    },
+    "selling_points": [
+      "蓝牙5.3稳定连接",
+      "350mAh长续航",
+      "轻巧佩戴舒适"
+    ],
+    "source": "manual"
+  },
+  {
+    "item_id": "X-SPU-M1",
+    "sku_id": "X-M1-BLACK",
+    "title": "星脉蓝牙耳机 X-M1 曜石黑",
+    "model": "X-M1",
+    "status": "active",
+    "sale_price": "299.00",
+    "warranty_months": 12,
+    "category": "digital_audio",
+    "category_name": "数码音频",
+    "spu_attributes": {
+      "brand": "星脉",
+      "model": "X-M1",
+      "warranty_months": 12
+    },
+    "sku_attributes": {
+      "color": "曜石黑",
+      "battery_mah": 350
+    },
+    "selling_points": [
+      "蓝牙5.3稳定连接",
+      "350mAh长续航",
+      "轻巧佩戴舒适"
+    ],
+    "source": "manual"
+  },
+  {
+    "item_id": "X-SPU-P2",
+    "sku_id": "X-P2-BLACK",
+    "title": "星脉充电宝 X-P2 10000mAh 黑色",
+    "model": "X-P2",
+    "status": "active",
+    "sale_price": "129.00",
+    "warranty_months": 12,
+    "category": "digital_power",
+    "category_name": "数码电源",
+    "spu_attributes": {
+      "brand": "星脉",
+      "model": "X-P2",
+      "warranty_months": 12
+    },
+    "sku_attributes": {
+      "color": "黑色",
+      "storage_gb": 0,
+      "battery_mah": 10000
+    },
+    "selling_points": [
+      "10000mAh大容量",
+      "双向快充",
+      "轻薄便携"
+    ],
+    "source": "manual"
+  },
+  {
+    "item_id": "Y-SPU-D01",
+    "sku_id": "Y-D01-S",
+    "title": "云织羽绒服 Y-D01 黑色 S 码",
+    "model": "Y-D01",
+    "status": "active",
+    "sale_price": "599.00",
+    "warranty_months": 0,
+    "category": "apparel",
+    "category_name": "服饰",
+    "spu_attributes": {
+      "brand": "云织",
+      "model": "Y-D01",
+      "warranty_months": 0
+    },
+    "sku_attributes": {
+      "color": "黑色",
+      "size": "S",
+      "material": "90%白鸭绒",
+      "season": "冬季"
+    },
+    "selling_points": [
+      "90%白鸭绒保暖",
+      "轻薄透气面料",
+      "防风防泼水"
+    ],
+    "source": "manual"
+  },
+  {
+    "item_id": "Y-SPU-D01",
+    "sku_id": "Y-D01-M",
+    "title": "云织羽绒服 Y-D01 黑色 M 码",
+    "model": "Y-D01",
+    "status": "active",
+    "sale_price": "599.00",
+    "warranty_months": 0,
+    "category": "apparel",
+    "category_name": "服饰",
+    "spu_attributes": {
+      "brand": "云织",
+      "model": "Y-D01",
+      "warranty_months": 0
+    },
+    "sku_attributes": {
+      "color": "黑色",
+      "size": "M",
+      "material": "90%白鸭绒",
+      "season": "冬季"
+    },
+    "selling_points": [
+      "90%白鸭绒保暖",
+      "轻薄透气面料",
+      "防风防泼水"
+    ],
+    "source": "manual"
+  },
+  {
+    "item_id": "Y-SPU-D01",
+    "sku_id": "Y-D01-L",
+    "title": "云织羽绒服 Y-D01 黑色 L 码",
+    "model": "Y-D01",
+    "status": "active",
+    "sale_price": "599.00",
+    "warranty_months": 0,
+    "category": "apparel",
+    "category_name": "服饰",
+    "spu_attributes": {
+      "brand": "云织",
+      "model": "Y-D01",
+      "warranty_months": 0
+    },
+    "sku_attributes": {
+      "color": "黑色",
+      "size": "L",
+      "material": "90%白鸭绒",
+      "season": "冬季"
+    },
+    "selling_points": [
+      "90%白鸭绒保暖",
+      "轻薄透气面料",
+      "防风防泼水"
+    ],
+    "source": "manual"
+  },
+  {
+    "item_id": "SPU-AFR-01",
+    "sku_id": "REAL-AFR-01",
+    "title": "格兰仕 Galanz KZ40-108",
+    "model": "Galanz KZ40-108",
+    "status": "active",
+    "sale_price": "329.00",
+    "warranty_months": 0,
+    "category": "air_fryer",
+    "category_name": "空气炸锅",
+    "spu_attributes": {
+      "brand": "格兰仕",
+      "model": "Galanz KZ40-108"
+    },
+    "sku_attributes": {
+      "material": "搪瓷",
+      "control": "智能操控",
+      "capacity_l": "1-2人"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 格兰仕空气炸锅",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-AFR-02",
+    "sku_id": "REAL-AFR-02",
+    "title": "美的 Midea KZ25E101",
+    "model": "Midea KZ25E101",
+    "status": "active",
+    "sale_price": "249.00",
+    "warranty_months": 0,
+    "category": "air_fryer",
+    "category_name": "空气炸锅",
+    "spu_attributes": {
+      "brand": "美的",
+      "model": "Midea KZ25E101"
+    },
+    "sku_attributes": {
+      "material": "搪瓷",
+      "control": "智能操控",
+      "capacity_l": "1-2人"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 美的空气炸锅",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-VAC-01",
+    "sku_id": "REAL-VAC-01",
+    "title": "戴森 Dyson V15 Detect Fluffy",
+    "model": "Dyson V15 Detect Fluffy",
+    "status": "active",
+    "sale_price": "3490.00",
+    "warranty_months": 0,
+    "category": "cordless_vacuum",
+    "category_name": "吸尘器",
+    "spu_attributes": {
+      "brand": "戴森",
+      "model": "Dyson V15 Detect Fluffy"
+    },
+    "sku_attributes": {
+      "power_w": "500W以下"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 戴森V15 fluffy",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-VAC-02",
+    "sku_id": "REAL-VAC-02",
+    "title": "德尔玛 Deerma DX700",
+    "model": "Deerma DX700",
+    "status": "active",
+    "sale_price": "299.00",
+    "warranty_months": 0,
+    "category": "cordless_vacuum",
+    "category_name": "吸尘器",
+    "spu_attributes": {
+      "brand": "德尔玛",
+      "model": "Deerma DX700"
+    },
+    "sku_attributes": {
+      "power_w": "500W以下"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 德尔玛吸尘器",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-HUM-01",
+    "sku_id": "REAL-HUM-01",
+    "title": "德尔玛 Deerma F628S",
+    "model": "Deerma F628S",
+    "status": "active",
+    "sale_price": "169.00",
+    "warranty_months": 0,
+    "category": "humidifier",
+    "category_name": "加湿器",
+    "spu_attributes": {
+      "brand": "德尔玛",
+      "model": "Deerma F628S"
+    },
+    "sku_attributes": {
+      "humidity_type": "除菌型"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 德尔玛加湿器",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-HUM-02",
+    "sku_id": "REAL-HUM-02",
+    "title": "小熊 Bear JSQ-C30Q1",
+    "model": "Bear JSQ-C30Q1",
+    "status": "active",
+    "sale_price": "129.00",
+    "warranty_months": 0,
+    "category": "humidifier",
+    "category_name": "加湿器",
+    "spu_attributes": {
+      "brand": "小熊",
+      "model": "Bear JSQ-C30Q1"
+    },
+    "sku_attributes": {
+      "humidity_type": "除菌型"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 小熊加湿器",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-KET-01",
+    "sku_id": "REAL-KET-01",
+    "title": "苏泊尔 SUPOR SW-17J63B",
+    "model": "SUPOR SW-17J63B",
+    "status": "active",
+    "sale_price": "159.00",
+    "warranty_months": 0,
+    "category": "electric_kettle",
+    "category_name": "电水壶",
+    "spu_attributes": {
+      "brand": "苏泊尔",
+      "model": "SUPOR SW-17J63B"
+    },
+    "sku_attributes": {
+      "capacity_l": "1L",
+      "material": "双层不锈钢"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 苏泊尔电水壶",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-KET-02",
+    "sku_id": "REAL-KET-02",
+    "title": "美的 Midea MK-SH15Colour102",
+    "model": "Midea MK-SH15Colour102",
+    "status": "active",
+    "sale_price": "79.00",
+    "warranty_months": 0,
+    "category": "electric_kettle",
+    "category_name": "电水壶",
+    "spu_attributes": {
+      "brand": "美的",
+      "model": "Midea MK-SH15Colour102"
+    },
+    "sku_attributes": {
+      "capacity_l": "1L",
+      "material": "双层不锈钢"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 美的电水壶",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-FAN-01",
+    "sku_id": "REAL-FAN-01",
+    "title": "格力 GREE FXDZ-2307Bg5",
+    "model": "GREE FXDZ-2307Bg5",
+    "status": "active",
+    "sale_price": "499.00",
+    "warranty_months": 0,
+    "category": "air_circulation_fan",
+    "category_name": "循环风扇",
+    "spu_attributes": {
+      "brand": "格力",
+      "model": "GREE FXDZ-2307Bg5"
+    },
+    "sku_attributes": {
+      "control": "遥控控制"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 格力循环扇 FXDZ-2307Bg5",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-FAN-02",
+    "sku_id": "REAL-FAN-02",
+    "title": "美的 Midea SAC35CR",
+    "model": "Midea SAC35CR",
+    "status": "active",
+    "sale_price": "199.00",
+    "warranty_months": 0,
+    "category": "air_circulation_fan",
+    "category_name": "循环风扇",
+    "spu_attributes": {
+      "brand": "美的",
+      "model": "Midea SAC35CR"
+    },
+    "sku_attributes": {
+      "control": "遥控控制"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 美的落地扇",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-AUD-01",
+    "sku_id": "REAL-AUD-01",
+    "title": "捷波朗 Jabra Elite 7 Active",
+    "model": "Jabra Elite 7 Active",
+    "status": "active",
+    "sale_price": "1299.00",
+    "warranty_months": 0,
+    "category": "digital_audio",
+    "category_name": "蓝牙耳机",
+    "spu_attributes": {
+      "brand": "捷波朗",
+      "model": "Jabra Elite 7 Active"
+    },
+    "sku_attributes": {
+      "wearing": "头戴式"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 捷波朗真无线耳机",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-AUD-02",
+    "sku_id": "REAL-AUD-02",
+    "title": "QCY QCY H3",
+    "model": "QCY H3",
+    "status": "active",
+    "sale_price": "299.00",
+    "warranty_months": 0,
+    "category": "digital_audio",
+    "category_name": "蓝牙耳机",
+    "spu_attributes": {
+      "brand": "QCY",
+      "model": "QCY H3"
+    },
+    "sku_attributes": {
+      "wearing": "头戴式"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 QCY 头戴耳机",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-PWR-01",
+    "sku_id": "REAL-PWR-01",
+    "title": "小米 Xiaomi 移动电源 3 20000mAh",
+    "model": "Xiaomi 移动电源 3 20000mAh",
+    "status": "active",
+    "sale_price": "129.00",
+    "warranty_months": 0,
+    "category": "digital_power",
+    "category_name": "移动电源",
+    "spu_attributes": {
+      "brand": "小米",
+      "model": "Xiaomi 移动电源 3 20000mAh"
+    },
+    "sku_attributes": {
+      "capacity_mah": "25000mAh及以上"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 小米移动电源3",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-PWR-02",
+    "sku_id": "REAL-PWR-02",
+    "title": "罗马仕 ROMOSS 10000mAh 22.5W",
+    "model": "ROMOSS 10000mAh 22.5W",
+    "status": "active",
+    "sale_price": "59.00",
+    "warranty_months": 0,
+    "category": "digital_power",
+    "category_name": "移动电源",
+    "spu_attributes": {
+      "brand": "罗马仕",
+      "model": "ROMOSS 10000mAh 22.5W"
+    },
+    "sku_attributes": {
+      "capacity_mah": "25000mAh及以上"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 罗马仕10000毫安",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-APP-01",
+    "sku_id": "REAL-APP-01",
+    "title": "雪中飞 雪中飞 XZF2155",
+    "model": "雪中飞 XZF2155",
+    "status": "active",
+    "sale_price": "499.00",
+    "warranty_months": 0,
+    "category": "apparel",
+    "category_name": "羽绒服",
+    "spu_attributes": {
+      "brand": "雪中飞",
+      "model": "雪中飞 XZF2155"
+    },
+    "sku_attributes": {
+      "material": "牛仔布",
+      "fill": "白鹅绒"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 雪中飞羽绒服",
+      "price_basis": "京东在售价格（核实）"
+    }
+  },
+  {
+    "item_id": "SPU-APP-02",
+    "sku_id": "REAL-APP-02",
+    "title": "茵曼 茵曼 INMAN W2302",
+    "model": "茵曼 INMAN W2302",
+    "status": "active",
+    "sale_price": "499.00",
+    "warranty_months": 0,
+    "category": "apparel",
+    "category_name": "羽绒服",
+    "spu_attributes": {
+      "brand": "茵曼",
+      "model": "茵曼 INMAN W2302"
+    },
+    "sku_attributes": {
+      "material": "牛仔布",
+      "fill": "白鹅绒"
+    },
+    "selling_points": [],
+    "source": "network",
+    "data_confidence": {
+      "level": "real_model",
+      "real_fields": [
+        "brand",
+        "category",
+        "model",
+        "sale_price",
+        "attr_enums"
+      ],
+      "approx_fields": [
+        "attr_values"
+      ],
+      "note": "品牌/型号/价格经京东在售商品核实；attr_values 为京东品类枚举参考。",
+      "source_note": "京东知识图谱 GoodsKG + 京东在售商品（WebSearch 核实）",
+      "model_basis": "京东在售 茵曼羽绒服",
+      "price_basis": "京东在售价格（核实）"
+    }
+  }
+]

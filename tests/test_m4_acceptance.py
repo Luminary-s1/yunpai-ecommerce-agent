@@ -166,8 +166,11 @@ def test_knowledge_outage_stream_reports_retrieval_specific_error(tmp_path) -> N
             json={"session_id": "acc-rag-off-2", "message": "尺码怎么选", "context": {}},
         )
         events = sse_events(response)
-        assert events[-2]["event"] == "error"
-        assert events[-2]["code"] != "internal_error"
+        # R4 契约（负责人认可）：检索故障转人工，SSE 发 handoff 事件 +
+        # reason=knowledge_unavailable（可区分码），而非 generic error。
+        # 此前的 M4 旧契约断言 error 事件，未跟上 R4 语义演进。
+        assert events[-2]["event"] == "handoff"
+        assert events[-2]["reason"] == "knowledge_unavailable"
 
 
 def test_model_outage_stream_stays_actionable(tmp_path) -> None:

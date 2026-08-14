@@ -607,7 +607,7 @@ class TaobaoIntegrationService:
                 """
                 SELECT id, external_event_id, direction, message_type, content_redacted,
                        request_id, action_mode, status, created_at, updated_at
-                FROM channel_events WHERE conversation_id=? ORDER BY created_at
+                FROM channel_events WHERE conversation_id=? ORDER BY created_at, rowid
                 """,
                 (conversation_id,),
             ).fetchall()

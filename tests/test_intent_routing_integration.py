@@ -56,9 +56,15 @@ EXPECTED_EDGES = {
     ("precheck", "handoff", None, True),
     ("precheck", "refuse", None, True),
     ("precheck", "retrieve", None, True),
-    ("refine_retrieval", "build_generation_context", None, False),
+    # R1 修复拓扑：retrieve/refine_retrieval 意图门拦截（refuse/handoff）直达终态，
+    # 不再被 build_decision_context/build_generation_context 无条件覆盖（对齐 12a4b2b）
+    ("refine_retrieval", "build_generation_context", None, True),
+    ("refine_retrieval", "handoff", None, True),
+    ("refine_retrieval", "refuse", None, True),
     ("refuse", "persist", None, False),
-    ("retrieve", "build_decision_context", None, False),
+    ("retrieve", "build_decision_context", None, True),
+    ("retrieve", "handoff", None, True),
+    ("retrieve", "refuse", None, True),
     ("retry_later", "persist", None, False),
     ("tool_gate", "clarify", None, True),
     ("tool_gate", "execute_tool", "execute", True),

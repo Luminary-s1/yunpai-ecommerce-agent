@@ -1,0 +1,11 @@
+category_code,category_name,parent_category,level,updated_at
+home_appliance,小家电,,1,2026-08-12
+air_fryer,空气炸锅,home_appliance,2,2026-08-12
+cordless_vacuum,无线吸尘器,home_appliance,2,2026-08-12
+humidifier,加湿器,home_appliance,2,2026-08-12
+electric_kettle,电热水壶,home_appliance,2,2026-08-12
+air_circulation_fan,循环风扇,home_appliance,2,2026-08-12
+digital,数码,,1,2026-08-12
+digital_audio,数码音频,digital,2,2026-08-12
+digital_power,数码电源,digital,2,2026-08-12
+apparel,服饰,,1,2026-08-12

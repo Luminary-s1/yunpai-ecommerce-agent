@@ -111,51 +111,68 @@ class KnowledgeManagementService:
         return items[0] if items else None
 
     def create(
-        self, tenant_id: str, request: KnowledgeCreateRequest, actor: str
+        self,
+        tenant_id: str,
+        request: KnowledgeCreateRequest,
+        actor: str,
+        knowledge_key: str | None = None,
     ) -> dict[str, Any]:
+        """创建知识草稿（candidate/draft）。
+
+        knowledge_key: 可选。默认 f"knowledge-{uuid}"（向后兼容）；
+        Wiki 编辑传 f"kg-{item_id}" 以覆盖资产层同名词条（编辑即时生效闭环）。
+        """
         self._validate_scope(request.layer, request.store_id, request.sku_id)
-        item_id = self.knowledge.add_document(
-            **request.model_dump(),
-            tenant_id=tenant_id,
-            knowledge_key=f"knowledge-{uuid.uuid4().hex}",
-            status="candidate",
-            review_status="draft",
-        )
+        # P3 竞态：插入入 _write_lock（RLock 可重入，add_document 内部持锁不冲突）。
+        # 注意：不预检同 key active——create 只建 candidate，Wiki 编辑已生效词条
+        # 走此路径是合法语义（新候选版本），approve 时先 retire 旧 active 再由
+        # v33 唯一索引兜底单 active（终审发现：预检曾把 Wiki 二次编辑 100% 拦死）。
+        with self.db._write_lock:
+            item_id = self.knowledge.add_document(
+                **request.model_dump(),
+                tenant_id=tenant_id,
+                knowledge_key=knowledge_key or f"knowledge-{uuid.uuid4().hex}",
+                status="candidate",
+                review_status="draft",
+            )
         self.db.audit("knowledge.draft_created", actor, item_id, request.model_dump(), tenant_id)
         return self._require(tenant_id, item_id)
 
     def revise(
         self, tenant_id: str, item_id: str, request: KnowledgeReviseRequest, actor: str
     ) -> dict[str, Any]:
-        current = self._require(tenant_id, item_id)
-        if current["record_version"] != request.expected_record_version:
-            raise KnowledgeLifecycleError("knowledge version conflict")
-        with self.db.connect() as conn:
-            next_version = int(
-                conn.execute(
-                    "SELECT COALESCE(MAX(version), 0) + 1 FROM knowledge "
-                    "WHERE tenant_id=? AND knowledge_key=?",
-                    (tenant_id, current["knowledge_key"]),
-                ).fetchone()[0]
+        # P3 竞态：读当前 + record_version 校验 + MAX(version)+1 分配 + 插入
+        # 整体入 _write_lock，防并发 revise 产生重复版本号（RLock 可重入）
+        with self.db._write_lock:
+            current = self._require(tenant_id, item_id)
+            if current["record_version"] != request.expected_record_version:
+                raise KnowledgeLifecycleError("knowledge version conflict")
+            with self.db.connect() as conn:
+                next_version = int(
+                    conn.execute(
+                        "SELECT COALESCE(MAX(version), 0) + 1 FROM knowledge "
+                        "WHERE tenant_id=? AND knowledge_key=?",
+                        (tenant_id, current["knowledge_key"]),
+                    ).fetchone()[0]
+                )
+            values = request.model_dump(exclude={"expected_record_version"}, exclude_none=True)
+            new_id = self.knowledge.add_document(
+                category=current["category"],
+                intent=current["intent"],
+                question=values.get("question", current["question"]),
+                answer=values.get("answer", current["answer"]),
+                keywords=values.get("keywords", current["keywords"]),
+                risk_level=current["risk_level"],
+                source=values.get("source", current["source"]),
+                version=next_version,
+                status="candidate",
+                tenant_id=tenant_id,
+                knowledge_key=current["knowledge_key"],
+                layer=current["layer"],
+                store_id=current["store_id"],
+                sku_id=current["sku_id"],
+                review_status="draft",
             )
-        values = request.model_dump(exclude={"expected_record_version"}, exclude_none=True)
-        new_id = self.knowledge.add_document(
-            category=current["category"],
-            intent=current["intent"],
-            question=values.get("question", current["question"]),
-            answer=values.get("answer", current["answer"]),
-            keywords=values.get("keywords", current["keywords"]),
-            risk_level=current["risk_level"],
-            source=values.get("source", current["source"]),
-            version=next_version,
-            status="candidate",
-            tenant_id=tenant_id,
-            knowledge_key=current["knowledge_key"],
-            layer=current["layer"],
-            store_id=current["store_id"],
-            sku_id=current["sku_id"],
-            review_status="draft",
-        )
         self.db.audit(
             "knowledge.version_created",
             actor,
@@ -192,6 +209,12 @@ class KnowledgeManagementService:
             raise KnowledgeLifecycleError("knowledge version conflict")
         now = utc_now()
         with self.db._write_lock, self.db.connect() as conn:
+            # 多租户修复（P1-1）：retire 旧 active 只限本租户行（tenant_id=?）。
+            # 此前 (tenant_id=? OR tenant_id IS NULL) 会让租户影子编辑 approve 时
+            # 退休全局行——租户 A 会"偷走"全局知识导致其他租户不可见。
+            # 租户影子行与全局行按 (COALESCE(tenant,''), knowledge_key) 共存合法
+            # （v33 索引只约束同一租户内唯一 active）；租户影子行经检索排序
+            # shadow 全局行，全局替换留给全局管理员（tenant=None 路径）。
             conn.execute(
                 """
                 UPDATE knowledge
@@ -241,6 +264,7 @@ class KnowledgeManagementService:
             raise KnowledgeLifecycleError("knowledge version conflict")
         now = utc_now()
         with self.db._write_lock, self.db.connect() as conn:
+            # 多租户修复（P1-1）：rollback 同 approve——只退本租户 active 行
             conn.execute(
                 """
                 UPDATE knowledge SET status='retired', effective_to=?,
@@ -280,7 +304,8 @@ class KnowledgeManagementService:
         rollout_id = f"rollout-{uuid.uuid4().hex}"
         with self.db._write_lock, self.db.connect() as conn:
             baseline = conn.execute(
-                "SELECT id FROM knowledge WHERE tenant_id=? AND knowledge_key=? AND status='active'",
+                "SELECT id FROM knowledge WHERE (tenant_id=? OR tenant_id IS NULL) "
+                "AND knowledge_key=? AND status='active'",
                 (tenant_id, candidate["knowledge_key"]),
             ).fetchone()
             try:

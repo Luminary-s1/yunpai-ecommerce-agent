@@ -1,0 +1,207 @@
+{
+  "schema_version": "1.0",
+  "updated_at": "2026-08-12",
+  "node_labels": {
+    "category": {
+      "label": "Category",
+      "unique_key": "category_code",
+      "fields": [
+        "category_code",
+        "category_name",
+        "parent_category",
+        "level"
+      ]
+    },
+    "product": {
+      "label": "Product",
+      "unique_key": "item_id",
+      "fields": [
+        "item_id",
+        "title",
+        "model",
+        "status",
+        "sale_price",
+        "warranty_months",
+        "category",
+        "category_name",
+        "source"
+      ]
+    },
+    "sku": {
+      "label": "SKU",
+      "unique_key": "sku_id",
+      "fields": [
+        "sku_id",
+        "item_id",
+        "title",
+        "color",
+        "status",
+        "sale_price",
+        "category",
+        "source"
+      ]
+    },
+    "attribute": {
+      "label": "Attribute",
+      "unique_key": "spec_key",
+      "fields": [
+        "spec_key",
+        "attr_key",
+        "attr_value",
+        "level",
+        "owner_id"
+      ]
+    },
+    "policy": {
+      "label": "Policy",
+      "unique_key": "policy_code",
+      "fields": [
+        "policy_code",
+        "policy_type",
+        "policy_name",
+        "content",
+        "scope",
+        "scope_key",
+        "risk_level",
+        "source"
+      ]
+    },
+    "script": {
+      "label": "Script",
+      "unique_key": "script_id",
+      "fields": [
+        "script_id",
+        "category",
+        "intent",
+        "keywords",
+        "canonical_answer",
+        "risk_level",
+        "layer",
+        "source"
+      ]
+    },
+    "faq": {
+      "label": "FAQ",
+      "unique_key": "faq_id",
+      "fields": [
+        "faq_id",
+        "category",
+        "intent",
+        "question",
+        "answer",
+        "risk_level",
+        "layer",
+        "ref_script_id",
+        "sku_id",
+        "source"
+      ]
+    },
+    "rule": {
+      "label": "Rule",
+      "unique_key": "rule_code",
+      "fields": [
+        "rule_code",
+        "rule_title",
+        "authority",
+        "theme",
+        "content_summary",
+        "source",
+        "source_url",
+        "captured_at"
+      ]
+    }
+  },
+  "relationship_types": {
+    "belongs_to": {
+      "type": "BELONGS_TO",
+      "fields": [
+        "confidence",
+        "generated_by"
+      ]
+    },
+    "has_attr": {
+      "type": "HAS_ATTR",
+      "fields": [
+        "confidence",
+        "generated_by"
+      ]
+    },
+    "applies_to": {
+      "type": "APPLIES_TO",
+      "fields": [
+        "confidence",
+        "generated_by"
+      ]
+    },
+    "refers_to": {
+      "type": "REFERS_TO",
+      "fields": [
+        "confidence",
+        "generated_by",
+        "target_type"
+      ]
+    },
+    "related_to": {
+      "type": "RELATED_TO",
+      "fields": [
+        "confidence",
+        "generated_by"
+      ]
+    }
+  },
+  "enums": {
+    "category_code": [
+      "home_appliance",
+      "air_fryer",
+      "cordless_vacuum",
+      "humidifier",
+      "electric_kettle",
+      "air_circulation_fan",
+      "digital",
+      "digital_audio",
+      "digital_power",
+      "apparel"
+    ],
+    "policy_type": [
+      "warranty",
+      "return",
+      "refund",
+      "exchange",
+      "logistics",
+      "invoice",
+      "price_protection"
+    ],
+    "risk_level": [
+      "low",
+      "medium",
+      "high",
+      "critical"
+    ],
+    "layer": [
+      "platform",
+      "industry",
+      "store",
+      "product",
+      "evolution"
+    ],
+    "status": [
+      "active",
+      "inactive",
+      "retired"
+    ],
+    "attr_key": [
+      "brand",
+      "model",
+      "warranty_months",
+      "color",
+      "capacity_l",
+      "runtime_min",
+      "filter",
+      "size",
+      "material",
+      "season",
+      "battery_mah",
+      "storage_gb"
+    ]
+  }
+}

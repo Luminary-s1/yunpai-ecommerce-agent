@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-11",
+  "regenerated_by": "11_refresh_manifest.py",
+  "entities": {
+    "product": 24,
+    "sku": 28,
+    "category": 10,
+    "attribute": 107,
+    "policy": 9,
+    "script": 52,
+    "faq": 63,
+    "rule": 9,
+    "rule_extended": 8
+  },
+  "relationships": {
+    "belongs_to": 28,
+    "has_attr": 107,
+    "applies_to": 34,
+    "refers_to": 64,
+    "related_to": 52
+  },
+  "total_nodes": 310,
+  "total_rels": 285
+}

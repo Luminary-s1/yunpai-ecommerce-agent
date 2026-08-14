@@ -162,7 +162,7 @@ class QualityService:
                 """
                 SELECT id, risk_level, route_reason, sources_json, model_fallback, redacted
                 FROM messages WHERE session_id=? AND tenant_id=? AND role='assistant'
-                ORDER BY created_at
+                ORDER BY created_at, rowid
                 """,
                 (conversation_id, tenant_id),
             ).fetchall()

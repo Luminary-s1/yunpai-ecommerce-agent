@@ -1,0 +1,782 @@
+[
+ {
+  "script_id": "SCRIPT-001",
+  "category": "接待",
+  "intent": "greeting",
+  "keywords": "你好 在吗 客服",
+  "canonical_answer": "您好，我是店铺智能客服。您可以告诉我想了解的商品、订单或售后问题；涉及退款、赔付、改价、改地址等操作时，我会为您转人工确认。",
+  "questions": [
+   "你好",
+   "有人吗",
+   "客服在不在"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-002",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "商品 参数 功能 详情",
+  "canonical_answer": "我可以依据当前商品详情说明功能和参数。请发商品名称、链接或规格；未出现在商品详情中的能力，我不会自行承诺。",
+  "questions": [
+   "这个商品有什么功能",
+   "能介绍一下产品吗",
+   "商品参数怎么看"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-003",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "材质 面料 成分",
+  "canonical_answer": "材质请以当前商品详情页的成分或参数标注为准。不同颜色、批次或规格可能不同，请提供具体 SKU 后再核对。",
+  "questions": [
+   "这是什么材质",
+   "面料成分是什么",
+   "产品用什么做的"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-004",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "尺寸 尺码 大小 测量",
+  "canonical_answer": "请参考商品页对应规格的尺寸表，并结合自己的实际测量值选择。不同版型可能有差异；拿不准时请提供身高、体重或使用尺寸，由人工进一步建议。",
+  "questions": [
+   "尺码怎么选",
+   "这个尺寸多大",
+   "我应该买哪个码"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-005",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "颜色 色差 图片 实物",
+  "canonical_answer": "商品图片会尽量还原实物，但受拍摄光线和屏幕显示影响可能存在轻微色差。请以收到的实物和商品页说明为准。",
+  "questions": [
+   "实物有色差吗",
+   "颜色和图片一样吗",
+   "会不会偏色"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-006",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "兼容 适配 型号",
+  "canonical_answer": "是否适配需要核对商品支持列表与您的具体品牌、型号和版本。请提供完整型号；未列明的设备不能直接承诺兼容。",
+  "questions": [
+   "这个能适配吗",
+   "支持我的型号吗",
+   "兼容哪些设备"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-007",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "正品 防伪 授权",
+  "canonical_answer": "商品来源与正品保障以店铺资质、商品页承诺和可提供的凭证为准。如需核验防伪方式或授权材料，我可以转人工处理。",
+  "questions": [
+   "是正品吗",
+   "怎么查防伪",
+   "有品牌授权吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-008",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "保质期 生产日期 有效期",
+  "canonical_answer": "生产日期和保质期以商品页说明及实际包装标识为准。仓库批次会流动，无法在未核实库存批次时承诺某个具体日期。",
+  "questions": [
+   "保质期多久",
+   "生产日期新吗",
+   "还有多久过期"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-009",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "使用 清洗 保养",
+  "canonical_answer": "使用、清洗和保养请优先遵循商品说明书、洗涤标或包装标识。若说明缺失，请提供商品名称和具体问题后再核对。",
+  "questions": [
+   "怎么清洗",
+   "平时如何保养",
+   "第一次怎么使用"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-010",
+  "category": "商品",
+  "intent": "product",
+  "keywords": "质保 保修 维修",
+  "canonical_answer": "质保范围和期限以商品页、保修卡及店铺售后政策为准。人为损坏、耗材或非正常使用是否覆盖，需要人工依据凭证判定。",
+  "questions": [
+   "保修多久",
+   "坏了能维修吗",
+   "质保包括什么"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-011",
+  "category": "库存",
+  "intent": "inventory",
+  "keywords": "库存 现货 有货",
+  "canonical_answer": "页面可下单通常表示当前系统有可售库存，但大促或并发下单时库存可能变化。最终以订单提交和仓库复核结果为准。",
+  "questions": [
+   "现在有货吗",
+   "这是现货吗",
+   "库存还有多少"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-012",
+  "category": "库存",
+  "intent": "inventory",
+  "keywords": "补货 到货 缺货",
+  "canonical_answer": "补货时间需以采购和入库结果为准，未确认前不能承诺具体日期。您可以关注商品页面，或留下需要的规格由人工登记。",
+  "questions": [
+   "什么时候补货",
+   "没货了还会上吗",
+   "到货能通知我吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-013",
+  "category": "价格",
+  "intent": "price_promo",
+  "keywords": "价格 到手价 标价",
+  "canonical_answer": "实际支付金额由商品价、店铺优惠、平台优惠和账号可用券共同计算，请以结算页实时展示为准。客服不能绕过平台修改成交价。",
+  "questions": [
+   "实际多少钱",
+   "到手价是多少",
+   "为什么结算价不一样"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-014",
+  "category": "活动",
+  "intent": "price_promo",
+  "keywords": "活动 优惠 促销 时间",
+  "canonical_answer": "活动范围、门槛和时间以当前活动页及结算页规则为准。过期活动、截图或历史价格不能作为当前优惠承诺。",
+  "questions": [
+   "最近有什么活动",
+   "优惠什么时候结束",
+   "现在参加促销吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-015",
+  "category": "活动",
+  "intent": "price_promo",
+  "keywords": "优惠券 领取 使用 门槛",
+  "canonical_answer": "优惠券能否领取和使用取决于发放对象、有效期、商品范围及金额门槛，请在结算页核对；不同优惠不一定可以叠加。",
+  "questions": [
+   "优惠券怎么领",
+   "为什么券用不了",
+   "几张券能叠加吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-016",
+  "category": "活动",
+  "intent": "price_promo",
+  "keywords": "保价 差价 降价",
+  "canonical_answer": "是否支持保价及计算周期以平台和店铺当前规则为准。差价申请属于资金相关操作，需要人工核对订单、活动类型和时间。",
+  "questions": [
+   "刚买就降价怎么办",
+   "可以退差价吗",
+   "支持价格保护吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-017",
+  "category": "活动",
+  "intent": "price_promo",
+  "keywords": "直播 直播间 价格",
+  "canonical_answer": "直播间价格可能受时段、限量券和指定链接影响，请以直播间对应商品的结算页为准；其他链接不能直接套用同一价格。",
+  "questions": [
+   "直播间为什么更便宜",
+   "直播价还能买吗",
+   "主播说的价格怎么没有"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-018",
+  "category": "预售",
+  "intent": "shipping",
+  "keywords": "预售 尾款 定金 发货",
+  "canonical_answer": "预售商品的定金、尾款和预计发货时间以商品页预售规则为准。预计时间不是必然送达时间，订单异常时会转人工处理。",
+  "questions": [
+   "预售什么时候发",
+   "尾款什么时候付",
+   "定金能退吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-019",
+  "category": "支付",
+  "intent": "payment",
+  "keywords": "支付 失败 扣款",
+  "canonical_answer": "支付方式和结果由平台支付页面决定。若显示扣款但订单未成功，请勿重复支付，先保存支付记录并联系平台或人工客服核对。",
+  "questions": [
+   "为什么支付失败",
+   "扣款了没订单",
+   "可以用什么方式付款"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-020",
+  "category": "发票",
+  "intent": "invoice",
+  "keywords": "发票 抬头 税号 开票",
+  "canonical_answer": "发票类型、可开内容和申请入口以店铺及平台规则为准。实际开票或修改抬头需要核对订单与税务信息，我会转人工确认。",
+  "questions": [
+   "可以开发票吗",
+   "发票抬头怎么改",
+   "能开专票吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-021",
+  "category": "订单",
+  "intent": "order",
+  "keywords": "订单 状态 查询",
+  "canonical_answer": "订单状态属于个人交易信息，需要在已授权会话中查询。请通过平台订单页查看；如果状态异常，我会转人工并请您只提供必要的订单编号。",
+  "questions": [
+   "我的订单怎么样了",
+   "帮我查订单",
+   "订单状态是什么"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-022",
+  "category": "订单",
+  "intent": "order",
+  "keywords": "取消 订单",
+  "canonical_answer": "取消订单会改变交易状态，不能由智能客服直接执行。请先在平台订单页尝试取消；若无法操作，我会转人工核对发货状态。",
+  "questions": [
+   "怎么取消订单",
+   "不想要了能取消吗",
+   "帮我关掉订单"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-023",
+  "category": "订单",
+  "intent": "order",
+  "keywords": "地址 修改 收货人 电话",
+  "canonical_answer": "收货信息涉及隐私和履约风险，智能客服不会直接修改。若订单尚未发货，请立即转人工核对；已发货时需按承运方规则处理。",
+  "questions": [
+   "收货地址写错了",
+   "能改手机号吗",
+   "帮我改一下地址"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-024",
+  "category": "发货",
+  "intent": "shipping",
+  "keywords": "发货 时间 多久",
+  "canonical_answer": "发货时效以商品页承诺、订单状态和仓库实际处理为准。预售、定制、大促及不可抗力可能影响时间，未核实订单前不能承诺具体发出时刻。",
+  "questions": [
+   "什么时候发货",
+   "多久能发出",
+   "今天可以发吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-025",
+  "category": "发货",
+  "intent": "shipping",
+  "keywords": "加急 催发货",
+  "canonical_answer": "可以记录您的加急诉求，但不能保证仓库改变出库顺序。催发货属于订单操作，需要人工结合订单状态处理。",
+  "questions": [
+   "能加急发货吗",
+   "帮我催一下",
+   "着急用今天必须发"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-026",
+  "category": "发货",
+  "intent": "shipping",
+  "keywords": "快递 承运商 指定",
+  "canonical_answer": "承运商通常由仓库根据地址和线路安排，是否可指定以商品页及仓库能力为准。特殊需求请在下单前让人工确认。",
+  "questions": [
+   "发什么快递",
+   "可以指定顺丰吗",
+   "用哪家物流"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-027",
+  "category": "发货",
+  "intent": "shipping",
+  "keywords": "偏远 地区 邮费",
+  "canonical_answer": "偏远地区是否配送、运费及附加条件以结算页和承运商覆盖范围为准。页面无法下单时，客服不能私下承诺发货。",
+  "questions": [
+   "偏远地区能发吗",
+   "新疆包邮吗",
+   "这个地址要加运费吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-028",
+  "category": "物流",
+  "intent": "logistics",
+  "keywords": "物流 轨迹 到哪",
+  "canonical_answer": "具体物流轨迹需要在已授权订单上下文中查询，请先查看平台物流页。若长时间无更新或轨迹异常，我会转人工核验。",
+  "questions": [
+   "快递到哪里了",
+   "查一下物流",
+   "怎么没有物流更新"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-029",
+  "category": "物流",
+  "intent": "logistics",
+  "keywords": "延迟 超时 未送达",
+  "canonical_answer": "物流时效受线路和承运商影响，预计送达并非保证时间。若超过平台或商品页承诺，请提供订单编号，由人工核验并按规则处理。",
+  "questions": [
+   "快递怎么还没到",
+   "物流超时了",
+   "预计时间过了怎么办"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-030",
+  "category": "物流",
+  "intent": "logistics",
+  "keywords": "丢件 破损 包裹",
+  "canonical_answer": "如包裹疑似丢失或外包装破损，请保留物流记录、外包装和开箱证据，不要私下处理赔付。我会转人工联系承运商并按平台流程核验。",
+  "questions": [
+   "包裹丢了怎么办",
+   "外包装破了",
+   "快递显示异常"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-031",
+  "category": "物流",
+  "intent": "logistics",
+  "keywords": "签收 没收到 代收",
+  "canonical_answer": "显示签收但未收到时，请先核对门卫、驿站、家人代收和配送电话；仍未找到请尽快转人工，由人工联系承运商核查。",
+  "questions": [
+   "显示签收但没收到",
+   "谁帮我签收了",
+   "快递放哪了"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-032",
+  "category": "售后",
+  "intent": "return_exchange",
+  "keywords": "七天 无理由 退货",
+  "canonical_answer": "是否支持七天无理由退货，以商品性质、完好标准、签收时间和平台规则为准。定制、鲜活、已拆封影响二次销售等情形可能不适用。",
+  "questions": [
+   "支持七天无理由吗",
+   "不喜欢可以退吗",
+   "收到后几天能退"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-033",
+  "category": "售后",
+  "intent": "return_exchange",
+  "keywords": "退货 条件 包装 完好",
+  "canonical_answer": "退货通常需保持商品、配件、赠品、包装和凭证完整，不影响二次销售；具体标准以平台售后页和商品说明为准。",
+  "questions": [
+   "拆封了还能退吗",
+   "退货需要什么",
+   "包装丢了能退吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-034",
+  "category": "售后",
+  "intent": "return_exchange",
+  "keywords": "退货 运费 谁承担",
+  "canonical_answer": "退货运费由退货原因、运费险状态和平台判责共同决定。未核验订单和责任前，客服不能承诺由某一方承担。",
+  "questions": [
+   "退货运费谁出",
+   "有运费险吗",
+   "寄回去要我付钱吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-035",
+  "category": "售后",
+  "intent": "return_exchange",
+  "keywords": "换货 尺码 颜色",
+  "canonical_answer": "能否换货取决于平台入口、商品状态和目标规格库存。实际换货会改变订单履约，请从售后页申请或转人工确认。",
+  "questions": [
+   "可以换个尺码吗",
+   "颜色买错了怎么换",
+   "能直接换货吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-036",
+  "category": "退款",
+  "intent": "refund",
+  "keywords": "退款 到账 时间 原路",
+  "canonical_answer": "退款通过平台审核后通常按原支付路径退回，到账时间由平台、银行或支付机构决定。具体进度请查看售后详情，异常时转人工核验。",
+  "questions": [
+   "退款多久到账",
+   "钱退到哪里",
+   "退款怎么还没收到"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-037",
+  "category": "退款",
+  "intent": "refund",
+  "keywords": "申请 退款 操作",
+  "canonical_answer": "退款会改变交易和资金状态，智能客服不能代为执行。请在平台订单的售后入口申请；需要协助时我会转人工。",
+  "questions": [
+   "怎么申请退款",
+   "帮我退款",
+   "现在给我退钱"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-038",
+  "category": "售后",
+  "intent": "after_sales",
+  "keywords": "少件 漏发 错发",
+  "canonical_answer": "发现少件、漏发或错发，请保留外包装、面单、商品和开箱记录，并提供订单编号。补发、退款或赔付需人工核验后按平台规则处理。",
+  "questions": [
+   "少发了一件",
+   "收到的东西不对",
+   "配件漏发了"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-039",
+  "category": "售后",
+  "intent": "after_sales",
+  "keywords": "质量 破损 瑕疵",
+  "canonical_answer": "如有质量问题或商品破损，请停止继续使用并保留清晰照片或视频、包装和订单信息。人工会依据证据和平台规则判断退换方案。",
+  "questions": [
+   "商品有质量问题",
+   "收到就是坏的",
+   "有明显瑕疵怎么办"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-040",
+  "category": "售后",
+  "intent": "after_sales",
+  "keywords": "证据 图片 视频 凭证",
+  "canonical_answer": "售后核验通常需要订单编号、问题部位照片或视频、外包装和物流面单。请只提交必要信息，并遮盖无关的个人隐私。",
+  "questions": [
+   "售后要提供什么证据",
+   "需要拍视频吗",
+   "怎么证明商品有问题"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-041",
+  "category": "赔付",
+  "intent": "complaint",
+  "keywords": "赔偿 赔付 补偿",
+  "canonical_answer": "赔付属于资金和责任判定事项，智能客服不能承诺金额或直接执行。请提供订单与问题证据，由人工依据平台规则核验。",
+  "questions": [
+   "你们要怎么赔",
+   "给我补偿",
+   "损失谁负责"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-042",
+  "category": "投诉",
+  "intent": "complaint",
+  "keywords": "投诉 举报 不满意",
+  "canonical_answer": "很抱歉给您带来不好的体验。我会记录问题并转人工处理；请说明订单和具体情况，不需要提供账号密码、验证码等敏感信息。",
+  "questions": [
+   "我要投诉",
+   "服务太差了",
+   "我要举报你们"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-043",
+  "category": "人工",
+  "intent": "human",
+  "keywords": "人工 真人 客服",
+  "canonical_answer": "好的，我会将当前问题和必要上下文转给人工客服。请不要发送密码、验证码、完整身份证号或银行卡信息。",
+  "questions": [
+   "转人工",
+   "找真人客服",
+   "机器人解决不了"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-044",
+  "category": "隐私",
+  "intent": "privacy",
+  "keywords": "隐私 手机 地址 身份证",
+  "canonical_answer": "为保护隐私，请勿在对话中发送密码、验证码、银行卡号或完整身份证号。订单核验只应收集完成当前服务所必需的信息。",
+  "questions": [
+   "需要提供身份证吗",
+   "我的信息安全吗",
+   "能把手机号发给你吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-045",
+  "category": "安全",
+  "intent": "security",
+  "keywords": "验证码 密码 账号 转账",
+  "canonical_answer": "客服不会索要密码、短信验证码或要求向私人账户转账。遇到此类请求请立即停止操作，通过平台官方入口核验并联系人工客服。",
+  "questions": [
+   "客服让我发验证码",
+   "要转到私人账户吗",
+   "可以把密码给你吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-046",
+  "category": "安全",
+  "intent": "security",
+  "keywords": "站外 私聊 微信 链接",
+  "canonical_answer": "请在平台官方订单和售后入口内沟通与支付，不建议转到私人社交账号或点击来源不明的链接，以免失去平台保障。",
+  "questions": [
+   "能加微信处理吗",
+   "发个站外链接给我",
+   "私下交易便宜吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-047",
+  "category": "评价",
+  "intent": "after_sales",
+  "keywords": "评价 好评 返现",
+  "canonical_answer": "评价应基于真实体验。客服不能以返现、赠品或其他利益诱导指定评价内容；如有问题，请先通过平台售后渠道解决。",
+  "questions": [
+   "好评返现吗",
+   "给好评送什么",
+   "能改评价换补偿吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-048",
+  "category": "赠品",
+  "intent": "price_promo",
+  "keywords": "赠品 礼品 数量",
+  "canonical_answer": "赠品的适用商品、数量和发放条件以活动页及订单结算信息为准，赠完即止的活动需以实际库存为准。",
+  "questions": [
+   "下单有赠品吗",
+   "赠品是什么",
+   "为什么我没有礼品"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-049",
+  "category": "安装",
+  "intent": "product",
+  "keywords": "安装 调试 上门",
+  "canonical_answer": "是否包含安装、上门或调试服务以商品页服务说明和覆盖地区为准。未标注的服务不能默认承诺，特殊需求请先转人工确认。",
+  "questions": [
+   "包安装吗",
+   "有人上门调试吗",
+   "安装费怎么算"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-050",
+  "category": "定制",
+  "intent": "product",
+  "keywords": "定制 修改 周期",
+  "canonical_answer": "定制内容、费用、确认稿和交付周期需在下单前由人工确认。定制商品的取消与退换规则可能不同，请确认后再支付。",
+  "questions": [
+   "可以定制吗",
+   "能改尺寸吗",
+   "定制多久做好"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-051",
+  "category": "服务",
+  "intent": "greeting",
+  "keywords": "工作时间 在线 时间",
+  "canonical_answer": "智能客服可持续接收问题；人工服务时间以店铺页面为准。非人工时段的高风险或复杂事项会先记录，等待人工处理。",
+  "questions": [
+   "客服几点上班",
+   "晚上有人吗",
+   "周末能处理售后吗"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ },
+ {
+  "script_id": "SCRIPT-052",
+  "category": "边界",
+  "intent": "unsupported",
+  "keywords": "竞品 销量 库存 内部数据",
+  "canonical_answer": "我只能依据本店已授权的商品、订单和政策信息回答，无法提供其他店铺的真实销量、库存、买家数据或未公开的内部信息。",
+  "questions": [
+   "告诉我竞品真实销量",
+   "查别家店库存",
+   "给我其他买家数据"
+  ],
+  "risk_level": "low",
+  "layer": "platform",
+  "source": "builtin:ecommerce-sop-v1"
+ }
+]

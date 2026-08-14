@@ -1,0 +1,751 @@
+[
+  {
+    "spec_key": "QC-SPU-AF5|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-AF5"
+  },
+  {
+    "spec_key": "QC-SPU-AF5|model",
+    "attr_key": "model",
+    "attr_value": "AF5",
+    "level": "SPU",
+    "owner_id": "QC-SPU-AF5"
+  },
+  {
+    "spec_key": "QC-SPU-AF5|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "QC-SPU-AF5"
+  },
+  {
+    "spec_key": "QC-AF5-WHITE|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "5",
+    "level": "SKU",
+    "owner_id": "QC-AF5-WHITE"
+  },
+  {
+    "spec_key": "QC-AF5-WHITE|color",
+    "attr_key": "color",
+    "attr_value": "云白",
+    "level": "SKU",
+    "owner_id": "QC-AF5-WHITE"
+  },
+  {
+    "spec_key": "QC-AF5-GREEN|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "5",
+    "level": "SKU",
+    "owner_id": "QC-AF5-GREEN"
+  },
+  {
+    "spec_key": "QC-AF5-GREEN|color",
+    "attr_key": "color",
+    "attr_value": "松绿",
+    "level": "SKU",
+    "owner_id": "QC-AF5-GREEN"
+  },
+  {
+    "spec_key": "QC-SPU-VC1|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-VC1"
+  },
+  {
+    "spec_key": "QC-SPU-VC1|model",
+    "attr_key": "model",
+    "attr_value": "VC-A1",
+    "level": "SPU",
+    "owner_id": "QC-SPU-VC1"
+  },
+  {
+    "spec_key": "QC-SPU-VC1|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "24",
+    "level": "SPU",
+    "owner_id": "QC-SPU-VC1"
+  },
+  {
+    "spec_key": "QC-VC-A1|runtime_min",
+    "attr_key": "runtime_min",
+    "attr_value": "45",
+    "level": "SKU",
+    "owner_id": "QC-VC-A1"
+  },
+  {
+    "spec_key": "QC-SPU-HM3|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-HM3"
+  },
+  {
+    "spec_key": "QC-SPU-HM3|model",
+    "attr_key": "model",
+    "attr_value": "HM-3L",
+    "level": "SPU",
+    "owner_id": "QC-SPU-HM3"
+  },
+  {
+    "spec_key": "QC-SPU-HM3|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "QC-SPU-HM3"
+  },
+  {
+    "spec_key": "QC-HM-3L|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "3",
+    "level": "SKU",
+    "owner_id": "QC-HM-3L"
+  },
+  {
+    "spec_key": "QC-SPU-KT17|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-KT17"
+  },
+  {
+    "spec_key": "QC-SPU-KT17|model",
+    "attr_key": "model",
+    "attr_value": "KT-17",
+    "level": "SPU",
+    "owner_id": "QC-SPU-KT17"
+  },
+  {
+    "spec_key": "QC-SPU-KT17|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "QC-SPU-KT17"
+  },
+  {
+    "spec_key": "QC-KT-17|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "1.7",
+    "level": "SKU",
+    "owner_id": "QC-KT-17"
+  },
+  {
+    "spec_key": "QC-SPU-FN1|brand",
+    "attr_key": "brand",
+    "attr_value": "晴川",
+    "level": "SPU",
+    "owner_id": "QC-SPU-FN1"
+  },
+  {
+    "spec_key": "QC-SPU-FN1|model",
+    "attr_key": "model",
+    "attr_value": "FN-D1",
+    "level": "SPU",
+    "owner_id": "QC-SPU-FN1"
+  },
+  {
+    "spec_key": "QC-SPU-FN1|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "24",
+    "level": "SPU",
+    "owner_id": "QC-SPU-FN1"
+  },
+  {
+    "spec_key": "QC-FN-D1|filter",
+    "attr_key": "filter",
+    "attr_value": "H13",
+    "level": "SKU",
+    "owner_id": "QC-FN-D1"
+  },
+  {
+    "spec_key": "X-SPU-M1|brand",
+    "attr_key": "brand",
+    "attr_value": "星脉",
+    "level": "SPU",
+    "owner_id": "X-SPU-M1"
+  },
+  {
+    "spec_key": "X-SPU-M1|model",
+    "attr_key": "model",
+    "attr_value": "X-M1",
+    "level": "SPU",
+    "owner_id": "X-SPU-M1"
+  },
+  {
+    "spec_key": "X-SPU-M1|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "X-SPU-M1"
+  },
+  {
+    "spec_key": "X-M1-WHITE|color",
+    "attr_key": "color",
+    "attr_value": "云白",
+    "level": "SKU",
+    "owner_id": "X-M1-WHITE"
+  },
+  {
+    "spec_key": "X-M1-WHITE|battery_mah",
+    "attr_key": "battery_mah",
+    "attr_value": "350",
+    "level": "SKU",
+    "owner_id": "X-M1-WHITE"
+  },
+  {
+    "spec_key": "X-M1-BLACK|color",
+    "attr_key": "color",
+    "attr_value": "曜石黑",
+    "level": "SKU",
+    "owner_id": "X-M1-BLACK"
+  },
+  {
+    "spec_key": "X-M1-BLACK|battery_mah",
+    "attr_key": "battery_mah",
+    "attr_value": "350",
+    "level": "SKU",
+    "owner_id": "X-M1-BLACK"
+  },
+  {
+    "spec_key": "X-SPU-P2|brand",
+    "attr_key": "brand",
+    "attr_value": "星脉",
+    "level": "SPU",
+    "owner_id": "X-SPU-P2"
+  },
+  {
+    "spec_key": "X-SPU-P2|model",
+    "attr_key": "model",
+    "attr_value": "X-P2",
+    "level": "SPU",
+    "owner_id": "X-SPU-P2"
+  },
+  {
+    "spec_key": "X-SPU-P2|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "12",
+    "level": "SPU",
+    "owner_id": "X-SPU-P2"
+  },
+  {
+    "spec_key": "X-P2-BLACK|color",
+    "attr_key": "color",
+    "attr_value": "黑色",
+    "level": "SKU",
+    "owner_id": "X-P2-BLACK"
+  },
+  {
+    "spec_key": "X-P2-BLACK|storage_gb",
+    "attr_key": "storage_gb",
+    "attr_value": "0",
+    "level": "SKU",
+    "owner_id": "X-P2-BLACK"
+  },
+  {
+    "spec_key": "X-P2-BLACK|battery_mah",
+    "attr_key": "battery_mah",
+    "attr_value": "10000",
+    "level": "SKU",
+    "owner_id": "X-P2-BLACK"
+  },
+  {
+    "spec_key": "Y-SPU-D01|brand",
+    "attr_key": "brand",
+    "attr_value": "云织",
+    "level": "SPU",
+    "owner_id": "Y-SPU-D01"
+  },
+  {
+    "spec_key": "Y-SPU-D01|model",
+    "attr_key": "model",
+    "attr_value": "Y-D01",
+    "level": "SPU",
+    "owner_id": "Y-SPU-D01"
+  },
+  {
+    "spec_key": "Y-SPU-D01|warranty_months",
+    "attr_key": "warranty_months",
+    "attr_value": "0",
+    "level": "SPU",
+    "owner_id": "Y-SPU-D01"
+  },
+  {
+    "spec_key": "Y-D01-S|color",
+    "attr_key": "color",
+    "attr_value": "黑色",
+    "level": "SKU",
+    "owner_id": "Y-D01-S"
+  },
+  {
+    "spec_key": "Y-D01-S|size",
+    "attr_key": "size",
+    "attr_value": "S",
+    "level": "SKU",
+    "owner_id": "Y-D01-S"
+  },
+  {
+    "spec_key": "Y-D01-S|material",
+    "attr_key": "material",
+    "attr_value": "90%白鸭绒",
+    "level": "SKU",
+    "owner_id": "Y-D01-S"
+  },
+  {
+    "spec_key": "Y-D01-S|season",
+    "attr_key": "season",
+    "attr_value": "冬季",
+    "level": "SKU",
+    "owner_id": "Y-D01-S"
+  },
+  {
+    "spec_key": "Y-D01-M|color",
+    "attr_key": "color",
+    "attr_value": "黑色",
+    "level": "SKU",
+    "owner_id": "Y-D01-M"
+  },
+  {
+    "spec_key": "Y-D01-M|size",
+    "attr_key": "size",
+    "attr_value": "M",
+    "level": "SKU",
+    "owner_id": "Y-D01-M"
+  },
+  {
+    "spec_key": "Y-D01-M|material",
+    "attr_key": "material",
+    "attr_value": "90%白鸭绒",
+    "level": "SKU",
+    "owner_id": "Y-D01-M"
+  },
+  {
+    "spec_key": "Y-D01-M|season",
+    "attr_key": "season",
+    "attr_value": "冬季",
+    "level": "SKU",
+    "owner_id": "Y-D01-M"
+  },
+  {
+    "spec_key": "Y-D01-L|color",
+    "attr_key": "color",
+    "attr_value": "黑色",
+    "level": "SKU",
+    "owner_id": "Y-D01-L"
+  },
+  {
+    "spec_key": "Y-D01-L|size",
+    "attr_key": "size",
+    "attr_value": "L",
+    "level": "SKU",
+    "owner_id": "Y-D01-L"
+  },
+  {
+    "spec_key": "Y-D01-L|material",
+    "attr_key": "material",
+    "attr_value": "90%白鸭绒",
+    "level": "SKU",
+    "owner_id": "Y-D01-L"
+  },
+  {
+    "spec_key": "Y-D01-L|season",
+    "attr_key": "season",
+    "attr_value": "冬季",
+    "level": "SKU",
+    "owner_id": "Y-D01-L"
+  },
+  {
+    "spec_key": "SPU-AFR-01|brand",
+    "attr_key": "brand",
+    "attr_value": "格兰仕",
+    "level": "SPU",
+    "owner_id": "SPU-AFR-01"
+  },
+  {
+    "spec_key": "SPU-AFR-01|model",
+    "attr_key": "model",
+    "attr_value": "Galanz KZ40-108",
+    "level": "SPU",
+    "owner_id": "SPU-AFR-01"
+  },
+  {
+    "spec_key": "REAL-AFR-01|material",
+    "attr_key": "material",
+    "attr_value": "搪瓷",
+    "level": "SKU",
+    "owner_id": "REAL-AFR-01"
+  },
+  {
+    "spec_key": "REAL-AFR-01|control",
+    "attr_key": "control",
+    "attr_value": "智能操控",
+    "level": "SKU",
+    "owner_id": "REAL-AFR-01"
+  },
+  {
+    "spec_key": "REAL-AFR-01|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "1-2人",
+    "level": "SKU",
+    "owner_id": "REAL-AFR-01"
+  },
+  {
+    "spec_key": "SPU-AFR-02|brand",
+    "attr_key": "brand",
+    "attr_value": "美的",
+    "level": "SPU",
+    "owner_id": "SPU-AFR-02"
+  },
+  {
+    "spec_key": "SPU-AFR-02|model",
+    "attr_key": "model",
+    "attr_value": "Midea KZ25E101",
+    "level": "SPU",
+    "owner_id": "SPU-AFR-02"
+  },
+  {
+    "spec_key": "REAL-AFR-02|material",
+    "attr_key": "material",
+    "attr_value": "搪瓷",
+    "level": "SKU",
+    "owner_id": "REAL-AFR-02"
+  },
+  {
+    "spec_key": "REAL-AFR-02|control",
+    "attr_key": "control",
+    "attr_value": "智能操控",
+    "level": "SKU",
+    "owner_id": "REAL-AFR-02"
+  },
+  {
+    "spec_key": "REAL-AFR-02|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "1-2人",
+    "level": "SKU",
+    "owner_id": "REAL-AFR-02"
+  },
+  {
+    "spec_key": "SPU-VAC-01|brand",
+    "attr_key": "brand",
+    "attr_value": "戴森",
+    "level": "SPU",
+    "owner_id": "SPU-VAC-01"
+  },
+  {
+    "spec_key": "SPU-VAC-01|model",
+    "attr_key": "model",
+    "attr_value": "Dyson V15 Detect Fluffy",
+    "level": "SPU",
+    "owner_id": "SPU-VAC-01"
+  },
+  {
+    "spec_key": "REAL-VAC-01|power_w",
+    "attr_key": "power_w",
+    "attr_value": "500W以下",
+    "level": "SKU",
+    "owner_id": "REAL-VAC-01"
+  },
+  {
+    "spec_key": "SPU-VAC-02|brand",
+    "attr_key": "brand",
+    "attr_value": "德尔玛",
+    "level": "SPU",
+    "owner_id": "SPU-VAC-02"
+  },
+  {
+    "spec_key": "SPU-VAC-02|model",
+    "attr_key": "model",
+    "attr_value": "Deerma DX700",
+    "level": "SPU",
+    "owner_id": "SPU-VAC-02"
+  },
+  {
+    "spec_key": "REAL-VAC-02|power_w",
+    "attr_key": "power_w",
+    "attr_value": "500W以下",
+    "level": "SKU",
+    "owner_id": "REAL-VAC-02"
+  },
+  {
+    "spec_key": "SPU-HUM-01|brand",
+    "attr_key": "brand",
+    "attr_value": "德尔玛",
+    "level": "SPU",
+    "owner_id": "SPU-HUM-01"
+  },
+  {
+    "spec_key": "SPU-HUM-01|model",
+    "attr_key": "model",
+    "attr_value": "Deerma F628S",
+    "level": "SPU",
+    "owner_id": "SPU-HUM-01"
+  },
+  {
+    "spec_key": "REAL-HUM-01|humidity_type",
+    "attr_key": "humidity_type",
+    "attr_value": "除菌型",
+    "level": "SKU",
+    "owner_id": "REAL-HUM-01"
+  },
+  {
+    "spec_key": "SPU-HUM-02|brand",
+    "attr_key": "brand",
+    "attr_value": "小熊",
+    "level": "SPU",
+    "owner_id": "SPU-HUM-02"
+  },
+  {
+    "spec_key": "SPU-HUM-02|model",
+    "attr_key": "model",
+    "attr_value": "Bear JSQ-C30Q1",
+    "level": "SPU",
+    "owner_id": "SPU-HUM-02"
+  },
+  {
+    "spec_key": "REAL-HUM-02|humidity_type",
+    "attr_key": "humidity_type",
+    "attr_value": "除菌型",
+    "level": "SKU",
+    "owner_id": "REAL-HUM-02"
+  },
+  {
+    "spec_key": "SPU-KET-01|brand",
+    "attr_key": "brand",
+    "attr_value": "苏泊尔",
+    "level": "SPU",
+    "owner_id": "SPU-KET-01"
+  },
+  {
+    "spec_key": "SPU-KET-01|model",
+    "attr_key": "model",
+    "attr_value": "SUPOR SW-17J63B",
+    "level": "SPU",
+    "owner_id": "SPU-KET-01"
+  },
+  {
+    "spec_key": "REAL-KET-01|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "1L",
+    "level": "SKU",
+    "owner_id": "REAL-KET-01"
+  },
+  {
+    "spec_key": "REAL-KET-01|material",
+    "attr_key": "material",
+    "attr_value": "双层不锈钢",
+    "level": "SKU",
+    "owner_id": "REAL-KET-01"
+  },
+  {
+    "spec_key": "SPU-KET-02|brand",
+    "attr_key": "brand",
+    "attr_value": "美的",
+    "level": "SPU",
+    "owner_id": "SPU-KET-02"
+  },
+  {
+    "spec_key": "SPU-KET-02|model",
+    "attr_key": "model",
+    "attr_value": "Midea MK-SH15Colour102",
+    "level": "SPU",
+    "owner_id": "SPU-KET-02"
+  },
+  {
+    "spec_key": "REAL-KET-02|capacity_l",
+    "attr_key": "capacity_l",
+    "attr_value": "1L",
+    "level": "SKU",
+    "owner_id": "REAL-KET-02"
+  },
+  {
+    "spec_key": "REAL-KET-02|material",
+    "attr_key": "material",
+    "attr_value": "双层不锈钢",
+    "level": "SKU",
+    "owner_id": "REAL-KET-02"
+  },
+  {
+    "spec_key": "SPU-FAN-01|brand",
+    "attr_key": "brand",
+    "attr_value": "格力",
+    "level": "SPU",
+    "owner_id": "SPU-FAN-01"
+  },
+  {
+    "spec_key": "SPU-FAN-01|model",
+    "attr_key": "model",
+    "attr_value": "GREE FXDZ-2307Bg5",
+    "level": "SPU",
+    "owner_id": "SPU-FAN-01"
+  },
+  {
+    "spec_key": "REAL-FAN-01|control",
+    "attr_key": "control",
+    "attr_value": "遥控控制",
+    "level": "SKU",
+    "owner_id": "REAL-FAN-01"
+  },
+  {
+    "spec_key": "SPU-FAN-02|brand",
+    "attr_key": "brand",
+    "attr_value": "美的",
+    "level": "SPU",
+    "owner_id": "SPU-FAN-02"
+  },
+  {
+    "spec_key": "SPU-FAN-02|model",
+    "attr_key": "model",
+    "attr_value": "Midea SAC35CR",
+    "level": "SPU",
+    "owner_id": "SPU-FAN-02"
+  },
+  {
+    "spec_key": "REAL-FAN-02|control",
+    "attr_key": "control",
+    "attr_value": "遥控控制",
+    "level": "SKU",
+    "owner_id": "REAL-FAN-02"
+  },
+  {
+    "spec_key": "SPU-AUD-01|brand",
+    "attr_key": "brand",
+    "attr_value": "捷波朗",
+    "level": "SPU",
+    "owner_id": "SPU-AUD-01"
+  },
+  {
+    "spec_key": "SPU-AUD-01|model",
+    "attr_key": "model",
+    "attr_value": "Jabra Elite 7 Active",
+    "level": "SPU",
+    "owner_id": "SPU-AUD-01"
+  },
+  {
+    "spec_key": "REAL-AUD-01|wearing",
+    "attr_key": "wearing",
+    "attr_value": "头戴式",
+    "level": "SKU",
+    "owner_id": "REAL-AUD-01"
+  },
+  {
+    "spec_key": "SPU-AUD-02|brand",
+    "attr_key": "brand",
+    "attr_value": "QCY",
+    "level": "SPU",
+    "owner_id": "SPU-AUD-02"
+  },
+  {
+    "spec_key": "SPU-AUD-02|model",
+    "attr_key": "model",
+    "attr_value": "QCY H3",
+    "level": "SPU",
+    "owner_id": "SPU-AUD-02"
+  },
+  {
+    "spec_key": "REAL-AUD-02|wearing",
+    "attr_key": "wearing",
+    "attr_value": "头戴式",
+    "level": "SKU",
+    "owner_id": "REAL-AUD-02"
+  },
+  {
+    "spec_key": "SPU-PWR-01|brand",
+    "attr_key": "brand",
+    "attr_value": "小米",
+    "level": "SPU",
+    "owner_id": "SPU-PWR-01"
+  },
+  {
+    "spec_key": "SPU-PWR-01|model",
+    "attr_key": "model",
+    "attr_value": "Xiaomi 移动电源 3 20000mAh",
+    "level": "SPU",
+    "owner_id": "SPU-PWR-01"
+  },
+  {
+    "spec_key": "REAL-PWR-01|capacity_mah",
+    "attr_key": "capacity_mah",
+    "attr_value": "25000mAh及以上",
+    "level": "SKU",
+    "owner_id": "REAL-PWR-01"
+  },
+  {
+    "spec_key": "SPU-PWR-02|brand",
+    "attr_key": "brand",
+    "attr_value": "罗马仕",
+    "level": "SPU",
+    "owner_id": "SPU-PWR-02"
+  },
+  {
+    "spec_key": "SPU-PWR-02|model",
+    "attr_key": "model",
+    "attr_value": "ROMOSS 10000mAh 22.5W",
+    "level": "SPU",
+    "owner_id": "SPU-PWR-02"
+  },
+  {
+    "spec_key": "REAL-PWR-02|capacity_mah",
+    "attr_key": "capacity_mah",
+    "attr_value": "25000mAh及以上",
+    "level": "SKU",
+    "owner_id": "REAL-PWR-02"
+  },
+  {
+    "spec_key": "SPU-APP-01|brand",
+    "attr_key": "brand",
+    "attr_value": "雪中飞",
+    "level": "SPU",
+    "owner_id": "SPU-APP-01"
+  },
+  {
+    "spec_key": "SPU-APP-01|model",
+    "attr_key": "model",
+    "attr_value": "雪中飞 XZF2155",
+    "level": "SPU",
+    "owner_id": "SPU-APP-01"
+  },
+  {
+    "spec_key": "REAL-APP-01|material",
+    "attr_key": "material",
+    "attr_value": "牛仔布",
+    "level": "SKU",
+    "owner_id": "REAL-APP-01"
+  },
+  {
+    "spec_key": "REAL-APP-01|fill",
+    "attr_key": "fill",
+    "attr_value": "白鹅绒",
+    "level": "SKU",
+    "owner_id": "REAL-APP-01"
+  },
+  {
+    "spec_key": "SPU-APP-02|brand",
+    "attr_key": "brand",
+    "attr_value": "茵曼",
+    "level": "SPU",
+    "owner_id": "SPU-APP-02"
+  },
+  {
+    "spec_key": "SPU-APP-02|model",
+    "attr_key": "model",
+    "attr_value": "茵曼 INMAN W2302",
+    "level": "SPU",
+    "owner_id": "SPU-APP-02"
+  },
+  {
+    "spec_key": "REAL-APP-02|material",
+    "attr_key": "material",
+    "attr_value": "牛仔布",
+    "level": "SKU",
+    "owner_id": "REAL-APP-02"
+  },
+  {
+    "spec_key": "REAL-APP-02|fill",
+    "attr_key": "fill",
+    "attr_value": "白鹅绒",
+    "level": "SKU",
+    "owner_id": "REAL-APP-02"
+  }
+]

@@ -1,0 +1,540 @@
+"""knowledge_engine → 运行时 knowledge 表的导入桥（B1b：layer 即 scope）。
+
+设计（低耦合、可复用、零 schema 改动）：
+- 双引擎（资产层）持有完整数据：scope / compiled_truth / timeline / 全属性
+- 运行时（knowledge 表）只承载 RAG 可消费的 Q&A 类知识
+- 本桥负责把资产层的 KnowledgeItem 翻译成 knowledge 表的插入行，
+  并把 scope 映射到运行时已有的 layer 字段（B1b，不加新列）
+
+scope → layer 映射（B1b 核心）：
+    general → platform（跨租户通用话术） / industry（行业规则）
+    seller  → store（单店，store_id 取自 scope_key 或调用方默认）
+    memory  → evolution（记忆，默认隔离）
+
+哪些知识进 RAG 表：
+    FAQ / Script / Policy / Rule（有 Q&A 语义，RAG 可检索）
+    实体类（Category/Product/SKU/Attribute）留在图谱资产层，
+    供 Wiki 人读 + 将来 Neo4j 导入，不进 Q&A 表
+
+关键约束：
+    seller 知识必须有非空 store_id，否则会被所有店铺检索到（隔离漏洞）
+"""
+
+from __future__ import annotations
+
+import logging
+import sqlite3
+from typing import Any
+
+from .models import (
+    KnowledgeItem,
+    KnowledgeKind,
+    KnowledgeScope,
+    TimelineEntry,
+    utc_now_iso,
+)
+
+logger = logging.getLogger("knowledge_engine.runtime_bridge")
+
+
+# scope → layer 映射（B1b：复用运行时已有 layer，不加列）
+SCOPE_TO_LAYER: dict[KnowledgeScope, str] = {
+    KnowledgeScope.GENERAL: "platform",
+    KnowledgeScope.SELLER: "store",
+    KnowledgeScope.MEMORY: "evolution",
+}
+
+# 运行时 layer → scope（SCOPE_TO_LAYER 的反向映射；industry/platform 均属 general）
+RUNTIME_LAYER_TO_SCOPE: dict[str, KnowledgeScope] = {
+    "platform": KnowledgeScope.GENERAL,
+    "industry": KnowledgeScope.GENERAL,
+    "store": KnowledgeScope.SELLER,
+    "product": KnowledgeScope.SELLER,
+    "evolution": KnowledgeScope.MEMORY,
+}
+
+# kind → knowledge 表 category 字段（RAG 检索的类别标签）
+KIND_TO_CATEGORY: dict[KnowledgeKind, str] = {
+    KnowledgeKind.FAQ: "常见问答",
+    KnowledgeKind.SCRIPT: "客服话术",
+    KnowledgeKind.POLICY: "售后政策",
+    KnowledgeKind.RULE: "行业规则",
+}
+
+# 只导入 Q&A 类（RAG 可消费）；实体类留在图谱资产层
+RAG_IMPORTABLE: set[KnowledgeKind] = {
+    KnowledgeKind.FAQ,
+    KnowledgeKind.SCRIPT,
+    KnowledgeKind.POLICY,
+    KnowledgeKind.RULE,
+}
+
+# 任务6 risk_level 有 critical，运行时 knowledge 表只有 low/medium/high，需映射
+_RISK_MAP = {"critical": "high", "high": "high", "medium": "medium", "low": "low"}
+
+
+def _to_question(item: KnowledgeItem) -> str:
+    """取一条知识的"问题"侧（RAG 检索时的 query 命中对象）。"""
+    attrs = item.attributes
+    if item.kind is KnowledgeKind.FAQ:
+        return attrs.get("question") or item.compiled_truth
+    if item.kind is KnowledgeKind.SCRIPT:
+        return attrs.get("intent") or attrs.get("canonical_question") or item.compiled_truth
+    if item.kind is KnowledgeKind.POLICY:
+        return attrs.get("policy_name") or item.compiled_truth
+    if item.kind is KnowledgeKind.RULE:
+        return attrs.get("rule_title") or item.compiled_truth
+    return item.compiled_truth
+
+
+def _to_keywords(item: KnowledgeItem) -> str:
+    """取关键词：优先记录自带，其次拼上意图/别名。"""
+    attrs = item.attributes
+    kw = attrs.get("keywords", "") or ""
+    extras = []
+    for k in ("intent", "aliases"):
+        v = attrs.get(k)
+        if isinstance(v, str) and v:
+            extras.append(v)
+        elif isinstance(v, list):
+            extras.extend(str(x) for x in v)
+    return " ".join([kw, *extras]).strip()
+
+
+def to_knowledge_row(item: KnowledgeItem, *, default_store_id: str = "default") -> dict[str, Any] | None:
+    """把一个 KnowledgeItem 翻译成 knowledge 表插入行。
+
+    返回 None 表示该知识不应进 RAG 表（实体类，留在图谱）。
+    参数：
+        item:            双引擎资产层的知识
+        default_store_id: seller 知识没有 scope_key 时的兜底店铺 id
+    """
+    if item.kind not in RAG_IMPORTABLE:
+        return None  # 实体类留在图谱资产层
+
+    # scope → layer（B1b）；已有 layer 优先保留
+    layer = item.attributes.get("layer") or SCOPE_TO_LAYER[item.scope]
+
+    # seller 知识必须有非空 store_id（否则检索隔离失效）
+    store_id: str | None = None
+    if item.scope is KnowledgeScope.SELLER:
+        if item.scope_key and item.scope_key != "all":
+            store_id = item.scope_key
+        elif item.scope_key == "all":
+            # ⑤ 多租户：无店铺维度的 seller 资产与 general 同待遇——
+            # store_id=NULL（所有店铺可见），租户维度归全局组（见 import_to_runtime）
+            store_id = None
+        else:
+            store_id = default_store_id
+
+    risk = _RISK_MAP.get(str(item.attributes.get("risk_level", "low")), "low")
+
+    return {
+        "id": f"kg-{item.id}",
+        "category": KIND_TO_CATEGORY[item.kind],
+        "intent": item.attributes.get("intent") or item.id,
+        "question": _to_question(item),
+        "answer": item.compiled_truth,
+        "keywords": _to_keywords(item),
+        "risk_level": risk,
+        # source 用 kg:{item.id} 唯一标识，保证检索结果可区分是哪条知识
+        "source": f"kg:{item.id}",
+        "version": 1,
+        "status": "active",
+        "approved_by": "builtin",
+        "layer": layer,
+        "store_id": store_id,
+        # 空字符串归一化为 None：检索过滤是 `sku_id IS NULL`，
+        # 空串会让常规检索静默漏掉该知识（F-006）
+        "sku_id": item.attributes.get("sku_id") or None,
+        "review_status": "approved",
+    }
+
+
+def import_to_runtime(
+    items: list[KnowledgeItem],
+    knowledge_base,
+    *,
+    tenant_id: str | None = None,
+    default_store_id: str = "default",
+    update_existing: bool = False,
+    allow_global_update: bool = False,
+) -> dict[str, int]:
+    """把双引擎资产层知识导入运行时 knowledge 表。
+
+    参数：
+        items:            双引擎的 KnowledgeItem 列表（loader.load_clean_dir 产出）
+        knowledge_base:   运行时 KnowledgeBase 实例（service.knowledge）
+        tenant_id:        调用方租户；general/无店铺 seller 项强制归全局组（NULL），
+                          有店铺 seller 项归本租户组
+        default_store_id: seller 知识无 scope_key 时的兜底店铺 id
+        update_existing:  True 时对已存在的 kg-* 行做内容更新（A6：热更新真正生效）；
+                          False 时跳过已存在（默认幂等，启动/测试不变）
+        allow_global_update: True 时允许对全局行（tenant_id IS NULL）热更新。
+                          仅 appliance 自身（启动导入）可传 True；租户端点
+                          （import-assets API）不传——租户永远不能改写全局知识。
+
+    返回：
+        {"imported": 导入条数, "updated": 更新条数, "update_failed": 更新失败条数,
+         "skipped_entity": 留在图谱的实体条数, "skipped_existing": 已存在跳过的条数,
+         "skipped_foreign": 被其他租户持有而跳过的条数,
+         "seller_default_store_count": 落入 default_store_id 的 seller 条数}
+
+    ⚠️ 隔离红线：02_clean 资产层通常无店铺维度字段，seller 知识会落入
+    default_store_id。若该值用裸 "default"，所有店铺的 seller 知识会互相可见
+    （隔离失效）。生产接入时必须按店传入 default_store_id，禁止静默用裸 default。
+
+    幂等（默认）：以 id="kg-{item.id}" 导入，已存在的跳过（不重复、不覆盖）。
+    热更新（update_existing=True）：已存在的行更新 answer/question/关键词等
+    内容字段（不改 id/租户/店铺），让 02_clean 修改后免重启生效。
+
+    多租户分组（P2-1 + ⑤）：general 与 scope_key="all" 的 seller 项强制归
+    **全局组**（tenant_id=None 写入）——平台通用话术/规则/无店铺 FAQ 对所有
+    租户可见；有店铺维度的 seller 项归**调用方租户组**。两组分别走预查/热更新/
+    INSERT 主体（各自按组的租户做租户隔离），零交叉改写。
+    """
+    imported = 0
+    updated = 0
+    update_failed = 0
+    skipped_foreign = 0
+    skipped_entity = 0
+    skipped_existing = 0
+    seller_default_store_count = 0
+
+    # P2-1+⑤：按有效租户分组——全局组（NULL）与调用方租户组
+    global_items: list[KnowledgeItem] = []
+    tenant_items: list[KnowledgeItem] = []
+    for item in items:
+        if item.scope is KnowledgeScope.GENERAL or (
+            item.scope is KnowledgeScope.SELLER and item.scope_key == "all"
+        ):
+            global_items.append(item)
+        else:
+            tenant_items.append(item)
+
+    def _import_group(
+        group_items: list[KnowledgeItem], group_tenant: str | None
+    ) -> None:
+        """对一组 items 执行预查/热更新/INSERT（组租户维度隔离）。"""
+        nonlocal imported, updated, update_failed, skipped_foreign
+        nonlocal skipped_entity, skipped_existing, seller_default_store_count
+        # 幂等：先查已存在的 kg-* id，重复导入跳过（D-014 语义，不报错不重复）
+        # P3：预查按租户分组——本租户/全局行进 existing（可幂等跳过/热更新），
+        # 他租户行进 foreign（跳过防跨租户改写）
+        existing: set[str] = set()
+        foreign: set[str] = set()
+        try:
+            with knowledge_base.db.connect() as conn:
+                rows = conn.execute(
+                    # 终审 P2：预查只收 active 行——retired 的 kg-X 行不应让热更新
+                    # 打在 invisible 行上（Wiki 接管后 active 是 kb-uuid 行）
+                    "SELECT id, tenant_id FROM knowledge WHERE id LIKE 'kg-%' AND status='active'"
+                ).fetchall()
+                for r in rows:
+                    row_tenant = r["tenant_id"]
+                    if group_tenant is None:
+                        # 全局组：NULL 行进 existing；任何租户行都是 foreign
+                        (existing if row_tenant is None else foreign).add(r["id"])
+                    elif row_tenant is None:
+                        # 多租户修复（P1-2）：租户组把 NULL 全局行归 foreign——
+                        # 租户导入永远不能改写全局知识（此前归 existing 且热更新
+                        # 条件含 NULL 分支，租户 admin 可越权重写全局行）
+                        foreign.add(r["id"])
+                    elif row_tenant == group_tenant:
+                        existing.add(r["id"])
+                    else:
+                        foreign.add(r["id"])
+        except Exception:
+            # P1-2：预查失败不再静默假装空集合（此前会照常 INSERT，
+            # 表缺失/迁移未跑时中途崩溃且无日志）
+            logger.exception("import_to_runtime 预查已存在知识失败，按空集合继续")
+            existing = set()
+        for item in group_items:
+            row = to_knowledge_row(item, default_store_id=default_store_id)
+            if row is None:
+                skipped_entity += 1
+                continue
+            if (
+                item.scope is KnowledgeScope.SELLER
+                and row.get("store_id") == default_store_id
+            ):
+                seller_default_store_count += 1
+            target_id = f"kg-{item.id}"
+            if target_id in foreign:
+                # P3：kg 资产被其他租户持有——跳过（防跨租户改写），与 skipped_existing 区分
+                skipped_foreign += 1
+                logger.warning(
+                    "kg 资产 %s 已被其他租户持有，跳过: tenant_id=%s",
+                    target_id, group_tenant,
+                )
+                continue
+            if target_id in existing:
+                # 全局组热更新授权：调用方本身是全局上下文（tenant_id is None）
+                # 或 appliance 显式传 allow_global_update=True；租户调用方
+                # （tenant_id 非 None 且未传旗标）不得改写全局行（P1-2）
+                if update_existing and (
+                    group_tenant is not None or allow_global_update or tenant_id is None
+                ):
+                    # A6：热更新——内容字段更新（不改 id/租户/店铺/status）
+                    # search_text / embedding 必须一并刷新，否则 keywords 别名
+                    # 修改后检索索引不更新（F-007：热更新假修复）
+                    from ..text_utils import hash_embedding, search_text, vector_to_blob
+
+                    qa_text = search_text(
+                        row.get("question") or "",
+                        row.get("answer") or "",
+                        row.get("keywords") or "",
+                        row.get("category") or "",
+                        row.get("intent") or "",
+                    )
+                    emb_text = (
+                        f"{row.get('question') or ''} {row.get('keywords') or ''} {row.get('answer') or ''}"
+                    )
+                    updatable = {
+                        "category": row.get("category"),
+                        "intent": row.get("intent"),
+                        "question": row.get("question"),
+                        "answer": row.get("answer"),
+                        "keywords": row.get("keywords"),
+                        "risk_level": row.get("risk_level"),
+                        "layer": row.get("layer"),
+                        "search_text": qa_text,
+                        "embedding": vector_to_blob(hash_embedding(emb_text)),
+                        "sku_id": row.get("sku_id"),
+                        # P3：热更新必须刷新 updated_at（时间线可溯源）
+                        "updated_at": utc_now_iso(),
+                    }
+                    if item.scope is KnowledgeScope.GENERAL or item.scope_key == "all":
+                        # general/无店铺 知识不得带 store_id（否则常规检索被店铺隔离
+                        # 过滤，平台通用话术不可见——修复 B1b 层迁移后残留的隔离误伤）
+                        updatable["store_id"] = None
+                    else:
+                        updatable["store_id"] = row.get("store_id")
+                    # None 值需要显式 SET（清除旧值）；其余字段保留
+                    set_clause = ", ".join(f"{k}=?" for k in updatable)
+                    # P3：热更新递增 record_version（并发乐观锁可见性，对齐 knowledge_management 口径）
+                    set_clause += ", record_version=record_version+1"
+                    # 多租户修复（P1-2）：热更新 UPDATE 租户条件收紧——
+                    # 全局组只能写 NULL 行；租户组只能写本租户行（去掉 NULL 分支）
+                    tenant_clause = (
+                        "AND tenant_id IS NULL"
+                        if group_tenant is None
+                        else "AND tenant_id=?"
+                    )
+                    params: list[Any] = [*updatable.values(), target_id]
+                    if group_tenant is not None:
+                        params.append(group_tenant)
+                    try:
+                        # P3：热更新 UPDATE 必须在 _write_lock 内（对照 rag.add_document 锁模式）
+                        with knowledge_base.db._write_lock, knowledge_base.db.connect() as conn:
+                            cursor = conn.execute(
+                                f"UPDATE knowledge SET {set_clause} WHERE id=? {tenant_clause}",
+                                tuple(params),
+                            )
+                            if cursor.rowcount != 1:
+                                raise RuntimeError(f"hot update 无匹配行: {target_id}")
+                            # F-007 补全：search_text 已重算，但 UPDATE 不自动同步 FTS 索引
+                            # （rag.add_document 只在新增时写 knowledge_fts），
+                            # 必须显式重建该行的 FTS 条目，否则热更新后全文检索仍命中旧内容。
+                            conn.execute(
+                                "DELETE FROM knowledge_fts WHERE doc_id=?",
+                                (target_id,),
+                            )
+                            conn.execute(
+                                "INSERT INTO knowledge_fts(doc_id, search_text) VALUES (?, ?)",
+                                (target_id, qa_text),
+                            )
+                        updated += 1
+                    except Exception:
+                        # P1-2/P3：热更新失败计 update_failed（不再伪装成 skipped_existing）
+                        logger.exception("热更新失败: %s", target_id)
+                        update_failed += 1
+                else:
+                    skipped_existing += 1
+                continue
+            # add_document 不接受 None 的 sku_id 之外的可空字段，这里显式剔除
+            row = {k: v for k, v in row.items() if v is not None}
+            # 复审决策：全局组 INSERT 不加旗标门禁——内容来自共享 02_clean 目录
+            # （调用方无法注入内容，非投毒面），且幂等 first-wins 保证首个导入者
+            # 写入后其他调用方被 existing 拦截；appliance 是全局内容的**权威刷新者**
+            # （allow_global_update=True 热更新），租户只能 seed 无法改写。
+            try:
+                knowledge_base.add_document(
+                    **row,
+                    tenant_id=group_tenant,
+                    knowledge_key=f"kg-{item.id}",
+                )
+            except sqlite3.IntegrityError:
+                # 终审 P2：Wiki 已 create+approve 同键词条（kb-uuid active 同租户）后，
+                # 资产重导 INSERT kg-X active 触发 v33 唯一索引——单条失败不中断整轮
+                logger.exception("kg 资产 %s 插入触发唯一约束（可能已被 Wiki 接管），计 update_failed", target_id)
+                update_failed += 1
+                continue
+            existing.add(target_id)
+            imported += 1
+
+    # 先导入租户组（保留调用方租户语义），再导入全局组（NULL）
+    _import_group(tenant_items, tenant_id)
+    _import_group(global_items, None)
+    return {
+        "imported": imported,
+        "updated": updated,
+        "update_failed": update_failed,
+        "skipped_entity": skipped_entity,
+        "skipped_existing": skipped_existing,
+        "skipped_foreign": skipped_foreign,
+        "seller_default_store_count": seller_default_store_count,
+    }
+
+
+def load_from_runtime(
+    knowledge_base,
+    *,
+    tenant_id: str | None = None,
+    statuses: tuple[str, ...] = ("active",),
+) -> list[KnowledgeItem]:
+    """反向加载器：从运行时 knowledge 表读 Q&A 类知识 → KnowledgeItem 列表。
+
+    与 import_to_runtime 互逆，构成"资产层 → 运行时 → 资产层"闭环
+    （任务3 Wiki 搭建的"编辑即时生效"依赖此桥）。
+
+    读取规则（对齐 import_to_runtime 的写入口径）：
+    - 只读 Q&A 类行（layer ∈ platform/industry/store/product/evolution 且非实体类），
+      实体类（Category/Product/SKU/Attribute）留在资产层，不读
+    - id 归一化：运行时 `kg-{id}` → KnowledgeItem.id = `{id}`（与资产层同名）
+    - 演化历史：由该 knowledge_key 的**全部版本行**（含 retired/candidate）按 version
+      序拼接 —— 每次版本创建/激活/停用都构成一条可溯源的时间线
+    - scope 由运行时 layer 反推（B1b 反向映射：platform/industry→general，
+      store/product→seller，evolution→memory）
+
+    参数：
+        knowledge_base: 运行时 KnowledgeBase 实例（service.knowledge）
+        tenant_id:      租户过滤；None 表示**只读全局行**（tenant_id IS NULL）；
+                        传租户表示本租户 + 全局（对齐 rag.retrieve 语义）
+        statuses:       只读哪些状态的行（默认只读 active）
+
+    返回：
+        Q&A 类 KnowledgeItem 列表（无资产层对应的纯运行时知识也会返回）。
+    """
+    placeholders = ",".join("?" for _ in statuses)
+    params: list[Any] = [*statuses]
+    # 多租户修复（P3-4）：None 时必须有租户过滤（只读全局行）——此前 None 时
+    # 完全没有 tenant_clause，返回**所有租户的行**（危险默认，潜在泄露面）
+    if tenant_id is None:
+        tenant_clause = "AND tenant_id IS NULL"
+    else:
+        tenant_clause = "AND (tenant_id IS NULL OR tenant_id=?)"
+        params.append(tenant_id)
+    with knowledge_base.db.connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT id, knowledge_key, category, intent, question, answer, keywords,
+                   risk_level, source, version, status, review_status, layer,
+                   store_id, sku_id, created_at, updated_at, effective_from,
+                   effective_to, approved_by, tenant_id
+            FROM knowledge
+            WHERE status IN ({placeholders}) {tenant_clause}
+            ORDER BY knowledge_key, version ASC
+            """,
+            tuple(params),
+        ).fetchall()
+
+    # 按 knowledge_key 归组（同一条知识的多版本）
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_key.setdefault(row["knowledge_key"], []).append(dict(row))
+
+    items: list[KnowledgeItem] = []
+    for key, versions in by_key.items():
+        current = versions[-1]  # version ASC，最后一行即最新版本
+        layer = current["layer"] or "industry"
+        scope = RUNTIME_LAYER_TO_SCOPE.get(layer, KnowledgeScope.GENERAL)
+
+        # id 归一化：运行时 knowledge_key 保留 `kg-{id}` 约定（import_to_runtime 写入时
+        # knowledge_key=f"kg-{item.id}"），且跨版本不变；行 id 随版本递增会变（新 uuid），
+        # 不能作为词条稳定 id。剥 kg- 前缀对齐资产层同名。
+        item_id = key
+        if item_id.startswith("kg-"):
+            item_id = item_id[len("kg-") :]
+
+        # 编译真相（当前最佳结论）
+        compiled_truth = current["answer"] or current["question"]
+
+        # 演化历史：逐版本拼接（created/revised/activated/retired）
+        timeline: list[TimelineEntry] = []
+        for v in versions:
+            when = v.get("updated_at") or v.get("effective_from") or utc_now_iso()
+            if v["version"] <= 1:
+                action, note = "created", f"导入运行时：{key}"
+            elif v["status"] == "active":
+                action, note = "revised", f"版本 {v['version']} 生效"
+            elif v["status"] == "retired":
+                action, note = "retired", f"版本 {v['version']} 停用"
+            else:
+                action, note = "revised", f"版本 {v['version']} 候选"
+            timeline.append(
+                TimelineEntry(
+                    at=when,
+                    action=action,
+                    note=note,
+                    source=v.get("source", "") or "runtime",
+                )
+            )
+
+        attributes: dict[str, Any] = {
+            "category": current["category"],
+            "intent": current["intent"],
+            "question": current["question"],
+            "answer": current["answer"],
+            "keywords": current["keywords"] or "",
+            "risk_level": current["risk_level"] or "low",
+            "source": current["source"],
+            "version": current["version"],
+            "status": current["status"],
+            "review_status": current["review_status"] or "",
+            "layer": current["layer"],
+            "store_id": current["store_id"],
+            "sku_id": current["sku_id"],
+            "knowledge_key": key,
+            "approved_by": current["approved_by"],
+            "effective_from": current["effective_from"],
+            # ④ 多租户：透传租户维度（Wiki 影子编辑需区分全局词条与租户行）
+            "tenant_id": current["tenant_id"],
+        }
+
+        # kind：layer=industry/platform → rule（行业规则）；否则按 category 反推
+        kind = _infer_kind_from_layer_and_category(layer, current["category"])
+        scope_key = current["store_id"] or "all"
+
+        items.append(
+            KnowledgeItem(
+                id=item_id,
+                kind=kind,
+                scope=scope,
+                scope_key=scope_key,
+                compiled_truth=compiled_truth,
+                timeline=timeline,
+                attributes=attributes,
+            )
+        )
+    return items
+
+
+def _infer_kind_from_layer_and_category(
+    layer: str, category: str | None
+) -> KnowledgeKind:
+    """从运行时 layer + category 反推 KnowledgeKind（尽力而为，可被合并层覆盖）。
+
+    layer=industry 的行必是行业规则（rule）；其余按 category 关键词归类，
+    未命中回退 policy（售后政策）。
+    """
+    if layer == "industry":
+        return KnowledgeKind.RULE
+    text = category or ""
+    if "常见问答" in text or "FAQ" in text.upper():
+        return KnowledgeKind.FAQ
+    if "客服话术" in text or "SOP" in text.upper():
+        return KnowledgeKind.SCRIPT
+    if "行业规则" in text or "法规" in text:
+        return KnowledgeKind.RULE
+    return KnowledgeKind.POLICY

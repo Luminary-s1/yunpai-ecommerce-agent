@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import base64
-import binascii
 import json
 import math
-import re
 import sqlite3
 import threading
 import uuid
@@ -37,13 +34,14 @@ def utc_now() -> str:
 
 
 class SessionScopeError(ValueError):
-    def __init__(self, message: str, *, code: str = "session_scope_error"):
-        super().__init__(message)
-        self.code = code
+    pass
 
 
 class Database:
-    SCHEMA_VERSION = 32
+    # 占号裁定（负责人 08-13）：v31 归 PR #11、v32 归 F-322/负责人分支（均已合入
+    # main，SCHEMA_VERSION 取最大值 33）、本 PR 的 knowledge_key active 唯一索引
+    # 用 v33（防同名方法静默覆盖事故，见 CONTRIBUTING「Schema 版本号占用登记」）
+    SCHEMA_VERSION = 33
 
     def __init__(self, path: Path):
         self.path = path
@@ -174,6 +172,9 @@ class Database:
             if 32 not in applied:
                 self._apply_v32(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (32, ?)", (utc_now(),))
+            if 33 not in applied:
+                self._apply_v33(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (33, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2196,7 +2197,6 @@ class Database:
             """
         )
 
-    @classmethod
     def _apply_v26(cls, conn: sqlite3.Connection) -> None:
         exists = conn.execute(
             "SELECT 1 FROM sqlite_master "
@@ -2432,6 +2432,8 @@ class Database:
                 ON traffic_analysis_runs(tenant_id, experiment_id, created_at DESC);
             """
         )
+
+    @staticmethod
 
     @staticmethod
     def _apply_v29(conn: sqlite3.Connection) -> None:
@@ -3003,6 +3005,71 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v33(conn: sqlite3.Connection) -> None:
+        # 占号裁定：本 PR 迁移从 v31 改 v33（v31 归 PR #11，v32 归 F-322）。
+        # 语义：本 PR 的两块迁移合入 v33——P0-2 检索日志落 SQLite（原 v30 被
+        # main 的 inventory_planning 占用后并入本号）+ knowledge_key active
+        # 唯一索引（防 Wiki 编辑与资产重导产生双份 active）。
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS retrieval_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts REAL NOT NULL,
+                tenant_id TEXT NOT NULL DEFAULT '',
+                store_id TEXT NOT NULL DEFAULT '',
+                query TEXT NOT NULL DEFAULT '',
+                hits INTEGER NOT NULL DEFAULT 0,
+                guard_blocks INTEGER NOT NULL DEFAULT 0,
+                guard_scope_block INTEGER NOT NULL DEFAULT 0,
+                memory_recalled INTEGER NOT NULL DEFAULT 0,
+                latency_ms REAL NOT NULL DEFAULT 0.0,
+                failed INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'graph',
+                event_type TEXT NOT NULL DEFAULT 'normal'
+            );
+            CREATE INDEX IF NOT EXISTS idx_retrieval_logs_ts
+                ON retrieval_logs(ts DESC);
+            CREATE INDEX IF NOT EXISTS idx_retrieval_logs_event
+                ON retrieval_logs(event_type, ts DESC);
+            """
+        )
+        # P1-1 知识键唯一性：同一 (tenant_id, knowledge_key) 只允许**一行 active**。
+        # 防止 Wiki 编辑（kg- 键空间）与资产导入重导产生双份 active 知识；
+        # 保留多版本语义（candidate/retired 可并存，revise 新版本 + 旧 active 共存）。
+        # 防御：knowledge 表缺失（schema_migrations 撒谎场景）时跳过，
+        # 由 _validate_schema 统一兜底报"schema validation failed"。
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge'"
+        ).fetchone()
+        if exists is None:
+            return
+        # 建索引前先清理历史重复 active（若有）：同一 (tenant_id, knowledge_key)
+        # 保留最新一行 active，其余置 retired——否则唯一索引抛 IntegrityError，
+        # 生产库迁移直接崩溃。COALESCE 使 NULL 租户（全局行）也参与去重。
+        conn.execute(
+            """
+            UPDATE knowledge SET status='retired', effective_to=COALESCE(effective_to, created_at)
+            WHERE status='active' AND id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY COALESCE(tenant_id, ''), knowledge_key
+                        ORDER BY version DESC, updated_at DESC, rowid DESC
+                    ) AS rn
+                    FROM knowledge
+                    WHERE status='active' AND knowledge_key IS NOT NULL
+                ) WHERE rn = 1
+            )
+            """
+        )
+        conn.executescript(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_key_unique
+                ON knowledge(COALESCE(tenant_id, ''), knowledge_key)
+                WHERE knowledge_key IS NOT NULL AND status='active';
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -3161,10 +3228,6 @@ class Database:
                 "competitor_sku",
                 "payload_hash",
                 "entity_match_id",
-                "rating_value",
-                "rating_scale",
-                "sales_rank",
-                "rank_scope",
             },
             "sop_definitions": {"tenant_id", "sop_key", "current_active_version"},
             "sop_versions": {"definition_id", "version", "dsl_json", "status"},
@@ -3307,15 +3370,7 @@ class Database:
                 "lease_until",
                 "record_version",
             },
-            "messages": {
-                "tenant_id",
-                "client_id",
-                "redacted",
-                "context_snapshot_id",
-                "customer_intent",
-                "intent_confidence",
-                "intent_method",
-            },
+            "messages": {"tenant_id", "client_id", "redacted", "context_snapshot_id"},
             "qa_results": {"tenant_id", "issues_json", "review_status", "record_version"},
             "channel_reply_drafts": {"outbox_id", "record_version", "status"},
             "channel_outbox": {
@@ -3558,17 +3613,6 @@ class Database:
             )
         return event_id
 
-    def recent_messages(self, session_id: str, limit: int) -> list[dict[str, Any]]:
-        with self.connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT role, content, created_at FROM messages
-                WHERE session_id = ? ORDER BY created_at DESC LIMIT ?
-                """,
-                (session_id, limit),
-            ).fetchall()
-        return [dict(row) for row in reversed(rows)]
-
     def recent_assistant_route_reasons(
         self, session_id: str, limit: int = 2
     ) -> list[str]:
@@ -3581,7 +3625,18 @@ class Database:
                 """,
                 (session_id, limit),
             ).fetchall()
-        return [str(row[0]) for row in rows if row[0] is not None]
+        return [str(row["route_reason"]) for row in rows if row["route_reason"]]
+
+    def recent_messages(self, session_id: str, limit: int) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT role, content, created_at FROM messages
+                WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?
+                """,
+                (session_id, limit),
+            ).fetchall()
+        return [dict(row) for row in reversed(rows)]
 
     def paginated_messages(
         self,
@@ -3595,27 +3650,11 @@ class Database:
         decoded_cursor: tuple[str, str] | None = None
         if cursor:
             try:
-                if "|" in cursor:
-                    # Legacy composite cursors remain readable. Recover the UTC
-                    # offset from clients that naively placed the old '+' form in
-                    # a query string, where form decoding changed it to a space.
-                    raw_cursor = cursor
-                    if "T" in raw_cursor and "+" not in raw_cursor:
-                        raw_cursor = re.sub(
-                            r" (?=\d{2}:\d{2}\|)", "+", raw_cursor, count=1
-                        )
-                else:
-                    padding = "=" * (-len(cursor) % 4)
-                    raw_cursor = base64.b64decode(
-                        cursor + padding,
-                        altchars=b"-_",
-                        validate=True,
-                    ).decode("utf-8")
-                created_at, message_id = raw_cursor.rsplit("|", 1)
+                created_at, message_id = cursor.rsplit("|", 1)
                 datetime.fromisoformat(created_at)
                 if created_at and message_id:
                     decoded_cursor = (created_at, message_id)
-            except (binascii.Error, TypeError, UnicodeDecodeError, ValueError):
+            except (TypeError, ValueError):
                 decoded_cursor = None
 
         page_limit = max(1, min(100, limit))
@@ -3642,12 +3681,11 @@ class Database:
                 SELECT m.id, m.trace_id, m.role, m.content, m.intent,
                        m.risk_level, m.route_reason, m.sources_json,
                        m.model_fallback, m.redacted, m.context_snapshot_id,
-                       m.customer_intent, m.intent_confidence, m.intent_method,
                        m.created_at
                 FROM messages m
                 JOIN sessions s ON s.id=m.session_id
                 WHERE {' AND '.join(conditions)}
-                ORDER BY m.created_at, m.id
+                ORDER BY m.created_at, m.rowid
                 LIMIT ?
                 """,
                 (*params, page_limit + 1),
@@ -3658,10 +3696,7 @@ class Database:
         items = [dict(row) for row in page_rows]
         next_cursor = None
         if has_more and page_rows:
-            raw_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
-            next_cursor = base64.urlsafe_b64encode(raw_cursor.encode("utf-8")).decode(
-                "ascii"
-            ).rstrip("=")
+            next_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
         return {
             "items": items,
             "next_cursor": next_cursor,
@@ -3703,13 +3738,9 @@ class Database:
         source_reference: str | None = None,
     ) -> str:
         if source_type not in SESSION_SOURCE_TYPES:
-            raise SessionScopeError(
-                "invalid session source type", code="invalid_session_source"
-            )
+            raise SessionScopeError("invalid session source type")
         if source_reference is not None and len(source_reference) > 128:
-            raise SessionScopeError(
-                "session source reference is too long", code="invalid_session_source"
-            )
+            raise SessionScopeError("session source reference is too long")
         with self._write_lock, self.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM sessions WHERE tenant_id=? AND external_session_id=?",
@@ -3717,24 +3748,13 @@ class Database:
             ).fetchone()
             if row is not None:
                 if row["subject_hash"] != subject_hash or row["client_id"] != client_id:
-                    raise SessionScopeError(
-                        "session id is already bound to another authenticated scope",
-                        code="session_scope_conflict",
-                    )
+                    raise SessionScopeError("session id is already bound to another authenticated scope")
                 if row["source_type"] != source_type:
-                    raise SessionScopeError(
-                        "session id is already bound to another source type",
-                        code="session_source_conflict",
-                    )
+                    raise SessionScopeError("session id is already bound to another source type")
                 if row["source_reference"] != source_reference:
-                    raise SessionScopeError(
-                        "session id is already bound to another source reference",
-                        code="session_source_conflict",
-                    )
+                    raise SessionScopeError("session id is already bound to another source reference")
                 if row["status"] != "active":
-                    raise SessionScopeError(
-                        "session is closed", code="session_closed"
-                    )
+                    raise SessionScopeError("session is closed")
                 conn.execute("UPDATE sessions SET last_seen_at=? WHERE id=?", (utc_now(), row["id"]))
                 return str(row["id"])
 

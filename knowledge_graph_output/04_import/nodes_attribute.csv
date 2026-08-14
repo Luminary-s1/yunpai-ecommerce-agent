@@ -1,0 +1,108 @@
+spec_key,attr_key,attr_value,level,owner_id,updated_at
+QC-SPU-AF5|brand,brand,晴川,SPU,QC-SPU-AF5,2026-08-12
+QC-SPU-AF5|model,model,AF5,SPU,QC-SPU-AF5,2026-08-12
+QC-SPU-AF5|warranty_months,warranty_months,12,SPU,QC-SPU-AF5,2026-08-12
+QC-AF5-WHITE|capacity_l,capacity_l,5,SKU,QC-AF5-WHITE,2026-08-12
+QC-AF5-WHITE|color,color,云白,SKU,QC-AF5-WHITE,2026-08-12
+QC-AF5-GREEN|capacity_l,capacity_l,5,SKU,QC-AF5-GREEN,2026-08-12
+QC-AF5-GREEN|color,color,松绿,SKU,QC-AF5-GREEN,2026-08-12
+QC-SPU-VC1|brand,brand,晴川,SPU,QC-SPU-VC1,2026-08-12
+QC-SPU-VC1|model,model,VC-A1,SPU,QC-SPU-VC1,2026-08-12
+QC-SPU-VC1|warranty_months,warranty_months,24,SPU,QC-SPU-VC1,2026-08-12
+QC-VC-A1|runtime_min,runtime_min,45,SKU,QC-VC-A1,2026-08-12
+QC-SPU-HM3|brand,brand,晴川,SPU,QC-SPU-HM3,2026-08-12
+QC-SPU-HM3|model,model,HM-3L,SPU,QC-SPU-HM3,2026-08-12
+QC-SPU-HM3|warranty_months,warranty_months,12,SPU,QC-SPU-HM3,2026-08-12
+QC-HM-3L|capacity_l,capacity_l,3,SKU,QC-HM-3L,2026-08-12
+QC-SPU-KT17|brand,brand,晴川,SPU,QC-SPU-KT17,2026-08-12
+QC-SPU-KT17|model,model,KT-17,SPU,QC-SPU-KT17,2026-08-12
+QC-SPU-KT17|warranty_months,warranty_months,12,SPU,QC-SPU-KT17,2026-08-12
+QC-KT-17|capacity_l,capacity_l,1.7,SKU,QC-KT-17,2026-08-12
+QC-SPU-FN1|brand,brand,晴川,SPU,QC-SPU-FN1,2026-08-12
+QC-SPU-FN1|model,model,FN-D1,SPU,QC-SPU-FN1,2026-08-12
+QC-SPU-FN1|warranty_months,warranty_months,24,SPU,QC-SPU-FN1,2026-08-12
+QC-FN-D1|filter,filter,H13,SKU,QC-FN-D1,2026-08-12
+X-SPU-M1|brand,brand,星脉,SPU,X-SPU-M1,2026-08-12
+X-SPU-M1|model,model,X-M1,SPU,X-SPU-M1,2026-08-12
+X-SPU-M1|warranty_months,warranty_months,12,SPU,X-SPU-M1,2026-08-12
+X-M1-WHITE|color,color,云白,SKU,X-M1-WHITE,2026-08-12
+X-M1-WHITE|battery_mah,battery_mah,350,SKU,X-M1-WHITE,2026-08-12
+X-M1-BLACK|color,color,曜石黑,SKU,X-M1-BLACK,2026-08-12
+X-M1-BLACK|battery_mah,battery_mah,350,SKU,X-M1-BLACK,2026-08-12
+X-SPU-P2|brand,brand,星脉,SPU,X-SPU-P2,2026-08-12
+X-SPU-P2|model,model,X-P2,SPU,X-SPU-P2,2026-08-12
+X-SPU-P2|warranty_months,warranty_months,12,SPU,X-SPU-P2,2026-08-12
+X-P2-BLACK|color,color,黑色,SKU,X-P2-BLACK,2026-08-12
+X-P2-BLACK|storage_gb,storage_gb,0,SKU,X-P2-BLACK,2026-08-12
+X-P2-BLACK|battery_mah,battery_mah,10000,SKU,X-P2-BLACK,2026-08-12
+Y-SPU-D01|brand,brand,云织,SPU,Y-SPU-D01,2026-08-12
+Y-SPU-D01|model,model,Y-D01,SPU,Y-SPU-D01,2026-08-12
+Y-SPU-D01|warranty_months,warranty_months,0,SPU,Y-SPU-D01,2026-08-12
+Y-D01-S|color,color,黑色,SKU,Y-D01-S,2026-08-12
+Y-D01-S|size,size,S,SKU,Y-D01-S,2026-08-12
+Y-D01-S|material,material,90%白鸭绒,SKU,Y-D01-S,2026-08-12
+Y-D01-S|season,season,冬季,SKU,Y-D01-S,2026-08-12
+Y-D01-M|color,color,黑色,SKU,Y-D01-M,2026-08-12
+Y-D01-M|size,size,M,SKU,Y-D01-M,2026-08-12
+Y-D01-M|material,material,90%白鸭绒,SKU,Y-D01-M,2026-08-12
+Y-D01-M|season,season,冬季,SKU,Y-D01-M,2026-08-12
+Y-D01-L|color,color,黑色,SKU,Y-D01-L,2026-08-12
+Y-D01-L|size,size,L,SKU,Y-D01-L,2026-08-12
+Y-D01-L|material,material,90%白鸭绒,SKU,Y-D01-L,2026-08-12
+Y-D01-L|season,season,冬季,SKU,Y-D01-L,2026-08-12
+SPU-AFR-01|brand,brand,格兰仕,SPU,SPU-AFR-01,2026-08-12
+SPU-AFR-01|model,model,Galanz KZ40-108,SPU,SPU-AFR-01,2026-08-12
+REAL-AFR-01|material,material,搪瓷,SKU,REAL-AFR-01,2026-08-12
+REAL-AFR-01|control,control,智能操控,SKU,REAL-AFR-01,2026-08-12
+REAL-AFR-01|capacity_l,capacity_l,1-2人,SKU,REAL-AFR-01,2026-08-12
+SPU-AFR-02|brand,brand,美的,SPU,SPU-AFR-02,2026-08-12
+SPU-AFR-02|model,model,Midea KZ25E101,SPU,SPU-AFR-02,2026-08-12
+REAL-AFR-02|material,material,搪瓷,SKU,REAL-AFR-02,2026-08-12
+REAL-AFR-02|control,control,智能操控,SKU,REAL-AFR-02,2026-08-12
+REAL-AFR-02|capacity_l,capacity_l,1-2人,SKU,REAL-AFR-02,2026-08-12
+SPU-VAC-01|brand,brand,戴森,SPU,SPU-VAC-01,2026-08-12
+SPU-VAC-01|model,model,Dyson V15 Detect Fluffy,SPU,SPU-VAC-01,2026-08-12
+REAL-VAC-01|power_w,power_w,500W以下,SKU,REAL-VAC-01,2026-08-12
+SPU-VAC-02|brand,brand,德尔玛,SPU,SPU-VAC-02,2026-08-12
+SPU-VAC-02|model,model,Deerma DX700,SPU,SPU-VAC-02,2026-08-12
+REAL-VAC-02|power_w,power_w,500W以下,SKU,REAL-VAC-02,2026-08-12
+SPU-HUM-01|brand,brand,德尔玛,SPU,SPU-HUM-01,2026-08-12
+SPU-HUM-01|model,model,Deerma F628S,SPU,SPU-HUM-01,2026-08-12
+REAL-HUM-01|humidity_type,humidity_type,除菌型,SKU,REAL-HUM-01,2026-08-12
+SPU-HUM-02|brand,brand,小熊,SPU,SPU-HUM-02,2026-08-12
+SPU-HUM-02|model,model,Bear JSQ-C30Q1,SPU,SPU-HUM-02,2026-08-12
+REAL-HUM-02|humidity_type,humidity_type,除菌型,SKU,REAL-HUM-02,2026-08-12
+SPU-KET-01|brand,brand,苏泊尔,SPU,SPU-KET-01,2026-08-12
+SPU-KET-01|model,model,SUPOR SW-17J63B,SPU,SPU-KET-01,2026-08-12
+REAL-KET-01|capacity_l,capacity_l,1L,SKU,REAL-KET-01,2026-08-12
+REAL-KET-01|material,material,双层不锈钢,SKU,REAL-KET-01,2026-08-12
+SPU-KET-02|brand,brand,美的,SPU,SPU-KET-02,2026-08-12
+SPU-KET-02|model,model,Midea MK-SH15Colour102,SPU,SPU-KET-02,2026-08-12
+REAL-KET-02|capacity_l,capacity_l,1L,SKU,REAL-KET-02,2026-08-12
+REAL-KET-02|material,material,双层不锈钢,SKU,REAL-KET-02,2026-08-12
+SPU-FAN-01|brand,brand,格力,SPU,SPU-FAN-01,2026-08-12
+SPU-FAN-01|model,model,GREE FXDZ-2307Bg5,SPU,SPU-FAN-01,2026-08-12
+REAL-FAN-01|control,control,遥控控制,SKU,REAL-FAN-01,2026-08-12
+SPU-FAN-02|brand,brand,美的,SPU,SPU-FAN-02,2026-08-12
+SPU-FAN-02|model,model,Midea SAC35CR,SPU,SPU-FAN-02,2026-08-12
+REAL-FAN-02|control,control,遥控控制,SKU,REAL-FAN-02,2026-08-12
+SPU-AUD-01|brand,brand,捷波朗,SPU,SPU-AUD-01,2026-08-12
+SPU-AUD-01|model,model,Jabra Elite 7 Active,SPU,SPU-AUD-01,2026-08-12
+REAL-AUD-01|wearing,wearing,头戴式,SKU,REAL-AUD-01,2026-08-12
+SPU-AUD-02|brand,brand,QCY,SPU,SPU-AUD-02,2026-08-12
+SPU-AUD-02|model,model,QCY H3,SPU,SPU-AUD-02,2026-08-12
+REAL-AUD-02|wearing,wearing,头戴式,SKU,REAL-AUD-02,2026-08-12
+SPU-PWR-01|brand,brand,小米,SPU,SPU-PWR-01,2026-08-12
+SPU-PWR-01|model,model,Xiaomi 移动电源 3 20000mAh,SPU,SPU-PWR-01,2026-08-12
+REAL-PWR-01|capacity_mah,capacity_mah,25000mAh及以上,SKU,REAL-PWR-01,2026-08-12
+SPU-PWR-02|brand,brand,罗马仕,SPU,SPU-PWR-02,2026-08-12
+SPU-PWR-02|model,model,ROMOSS 10000mAh 22.5W,SPU,SPU-PWR-02,2026-08-12
+REAL-PWR-02|capacity_mah,capacity_mah,25000mAh及以上,SKU,REAL-PWR-02,2026-08-12
+SPU-APP-01|brand,brand,雪中飞,SPU,SPU-APP-01,2026-08-12
+SPU-APP-01|model,model,雪中飞 XZF2155,SPU,SPU-APP-01,2026-08-12
+REAL-APP-01|material,material,牛仔布,SKU,REAL-APP-01,2026-08-12
+REAL-APP-01|fill,fill,白鹅绒,SKU,REAL-APP-01,2026-08-12
+SPU-APP-02|brand,brand,茵曼,SPU,SPU-APP-02,2026-08-12
+SPU-APP-02|model,model,茵曼 INMAN W2302,SPU,SPU-APP-02,2026-08-12
+REAL-APP-02|material,material,牛仔布,SKU,REAL-APP-02,2026-08-12
+REAL-APP-02|fill,fill,白鹅绒,SKU,REAL-APP-02,2026-08-12

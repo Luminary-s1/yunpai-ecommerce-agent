@@ -1161,3 +1161,46 @@ def test_v25_database_applies_v26_competitor_observation_columns(tmp_path) -> No
         "rank_scope": None,
     }
     assert migration_counts.get(26) == 1
+
+
+def test_v33_unique_index_covers_null_tenant(tmp_path) -> None:
+    """终审 P1-2（改号 v33，占号裁定：v31 归 PR #11、v32 归 F-322）：
+    COALESCE 唯一索引必须对 NULL 租户（全局行）也生效。
+
+    SQLite 普通唯一索引 NULL 互异——同 key 两个 NULL 租户 active 行不被拦截。
+    表达式索引 COALESCE(tenant_id,'') 修复后：第二个 NULL 租户 active 行必须被拦。
+    负责人裁定：不断言全局 schema_version()==33，只断言本迁移成员与索引存在。
+    """
+    import sqlite3
+    from ecommerce_agent.database import Database
+
+    db = Database(tmp_path / "nulltenant.sqlite3")
+    db.initialize()
+    # 裁定项：本 PR 迁移号为 33
+    with db._write_lock, db.connect() as conn:
+        versions = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
+    assert 33 in versions, "v33 迁移应已登记"
+    with db._write_lock, db.connect() as conn:
+        conn.execute("DROP INDEX idx_knowledge_key_unique")
+        conn.execute(
+            "DELETE FROM schema_migrations WHERE version=33"
+        )
+    with db._write_lock, db.connect() as conn:
+        db._apply_v33(conn)
+        # 插入第一个 NULL 租户 active 行（应成功）
+        insert_sql = (
+            """INSERT INTO knowledge(id, category, intent, question, answer, keywords,
+               search_text, embedding, risk_level, source, version, status,
+               effective_from, effective_to, approved_by, checksum, created_at,
+               tenant_id, knowledge_key, layer, store_id, sku_id, review_status,
+               record_version, updated_at)
+            VALUES (?, 'c','i','q','a','','',X'00','low','s',1,'active',
+               '2026-01-01',NULL,'b','c','2026-01-01',NULL,'kg-NULL-DUP','l',NULL,NULL,'approved',1,'2026-01-01')"""
+        )
+        conn.execute(insert_sql, ("dup-null-1",))
+        # 第二个同 key 的 NULL 租户 active 行——必须被 COALESCE 唯一索引拦截
+        try:
+            conn.execute(insert_sql, ("dup-null-2",))
+            assert False, "COALESCE 唯一索引应拦截同 key 第二个 NULL 租户 active 行"
+        except sqlite3.IntegrityError:
+            pass  # 预期拦截

@@ -16,3 +16,14 @@ env.md
 
 # 个人排期与执行计划，不随仓库分发
 docs/tasks_intro/
+
+# 交付包 zip 不入库（07_handoff/ 目录已入库，zip 本地分发用）
+07_handoff.zip
+
+# M3 生成物出仓（可重建，避免与根目录双份分叉——负责人二次 review #9.3）
+# 07_handoff/ 由 05_scripts/09_handoff.py 重建；wiki_pages/ 由 wiki_renderer 重建
+knowledge_graph_output/07_handoff/
+knowledge_graph_output/wiki_pages/
+
+# 运行时评测临时目录（customer-eval-* 是客户评测现场，不入库）
+customer-eval-*/

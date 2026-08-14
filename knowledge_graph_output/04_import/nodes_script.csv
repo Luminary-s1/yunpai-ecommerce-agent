@@ -1,0 +1,53 @@
+script_id,category,intent,keywords,canonical_answer,risk_level,layer,source,updated_at
+SCRIPT-001,接待,greeting,你好 在吗 客服,您好，我是店铺智能客服。您可以告诉我想了解的商品、订单或售后问题；涉及退款、赔付、改价、改地址等操作时，我会为您转人工确认。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-002,商品,product,商品 参数 功能 详情,我可以依据当前商品详情说明功能和参数。请发商品名称、链接或规格；未出现在商品详情中的能力，我不会自行承诺。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-003,商品,product,材质 面料 成分,材质请以当前商品详情页的成分或参数标注为准。不同颜色、批次或规格可能不同，请提供具体 SKU 后再核对。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-004,商品,product,尺寸 尺码 大小 测量,请参考商品页对应规格的尺寸表，并结合自己的实际测量值选择。不同版型可能有差异；拿不准时请提供身高、体重或使用尺寸，由人工进一步建议。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-005,商品,product,颜色 色差 图片 实物,商品图片会尽量还原实物，但受拍摄光线和屏幕显示影响可能存在轻微色差。请以收到的实物和商品页说明为准。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-006,商品,product,兼容 适配 型号,是否适配需要核对商品支持列表与您的具体品牌、型号和版本。请提供完整型号；未列明的设备不能直接承诺兼容。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-007,商品,product,正品 防伪 授权,商品来源与正品保障以店铺资质、商品页承诺和可提供的凭证为准。如需核验防伪方式或授权材料，我可以转人工处理。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-008,商品,product,保质期 生产日期 有效期,生产日期和保质期以商品页说明及实际包装标识为准。仓库批次会流动，无法在未核实库存批次时承诺某个具体日期。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-009,商品,product,使用 清洗 保养,使用、清洗和保养请优先遵循商品说明书、洗涤标或包装标识。若说明缺失，请提供商品名称和具体问题后再核对。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-010,商品,product,质保 保修 维修,质保范围和期限以商品页、保修卡及店铺售后政策为准。人为损坏、耗材或非正常使用是否覆盖，需要人工依据凭证判定。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-011,库存,inventory,库存 现货 有货,页面可下单通常表示当前系统有可售库存，但大促或并发下单时库存可能变化。最终以订单提交和仓库复核结果为准。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-012,库存,inventory,补货 到货 缺货,补货时间需以采购和入库结果为准，未确认前不能承诺具体日期。您可以关注商品页面，或留下需要的规格由人工登记。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-013,价格,price_promo,价格 到手价 标价,实际支付金额由商品价、店铺优惠、平台优惠和账号可用券共同计算，请以结算页实时展示为准。客服不能绕过平台修改成交价。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-014,活动,price_promo,活动 优惠 促销 时间,活动范围、门槛和时间以当前活动页及结算页规则为准。过期活动、截图或历史价格不能作为当前优惠承诺。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-015,活动,price_promo,优惠券 领取 使用 门槛,优惠券能否领取和使用取决于发放对象、有效期、商品范围及金额门槛，请在结算页核对；不同优惠不一定可以叠加。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-016,活动,price_promo,保价 差价 降价,是否支持保价及计算周期以平台和店铺当前规则为准。差价申请属于资金相关操作，需要人工核对订单、活动类型和时间。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-017,活动,price_promo,直播 直播间 价格,直播间价格可能受时段、限量券和指定链接影响，请以直播间对应商品的结算页为准；其他链接不能直接套用同一价格。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-018,预售,shipping,预售 尾款 定金 发货,预售商品的定金、尾款和预计发货时间以商品页预售规则为准。预计时间不是必然送达时间，订单异常时会转人工处理。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-019,支付,payment,支付 失败 扣款,支付方式和结果由平台支付页面决定。若显示扣款但订单未成功，请勿重复支付，先保存支付记录并联系平台或人工客服核对。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-020,发票,invoice,发票 抬头 税号 开票,发票类型、可开内容和申请入口以店铺及平台规则为准。实际开票或修改抬头需要核对订单与税务信息，我会转人工确认。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-021,订单,order,订单 状态 查询,订单状态属于个人交易信息，需要在已授权会话中查询。请通过平台订单页查看；如果状态异常，我会转人工并请您只提供必要的订单编号。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-022,订单,order,取消 订单,取消订单会改变交易状态，不能由智能客服直接执行。请先在平台订单页尝试取消；若无法操作，我会转人工核对发货状态。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-023,订单,order,地址 修改 收货人 电话,收货信息涉及隐私和履约风险，智能客服不会直接修改。若订单尚未发货，请立即转人工核对；已发货时需按承运方规则处理。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-024,发货,shipping,发货 时间 多久,发货时效以商品页承诺、订单状态和仓库实际处理为准。预售、定制、大促及不可抗力可能影响时间，未核实订单前不能承诺具体发出时刻。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-025,发货,shipping,加急 催发货,可以记录您的加急诉求，但不能保证仓库改变出库顺序。催发货属于订单操作，需要人工结合订单状态处理。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-026,发货,shipping,快递 承运商 指定,承运商通常由仓库根据地址和线路安排，是否可指定以商品页及仓库能力为准。特殊需求请在下单前让人工确认。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-027,发货,shipping,偏远 地区 邮费,偏远地区是否配送、运费及附加条件以结算页和承运商覆盖范围为准。页面无法下单时，客服不能私下承诺发货。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-028,物流,logistics,物流 轨迹 到哪,具体物流轨迹需要在已授权订单上下文中查询，请先查看平台物流页。若长时间无更新或轨迹异常，我会转人工核验。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-029,物流,logistics,延迟 超时 未送达,物流时效受线路和承运商影响，预计送达并非保证时间。若超过平台或商品页承诺，请提供订单编号，由人工核验并按规则处理。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-030,物流,logistics,丢件 破损 包裹,如包裹疑似丢失或外包装破损，请保留物流记录、外包装和开箱证据，不要私下处理赔付。我会转人工联系承运商并按平台流程核验。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-031,物流,logistics,签收 没收到 代收,显示签收但未收到时，请先核对门卫、驿站、家人代收和配送电话；仍未找到请尽快转人工，由人工联系承运商核查。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-032,售后,return_exchange,七天 无理由 退货,是否支持七天无理由退货，以商品性质、完好标准、签收时间和平台规则为准。定制、鲜活、已拆封影响二次销售等情形可能不适用。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-033,售后,return_exchange,退货 条件 包装 完好,退货通常需保持商品、配件、赠品、包装和凭证完整，不影响二次销售；具体标准以平台售后页和商品说明为准。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-034,售后,return_exchange,退货 运费 谁承担,退货运费由退货原因、运费险状态和平台判责共同决定。未核验订单和责任前，客服不能承诺由某一方承担。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-035,售后,return_exchange,换货 尺码 颜色,能否换货取决于平台入口、商品状态和目标规格库存。实际换货会改变订单履约，请从售后页申请或转人工确认。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-036,退款,refund,退款 到账 时间 原路,退款通过平台审核后通常按原支付路径退回，到账时间由平台、银行或支付机构决定。具体进度请查看售后详情，异常时转人工核验。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-037,退款,refund,申请 退款 操作,退款会改变交易和资金状态，智能客服不能代为执行。请在平台订单的售后入口申请；需要协助时我会转人工。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-038,售后,after_sales,少件 漏发 错发,发现少件、漏发或错发，请保留外包装、面单、商品和开箱记录，并提供订单编号。补发、退款或赔付需人工核验后按平台规则处理。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-039,售后,after_sales,质量 破损 瑕疵,如有质量问题或商品破损，请停止继续使用并保留清晰照片或视频、包装和订单信息。人工会依据证据和平台规则判断退换方案。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-040,售后,after_sales,证据 图片 视频 凭证,售后核验通常需要订单编号、问题部位照片或视频、外包装和物流面单。请只提交必要信息，并遮盖无关的个人隐私。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-041,赔付,complaint,赔偿 赔付 补偿,赔付属于资金和责任判定事项，智能客服不能承诺金额或直接执行。请提供订单与问题证据，由人工依据平台规则核验。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-042,投诉,complaint,投诉 举报 不满意,很抱歉给您带来不好的体验。我会记录问题并转人工处理；请说明订单和具体情况，不需要提供账号密码、验证码等敏感信息。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-043,人工,human,人工 真人 客服,好的，我会将当前问题和必要上下文转给人工客服。请不要发送密码、验证码、完整身份证号或银行卡信息。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-044,隐私,privacy,隐私 手机 地址 身份证,为保护隐私，请勿在对话中发送密码、验证码、银行卡号或完整身份证号。订单核验只应收集完成当前服务所必需的信息。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-045,安全,security,验证码 密码 账号 转账,客服不会索要密码、短信验证码或要求向私人账户转账。遇到此类请求请立即停止操作，通过平台官方入口核验并联系人工客服。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-046,安全,security,站外 私聊 微信 链接,请在平台官方订单和售后入口内沟通与支付，不建议转到私人社交账号或点击来源不明的链接，以免失去平台保障。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-047,评价,after_sales,评价 好评 返现,评价应基于真实体验。客服不能以返现、赠品或其他利益诱导指定评价内容；如有问题，请先通过平台售后渠道解决。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-048,赠品,price_promo,赠品 礼品 数量,赠品的适用商品、数量和发放条件以活动页及订单结算信息为准，赠完即止的活动需以实际库存为准。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-049,安装,product,安装 调试 上门,是否包含安装、上门或调试服务以商品页服务说明和覆盖地区为准。未标注的服务不能默认承诺，特殊需求请先转人工确认。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-050,定制,product,定制 修改 周期,定制内容、费用、确认稿和交付周期需在下单前由人工确认。定制商品的取消与退换规则可能不同，请确认后再支付。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-051,服务,greeting,工作时间 在线 时间,智能客服可持续接收问题；人工服务时间以店铺页面为准。非人工时段的高风险或复杂事项会先记录，等待人工处理。,low,platform,builtin:ecommerce-sop-v1,2026-08-12
+SCRIPT-052,边界,unsupported,竞品 销量 库存 内部数据,我只能依据本店已授权的商品、订单和政策信息回答，无法提供其他店铺的真实销量、库存、买家数据或未公开的内部信息。,low,platform,builtin:ecommerce-sop-v1,2026-08-12

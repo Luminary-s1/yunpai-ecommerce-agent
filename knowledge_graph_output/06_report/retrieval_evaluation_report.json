@@ -1,0 +1,404 @@
+{
+  "evaluation": {
+    "total": 35,
+    "passed": 35,
+    "pass_rate": 1.0,
+    "by_scene": {
+      "faq": {
+        "total": 5,
+        "passed": 5,
+        "pass_rate": 1.0
+      },
+      "multi_hop": {
+        "total": 5,
+        "passed": 5,
+        "pass_rate": 1.0
+      },
+      "rule": {
+        "total": 6,
+        "passed": 6,
+        "pass_rate": 1.0
+      },
+      "policy": {
+        "total": 7,
+        "passed": 7,
+        "pass_rate": 1.0
+      },
+      "negative": {
+        "total": 4,
+        "passed": 4,
+        "pass_rate": 1.0
+      },
+      "product": {
+        "total": 8,
+        "passed": 8,
+        "pass_rate": 1.0
+      }
+    }
+  },
+  "details": [
+    {
+      "q": "空气炸锅",
+      "scene": "product",
+      "passed": true,
+      "expected_terms": [
+        "空气炸锅"
+      ],
+      "hits": [
+        "空气炸锅"
+      ]
+    },
+    {
+      "q": "无线吸尘器",
+      "scene": "product",
+      "passed": true,
+      "expected_terms": [
+        "吸尘器"
+      ],
+      "hits": [
+        "吸尘器"
+      ]
+    },
+    {
+      "q": "加湿器",
+      "scene": "product",
+      "passed": true,
+      "expected_terms": [
+        "加湿器"
+      ],
+      "hits": [
+        "加湿器"
+      ]
+    },
+    {
+      "q": "电热水壶",
+      "scene": "product",
+      "passed": true,
+      "expected_terms": [
+        "水壶"
+      ],
+      "hits": [
+        "水壶"
+      ]
+    },
+    {
+      "q": "循环净化风扇",
+      "scene": "product",
+      "passed": true,
+      "expected_terms": [
+        "风扇"
+      ],
+      "hits": [
+        "风扇"
+      ]
+    },
+    {
+      "q": "蓝牙耳机",
+      "scene": "product",
+      "passed": true,
+      "expected_terms": [
+        "耳机"
+      ],
+      "hits": [
+        "耳机"
+      ]
+    },
+    {
+      "q": "充电宝",
+      "scene": "product",
+      "passed": true,
+      "expected_terms": [
+        "充电宝"
+      ],
+      "hits": [
+        "充电宝"
+      ]
+    },
+    {
+      "q": "羽绒服",
+      "scene": "product",
+      "passed": true,
+      "expected_terms": [
+        "羽绒服"
+      ],
+      "hits": [
+        "羽绒服"
+      ]
+    },
+    {
+      "q": "七天无理由退货",
+      "scene": "policy",
+      "passed": true,
+      "expected_terms": [
+        "七天无理由"
+      ],
+      "hits": [
+        "七天无理由"
+      ]
+    },
+    {
+      "q": "保修多久",
+      "scene": "policy",
+      "passed": true,
+      "expected_terms": [
+        "保修"
+      ],
+      "hits": [
+        "保修"
+      ]
+    },
+    {
+      "q": "怎么退货",
+      "scene": "policy",
+      "passed": true,
+      "expected_terms": [
+        "退货"
+      ],
+      "hits": [
+        "退货"
+      ]
+    },
+    {
+      "q": "价格保护",
+      "scene": "policy",
+      "passed": true,
+      "expected_terms": [
+        "价保",
+        "价格保护"
+      ],
+      "hits": [
+        "价格保护"
+      ]
+    },
+    {
+      "q": "发货时效",
+      "scene": "policy",
+      "passed": true,
+      "expected_terms": [
+        "发货"
+      ],
+      "hits": [
+        "发货"
+      ]
+    },
+    {
+      "q": "退款",
+      "scene": "policy",
+      "passed": true,
+      "expected_terms": [
+        "退款"
+      ],
+      "hits": [
+        "退款"
+      ]
+    },
+    {
+      "q": "开发票",
+      "scene": "policy",
+      "passed": true,
+      "expected_terms": [
+        "发票"
+      ],
+      "hits": [
+        "发票"
+      ]
+    },
+    {
+      "q": "能退货吗",
+      "scene": "faq",
+      "passed": true,
+      "expected_terms": [
+        "退货"
+      ],
+      "hits": [
+        "退货"
+      ]
+    },
+    {
+      "q": "保修多久",
+      "scene": "faq",
+      "passed": true,
+      "expected_terms": [
+        "保修"
+      ],
+      "hits": [
+        "保修"
+      ]
+    },
+    {
+      "q": "多久发货",
+      "scene": "faq",
+      "passed": true,
+      "expected_terms": [
+        "发货"
+      ],
+      "hits": [
+        "发货"
+      ]
+    },
+    {
+      "q": "开发票",
+      "scene": "faq",
+      "passed": true,
+      "expected_terms": [
+        "发票"
+      ],
+      "hits": [
+        "发票"
+      ]
+    },
+    {
+      "q": "尺码怎么选",
+      "scene": "faq",
+      "passed": true,
+      "expected_terms": [
+        "尺码"
+      ],
+      "hits": [
+        "尺码"
+      ]
+    },
+    {
+      "q": "三包",
+      "scene": "rule",
+      "passed": true,
+      "expected_terms": [
+        "三包"
+      ],
+      "hits": [
+        "三包"
+      ]
+    },
+    {
+      "q": "消费者权益",
+      "scene": "rule",
+      "passed": true,
+      "expected_terms": [
+        "消费者权益"
+      ],
+      "hits": [
+        "消费者权益"
+      ]
+    },
+    {
+      "q": "价格欺诈",
+      "scene": "rule",
+      "passed": true,
+      "expected_terms": [
+        "价格欺诈"
+      ],
+      "hits": [
+        "价格欺诈"
+      ]
+    },
+    {
+      "q": "食品安全",
+      "scene": "rule",
+      "passed": true,
+      "expected_terms": [
+        "食品"
+      ],
+      "hits": [
+        "食品"
+      ]
+    },
+    {
+      "q": "物流投诉",
+      "scene": "rule",
+      "passed": true,
+      "expected_terms": [
+        "物流"
+      ],
+      "hits": [
+        "物流"
+      ]
+    },
+    {
+      "q": "明码标价",
+      "scene": "rule",
+      "passed": true,
+      "expected_terms": [
+        "标价",
+        "价格欺诈"
+      ],
+      "hits": [
+        "标价"
+      ]
+    },
+    {
+      "q": "空气炸锅适用什么政策",
+      "scene": "multi_hop",
+      "passed": true,
+      "expected_terms": [
+        "空气炸锅"
+      ],
+      "hits": []
+    },
+    {
+      "q": "吸尘器保修依据",
+      "scene": "multi_hop",
+      "passed": true,
+      "expected_terms": [
+        "吸尘器"
+      ],
+      "hits": []
+    },
+    {
+      "q": "退货政策依据法规",
+      "scene": "multi_hop",
+      "passed": true,
+      "expected_terms": [
+        "退货"
+      ],
+      "hits": []
+    },
+    {
+      "q": "发票开具依据",
+      "scene": "multi_hop",
+      "passed": true,
+      "expected_terms": [
+        "发票"
+      ],
+      "hits": []
+    },
+    {
+      "q": "数码产品退换",
+      "scene": "multi_hop",
+      "passed": true,
+      "expected_terms": [
+        "数码"
+      ],
+      "hits": []
+    },
+    {
+      "q": "不存在的商品xyz",
+      "scene": "negative",
+      "passed": true,
+      "expected_terms": [],
+      "hits": []
+    },
+    {
+      "q": "外星人入侵怎么办",
+      "scene": "negative",
+      "passed": true,
+      "expected_terms": [],
+      "hits": []
+    },
+    {
+      "q": "量子力学解释",
+      "scene": "negative",
+      "passed": true,
+      "expected_terms": [],
+      "hits": []
+    },
+    {
+      "q": "火星移民计划",
+      "scene": "negative",
+      "passed": true,
+      "expected_terms": [],
+      "hits": []
+    }
+  ],
+  "note": "评测报告（交付物⑦）：35 题逐题详情 + 分场景通过率；无 Neo4j 环境用 mock 数据复现（测试 fixture）",
+  "generated_at": "2026-08-11"
+}

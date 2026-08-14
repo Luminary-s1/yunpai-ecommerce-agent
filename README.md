@@ -342,6 +342,27 @@ POST /v1/finance/reconciliation/tasks/{task_id}/transition
 
 真实淘宝实现默认关闭自动回复。它采用店铺 OAuth、奇门机器人消息入站和 TOP 异步回写，不依赖千牛页面自动化；本地协议与模拟测试已通过，真实联调仍需客服机器人类目、AppKey、奇门场景、平台专属凭证和测试店铺。提交平台审批前请使用[淘宝客服机器人 API 接入申请材料](docs/taobao-api-access-application.md)，获批后的操作见[淘宝客服接管联调手册](docs/taobao-customer-service-runbook.md)。
 
+## 知识库模块（M3）
+
+电商知识库：采集 → 清洗 → 结构化 → 双引擎（知识图谱 + Wiki）→ 运行时 RAG 的完整链路。
+
+**数据**：`knowledge_graph_output/` — 222 节点 / 240 边（8 实体类 + 5 关系类型），
+含原始采集（01_raw）、清洗结果（02_clean）、Schema 契约（03_dictionary）、
+Neo4j 导入文件（04_import）、校验报告（06_report）。
+
+**功能**：
+- **Wiki 前台**：控制台「知识库」模块（`/admin` → 知识库），词条浏览/分类/分页/
+  双通道搜索（运行时表 + 资产层）/编辑（审批流 draft→evaluate→approve）/图谱可视化
+- **图谱检索 API**：`/v1/graph/*`（实体查询/关系遍历/多跳推理/关键词检索/统计），需 Neo4j
+- **知识引擎**：`src/ecommerce_agent/knowledge_engine/`（模型/加载/梦循环/运行时桥/评测）
+- **梦循环**：每天自动增量摄取 + 一致性校验 + 合并记忆（`scheduler.py`）
+- **评测**：35 题检索质量评测（`scheduler.py --eval`）
+
+**Neo4j 部署**：`docker compose up -d` 一键启动，导入见 `knowledge_graph_output/04_import/README.md`。
+连接参数走 env（`NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD`，默认本地开发值）。
+
+**验收**：完整演示路径见 [docs/验收演示清单.md](docs/验收演示清单.md)。
+
 ## 自进化流程
 
 1. 对某条助手消息调用 `POST /v1/feedback`，负反馈同时提供经过人工校正的答案和 `evidence_source`。
