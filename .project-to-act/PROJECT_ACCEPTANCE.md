@@ -70,6 +70,7 @@
 | 范围内功能满足完成条件 | 待检查 | 对照 `PROJECT_FEATURES.md` | 无 |
 | 项目约定的测试全部通过 | 待检查 | 运行完整测试命令 | 无 |
 | 阻塞与重大遗留问题已处理 | 待检查 | 对照 `PROJECT_PROGRESS.md` | 无 |
+| M7-R～M10-R 规划与独立验收分工可执行 | 通过 | 校验 4 份工作台的工作包、开发者/独立验收人轮转、文档链接、来源四态与敏感信息边界 | E-20260814-002；仅证明规划文档有效，不代表任一里程碑功能完成 |
 
 ### M5-R WP4 实验与黑盒分析引擎验收
 
@@ -479,6 +480,7 @@
 
 | 证据 ID | 时间 | 方法或命令 | 退出状态 | 版本或文件哈希 | 结果摘要 | 证据位置 | 有效期 |
 |---|---|---|---|---|---|---|---|
+| E-20260814-002 | 2026-08-14 | 逐份检查总路线与 M7-R～M10-R 工作台；脚本校验工作包数量、四人轮转与开发/验收分离、相对链接、手机号/本机绝对路径扫描；运行 `git diff --check` 与 project-to-act validate | 0 | base `23dc83e` + docs-only planning worktree；无 schema、依赖、运行代码或测试变更 | 4 个里程碑、17 个工作包；闫睿涵/胡磊/缪海南/谢良璇开发包数为 4/4/5/4，全部由轮转中的另一人独立验收；缺失数据保持 `missing`，演示值保持 `demo`，不得冒充真实值或正式财务净利润。本证据只验收计划结构 | `docs/tasks/ECOMMERCE_CLOSED_LOOP_ROADMAP.md`、`docs/tasks/M7R_READONLY_DATA_WORKBENCH.md`、`docs/tasks/M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md`、`docs/tasks/M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md`、`docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`、`.project-to-act/PROJECT_{OVERVIEW,PROGRESS,FEATURES,ACCEPTANCE}.md` | 产品方向、里程碑边界、工作包分工、来源四态、利润/订购单 Gate 或上述文档变化前；不得用于证明实现、真实店铺接入、真实净利润或生产放行 |
 | E-20260813-025 | 2026-08-13 | 推送 F-322、创建并合入 PR #14；刷新 origin/main；在 detached `ee5e443` worktree 核对导入路径后运行交叉与全量 pytest、compileall、JS、AST migration、diff、台账校验；留言 PR #11 | push/PR merge/post-merge 测试与静态门均退出 0；一次 cwd 错误聚焦结果作废 | branch `298eede`；main merge `ee5e443`；PR #14；PR #11 comment `5278334229` | 精确 main 交叉 `51 passed`、全量 `770 passed, 1 xfailed`（282.54 秒）；v31 reservation、v32 runtime 与 v33 next-free 顺序保持。PR #10/#11 后续 Gate 未冒充完成 | PR #14、`src/ecommerce_agent/database.py`、`CONTRIBUTING.md`、全部 `tests/`、本台账 | main、PR #10/#11、schema 或 F-322 代码/测试变化前；不豁免真实数据、长稳或生产 Gate |
 | E-20260813-024 | 2026-08-13 | 核对 PR #13 单文件 diff/mergeability/checks；转 Ready 并 merge；刷新 origin/main；在 F-322 以 no-commit merge 解析 v31/v32 占号；运行日历/身份/迁移/灾备、全量 pytest、compileall、JS、AST migration、diff 与台账校验后完成本地 merge commit | PR merge、聚焦、全量、静态与本地 merge commit 均退出 0 | PR #13 head `a819a34`；origin/main `60c8052`；F-322 merge `76c2c85`，父 `97a56a4`/`60c8052` | 权威表为 v31 workspace、v32 F-322、v33 下一空闲；交叉 `51 passed`，全量 `770 passed, 1 xfailed`（282.56 秒）。main 只有 v31 占号通知，未含 `_apply_v31`；F-322 未推送，PR #10 改号及实际 PR #11 集成仍待闭合 | `CONTRIBUTING.md`、`tests/test_traffic_{lab_business_calendar,metric_identity_v32}.py`、`tests/test_{migrations,disaster_recovery}.py`、全部 `tests/`、本台账 | origin/main、PR #10/#11、F-322 代码/测试或占号表变化前；不豁免真实数据、长稳或生产 Gate |
 | E-20260813-023 | 2026-08-13 | 以 HTTP/1.1 fetch 两远端与 origin PR refs；扫描全部 local/remote `_apply_vNN`；核对最新 main 合并树；在临时 worktree 合成 PR #11 + F-322，保留 v31/v32 后运行交叉集与全量；在 PR #11 原树复现失败并用临时测试断言对齐验证归因 | fetch/main merge/交叉集退出 0；合成全量退出 1（`2 failed`）；两条对齐后的定点退出 0 | HEAD `97a56a4`；`origin/main=dbf2027`；PR #10 `82fea22`、PR #11 `2aa3283`、PR #13 `a819a34` | v32 远端唯一；PR #10/#11 存在不同 `_apply_v31` 双占号。PR #11+F-322 迁移/Traffic/workspace `62 passed`；全量 `805 passed, 1 xfailed, 2 failed`，均为 admin 页面测试整合，临时对齐后 `2 passed`。未写回本分支，合成全量 Gate 未宣称闭合 | `CONTRIBUTING.md`、`src/ecommerce_agent/database.py`、`tests/test_{workspace_agent,forecasting_wp4}.py`、origin PR refs、本台账 | 远端 refs、main、PR #10/#11/#13 或 admin 路由/测试变化前；不豁免真实数据、长稳或生产 Gate |

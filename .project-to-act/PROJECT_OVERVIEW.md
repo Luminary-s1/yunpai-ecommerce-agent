@@ -8,7 +8,7 @@
 - 项目名称：云湃电商一体机 Agent
 - 项目 ID：`yunpai-ecommerce-agent`
 - 代码仓库：`https://github.com/redmaplewww/yunpai-ecommerce-agent`（public）
-- 项目负责人：云湃一体机项目组
+- 项目负责人：闫睿涵
 - 风险等级：T3；顾客会话、订单上下文和平台凭证可能涉及个人信息或敏感业务数据
 
 ## 项目目标
@@ -16,6 +16,7 @@
 - 首先建立可实际签约、申请、授权、联调和验收的电商连接能力：依法访问店铺后台数据，接收并回复客服消息，支持人工随时接管，并将结果回写原平台。
 - 在真实连接和数据闭环稳定后，再把现有 Agent 安全基线接入渠道，逐步扩展知识、SOP、低风险业务执行、质检/VOC 和经营任务闭环。
 - 在真实平台暂不可用时，使用显式 `virtual=true` 的连接器建立稳定契约，优先开发仓储、竞品、商品、订单、指标、营销和利润等模块化经营能力。
+- 在店铺暂时只有查看权限时，以脱敏报表导入和人工配置先交付纯电商只读 Demo，依次形成销售/售后客服、商品流量与生命周期、预测补货/订购单及利润准备度闭环；真实写动作仍等待正式授权和独立 Gate。
 
 ## 当前焦点
 
@@ -108,6 +109,8 @@
 | D-038 | 虚拟推流 ground truth 只存在于 Connector 私有 fixture 生成边界 | 若隐藏权重或预期方向进入 PullRecord、数据库或 Traffic Lab 公共包，后续分析会读取答案而不是从观测恢复方向 | `VirtualTaobaoConnector` 只返回 revision、指标和稳定变更回执；隐藏输入是私有生成函数的局部状态，不作为对象属性、公共导出或持久字段；Traffic Lab importer 只消费标准 `PullRecord` |
 | D-039 | Forecast Eval oracle 与生产预测输入物理分段并审计实际字段 | 若期望类型、方向或阈值在 forecast/plan 调用前混入 observation，评测会变成答案泄漏；只声明“未使用”又不可证伪 | scenario runner 只接收 synthetic input，生产 `ForecastRunService` / `InventoryPlanningService` 完成后才读取独立 oracle；报告记录实际 service/engine/reader/policy 字段、输入 digest 与 oracle overlap，任一 overlap 或未登记调用字段使 Gate 失败；存在非零回测误差时，P80/P95 宽度塌缩为零也必须失败 |
 | D-040 | Switchback 与店铺经营日使用版本化店铺业务日历，缺配置 fail closed | UTC 与店铺本地日期/星期会给出相反质量门；import 时区、服务器时区和 Forecast 全局时区都不是店铺事实 | schema v32 权威记录按 `(tenant_id, store_id)` 保存 IANA timezone、record version、effective time 与审计主体；实验创建时固化 calendar ID/version/timezone/policy；窗口仍存 UTC，hour/date/weekday 用 `ZoneInfo` 转换，duration 保持绝对时间；缺记录拒绝创建，旧实验缺证据分析 blocked；simulate-store 显式写入 fixture timezone，不提供请求覆盖或任何时区回退 |
+| D-041 | 店铺暂不可写时先走报表驱动的只读 Demo，并对经营字段强制四态来源 | 当前千牛子账号只能查看，真实 API/店铺写权限尚未取得，但已有只读导出样本；若不区分真实、人工、演示与缺失，Demo 会被误当真实经营结论 | `actual/manual/demo/missing` 是唯一来源四态；字段必须带 data_as_of 和引用；敏感原始列不进 Git/模型/普通日志；缺失不转 0，demo 不进默认 operational 视图；浏览器登录态和 Cookie 不作为 Connector 或验收证据 |
+| D-042 | 订购单、补货与利润结论采用人工确认和完整度 Gate | 当前采购成本、真实订购单、运输周期和二次销售整备成本不可提供；自动补零或自动确认会制造错误采购与虚假净利润 | 系统只生成订购单 draft，人工确认且无采购/付款/ERP/库存写动作；供应商交期只收集和跟踪；缺必需费用时正式净利润不可用，演示值只能显示“净利润试算（演示参数）”；纯电商范围不建设生产工单 |
 
 ## 按需读取索引
 
@@ -121,6 +124,7 @@
 
 ## 路线变更记录
 
+- 2026-08-14：依据刘经理已确认的产品方向和当前只读数据条件，将后续路线冻结为四个里程碑：M7-R 只读经营数据与 Demo 事实底座、M8-R 销售与售后客服、M9-R 商品流量与生命周期、M10-R 预测补货/订购单/经营决策。新增 D-041/D-042，明确来源四态、缺失不补零、千牛不写、订购单人工确认、正式净利润完整度 Gate、无生产工单/ERP 替代。详细任务书见 `docs/tasks/ECOMMERCE_CLOSED_LOOP_ROADMAP.md`；当前仅完成规划，不代表功能实现或生产放行。
 - 2026-07-23：0.22.6 收敛后台视觉与响应式边界。经营总览改为独立内容列，活动列表、表格、客服会话、消息与测试结果使用受限高度和内部滚动；390px 下导航、KPI、筛选和会话区可读且无页面级横向溢出。7 项后台/API 定向测试和浏览器桌面/移动端实测通过，console error/warning 为 0；不改变模型、认证、数据隔离或生产 Gate。证据 E-20260723-004。
 - 2026-07-23：0.22.4 将顾客测试收敛到原后台智能客服页。此前卡片误走正式 `/v1/chat`，要求输入客户端密钥；现改走默认关闭、回环受限的 `/v1/test/customer-chat`，预置演示店铺上下文并显示实际回答、风险、追踪和来源，同时自动归入 simulation。正式客户 API 鉴权未改变。223 项全量测试、页面 JS 和浏览器实际保修对话通过；生产 Gate 不豁免。证据 E-20260723-002。
 - 2026-07-23：0.22.5 将 GLM Coding Plan 作为显式本机测试模型接入原后台顾客测试页面，使用标准 Chat Completions 非流式请求。修复 SSE 读取超时和模型将空容器输出为 null 导致的结构化决策校验失败；页面实测得到真实模型回答，审计轨迹为 `deliberate:model:answer -> generate:model -> verify:passed`。密钥仅由进程环境提供。226 项全量测试通过。证据 E-20260723-003；生产 Gate 不豁免。

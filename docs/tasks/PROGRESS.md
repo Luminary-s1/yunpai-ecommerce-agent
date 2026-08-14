@@ -23,8 +23,13 @@ Git 中的活跃任务书只保存稳定信息：模块目标、范围与非目�
 | M4 智能客服 | [M4_WORKBENCH.md](M4_WORKBENCH.md) | 闫睿涵 |
 | M5-R Traffic Lab | [M5R_TRAFFIC_LAB_WORKBENCH.md](M5R_TRAFFIC_LAB_WORKBENCH.md) | 闫睿涵 |
 | M6-R Demand Forecast | [M6R_DEMAND_FORECAST_WORKBENCH.md](M6R_DEMAND_FORECAST_WORKBENCH.md) | 闫睿涵 |
+| M7-R 只读经营数据与 Demo 事实底座 | [M7R_READONLY_DATA_WORKBENCH.md](M7R_READONLY_DATA_WORKBENCH.md) | 闫睿涵（收口） |
+| M8-R 销售与售后客服闭环 | [M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md](M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md) | 闫睿涵（收口） |
+| M9-R 商品流量与生命周期经营 | [M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md](M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md) | 闫睿涵（收口） |
+| M10-R 预测补货、订购单与经营决策 | [M10R_OPERATING_DECISION_WORKBENCH.md](M10R_OPERATING_DECISION_WORKBENCH.md) | 闫睿涵（收口） |
 
-任务书中的验收条目是规范，不是完成勾选项。实际执行状态以网页为准，不回写到本文档。
+M7-R～M10-R 的工作包开发人与独立验收人以各 WORKBENCH 分工表为准。任务书中的验收
+条目是规范，不是完成勾选项。实际执行状态以网页为准，不回写到本文档。
 
 ## 历史资料
 
