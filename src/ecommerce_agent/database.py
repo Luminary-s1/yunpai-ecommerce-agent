@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import math
+import re
 import sqlite3
 import threading
 import uuid
@@ -34,14 +37,16 @@ def utc_now() -> str:
 
 
 class SessionScopeError(ValueError):
-    pass
+    def __init__(self, message: str, *, code: str = "session_scope_error"):
+        super().__init__(message)
+        self.code = code
 
 
 class Database:
     # 占号裁定（负责人 08-13）：v31 归 PR #11、v32 归 F-322/负责人分支（均已合入
-    # main，SCHEMA_VERSION 取最大值 33）、本 PR 的 knowledge_key active 唯一索引
-    # 用 v33（防同名方法静默覆盖事故，见 CONTRIBUTING「Schema 版本号占用登记」）
-    SCHEMA_VERSION = 33
+    # main）、v33 归 knowledge/retrieval、v34 归 M7-R WP1 readonly data。
+    # 防同名方法静默覆盖事故，见 CONTRIBUTING「Schema 版本号占用登记」。
+    SCHEMA_VERSION = 34
 
     def __init__(self, path: Path):
         self.path = path
@@ -169,15 +174,18 @@ class Database:
             if 30 not in applied:
                 self._apply_v30(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (30, ?)", (utc_now(),))
-            # MERGE-GATE PR-11: main 有 v32+v33、没有 _apply_v31。
+            # MERGE-GATE PR-11: main 有 v32+v33+v34、没有 _apply_v31。
             # 合 PR #11 时必须补上 if 31 / _apply_v31（workspace 表），
-            # 并保留下面两块。SCHEMA_VERSION 保持 33。不得覆盖 v32 / 不得覆盖 v33。
+            # 并保留下面三块；不得回退 SCHEMA_VERSION 或覆盖 v32-v34。
             if 32 not in applied:
                 self._apply_v32(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (32, ?)", (utc_now(),))
             if 33 not in applied:
                 self._apply_v33(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (33, ?)", (utc_now(),))
+            if 34 not in applied:
+                self._apply_v34(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (34, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -2200,6 +2208,7 @@ class Database:
             """
         )
 
+    @classmethod
     def _apply_v26(cls, conn: sqlite3.Connection) -> None:
         exists = conn.execute(
             "SELECT 1 FROM sqlite_master "
@@ -3073,6 +3082,139 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v34(conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS readonly_import_manifests (
+                import_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                source_kind TEXT NOT NULL
+                    CHECK(source_kind IN ('actual','manual','demo')),
+                source_system TEXT NOT NULL,
+                report_type TEXT NOT NULL,
+                report_period TEXT NOT NULL,
+                exported_at TEXT NOT NULL,
+                imported_at TEXT NOT NULL,
+                schema_fingerprint TEXT NOT NULL
+                    CHECK(length(schema_fingerprint) = 64),
+                content_digest TEXT NOT NULL
+                    CHECK(length(content_digest) = 64),
+                mapping_version TEXT NOT NULL,
+                accepted_rows INTEGER NOT NULL CHECK(accepted_rows >= 0),
+                quarantined_rows INTEGER NOT NULL CHECK(quarantined_rows >= 0),
+                rejected_rows INTEGER NOT NULL CHECK(rejected_rows >= 0),
+                data_as_of TEXT,
+                references_json TEXT NOT NULL,
+                quality_json TEXT NOT NULL,
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                UNIQUE(tenant_id, import_id),
+                UNIQUE(tenant_id, store_id, import_id),
+                UNIQUE(tenant_id, store_id, import_id, source_kind),
+                UNIQUE(
+                    tenant_id, store_id, source_kind, source_system, report_type,
+                    report_period, mapping_version, exported_at
+                ),
+                CHECK(accepted_rows + quarantined_rows + rejected_rows > 0)
+            );
+            CREATE INDEX IF NOT EXISTS idx_readonly_import_manifests_scope
+                ON readonly_import_manifests(
+                    tenant_id, store_id, source_kind, exported_at DESC
+                );
+
+            CREATE TABLE IF NOT EXISTS readonly_field_evidence (
+                evidence_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                field_key TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                evidence_state TEXT NOT NULL
+                    CHECK(evidence_state IN ('actual','manual','demo','missing')),
+                reason TEXT NOT NULL,
+                data_as_of TEXT,
+                source_reference TEXT,
+                import_id TEXT,
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                created_at TEXT NOT NULL,
+                UNIQUE(tenant_id, evidence_id),
+                FOREIGN KEY(tenant_id, store_id, import_id, evidence_state)
+                    REFERENCES readonly_import_manifests(
+                        tenant_id, store_id, import_id, source_kind
+                    ),
+                CHECK(
+                    (evidence_state = 'missing'
+                        AND import_id IS NULL
+                        AND data_as_of IS NULL
+                        AND source_reference IS NULL)
+                    OR
+                    (evidence_state IN ('actual','manual','demo')
+                        AND import_id IS NOT NULL)
+                )
+            );
+            CREATE INDEX IF NOT EXISTS idx_readonly_field_evidence_scope
+                ON readonly_field_evidence(
+                    tenant_id, store_id, evidence_state, field_key, scope,
+                    created_at DESC
+                );
+
+            CREATE TABLE IF NOT EXISTS readonly_import_row_issues (
+                issue_id TEXT PRIMARY KEY,
+                import_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                row_number INTEGER NOT NULL CHECK(row_number >= 1),
+                disposition TEXT NOT NULL
+                    CHECK(disposition IN ('quarantined','rejected')),
+                reason TEXT NOT NULL,
+                field_keys_json TEXT NOT NULL,
+                raw_row_digest TEXT NOT NULL CHECK(length(raw_row_digest) = 64),
+                created_at TEXT NOT NULL,
+                UNIQUE(tenant_id, issue_id),
+                UNIQUE(import_id, row_number),
+                FOREIGN KEY(tenant_id, store_id, import_id)
+                    REFERENCES readonly_import_manifests(
+                        tenant_id, store_id, import_id
+                    )
+            );
+            CREATE INDEX IF NOT EXISTS idx_readonly_import_row_issues_scope
+                ON readonly_import_row_issues(
+                    tenant_id, store_id, import_id, row_number
+                );
+
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_import_manifests_immutable_update
+            BEFORE UPDATE ON readonly_import_manifests
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_import_manifest_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_import_manifests_immutable_delete
+            BEFORE DELETE ON readonly_import_manifests
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_import_manifest_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_field_evidence_immutable_update
+            BEFORE UPDATE ON readonly_field_evidence
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_field_evidence_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_field_evidence_immutable_delete
+            BEFORE DELETE ON readonly_field_evidence
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_field_evidence_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_import_row_issues_immutable_update
+            BEFORE UPDATE ON readonly_import_row_issues
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_import_row_issue_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_import_row_issues_immutable_delete
+            BEFORE DELETE ON readonly_import_row_issues
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_import_row_issue_immutable');
+            END;
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -3213,6 +3355,25 @@ class Database:
                 "plan_quality", "quality_issues_json", "assumptions_json",
                 "allocation_boundary_json", "calculation_steps_json", "action_mode",
                 "input_hash", "created_at",
+            },
+            "readonly_import_manifests": {
+                "import_id", "tenant_id", "store_id", "source_kind",
+                "source_system", "report_type", "report_period",
+                "exported_at", "imported_at", "schema_fingerprint",
+                "content_digest", "mapping_version", "accepted_rows",
+                "quarantined_rows", "rejected_rows", "data_as_of",
+                "references_json", "quality_json", "payload_hash",
+            },
+            "readonly_field_evidence": {
+                "evidence_id", "tenant_id", "store_id", "field_key",
+                "scope", "evidence_state", "reason", "data_as_of",
+                "source_reference", "import_id", "payload_hash",
+                "created_at",
+            },
+            "readonly_import_row_issues": {
+                "issue_id", "import_id", "tenant_id", "store_id",
+                "row_number", "disposition", "reason",
+                "field_keys_json", "raw_row_digest", "created_at",
             },
             "staged_rollouts": {
                 "tenant_id", "subject_type", "subject_key", "candidate_id",
@@ -3653,11 +3814,26 @@ class Database:
         decoded_cursor: tuple[str, str] | None = None
         if cursor:
             try:
-                created_at, message_id = cursor.rsplit("|", 1)
+                if "|" in cursor:
+                    # Keep old composite cursors readable. A bare query string
+                    # decodes the legacy UTC offset's '+' as a space.
+                    raw_cursor = cursor
+                    if "T" in raw_cursor and "+" not in raw_cursor:
+                        raw_cursor = re.sub(
+                            r" (?=\d{2}:\d{2}\|)", "+", raw_cursor, count=1
+                        )
+                else:
+                    padding = "=" * (-len(cursor) % 4)
+                    raw_cursor = base64.b64decode(
+                        cursor + padding,
+                        altchars=b"-_",
+                        validate=True,
+                    ).decode("utf-8")
+                created_at, message_id = raw_cursor.rsplit("|", 1)
                 datetime.fromisoformat(created_at)
                 if created_at and message_id:
                     decoded_cursor = (created_at, message_id)
-            except (TypeError, ValueError):
+            except (binascii.Error, TypeError, UnicodeDecodeError, ValueError):
                 decoded_cursor = None
 
         page_limit = max(1, min(100, limit))
@@ -3684,11 +3860,12 @@ class Database:
                 SELECT m.id, m.trace_id, m.role, m.content, m.intent,
                        m.risk_level, m.route_reason, m.sources_json,
                        m.model_fallback, m.redacted, m.context_snapshot_id,
+                       m.customer_intent, m.intent_confidence, m.intent_method,
                        m.created_at
                 FROM messages m
                 JOIN sessions s ON s.id=m.session_id
                 WHERE {' AND '.join(conditions)}
-                ORDER BY m.created_at, m.rowid
+                ORDER BY m.created_at, m.id
                 LIMIT ?
                 """,
                 (*params, page_limit + 1),
@@ -3699,7 +3876,10 @@ class Database:
         items = [dict(row) for row in page_rows]
         next_cursor = None
         if has_more and page_rows:
-            next_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
+            raw_cursor = f"{page_rows[-1]['created_at']}|{page_rows[-1]['id']}"
+            next_cursor = base64.urlsafe_b64encode(raw_cursor.encode("utf-8")).decode(
+                "ascii"
+            ).rstrip("=")
         return {
             "items": items,
             "next_cursor": next_cursor,
@@ -3741,9 +3921,13 @@ class Database:
         source_reference: str | None = None,
     ) -> str:
         if source_type not in SESSION_SOURCE_TYPES:
-            raise SessionScopeError("invalid session source type")
+            raise SessionScopeError(
+                "invalid session source type", code="invalid_session_source"
+            )
         if source_reference is not None and len(source_reference) > 128:
-            raise SessionScopeError("session source reference is too long")
+            raise SessionScopeError(
+                "session source reference is too long", code="invalid_session_source"
+            )
         with self._write_lock, self.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM sessions WHERE tenant_id=? AND external_session_id=?",
@@ -3751,13 +3935,22 @@ class Database:
             ).fetchone()
             if row is not None:
                 if row["subject_hash"] != subject_hash or row["client_id"] != client_id:
-                    raise SessionScopeError("session id is already bound to another authenticated scope")
+                    raise SessionScopeError(
+                        "session id is already bound to another authenticated scope",
+                        code="session_scope_conflict",
+                    )
                 if row["source_type"] != source_type:
-                    raise SessionScopeError("session id is already bound to another source type")
+                    raise SessionScopeError(
+                        "session id is already bound to another source type",
+                        code="session_source_conflict",
+                    )
                 if row["source_reference"] != source_reference:
-                    raise SessionScopeError("session id is already bound to another source reference")
+                    raise SessionScopeError(
+                        "session id is already bound to another source reference",
+                        code="session_source_conflict",
+                    )
                 if row["status"] != "active":
-                    raise SessionScopeError("session is closed")
+                    raise SessionScopeError("session is closed", code="session_closed")
                 conn.execute("UPDATE sessions SET last_seen_at=? WHERE id=?", (utc_now(), row["id"]))
                 return str(row["id"])
 

@@ -80,7 +80,7 @@
 | F-320 M6-R Forecasting API / Agent / Admin | P0 | 已完成 | F-301、F-310、F-317 至 F-319、D-030、D-034、D-035 | 九个管理员 API、两项动态目录只读工具、D20 virtual 场景与预测/库存风险后台完成；GET 与工具对 forecast/plan 回显同一 `evidence-freshness-v1`，旧 forecast/plan 不静默冒充当前；Traffic/Forecast/Plan 工具从固化 evidence 回显同一 `source-provenance-v1`，不以 wrapper 或会话来源猜测 virtual；租户/店铺范围、原子 policy、脏证据领域错误、审计、策略继承/排序、九表只读快照、后台 Decimal 投影和显式运行保持 | `src/ecommerce_agent/forecasting_api.py`、`business/{registry,service}.py`、`forecasting/{run_service,planning}.py`、`simulation.py`、`docs/admin-console.html`、`tests/test_forecasting_wp4.py`、E-20260812-007/008、E-20260813-004/E-20260813-009/E-20260813-010；沿用 schema v30、无新依赖/迁移/关键词路由/自动采购付款或库存调整 |
 | F-321 M6-R Forecast Eval | P0 | 已完成 | F-317 至 F-320、D-035、D-039 | 十类 synthetic demand 与 WP3 库存决策场景经真实 forecast/plan service 运行；独立 oracle 在生产调用后评分，数值 Gate 覆盖 rolling-origin 未来不变性、候选/champion/fallback、WAPE 可比性、signed Bias、P80/P95 覆盖与库存公式；报告审计实际生产字段和 oracle overlap；独立对抗补强零宽区间反证、计划脏证据类型化错误与同戳 policy 稳定决胜 | `evals/forecasting/forecast_eval_v1.json`、`scripts/{forecast_eval_runtime,run_forecast_eval}.py`、`tests/test_forecasting_eval.py`、`docs/works/14-feature-m6r-forecast-eval/{README,GROK_INDEPENDENT_REVIEW}.md`、E-20260813-001/002/003/004；Grok 4.6 xhigh 明确批准后，`03d3b85` 已快进合入并推送 main；不代表服务器 v30、真实数据、长稳或生产放行 |
 | F-322 Traffic Lab 店铺业务日历与 metric 三元身份 | P0 | 已完成 | F-312、F-315、D-037、D-040、schema v32 | 版本化 `(tenant, store)` 业务日历，实验固化 IANA timezone/version，缺配置或 legacy 缺证据 fail closed；Traffic accepted/quarantine 身份为 `(tenant, connector, source_id)`，历史缺 connector 进入 `legacy_unscoped` 且禁止分析；revision-only 与显式身份使用同一 canonical hash，出窗隔离复用 revision 身份；v30 可迁移、旧 hash 可重放、双态冲突拒绝、备份 manifest 精确版本策略保持。Forecast/business 包导出按需加载，避免 eval CLI 循环导入 | `src/ecommerce_agent/business_calendar.py`、`traffic_source_identity.py`、`traffic_lab/{service,analysis,freshness}.py`、`database.py`、`simulation.py`、`forecasting/__init__.py`、`business/__init__.py`、`tests/test_traffic_{lab_business_calendar,metric_identity_v32}.py`、E-20260813-019/020/021/022/023/024/025；已通过 PR #14 合入 main `ee5e443` 并在精确 merge tip 通过全量；开放 PR #10 改号与 PR #11 实际代码集成仍须分别闭合，不代表真实数据/长稳/生产放行 |
-| F-323 M7-R 只读经营数据与 Demo 事实底座 | P0 | 已规划 | F-202、F-208、F-303、F-305 至 F-309、D-041 | 订单/商品/库存/履约物流快照/经营指标/推广/退款/收入报表经字段白名单、脱敏、版本 manifest、逐行隔离和公开领域服务可重放导入；平台 SKU、商家编码和料号可解释映射；字段证据状态为 `actual/manual/demo/missing`，实际来源类型仅为 `actual/manual/demo`，`missing` 不生成导入记录；缺失不转零，默认经营视图不混入 Demo | `docs/tasks/M7R_READONLY_DATA_WORKBENCH.md`；当前仅规划，未实现导入或声明真实平台接入 |
+| F-323 M7-R 只读经营数据与 Demo 事实底座 | P0 | 进行中 | F-202、F-208、F-303、F-305 至 F-309、D-041 | 订单/商品/库存/履约物流快照/经营指标/推广/退款/收入报表经字段白名单、脱敏、版本 manifest、逐行隔离和公开领域服务可重放导入；平台 SKU、商家编码和料号可解释映射；字段证据状态为 `actual/manual/demo/missing`，实际来源类型仅为 `actual/manual/demo`，`missing` 不生成导入记录；缺失不转零，默认经营视图不混入 Demo | WP1 统一契约开发候选见 `src/ecommerce_agent/readonly_data/`、`src/ecommerce_agent/storage_refs.py`、schema v34 与 E-20260817-003/004；工作区既有 M4/知识库测试欠账收口和全绿基线见 E-20260817-005。字段名与字段值双层隐私门、`parsed_rows` 加逐行问题派生质量计数已冻结。仅覆盖统一契约、来源/缺失隔离和持久化底座，WP2～WP5、真实平台字段与导入、真实经营结论和生产放行仍待后续 |
 | F-324 M8-R 销售与售后客服闭环 | P0 | 已规划 | F-104、F-117、F-124 至 F-126、F-306、F-323、D-034、D-041 | 复用 M4 在只读影子模式跑通销售与售后多轮建议回复；批准话术、商品/订单/库存及履约物流快照、来源和新鲜度可追溯，回复只描述截至导出时间的状态，不冒充实时轨迹；缺事实追问/转人工；零平台发送、退款、赔付或订单写动作；独立客服 Eval 通过 | `docs/tasks/M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md`；主动营销与真实渠道留待后续 Gate |
 | F-325 M9-R 商品流量与生命周期经营 | P0 | 已规划 | F-304、F-312 至 F-316、F-323、D-037 至 D-041 | 建立保留原始粒度的 Listing/SKU 经营读模型；当前真实导出只展示 SKU 交易/库存、店铺级流量背景和准备度，禁止把店铺流量拆成 SKU；隔离 Demo 以模拟 SKU 流量、revision 和窗口跑通 M5-R 诊断及生命周期建议；存量标题/主图默认保持，建议人工确认且无商品/价格/广告/活动写动作 | `docs/tasks/M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md`；当前仅规划，Demo 不代表真实店铺流量、平台权重或真实因果 |
 | F-326 M10-R 预测补货与订购单闭环 | P0 | 已规划 | F-303、F-317 至 F-323、D-039、D-041、D-042 | 分层接入预测目标、候选信号、库存/供货约束和料号主数据，复用 M6-R 产生可追溯 forecast/plan；缺供货参数时降级；按料号生成订购单 draft，人工确认并收集/跟踪供应商交期，零采购、付款、ERP、库存或生产工单写动作 | `docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；当前仅规划，演示参数不得冒充真实供货事实 |
@@ -88,6 +88,26 @@
 
 ## 功能变更历史
 
+- 2026-08-17：关闭此前与 WP1 隔离的七项 M4/知识库失败及 skip/xfail 测试欠账，全量达到
+  `950 passed`。修复限于会话错误码/历史元数据/游标兼容和三项既有测试契约；未放宽
+  租户修改全局知识的权限，未增加关键词语义路由，未改变 schema、依赖或 WP1 冻结范围。
+  该全绿基线可供后续工作包开发，但不代表 WP2～WP5 或正式 M7-R 验收；见
+  E-20260817-005。
+- 2026-08-17：根据 M7-R WP1 独立技术复验反馈完成非阻断收口。字段白名单后的字符串值
+  继续经过值级 PII 检测，手机号（含空格/连字符）、身份证/银行卡、邮箱以及带标签的
+  姓名、地址、邮编不得进入标准化、模型、评测或日志投影；固有敏感字段名补齐证件、
+  邮箱、邮编、护照和银行卡。manifest 输入不再接受调用方自报三类质量计数，改由 WP2
+  解析器提供 `parsed_rows`，WP1 按唯一且范围合法的 `row_issues` 派生 accepted /
+  quarantined / rejected。schema 仍为 v34；见 E-20260817-004。
+- 2026-08-17：F-323 从“已规划”进入“进行中”。M7-R WP1 已形成开发自测候选：统一
+  `actual/manual/demo` 来源三类与 `actual/manual/demo/missing` 证据四态，冻结字段白名单、
+  隐私过滤、受控原始文件引用、schema fingerprint、manifest、逐行隔离、D-014 版本语义、
+  operational 默认排除 Demo 及 `missing` 不生成导入记录/不冒充数值零；字段证据按不可变
+  追加顺序决定当前态，仅当前载荷重放幂等，状态回环可追加，且证据 `data_as_of` 不得晚于
+  关联 manifest；schema v34 additive 增加三张只读导入证据表。该契约可供 WP2 与
+  M8-R～M10-R 开始适配骨架，但仍等待 M7-R WP5 独立复验；平台字段白名单、真实数据域
+  导入、身份映射和后续业务闭环不在 WP1 范围。初始证据见 E-20260817-003，独立反馈
+  收口见 E-20260817-004。
 - 2026-08-17：按 D-045 收敛当前派工。闫睿涵仅开发 M7-R WP1～WP4 与 M10-R WP1/WP4；
   M8-R WP1～WP4 改由谢良璇开发，因验收独立性要求，M8-R WP5 改由缪海南承担。M9-R
   和 M10-R 其余分工、M7-R 分阶段解锁及 D-044 的产品修订不变。F-323～F-327 仍为

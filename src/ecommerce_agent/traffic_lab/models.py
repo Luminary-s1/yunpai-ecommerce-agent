@@ -3,18 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal, Self
-from urllib.parse import parse_qsl, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ..storage_refs import validate_controlled_storage_ref
 from ..traffic_feature_schema import get_feature_schema
 
 
 BucketGranularity = Literal["hour", "day"]
 ExperimentAssignment = Literal["control", "treatment"]
 ExperimentType = Literal["aa", "platform_ab", "switchback", "difference_in_differences"]
-_APPROVED_OBJECT_STORAGE_SCHEMES = frozenset({"cos", "oss", "s3"})
-_LOCAL_OBJECT_PREFIX = "objects"
 
 
 def _require_aware(value: datetime) -> datetime:
@@ -48,40 +46,7 @@ class CreativeAssetCreate(BaseModel):
     @field_validator("storage_ref")
     @classmethod
     def reject_embedded_credentials(cls, value: str) -> str:
-        parsed = urlsplit(value)
-        sensitive_keys = {
-            "access_key",
-            "access_token",
-            "credential",
-            "secret",
-            "signature",
-            "token",
-            "x-amz-credential",
-            "x-amz-signature",
-        }
-        query_keys = {key.lower() for key, _value in parse_qsl(parsed.query)}
-        if parsed.username is not None or parsed.password is not None or query_keys & sensitive_keys:
-            raise ValueError("storage_ref_credentials_forbidden")
-        if value != value.strip() or parsed.query or parsed.fragment:
-            raise ValueError("storage_ref_not_approved")
-        if parsed.scheme:
-            if (
-                parsed.scheme.lower() not in _APPROVED_OBJECT_STORAGE_SCHEMES
-                or not parsed.netloc
-                or not parsed.path.strip("/")
-            ):
-                raise ValueError("storage_ref_not_approved")
-            return value
-        parts = value.split("/")
-        if (
-            parsed.netloc
-            or "\\" in value
-            or len(parts) < 2
-            or parts[0] != _LOCAL_OBJECT_PREFIX
-            or any(part in {"", ".", ".."} for part in parts)
-        ):
-            raise ValueError("storage_ref_not_approved")
-        return value
+        return validate_controlled_storage_ref(value)
 
 
 class ListingRevisionCreate(BaseModel):

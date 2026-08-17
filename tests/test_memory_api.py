@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -213,13 +214,35 @@ def test_import_assets_updates_existing_content(client: TestClient) -> None:
         Path(__file__).resolve().parent.parent / "knowledge_graph_output" / "02_clean"
     )
     items = load_clean_dir(clean_dir)
-    # 用 update_existing=True 直接调（端点默认幂等保留）
+    changed_item = next(
+        item
+        for item in items
+        if item.kind.value in {"faq", "script", "policy", "rule"}
+        and (item.scope.value == "general" or item.scope_key == "all")
+    )
+    marker = "【hot-update-contract】"
+    changed_item = replace(
+        changed_item, compiled_truth=f"{changed_item.compiled_truth}{marker}"
+    )
+
+    # 02_clean 是共享资产，只允许 appliance 的全局刷新上下文更新。
     stats = import_to_runtime(
-        items,
+        [changed_item],
         service.knowledge,
-        tenant_id="tenant-test",
+        tenant_id=None,
         default_store_id="tenant-test",
         update_existing=True,
+        allow_global_update=True,
     )
-    assert stats["updated"] >= 100, "热更新应更新已存在的 kg-* 行"
+    assert stats["updated"] == 1, "热更新应更新目标 kg-* 行"
     assert stats["imported"] == 0, "不应新增重复行"
+    with service.db.connect() as conn:
+        row = conn.execute(
+            """
+            SELECT answer FROM knowledge
+            WHERE id=? AND tenant_id IS NULL AND status='active'
+            """,
+            (f"kg-{changed_item.id}",),
+        ).fetchone()
+    assert row is not None
+    assert row["answer"].endswith(marker)

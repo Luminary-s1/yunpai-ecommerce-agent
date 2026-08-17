@@ -19,14 +19,16 @@ def md5(path: Path) -> str:
 
 
 def test_handoff_consistent_with_root() -> None:
-    """根目录与 07_handoff 关键文件 md5 一致（D-035）。
+    """跟踪中的 07_handoff 必须与根事实源一致（D-035）。
 
     契约变更（第三轮 R3）：07_handoff/ 由 05_scripts/09_handoff.py 重建，
-    已从 git 出仓（.gitignore 排除）。仅当目录仍被 git 跟踪时才比对；
-    出仓后跳过（交付包由 09_handoff.py 一次性生成，不再维护双份）。
+    已从 git 出仓（.gitignore 排除）。出仓状态验证生成脚本存在；仅当目录
+    仍被 git 跟踪时逐文件比对。
     """
+    generator = KB_ROOT / "05_scripts" / "09_handoff.py"
+    assert generator.is_file(), "缺少 07_handoff/ 权威生成脚本"
     if not HANDOFF.is_dir():
-        pytest.skip("07_handoff 目录不存在")
+        return
     import subprocess
     tracked = subprocess.run(
         ["git", "ls-files", "--error-unmatch", "--", "knowledge_graph_output/07_handoff/"],
@@ -34,7 +36,7 @@ def test_handoff_consistent_with_root() -> None:
         cwd=REPO_ROOT,
     )
     if tracked.returncode != 0:
-        pytest.skip("07_handoff 已出仓（09_handoff.py 重建），不再比对")
+        return
     pairs = [
         ("02_clean/clean_manifest.json", "02_clean/clean_manifest.json"),
         ("02_clean/faq.json", "02_clean/faq.json"),

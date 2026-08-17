@@ -10,8 +10,16 @@
   提交没有同步提升运行时包版本，因此不得把历史内部候选标签 `0.31.0`～`0.33.0` 写成
   当前运行时版本。生产放行继续阻塞。
 - 兼容性说明（0.30.0 运行时 + main 未升包增量）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变；WP5 仍沿用 v30，新增纯 Python Eval fixture/runner/report 与 D-039 oracle 边界，不改变依赖、持久 schema、API 或生产路由。F-322 未单独升版，使用 schema **v32**；**v31 已被 origin PR #11 占用**，合并时须保留两段迁移。v32 新增版本化 `(tenant,store)` IANA 业务日历和 nullable experiment 固化证据，并将 Traffic accepted/quarantine 重建为 `(tenant,connector,source_id)`；v30（或合并后的实际前序版本）可前向迁移，accepted 从不可变 revision 回填 connector，quarantine 仅从冻结 payload 读取，缺失写 `legacy_unscoped`。历史实验可读但缺日历证据时分析 blocked。灾备 manifest 继续精确匹配当前 schema：升级前以旧程序完成停机备份，升级后恢复写入前以 v32 程序生成并验证新全量备份；旧归档与匹配程序保留到隔离恢复演练通过。
-- 占号状态：PR #10 已合入 main `1906365`，schema **v33** 在 `main`（knowledge_key 唯一索引 + retrieval_logs）。F-322 **v32** 已在 main。PR #11 的 `_apply_v31`（workspace 会话表）仍占用中、未合入。合 #11 时必须 31+32+33 三块并存，扫描 `MERGE-GATE PR-11`。下一空闲号 **34**。
-- 最后更新：2026-08-14
+- 占号状态：PR #10 已合入 main `1906365`，schema **v33** 在 `main`（knowledge_key 唯一索引 + retrieval_logs）。F-322 **v32** 已在 main。PR #11 的 `_apply_v31`（workspace 会话表）仍占用中、未合入。合 #11 时必须 31+32+33 三块并存，扫描 `MERGE-GATE PR-11`。M7-R WP1 已以提交 `ec19061` 权威占用 **v34**；下一空闲号 **35**。
+- 最后更新：2026-08-17
+
+## M7-R WP1 只读经营数据统一契约（未单独升应用版）
+
+- 状态：WP1 已形成开发自测候选，仍等待缪海南在干净状态执行 WP5 独立复验；当前运行时包版本保持 `0.30.0`，不得据此声明 M7-R 或生产放行通过。
+- schema：v34 additive 新增 `readonly_import_manifests`、`readonly_import_row_issues`、`readonly_field_evidence` 三张表及证据不可变触发器；支持 v33→v34 前向迁移，不重建既有表。v34 已占用，下一空闲 schema 为 v35。
+- 兼容性：新增统一的 `actual/manual/demo` 来源、`actual/manual/demo/missing` 证据、字段名/字段值双层隐私过滤、受控 storage reference、manifest/逐行隔离和 D-014 版本契约；manifest 输入以解析器观察的 `parsed_rows` 为单一行数入口，accepted / quarantined / rejected 由逐行问题派生。无新依赖、HTTP API、Agent 路由、LangGraph 语义或生产动作。平台专属字段白名单、真实解析与数据域导入归 WP2。
+- 灾备：v34 会使精确匹配旧 schema 的灾备 manifest 失效；升级前用旧程序备份，升级后立即生成 v34 全量备份，并保留旧程序和旧归档，直到隔离恢复验证完成。
+- 验证：初始 E-20260817-003，独立反馈收口 E-20260817-004，既有 M4/知识库测试欠账收口 E-20260817-005。WP1 最终聚焦 `19 passed`，迁移/Traffic Lab/灾备/CLI 组合 `61 passed`；三项 red-first 契约覆盖 allowlist 值携带 PII、证件/邮箱/邮编字段名和调用方伪造质量计数。随后原七项欠账定点 `7 passed`、skip/xfail 相关集合 `59 passed`、关联 `108 passed`，最终工作区全量 `950 passed`。E-005 未改变 schema、依赖、租户权限、D-034 语义权威或 WP1 冻结范围。
 
 ## M6-R WP5 Forecast Eval（未单独升版）
 
