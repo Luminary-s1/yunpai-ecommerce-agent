@@ -71,11 +71,12 @@
 | 范围内功能满足完成条件 | 待检查 | 对照 `PROJECT_FEATURES.md` | 无 |
 | 项目约定的测试全部通过 | 待检查 | 运行完整测试命令 | 无 |
 | 阻塞与重大遗留问题已处理 | 待检查 | 对照 `PROJECT_PROGRESS.md` | 无 |
-| M7-R～M10-R 初版逐包轮转分工 | 已被取代 | 保留历史证据，不再作为当前派工依据 | E-20260814-002；当前责任矩阵以 D-045、E-20260817-002 和各 WORKBENCH 为准 |
+| M7-R～M10-R 初版逐包轮转分工 | 已被取代 | 保留历史证据，不再作为当前派工依据 | E-20260814-002；当前责任矩阵以 D-046、E-20260817-006 和各 WORKBENCH 为准 |
 | M7-R～M10-R 修订后产品口径可执行 | 通过（规划） | 逐项核对真实/演示数据隔离、D-041 状态与来源分层、签收确认与三层利润、导出物流快照和未来接口边界 | E-20260814-003；只验收产品与数据契约，不代表代码实现、真实店铺接入或生产放行 |
-| 单 M 单一开发负责人及独立 WP5 验收可执行 | 已被取代 | D-043 的历史责任结构保留，不再作为当前派工依据 | E-20260814-004；当前责任矩阵以 D-044、E-20260817-001 和各 WORKBENCH 为准 |
-| D-044 关键路径分工、M7 分阶段解锁与独立 WP5 可执行 | 已被部分取代 | D-044 的 M7 解锁、费用粒度和产品修订继续有效；当前人员矩阵改按 D-045 | E-20260817-001；当前派工以 E-20260817-002 和各 WORKBENCH 为准 |
-| D-045 收敛负责人开发范围并保持独立 WP5 | 通过（规划） | 校验闫睿涵只开发 M7-R 与 M10-R WP1/WP4；M8-R 由谢良璇开发；每个 WP5 与本 M 全部开发人不重叠 | E-20260817-002；只证明责任结构一致，不代表开发或验收已经开始 |
+| 单 M 单一开发负责人及独立 WP5 验收可执行 | 已被部分恢复 | D-043 的历史责任结构保留；M10-R 单一开发负责人原则由 D-046 恢复，其余当前派工按后续决策 | E-20260814-004、E-20260817-006；只证明责任结构，不代表开发或验收开始 |
+| D-044 关键路径分工、M7 分阶段解锁与独立 WP5 可执行 | 已被部分取代 | D-044 的 M7 解锁、费用粒度和产品修订继续有效；M10-R 人员矩阵改按 D-046 | E-20260817-001；当前派工以 E-20260817-006 和各 WORKBENCH 为准 |
+| D-045 收敛负责人开发范围并保持独立 WP5 | 已被部分取代 | D-045 的 M7-R、M8-R、M9-R 当前分工继续有效；M10-R WP1/WP4 派工由 D-046 取代 | E-20260817-002；当前 M10-R 派工见 E-20260817-006 |
+| D-046 恢复 M10-R 单一开发负责人并保持独立 WP5 | 通过（规划） | 结构化校验 M10-R WP1～WP4 均由缪海南承担、WP5 由胡磊承担且验收人与开发人不重叠；复核 M7-R～M9-R 分工未变 | E-20260817-006；只证明责任结构一致，不代表 M10-R 已开始、实现或验收 |
 
 ### M5-R WP4 实验与黑盒分析引擎验收
 
@@ -485,6 +486,7 @@
 
 | 证据 ID | 时间 | 方法或命令 | 退出状态 | 版本或文件哈希 | 结果摘要 | 证据位置 | 有效期 |
 |---|---|---|---|---|---|---|---|
+| E-20260817-006 | 2026-08-17 | 按项目负责人最新要求复核总路线、M10-R WORKBENCH、D-046 与项目台账；结构化解析四份 WORKBENCH 的 WP1～WP5、负责人和 WP5 互斥关系；扫描现行口径中的 M10-R 双负责人残留；运行 `git diff --check` 与 project-to-act validate | 0 | base/功能提交 `0b54a24` + docs-only D-046 责任调整；无 schema、依赖或运行代码变化 | 四个里程碑均恰有 WP1～WP5。M10-R WP1～WP4 全部由缪海南开发，WP5 由胡磊独立验收；胡磊不参与 M10-R 开发。M7-R、M8-R、M9-R 分工未变，现行口径不再保留 M10-R 双开发负责人。D-044/D-045 历史记录保留，但其中 M10-R 人员派工由 D-046 取代。本证据不验收功能实现 | `docs/tasks/ECOMMERCE_CLOSED_LOOP_ROADMAP.md`；`docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；`.project-to-act/PROJECT_{OVERVIEW,PROGRESS,FEATURES,ACCEPTANCE}.md` | 人员、工作包、验收独立性、D-046 或上述文档变化前；不得用于证明 M10-R 开发开始、功能实现、里程碑通过或生产放行 |
 | E-20260817-005 | 2026-08-17 | 对 E-20260817-003/004 已隔离的七项既有 M4/知识库失败逐项复现和归因；修复会话错误码、消息历史元数据与 `(created_at,id)` URL-safe/legacy 游标兼容；把知识热更新测试改为真实内容变更和显式全局管理作用域；handoff 出仓时验证权威生成脚本而非 skip；将无实时模型的意图留出集 xfail 改为显式负向能力边界。重跑原七项、skip/xfail 相关集合、关联回归和仓库全量；无文件故障注入强制关闭知识更新以证明测试可捕获退化；运行 compileall、whitespace、`CONTRIBUTING.md` 零改动与 project-to-act validate | 修复前原七项 1（`7 failed`）；故障注入 1（预期 `1 failed`）；还原后所有定点、集合、关联、全量和静态检查 0 | base `961938321d6ac4fb3314756e8ca061bb4484dd09`；本轮四文件组合 SHA-256 `3f313b3fade39bfe3964d102c8a39d8994a549ba00a6f5bf80f8427a6a6a50e9`；schema v34 不变 | 原七项 `7 passed`；skip/xfail 相关集合 `59 passed`；关联回归 `108 passed`；全量 `950 passed, 24 warnings`（566.70 秒），无 failed/skipped/xfailed。热更新故障注入稳定得到 `updated == 0` 对 `1` 的断言失败，还原后通过。24 条为既有 FastAPI 重复 Operation ID warning。租户不得修改全局知识的权限保持，D-034 语义权威不变，无 schema、依赖、API 或生产动作扩张 | `src/ecommerce_agent/database.py`；`tests/test_{memory_api,single_source,m4_acceptance}.py`；E-20260817-003/004 | 上述会话/游标、知识更新、单一事实源或无模型能力边界变化前；只关闭既有测试欠账并提供全绿开发基线，不证明 WP2～WP5、正式 WP5、真实平台接入、M7-R Gate 或生产放行 |
 | E-20260817-004 | 2026-08-17 | 根据 WP1 独立技术复验的三项非阻断反馈新增 red-first 契约：allowlist 字符串值携带顾客 PII、证件/邮箱/邮编固有敏感字段名、调用方自报三类质量计数；旧实现定点运行后实现值级 PII 门、扩充敏感字段名，并把 manifest 输入收敛为解析器观察 `parsed_rows` 加逐行问题派生质量；重跑定点、WP1 聚焦、迁移/Traffic Lab/灾备/CLI 组合与两轮工作区全量；compileall、whitespace、迁移唯一性、`CONTRIBUTING.md` 零改动和 project-to-act validate | 初始定点 1（预期 `3 failed`）；修复后定点/聚焦/组合/静态检查 0；最终全量 1（七项既有失败） | base `ec19061`；WP1 代码/测试文件集 SHA-256 `ce93515ac552836863e4e538ca1790dfc7bf4d742d007dc3c42e823c2ee891d9`；schema v34 | 定点 `3 failed → 3 passed`；聚焦 `19 passed`；组合 `61 passed`；最终全量 `941 passed, 7 failed, 1 skipped, 1 xfailed`（512.34 秒）。七项失败名称与 E-20260817-003 的干净基线相同。allowlist 后的手机号、身份证/银行卡、邮箱及带标签姓名/地址/邮编不进入下游；固有敏感字段名扩充；accepted / quarantined / rejected 只能由 `parsed_rows` 与唯一、范围合法的 `row_issues` 派生。WP2 必须让 `parsed_rows` 来自真实解析，WP1 不声称可回读任意外部文件 | `src/ecommerce_agent/readonly_data/{contracts,service}.py`；`tests/test_readonly_data_contract.py`；E-20260817-003 的其余 WP1 文件与基线证据 | WP1 隐私、manifest/质量计数输入、schema v34、上述代码/测试或 base/hash 变化前；可通知 WP2 与下游开始契约适配，但不证明 WP2～WP5、正式 WP5、真实平台字段/导入、M7-R Gate 或生产放行 |
 | E-20260817-003 | 2026-08-17 | M7-R WP1 red-first/定向回归；聚焦与迁移、Traffic Lab、灾备、CLI 组合 pytest；临时破坏可修改下游投影、归一化重复表头、Python 枚举/SQLite `CHECK` 一致性、隐私白名单和 Demo operational 隔离后复验并精确还原；以同时间乱序 UUID 和状态回环探针暴露字段证据旧决胜/全历史幂等缺陷；证据时间越过 manifest 的回归先红后修复；临时移除 v34 migration 后升级测试失败并还原；运行工作区全量 pytest，并与同一 HEAD 移除 WP1 改动的临时基线对照；compileall、whitespace、迁移/validator 唯一性与 project-to-act validate | 聚焦/组合/静态检查 0；预期反证均非 0；全量 1（七项既有失败，与基线相同） | base `ec19061`；WP1 代码/测试文件集 SHA-256 `b4cce7a42450092a6f2c6c87813892b0b4b548dd10b54486274cd030869f97d6`；schema v34 | 聚焦 `16 passed`；组合 `58 passed`；全量 `938 passed, 7 failed, 1 skipped, 1 xfailed`。七项失败与同 HEAD、无 WP1 的基线完全一致，归属既有 M4 幂等/会话元数据与知识库导入欠账。WP1 契约覆盖来源/证据状态、白名单/隐私、受控引用、manifest/逐行隔离、D-014、Demo/missing 隔离、字段证据追加顺序/当前重放/状态回环、证据时间上界及 v34 迁移；仅形成开发自测候选 | `src/ecommerce_agent/readonly_data/`；`src/ecommerce_agent/storage_refs.py`；`src/ecommerce_agent/database.py`；`src/ecommerce_agent/traffic_lab/models.py`；`tests/test_readonly_data_contract.py`；`tests/test_{migrations,traffic_lab,disaster_recovery,cli}.py` | WP1 契约、schema v34、上述代码/测试或 base/hash 变化前；只证明开发自测候选，必须由缪海南从干净状态执行 WP5 独立复验；不得用于证明 WP2～WP5、真实平台字段/导入、真实经营结论、M7-R 通过或生产放行 |
@@ -664,6 +666,10 @@
 
 ## 验收记录
 
+- 2026-08-17：按 D-046 将 M10-R WP1/WP4 改回缪海南，形成 WP1～WP4 由缪海南完整开发、
+  WP5 由胡磊独立验收的现行矩阵。结构化复核确认四份 WORKBENCH 均恰有 WP1～WP5、
+  M10-R 开发与验收不重叠、M7-R～M9-R 分工未变，现行口径无双负责人残留。该结论只
+  验收规划责任一致性，不表示 M10-R 已开始、实现或验收。见 E-20260817-006。
 - 2026-08-17：关闭 E-20260817-003/004 已证明与 WP1 无关的七项 M4/知识库失败及一项 skip、一项 xfail 测试欠账。会话边界补齐类型化错误码、历史意图元数据和稳定游标兼容；知识热更新测试使用真实变更与显式全局管理作用域且保留租户隔离；handoff 出仓时验证权威生成器；无实时模型留出集改为显式不得宣称达到 75%，未增加关键词语义路由。原七项 `7 passed`、skip/xfail 相关集合 `59 passed`、关联 `108 passed`、全量 `950 passed`；故障注入与静态门禁通过。该收口只提供全绿开发基线，不扩张 WP1 范围或豁免正式 WP5、真实数据、M7-R/生产 Gate。见 E-20260817-005。
 - 2026-08-17：根据 M7-R WP1 独立技术复验反馈完成三项非阻断收口：allowlist 后增加
   值级 PII 门，固有敏感字段名补齐证件/邮箱/邮编等，manifest 以解析器观察的
