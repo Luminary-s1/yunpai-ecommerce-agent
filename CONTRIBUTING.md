@@ -283,10 +283,11 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | **31** | PR #11 | 统一工作区会话持久化 / `codex/workspace-conversation-history` | `workspace_conversations` / `workspace_messages`（`_apply_v31`） | **占用中，未合并** |
 | **32** | M5-R | Traffic Lab / `main` | 店铺业务日历 + Traffic metric 三元身份 | 已合并（F-322 / PR #14） |
 | **33** | M3 | 知识库 / `main` | knowledge_key active 唯一索引 + `retrieval_logs` | 已合并（PR #10 / `1906365`） |
-| 34+ | *（空闲）* | | | |
+| **34** | M7-R | Readonly Data / `codex/m7r-wp1-readonly-contract` | import manifest、field evidence、row isolation issue（WP1） | **占用中，未合并** |
+| 35+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
-26–30、32、33 已在 `main`。**31 仍只属于开放中的 PR #11**，`main` 的 `initialize()` 目前是 30→32→33，故意没有 `_apply_v31`。下一空闲号从 **34** 起。
+26–30、32、33 已在 `main`。**31 仍只属于开放中的 PR #11**，`main` 的 `initialize()` 目前是 30→32→33，故意没有 `_apply_v31`。M7-R WP1 已占用 **34**，下一空闲号从 **35** 起。
 
 ### 合并 PR #11 前必扫（PR #10 合入后）
 
