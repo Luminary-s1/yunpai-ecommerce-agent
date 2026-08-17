@@ -19,7 +19,7 @@
 - schema：v34 additive 新增 `readonly_import_manifests`、`readonly_import_row_issues`、`readonly_field_evidence` 三张表及证据不可变触发器；支持 v33→v34 前向迁移，不重建既有表。v34 已合入 main，下一空闲 schema 为 v35。
 - 兼容性：新增统一的 `actual/manual/demo` 来源、`actual/manual/demo/missing` 证据、字段名/字段值双层隐私过滤、受控 storage reference、manifest/逐行隔离和 D-014 版本契约；manifest 输入以解析器观察的 `parsed_rows` 为单一行数入口，accepted / quarantined / rejected 由逐行问题派生。无新依赖、HTTP API、Agent 路由、LangGraph 语义或生产动作。平台专属字段白名单、真实解析与数据域导入归 WP2。
 - 灾备：v34 会使精确匹配旧 schema 的灾备 manifest 失效；升级前用旧程序备份，升级后立即生成 v34 全量备份，并保留旧程序和旧归档，直到隔离恢复验证完成。
-- 验证：初始 E-20260817-003，独立反馈收口 E-20260817-004，既有 M4/知识库测试欠账收口 E-20260817-005。WP1 最终聚焦 `19 passed`，迁移/Traffic Lab/灾备/CLI 组合 `61 passed`；三项 red-first 契约覆盖 allowlist 值携带 PII、证件/邮箱/邮编字段名和调用方伪造质量计数。随后原七项欠账定点 `7 passed`、skip/xfail 相关集合 `59 passed`、关联 `108 passed`，最终工作区全量 `950 passed`。E-005 未改变 schema、依赖、租户权限、D-034 语义权威或 WP1 冻结范围。
+- 验证：初始 E-20260817-003，独立反馈收口 E-20260817-004，既有 M4/知识库测试欠账收口 E-20260817-005，main 集成见 E-20260817-007。WP1 最终聚焦 `19 passed`，迁移/Traffic Lab/灾备/CLI 组合 `61 passed`；三项 red-first 契约覆盖 allowlist 值携带 PII、证件/邮箱/邮编字段名和调用方伪造质量计数。随后原七项欠账定点 `7 passed`、skip/xfail 相关集合 `59 passed`、关联 `108 passed`；隔离 main 集成树全量 `950 passed, 24 warnings`，无 failed/skipped/xfailed。E-005～007 未改变依赖、租户权限、D-034 语义权威或 WP1 冻结范围。
 
 ## M6-R WP5 Forecast Eval（未单独升版）
 
