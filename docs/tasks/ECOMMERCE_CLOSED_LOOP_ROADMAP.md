@@ -35,6 +35,16 @@
 | M9-R 商品流量与生命周期经营 | 链接和 SKU 如何获得曝光，商品下一步该做什么 | 流量诊断、受控实验建议和人工确认的生命周期建议 | M5-R、F-312～F-316 |
 | M10-R 预测补货与经营决策 | 备多少货、何时订、是否赚钱 | 预测/补货、订购单草稿、利润准备度和经营决策台 | M6-R、F-317～F-321、F-309 |
 
+四个模块用于网页登记的模块级内容，统一放在各任务书最前面的“模块信息与确认”区块，
+并严格按以下四个固定字段排列，避免与工作包字段混淆：
+
+| 模块 | 背景和模块说明 | 模块具体需求 | 模块验收标准 | 模块交接内容 |
+|---|---|---|---|---|
+| M7-R | [任务书对应字段](M7R_READONLY_DATA_WORKBENCH.md#背景和模块说明) | [任务书对应字段](M7R_READONLY_DATA_WORKBENCH.md#模块具体需求) | [任务书对应字段](M7R_READONLY_DATA_WORKBENCH.md#模块验收标准) | [任务书对应字段](M7R_READONLY_DATA_WORKBENCH.md#模块交接内容) |
+| M8-R | [任务书对应字段](M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md#背景和模块说明) | [任务书对应字段](M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md#模块具体需求) | [任务书对应字段](M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md#模块验收标准) | [任务书对应字段](M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md#模块交接内容) |
+| M9-R | [任务书对应字段](M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md#背景和模块说明) | [任务书对应字段](M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md#模块具体需求) | [任务书对应字段](M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md#模块验收标准) | [任务书对应字段](M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md#模块交接内容) |
+| M10-R | [任务书对应字段](M10R_OPERATING_DECISION_WORKBENCH.md#背景和模块说明) | [任务书对应字段](M10R_OPERATING_DECISION_WORKBENCH.md#模块具体需求) | [任务书对应字段](M10R_OPERATING_DECISION_WORKBENCH.md#模块验收标准) | [任务书对应字段](M10R_OPERATING_DECISION_WORKBENCH.md#模块交接内容) |
+
 M7-R 是共同前置，但不采用“整个 M7-R 完成后才允许下游开始”的串行门。M7-R WP1
 冻结导入与证据契约后，M8-R、M9-R 和 M10-R 可开始契约适配与骨架开发；WP2 每交付一个
 经复核的数据域，就解锁下游对应真实数据联调；WP3 完成商品/SKU/商家编码/料号映射后，
