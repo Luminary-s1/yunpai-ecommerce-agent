@@ -123,7 +123,7 @@ VirtualTaobao fixture 当前 ID 碰巧不重复，只是 fixture 事实，不能
 1. Switchback：**A**。建立版本化店铺业务日历；实验固化其版本；缺配置与旧实验缺固化证据一律 fail closed。否决 B（每实验显式时区）和 C（正式 UTC 日历）。V1 只存 IANA timezone + version + effective time + 审计主体，不做节假日/财政周。实验请求不得再提供可覆盖店铺日历的 timezone。虚拟 fixture 的 `store.timezone` 必须经 `simulate-store` 写入权威记录。
 2. D-037：**A**。持久身份改为 `(tenant_id, connector_id, source_id)`。缺 connector 的历史 quarantine 进入显式隔离域 `legacy_unscoped` 并禁止分析；迁移时不得猜测归属。否决 B（canonical 字符串命名空间）和 C（只接受自称 tenant-global 的 Connector）。D-037 的 revision 绑定、租户外键、未知不进分析、`data_as_of + payload_hash` 版本语义保持不变。
 
-完整执行说明见 `docs/tasks/M5R_TRAFFIC_LAB_V32_CODEX_HANDOFF.md`。
+当前任务与验收入口见 `docs/tasks/M5R_TRAFFIC_LAB_WORKBENCH.md`；v32 的历史执行证据保留在本文件下方“实施结果”。
 
 ## 实施结果
 
