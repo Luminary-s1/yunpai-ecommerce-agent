@@ -6,7 +6,15 @@
 - 校验：WriteBarrier / validate_full_recommendation / validate_model_output
 - M10-R 契约：RecommendationOutput / to_m10_contract / M10_CONTRACT_VERSION
 """
-from .interface import M10_CONTRACT_VERSION, RecommendationOutput, to_m10_contract
+from .interface import (
+    M10_CONTRACT_VERSION,
+    FactSnapshot,
+    M10RecommendationType,
+    RecommendationOutput,
+    RestockPayload,
+    m10_type_from_recommendation,
+    to_m10_contract,
+)
 from .schemas import (
     REQUIRED_FACTS,
     Recommendation,
@@ -28,16 +36,20 @@ __all__ = [
     "ALLOWED_INTERNAL_WRITES",
     "AuditRecord",
     "FORBIDDEN_OUTPUT_KEYS",
+    "FactSnapshot",
     "M10_CONTRACT_VERSION",
+    "M10RecommendationType",
     "REQUIRED_FACTS",
     "Recommendation",
     "RecommendationOutput",
     "RecommendationState",
     "RecommendationType",
+    "RestockPayload",
     "StateMachine",
     "TargetObject",
     "TransitionAction",
     "WriteBarrier",
+    "m10_type_from_recommendation",
     "to_m10_contract",
     "validate_full_recommendation",
     "validate_model_output",
