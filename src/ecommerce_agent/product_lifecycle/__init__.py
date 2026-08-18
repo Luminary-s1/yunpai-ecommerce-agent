@@ -5,6 +5,7 @@
 - 状态机：StateMachine / TransitionAction / AuditRecord
 - 校验：WriteBarrier / validate_full_recommendation / validate_model_output
 - M10-R 契约：RecommendationOutput / to_m10_contract / M10_CONTRACT_VERSION
+- 持久化：RecommendationPersistenceService / RecommendationError
 """
 from .interface import (
     M10_CONTRACT_VERSION,
@@ -23,6 +24,7 @@ from .schemas import (
     TargetObject,
     validate_recommendation,
 )
+from .service import RecommendationError, RecommendationPersistenceService
 from .state_machine import AuditRecord, StateMachine, TransitionAction
 from .validation import (
     ALLOWED_INTERNAL_WRITES,
@@ -41,7 +43,9 @@ __all__ = [
     "M10RecommendationType",
     "REQUIRED_FACTS",
     "Recommendation",
+    "RecommendationError",
     "RecommendationOutput",
+    "RecommendationPersistenceService",
     "RecommendationState",
     "RecommendationType",
     "RestockPayload",
@@ -55,3 +59,4 @@ __all__ = [
     "validate_model_output",
     "validate_recommendation",
 ]
+

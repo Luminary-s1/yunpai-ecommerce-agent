@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from ecommerce_agent.product_lifecycle import (
+    RecommendationPersistenceService,
+    RecommendationState,
+)
+
 from .boundaries import BOUNDARY_NOTES, DEMO_LABEL, state_badge
 
 
@@ -20,12 +25,20 @@ class WorkbenchPages:
     用法：
       pages = WorkbenchPages()
       data = pages.product_detail(store_id="s1", item_id="i1", sku_id="sku1")
+      pages = WorkbenchPages(recommendation_store=RecommendationPersistenceService(db))
+      recs = pages.recommendations(tenant_id="t1", store_id="s1")
     """
 
     # 允许的 scope（对齐现有 admin：operational/simulation/evaluation/all）
     ALLOWED_SCOPES: frozenset[str] = frozenset(
         {"operational", "simulation", "evaluation", "all"}
     )
+
+    def __init__(
+        self,
+        recommendation_store: RecommendationPersistenceService | None = None,
+    ) -> None:
+        self.recommendation_store = recommendation_store
 
     def product_detail(
         self,
@@ -65,6 +78,44 @@ class WorkbenchPages:
             "metrics": metric_views,
             "boundary_notes": BOUNDARY_NOTES,
         }
+
+    def recommendations(
+        self,
+        *,
+        tenant_id: str,
+        store_id: str | None = None,
+        state: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """商品/ SKU 的建议列表（读持久化服务，独立方法不污染 product_detail 键）。
+
+        失败暴露：未注入 recommendation_store 时抛错，不静默返回空。
+        """
+        if self.recommendation_store is None:
+            raise ValueError("workbench_recommendation_store_unconfigured")
+        state_value = (
+            RecommendationState(state) if state is not None else None
+        )
+        return self.recommendation_store.list(
+            tenant_id,
+            store_id=store_id,
+            state=state_value,
+            limit=limit,
+        )
+
+    def recommendation_audit_trail(
+        self,
+        *,
+        tenant_id: str,
+        recommendation_id: str,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """单条建议的审计流转（读持久化服务）。"""
+        if self.recommendation_store is None:
+            raise ValueError("workbench_recommendation_store_unconfigured")
+        return self.recommendation_store.audit_trail(
+            tenant_id, recommendation_id, limit=limit
+        )
 
 
 __all__ = [
