@@ -284,8 +284,8 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | **32** | M5-R | Traffic Lab / `main` | 店铺业务日历 + Traffic metric 三元身份 | 已合并（F-322 / PR #14） |
 | **33** | M3 | 知识库 / `main` | knowledge_key active 唯一索引 + `retrieval_logs` | 已合并（PR #10 / `1906365`） |
 | **34** | M7-R | Readonly Data / `main` | import manifest、field evidence、row isolation issue（WP1） | 已合并（WP1） |
-| **35** | M7-R WP3 | Product Identity 迁移开发中 | 商品/SKU/商家编码/料号身份映射 | **占用中，未合并** |
-| **36** | M9-R WP3 | 生命周期建议迁移开发中 | `product_recommendations` / `product_recommendation_audit`（`_apply_v36`） | **占用中，未合并（PR 申请中）** |
+| **35** | M7-R WP3 | Product Identity / `codex/m7r-wp3-product-identity` | 商品/SKU/商家编码/料号身份映射 | **已预留，运行迁移未合并** |
+| **36** | M9-R WP3 | 商品生命周期建议 | `product_recommendations` / `product_recommendation_audit`（`_apply_v36`） | **已预留，运行迁移未合并** |
 | 37+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
