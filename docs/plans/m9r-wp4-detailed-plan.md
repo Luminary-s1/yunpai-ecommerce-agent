@@ -96,14 +96,16 @@ Oracle = 固定输入 → 固定输出的确定性断言
 |---|---|---|---|
 | 1 | 商品/SKU 下钻到 revision、时间窗、指标、来源、建议依据 | ✅ 基建可用 | 扩展 /admin 路由 |
 | 2 | 显示「为什么建议」/「为什么暂不能建议」 | ✅ 基建可用 | 页面 + 建议依据 |
-| 3 | 页面浏览无隐式分析/创建实验/创建建议/修改商品 | ⚠️ | B4 页面写屏障测试 |
+| 3 | 页面浏览无隐式分析/创建实验/创建建议/修改商品 | ✅ | B4 页面写屏障测试（test_m9r_workbench_write_barrier.py） |
 | 4 | 机制 Eval 发现真实方向 + 拒绝污染方向 | ✅ 基建交付 | simulation-evidence-v1 复用 + M9 Eval 新增 |
 | 5 | 浏览器桌面 + 窄屏可读，console 无新增错误 | ✅ 基建可用 | 浏览器检查 |
 | 6 | 真实/模拟场景隔离，全链标注 | ✅ 底层就绪 | D19/D20/virtual_store_v1.json 复用 |
-| 7 | 样本数据不作为产品口径 | ⚠️ | B7 反例测试 |
-| 8 | 边界说明文字在页面展示 | ⚠️ | boundaries.py + 页面断言 |
-| 9 | 页面上每个数字渲染四态徽标 + 来源 + 时间 | ⚠️ | 页面渲染断言 |
-| 10 | 演示参数显式标注「试算」字样 | ⚠️ | boundaries.py 文案 + 页面断言 |
+| 7 | 样本数据不作为产品口径 | ✅ | B7 反例测试（test_m9r_data_trust.py） |
+| 8 | 边界说明文字在页面展示 | ✅ | boundaries.py + 页面断言（test_m9r_workbench_pages.py） |
+| 9 | 页面上每个数字渲染四态徽标 + 来源 + 时间 | ✅ | 页面渲染断言（test_m9r_workbench_pages.py） |
+| 10 | 演示参数显式标注「试算」字样 | ✅ | boundaries.py 文案 + 页面断言（test_m9r_workbench_pages.py DEMO_LABEL） |
+
+> 收口证据：test_m9r_workbench_pages.py + test_m9r_workbench_write_barrier.py 等 8 文件 36 passed in 0.65s（2026-08-18，分支 feature/m9r-read-model）。
 
 ---
 

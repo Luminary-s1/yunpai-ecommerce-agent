@@ -104,16 +104,18 @@ tests/
 |---|---|---|---|
 | 1 | 桥接 M5-R revision/experiment/analysis 证据 | ✅ 可设计 | bridge.py 复用接口测试 |
 | 2 | 桥接 freshness/provenance 证据 | ✅ 可设计 | 4 个持久化位置读取测试 |
-| 3 | 真实/Demo 查询物理隔离 | ⚠️ | demo 隔离测试 |
-| 4 | A/A、样本量、实际窗口、控制变量 Gate | ⚠️ | gates 确定性测试 |
+| 3 | 真实/Demo 查询物理隔离 | ✅ | demo 隔离测试（test_m9r_demo_isolation*.py，6 用例） |
+| 4 | A/A、样本量、实际窗口、控制变量 Gate | ✅ | gates 确定性测试（test_m9r_diagnosis_gates.py） |
 | 5 | freshness Gate | ✅ 可设计 | evidence-freshness-v1 |
-| 6 | 缺货/广告/价格污染不归因标题/主图 | ⚠️ | 污染 Gate 反证测试 |
-| 7 | 模型越权输出整份拒绝 | ⚠️ | 禁止键清单测试 |
-| 8 | 无合格实验不编造 uplift | ⚠️ | 无合格实验→观察/补数建议 |
-| 9 | 缺 SKU 流量/revision → blocked | ⚠️ | 真实路径 blocked 断言 |
-| 10 | 诊断全链平台写=0（内部写白名单） | ⚠️ | B4 反例测试 |
-| 11 | 受控实验入口可用（Demo 路径） | ⚠️ | run_demo_experiment 测试 |
-| 12 | Demo 隔离不进入默认视图 | ⚠️ | DataScope.DEMO 测试 |
+| 6 | 缺货/广告/价格污染不归因标题/主图 | ✅ | 污染 Gate 反证测试（test_m9r_diagnosis_gates.py） |
+| 7 | 模型越权输出整份拒绝 | ✅ | 禁止键清单测试（test_m9r_diagnosis_gates.py FORBIDDEN_KEYS） |
+| 8 | 无合格实验不编造 uplift | ✅ | 无合格实验→观察/补数建议（test_m9r_diagnosis.py） |
+| 9 | 缺 SKU 流量/revision → blocked | ✅ | 真实路径 blocked 断言（test_m9r_diagnosis.py） |
+| 10 | 诊断全链平台写=0（内部写白名单） | ✅ | B4 反例测试（test_m9r_write_barrier.py） |
+| 11 | 受控实验入口可用（Demo 路径） | ✅ | run_demo_experiment 测试（test_m9r_controlled_experiment.py） |
+| 12 | Demo 隔离不进入默认视图 | ✅ | DataScope.DEMO 测试（test_m9r_demo_isolation*.py） |
+
+> 收口证据：上述 8 个测试文件 36 passed in 0.65s（2026-08-18，分支 feature/m9r-read-model）。
 
 ---
 
