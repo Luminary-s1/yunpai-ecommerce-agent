@@ -367,7 +367,8 @@ class RecommendationOutput(BaseModel):
 
 **复用边界**（明确什么不做）：
 - **做**：建议状态机、类型注册表、模型输出校验、幂等控制
-- **不做**：不修改商品标题/主图/价格、不触发任何平台写动作、不建独立数据库表（先用内存/现有表）
+- **不做**：不修改商品标题/主图/价格、不触发任何平台写动作、不引入第二套状态标签
+- **持久化**：建 `product_recommendations` + `product_recommendation_audit` 表（v36 迁移，占号 PR #18 已获批；表结构本阶段交付，业务写入方为后续「WP3 持久化读写服务」）
 - **新增**：`product_lifecycle/schemas.py`（类型注册表）、`state_machine.py`（状态机）、`validation.py`（校验）、`interface.py`（M10-R 接口）
 
 **无风险**：

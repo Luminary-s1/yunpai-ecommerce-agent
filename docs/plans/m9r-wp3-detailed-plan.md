@@ -28,7 +28,7 @@ WP1 读模型 + WP2 诊断 ──> schemas.py 建议类型注册表 ──> stat
 |---|---|---|
 | WP1 + WP2 接口冻结 | ⏳ 待 WP1/WP2 收口 | 读模型字段名、诊断类型名不再变 |
 | M10-R 契约字段评审 + 冻结 | ⚠️ 待发起 | 第 4 周向缪海南发起 RecommendationOutput 评审 |
-| v35 schema 占号获批 | ⚠️ 待申请 | 建议状态机/审计需持久化（见风险） |
+| v36 schema 占号获批 | ✅ 已获批 | 占号 PR #18 已合并（v35 归 M7-R WP3，v36 归 M9-R WP3） |
 | B1/B2/B3 反例测试承载文件 | ✅ 计划已定 | keep_default / write_barrier / alternatives |
 
 ---
@@ -99,11 +99,12 @@ class RecommendationOutput(BaseModel):
 
 - **第 4 周向缪海南发起字段评审，第 5 周冻结**；超时未回复 → 单方冻结 V0（标注 unconfirmed-by-consumer）
 
-### 4.4 持久化（v35，质量红线）
+### 4.4 持久化（v36，质量红线）
 
 - 建议记录 + 审计记录**必须持久化**（服务重启不丢、工作台跨请求可查）
-- 走 v35 迁移（`product_recommendations` + `product_recommendation_audit` 表）
+- 走 v36 迁移（`product_recommendations` + `product_recommendation_audit` 表）
 - **WP3 开工前必须占号获批**；未获批不开工（不降级为内存）
+- 已获批（占号 PR #18）：v35 归 M7-R WP3 Product Identity，v36 归 M9-R WP3。**本任务交付表结构（`_apply_v36`），业务写入方为后续独立工作包「WP3 持久化读写服务」**（接表后 recommendations 落库 / audit 落库，读侧工作台与复验查询）
 
 ---
 
@@ -170,7 +171,7 @@ class RecommendationOutput(BaseModel):
 
 | 依赖/风险 | 状态 | 预案 |
 |---|---|---|
-| v35 schema 占号 | ⚠️ 需申请 | WP3 开工前向闫睿涵申请；未获批不开工（质量红线） |
+| v36 schema 占号 | ✅ 已获批 | 占号 PR #18 已合并；未获批不开工（质量红线） |
 | M10-R 契约字段冻结 | ⚠️ 需评审 | 第 4 周发起评审；第 5 周超时未回复 → 单方冻结 V0 |
 | 缺成本/缺竞品 | ⚠️ 数据依赖 | 降级：`degraded: true` + `missing_evidence`，不出具体数字 |
 | 存量标题/主图默认不改 | ✅ 计划已锁 | B1 反例测试 `test_m9r_lifecycle_keep_default.py` |
