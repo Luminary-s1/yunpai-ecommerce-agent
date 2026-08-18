@@ -284,10 +284,11 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | **32** | M5-R | Traffic Lab / `main` | 店铺业务日历 + Traffic metric 三元身份 | 已合并（F-322 / PR #14） |
 | **33** | M3 | 知识库 / `main` | knowledge_key active 唯一索引 + `retrieval_logs` | 已合并（PR #10 / `1906365`） |
 | **34** | M7-R | Readonly Data / `main` | import manifest、field evidence、row isolation issue（WP1） | 已合并（WP1） |
-| 35+ | *（空闲）* | | | |
+| **35** | M7-R | Product Identity / `codex/m7r-wp3-product-identity` | canonical 商品、SKU、商家编码、内部料号映射与对账（WP3） | **已预留，运行迁移未合并** |
+| 36+ | *（空闲）* | | | |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
-26–30、32、33、34 已在 `main`。**31 仍只属于开放中的 PR #11**，`main` 的 `initialize()` 目前是 30→32→33→34，故意没有 `_apply_v31`。M7-R WP1 的 v34 已合入，下一空闲号从 **35** 起。
+26–30、32、33、34 已在 `main`。**31 仍只属于开放中的 PR #11**，`main` 的 `initialize()` 目前是 30→32→33→34，故意没有 `_apply_v31`。M7-R WP3 已从 main 预留 v35，但 `_apply_v35` 尚未合入；下一空闲号从 **36** 起。
 
 ### 合并 PR #11 前必扫（PR #10 与 M7-R WP1 合入后）
 
