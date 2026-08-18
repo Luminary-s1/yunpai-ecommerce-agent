@@ -104,7 +104,14 @@ class RecommendationOutput(BaseModel):
 - 建议记录 + 审计记录**必须持久化**（服务重启不丢、工作台跨请求可查）
 - 走 v36 迁移（`product_recommendations` + `product_recommendation_audit` 表）
 - **WP3 开工前必须占号获批**；未获批不开工（不降级为内存）
-- 已获批（占号 PR #18）：v35 归 M7-R WP3 Product Identity，v36 归 M9-R WP3。**本任务交付表结构（`_apply_v36`），业务写入方为后续独立工作包「WP3 持久化读写服务」**（接表后 recommendations 落库 / audit 落库，读侧工作台与复验查询）
+- 已获批（占号 PR #18）：v35 归 M7-R WP3 Product Identity，v36 归 M9-R WP3。
+- **✅ 已交付（2026-08-18）**：表结构 `_apply_v36` + 持久化读写服务 `RecommendationPersistenceService`
+  （`product_lifecycle/service.py`，薄 service：create 强制 DRAFT + 幂等 / record_transition 同事务
+  UPDATE+INSERT / get/list/audit_trail 读侧 / payload_hash 内容裁剪清单）。已挂进
+  `OperationsService.recommendations`，并注册 `list_recommendations` /
+  `get_recommendation_audit_trail` 两个只读 agent 工具（domain=lifecycle，L0）。
+  WP4 工作台经 `WorkbenchPages.recommendations` / `recommendation_audit_trail` 读侧暴露。
+  测试：`test_m9r_lifecycle_persistence_service.py` 10 用例全绿。
 
 ---
 

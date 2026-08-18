@@ -33,6 +33,8 @@ from .metrics import MetricQuery, MetricsService
 from .ops_assistant import OpsAssistantService
 from .orders import OrderService, OrderUpsert
 from .registry import business_module_catalog
+from ..product_lifecycle.service import RecommendationPersistenceService
+from ..product_lifecycle.schemas import RecommendationState
 
 if TYPE_CHECKING:
     from ..traffic_lab import TrafficAnalysisInterpreter
@@ -92,6 +94,20 @@ class ForecastEvidenceToolInput(BaseModel):
     store_id: str | None = Field(default=None, max_length=128)
 
 
+class RecommendationListToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: str | None = Field(default=None, max_length=128)
+    state: str | None = None  # draft/awaiting_review/approved/rejected/observed/closed
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class RecommendationDetailToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recommendation_id: str = Field(min_length=1, max_length=128)
+
+
 class OperationsService:
     def __init__(
         self,
@@ -138,6 +154,7 @@ class OperationsService:
             business_calendars=self.business_calendars,
         )
         self.metrics = MetricsService(db, self.inventory)
+        self.recommendations = RecommendationPersistenceService(db)
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]
@@ -512,6 +529,35 @@ class OperationsService:
                     metadata={"domain": "forecasting", "risk_level": "L0"},
                 )
             )
+        if registry.get("list_recommendations") is None:
+            registry.register(
+                ToolSpec(
+                    name="list_recommendations",
+                    description=(
+                        "读取当前租户的生命周期建议列表（选品/上新/诊断/实验/定价/活动/"
+                        "补货/清仓），可按店铺/状态过滤；只返回只读建议证据，"
+                        "不创建/批准/修改任何建议，不触发平台动作"
+                    ),
+                    kind="read",
+                    input_model=RecommendationListToolInput,
+                    handler=self._list_recommendations_tool,
+                    metadata={"domain": "lifecycle", "risk_level": "L0"},
+                )
+            )
+        if registry.get("get_recommendation_audit_trail") is None:
+            registry.register(
+                ToolSpec(
+                    name="get_recommendation_audit_trail",
+                    description=(
+                        "读取单条生命周期建议的完整状态流转审计（draft→…→closed）；"
+                        "只读审计记录，不可变，不修改任何建议"
+                    ),
+                    kind="read",
+                    input_model=RecommendationDetailToolInput,
+                    handler=self._recommendation_audit_trail_tool,
+                    metadata={"domain": "lifecycle", "risk_level": "L0"},
+                )
+            )
 
     def _inventory_risk_tool(
         self, arguments: BaseModel, context: ToolExecutionContext
@@ -821,4 +867,32 @@ class OperationsService:
                     "source_provenance": provenance,
                 },
             },
+        )
+
+    def _list_recommendations_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = RecommendationListToolInput.model_validate(arguments.model_dump())
+        state = RecommendationState(value.state) if value.state else None
+        items = self.recommendations.list(
+            context.tenant_id,
+            store_id=value.store_id,
+            state=state,
+            limit=value.limit,
+        )
+        return ToolResult(
+            status="success",
+            output={"items": items, "count": len(items)},
+        )
+
+    def _recommendation_audit_trail_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = RecommendationDetailToolInput.model_validate(arguments.model_dump())
+        trail = self.recommendations.audit_trail(
+            context.tenant_id, value.recommendation_id
+        )
+        return ToolResult(
+            status="success",
+            output={"items": trail, "count": len(trail)},
         )
