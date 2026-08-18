@@ -44,10 +44,13 @@ class SessionScopeError(ValueError):
 
 class Database:
     # 占号裁定（负责人 08-13）：v31 归 PR #11、v32 归 F-322/负责人分支（均已合入
+    # 占号裁定（负责人 08-13）：v31 归 PR #11、v32 归 F-322/负责人分支（均已合入
     # main）、v33 归 knowledge/retrieval、v34 归 M7-R WP1 readonly data、
     # v35 归 M7-R WP3 product identity。
+    # 占号裁定（08-18）：v36 归 M9-R WP3 生命周期建议（本分支）、v37 归 M9-R
+    # 复审修复（复合主键 + stale + 内容不可变触发器）。
     # 防同名方法静默覆盖事故，见 CONTRIBUTING「Schema 版本号占用登记」。
-    SCHEMA_VERSION = 35
+    SCHEMA_VERSION = 37
 
     def __init__(self, path: Path):
         self.path = path
@@ -190,6 +193,12 @@ class Database:
             if 35 not in applied:
                 self._apply_v35(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (35, ?)", (utc_now(),))
+            if 36 not in applied:
+                self._apply_v36(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (36, ?)", (utc_now(),))
+            if 37 not in applied:
+                self._apply_v37(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (37, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -3417,7 +3426,77 @@ class Database:
             BEGIN
                 SELECT RAISE(ABORT, 'readonly_product_reconciliation_row_immutable');
             END;
+        )
+
+    def _apply_v36(conn: sqlite3.Connection) -> None:
+        # M9-R WP3 生命周期建议持久化（占号裁定 08-18：v36 归 M9-R WP3，v35 归 M7-R WP3）。
+        # product_recommendations 可变（state 随状态机落库），不加不可变触发器；
+        # product_recommendation_audit 追加式审计日志，不可变（UPDATE/DELETE 拒绝）。
+        conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS product_recommendations (
+                recommendation_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                recommendation_type TEXT NOT NULL
+                    CHECK(recommendation_type IN (
+                        '选品候选','上新准备','曝光/点击诊断','受控实验','保持观察',
+                        '定价候选','活动候选','补货联动','清仓预警'
+                    )),
+                store_id TEXT NOT NULL,
+                item_id TEXT,
+                sku_id TEXT,
+                facts_snapshot_json TEXT NOT NULL,
+                rationale TEXT NOT NULL,
+                missing_evidence_json TEXT NOT NULL,
+                alternatives_json TEXT NOT NULL,
+                state TEXT NOT NULL
+                    CHECK(state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed'
+                    )),
+                degraded INTEGER NOT NULL DEFAULT 0 CHECK(degraded IN (0, 1)),
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(tenant_id, recommendation_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_product_recommendations_scope
+                ON product_recommendations(
+                    tenant_id, store_id, recommendation_type, state, created_at DESC
+                );
+            CREATE TABLE IF NOT EXISTS product_recommendation_audit (
+                audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL,
+                recommendation_id TEXT NOT NULL,
+                action TEXT NOT NULL
+                    CHECK(action IN ('submit','approve','reject','observe','close','mark_stale')),
+                from_state TEXT NOT NULL
+                    CHECK(from_state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed'
+                    )),
+                to_state TEXT NOT NULL
+                    CHECK(to_state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed'
+                    )),
+                actor TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                FOREIGN KEY(tenant_id, recommendation_id)
+                    REFERENCES product_recommendations(tenant_id, recommendation_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_recommendation
+                ON product_recommendation_audit(recommendation_id, occurred_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_tenant_time
+                ON product_recommendation_audit(tenant_id, occurred_at DESC);
+            CREATE TRIGGER IF NOT EXISTS trg_product_recommendation_audit_immutable_update
+            BEFORE UPDATE ON product_recommendation_audit
+            BEGIN
+                SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_product_recommendation_audit_immutable_delete
+            BEFORE DELETE ON product_recommendation_audit
+            BEGIN
+                SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
+            END;
         )
 
     @staticmethod
@@ -3948,6 +4027,20 @@ class Database:
                 "occurrence_count",
                 "detail_json",
                 "record_version",
+            },
+            # M9-R WP3（v36）生命周期建议持久化：product_recommendations 可变实体
+            # （state 状态机落库），product_recommendation_audit 追加式审计（不可变）。
+            "product_recommendations": {
+                "recommendation_id", "tenant_id", "recommendation_type",
+                "store_id", "item_id", "sku_id",
+                "facts_snapshot_json", "rationale", "missing_evidence_json",
+                "alternatives_json", "state", "degraded",
+                "payload_hash", "created_at", "updated_at",
+            },
+            "product_recommendation_audit": {
+                "audit_id", "recommendation_id", "tenant_id", "action",
+                "from_state", "to_state", "actor", "occurred_at",
+                "payload_hash",
             },
         }
         tables = {
