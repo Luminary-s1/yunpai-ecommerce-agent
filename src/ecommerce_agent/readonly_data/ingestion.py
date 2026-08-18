@@ -59,6 +59,27 @@ from .service import ReadonlyDataService
 
 
 _SAFE_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{1,127}$")
+_SOURCE_ID_DIGEST = re.compile(r"^[0-9a-f]{24}$")
+
+
+def _source_id_prefix(report_type: str, digest: str) -> str:
+    return f"readonly:{report_type}:{digest[:24]}"
+
+
+def source_manifest_key(source_id: str | None) -> tuple[str, str] | None:
+    """Return the manifest lookup key encoded by a WP2 domain source id."""
+    if not isinstance(source_id, str):
+        return None
+    parts = source_id.split(":", 3)
+    if (
+        len(parts) != 4
+        or parts[0] != "readonly"
+        or not parts[1]
+        or _SOURCE_ID_DIGEST.fullmatch(parts[2]) is None
+        or not parts[3]
+    ):
+        return None
+    return parts[1], parts[2]
 
 
 @dataclass(frozen=True, slots=True)
@@ -770,7 +791,7 @@ class ReadonlyReportIngestionService:
                 separators=(",", ":"),
             ).encode()
         ).hexdigest()[:24]
-        return f"readonly:{report_type}:{digest[:24]}:{identity}"
+        return f"{_source_id_prefix(report_type, digest)}:{identity}"
 
     @staticmethod
     def _aware(value: datetime, request: ReportImportRequest) -> datetime:
@@ -816,4 +837,4 @@ class ReadonlyReportIngestionService:
         return "report_import_failed"
 
 
-__all__ = ["ReadonlyReportIngestionService"]
+__all__ = ["ReadonlyReportIngestionService", "source_manifest_key"]

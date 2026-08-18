@@ -28,7 +28,7 @@ from .adapters import (
     ReportImportJob,
     ReportImportRequest,
 )
-from .ingestion import ReadonlyReportIngestionService
+from .ingestion import ReadonlyReportIngestionService, source_manifest_key
 from .service import ReadonlyDataService
 
 __all__ = [
@@ -60,4 +60,5 @@ __all__ = [
     "project_evidenced_value",
     "sanitize_report_row",
     "schema_fingerprint",
+    "source_manifest_key",
 ]
