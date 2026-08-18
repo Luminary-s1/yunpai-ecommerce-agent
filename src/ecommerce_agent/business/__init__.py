@@ -32,11 +32,12 @@ from .ops_assistant import (
     OpsOperationRecordUpsert,
     OpsReportQuery,
 )
-from .orders import OrderService, OrderUpsert
+from .orders import AfterSaleCaseType, OrderService, OrderUpsert
 
 __all__ = [
     "CatalogItemUpsert",
     "CatalogService",
+    "AfterSaleCaseType",
     "CompetitiveIntelligenceService",
     "CompetitiveAlertTransition",
     "CompetitiveCustomDimension",
