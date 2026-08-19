@@ -7,7 +7,7 @@
 - 解释器：DiagnosisInterpreter / RulesetDiagnosisInterpreter（语义角色占位）
 - 实验：ExperimentGateway / ExperimentNotAvailableError / ExperimentPath（双路径）
 """
-from .bridge import EvidenceBridge, PROVENANCE_PATHS
+from .bridge import EvidenceBridge
 from .diagnosis import (
     FORBIDDEN_DIAGNOSIS_KEYS,
     Diagnosis,
@@ -41,7 +41,6 @@ __all__ = [
     "FORBIDDEN_KEYS",
     "GateEngine",
     "GateResult",
-    "PROVENANCE_PATHS",
     "RulesetDiagnosisInterpreter",
     "build_diagnosis_facts",
     "run_interpretation",

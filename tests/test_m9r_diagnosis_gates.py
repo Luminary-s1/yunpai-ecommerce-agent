@@ -71,10 +71,23 @@ def test_gate_run_all_gates_passed() -> None:
     all_passed, results = engine.run_all({
         "evidence_state": "actual",
         "freshness": {"usable_as_current": True},
+        "quality_gate": {"status": "passed", "issues": []},
     })
     assert all_passed is True
     assert all(isinstance(r, GateResult) for r in results)
-    assert len(results) == 2
+    assert len(results) == 3
+
+
+def test_gate_run_all_fails_on_blocked_quality_gate() -> None:
+    """quality_gate blocked（缺 A/A/样本/窗口等）→ all_passed=False。"""
+    engine = GateEngine()
+    all_passed, results = engine.run_all({
+        "evidence_state": "actual",
+        "freshness": {"usable_as_current": True},
+        "quality_gate": {"status": "blocked", "issues": ["aa_gate_missing"]},
+    })
+    assert all_passed is False
+    assert any(r.name == "quality_gate" and not r.passed for r in results)
 
 
 def test_gate_run_all_fails_on_missing_evidence() -> None:

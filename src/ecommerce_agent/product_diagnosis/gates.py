@@ -75,11 +75,30 @@ class GateEngine:
             return GateResult("output_scope", False, "forbidden_output_key_recursive")
         return GateResult("output_scope", True)
 
+    @staticmethod
+    def check_quality_gate(view: Mapping[str, Any]) -> GateResult:
+        """quality_gate：M5-R 已把 A/A/样本/实际窗口/控制变量/污染折进 status。
+
+        只有 status == "passed" 才允许强方向结论（对齐 strong_conclusion_allowed）。
+        """
+        gate = view.get("quality_gate")
+        if isinstance(gate, Mapping):
+            status = gate.get("status")
+            issues = gate.get("issues") or ()
+        else:
+            status = gate
+            issues = ()
+        if status != "passed":
+            detail = ",".join(str(i) for i in issues) or (str(status) if status else "missing")
+            return GateResult("quality_gate", False, f"quality_gate_not_passed:{detail}")
+        return GateResult("quality_gate", True)
+
     def run_all(self, view: Mapping[str, Any]) -> tuple[bool, list[GateResult]]:
         """组合判定：全部通过 → (True, results)；任一失败 → (False, results)。"""
         results = [
             self.check_evidence(view),
             self.check_freshness(view),
+            self.check_quality_gate(view),
         ]
         all_passed = all(result.passed for result in results)
         return all_passed, results

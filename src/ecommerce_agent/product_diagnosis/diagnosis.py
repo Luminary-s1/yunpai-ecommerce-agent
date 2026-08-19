@@ -138,11 +138,17 @@ def validate_diagnosis_output(
         DiagnosisType.EXPOSURE_INSUFFICIENT,
         DiagnosisType.CLICK_INSUFFICIENT,
         DiagnosisType.CONVERSION_INSUFFICIENT,
+    }
+    # 污染标记（degraded 降级）不是「强方向结论」，且必须与 facts 的污染旗标一致
+    pollution_types = {
         DiagnosisType.STOCKOUT_POLLUTION,
         DiagnosisType.AD_PRICE_POLLUTION,
     }
     if diagnosis_type in strong_types and not facts.conclusion_allowed():
         raise ValueError("diagnosis_conclusion_not_allowed")
+    if diagnosis_type in pollution_types:
+        if not (facts.stockout or facts.pollution is not None):
+            raise ValueError("diagnosis_pollution_marker_without_pollution")
     return Diagnosis(
         diagnosis_type=diagnosis_type,
         sku_id=facts.sku_id,

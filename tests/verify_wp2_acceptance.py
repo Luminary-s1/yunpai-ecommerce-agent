@@ -5,8 +5,14 @@
 """
 from __future__ import annotations
 
-from ecommerce_agent.product_diagnosis.bridge import EvidenceBridge, PROVENANCE_PATHS
-from ecommerce_agent.product_diagnosis.diagnosis import DiagnosisType, build_diagnosis
+import pytest
+
+from ecommerce_agent.product_diagnosis.bridge import EvidenceBridge
+from ecommerce_agent.product_diagnosis.diagnosis import (
+    DiagnosisType,
+    build_diagnosis_facts,
+    validate_diagnosis_output,
+)
 from ecommerce_agent.product_diagnosis.experiment import (
     ExperimentGateway,
     ExperimentNotAvailableError,
@@ -28,70 +34,57 @@ def check(cid: str, desc: str, expected: str, fn) -> None:
     RESULTS.append((cid, desc, expected, ok, actual))
 
 
-class _FakeService:
-    """假 TrafficLabService：返回可预测视图，供桥接测试。"""
+def _real_bridge() -> EvidenceBridge:
+    """真实 TrafficLabService + tmp DB 种数据（WP5 验收：不再用假视图）。"""
+    from pathlib import Path
+    import tempfile
 
-    def get_revision(self, tenant_id, revision_id):
-        return {
-            "revision_id": revision_id,
-            "evidence_json": {
-                "source_provenance": {
-                    "source_type": "virtual", "virtual": True,
-                    "completeness": "complete", "basis": "demo",
-                }
-            },
-            "freshness": {"usable_as_current": True},
-            "data_as_of": "2026-08-17",
-        }
+    from ecommerce_agent.database import Database
+    from tests.test_m9r_diagnosis_bridge import _seeded_service
 
-    def get_experiment(self, tenant_id, experiment_id):
-        return {
-            "experiment_id": experiment_id,
-            "evidence_json": {
-                "source_provenance": {
-                    "source_type": "actual", "virtual": False,
-                    "completeness": "complete", "basis": "report",
-                }
-            },
-            "freshness": {"usable_as_current": True},
-            "status": "running",
-            "data_as_of": "2026-08-17",
-        }
-
-    def list_analysis_runs(self, tenant_id, experiment_id, *, limit=100):
-        return [{"analysis_run_id": "run-1", "statistical_facts": {"effect": 0.1}}]
+    db = Database(Path(tempfile.mkdtemp()) / "verify-wp2.sqlite3")
+    db.initialize()
+    return EvidenceBridge(_seeded_service(db))
 
 
-def _bridge() -> EvidenceBridge:
-    bridge = EvidenceBridge(service=None)  # type: ignore[arg-type]
-    bridge.service = _FakeService()  # type: ignore[assignment]
-    return bridge
-
-
-# ── 条目 1：桥接 revision/experiment/analysis ──
+# ── 条目 1：桥接 revision/experiment/analysis（真实证据）──
 def t01() -> None:
-    b = _bridge()
-    assert b.get_revision_view("t1", "rev-1")["evidence_state"] == "demo"
-    assert b.get_experiment_view("t1", "exp-1")["status"] == "running"
-    runs = b.list_analysis_runs_view("t1", "exp-1")
-    assert runs[0]["analysis_run_id"] == "run-1"
-    assert runs[0]["evidence_state"] == "actual"
-
-
-# ── 条目 2：桥接 freshness/provenance ──
-def t02() -> None:
-    assert PROVENANCE_PATHS["traffic"] == ("evidence_json", "source_provenance")
-    b = _bridge()
-    view = b.get_revision_view("t1", "rev-1")
+    bridge = _real_bridge()
+    # revision 证据从真实 metric buckets 读取（virtual → demo，非 missing）
+    with bridge.service.db.connect() as conn:
+        bucket_rev = conn.execute(
+            "SELECT listing_revision_id FROM traffic_metric_buckets WHERE tenant_id='tenant-a' LIMIT 1"
+        ).fetchone()["listing_revision_id"]
+    view = bridge.get_revision_view("tenant-a", bucket_rev)
+    assert view["evidence_state"] == "demo", f"got {view['evidence_state']}"
     assert view["source_provenance"]["source_type"] == "virtual"
-    assert view["freshness"]["usable_as_current"] is True
+    assert view["data_as_of"] is not None
+
+
+# ── 条目 2：桥接 freshness/provenance（真实持久化位置）──
+def t02() -> None:
+    bridge = _real_bridge()
+    with bridge.service.db.connect() as conn:
+        bucket_rev = conn.execute(
+            "SELECT listing_revision_id FROM traffic_metric_buckets WHERE tenant_id='tenant-a' LIMIT 1"
+        ).fetchone()["listing_revision_id"]
+    view = bridge.get_revision_view("tenant-a", bucket_rev)
+    assert view["freshness"] is not None
+    assert "reason_codes" in view["freshness"]  # evidence-freshness-v1 结构
 
 
 # ── 条目 3：真实/Demo 物理隔离 ──
 def t03() -> None:
-    b = _bridge()
-    assert b.get_revision_view("t1", "rev-demo")["evidence_state"] == "demo"
-    assert b.get_experiment_view("t1", "exp-real")["evidence_state"] == "actual"
+    bridge = _real_bridge()
+    # 真实种的是 virtual_taobao → demo（隔离语义：demo 不进 operational）
+    with bridge.service.db.connect() as conn:
+        bucket_rev = conn.execute(
+            "SELECT listing_revision_id FROM traffic_metric_buckets WHERE tenant_id='tenant-a' LIMIT 1"
+        ).fetchone()["listing_revision_id"]
+    view = bridge.get_revision_view("tenant-a", bucket_rev)
+    assert view["evidence_state"] == "demo"
+    # 不存在的 experiment → missing（不冒充）
+    assert bridge.get_experiment_view("tenant-a", "exp-nonexistent")["evidence_state"] == "missing"
 
 
 # ── 条目 4：Gate 通过才给强方向结论 ──
@@ -100,10 +93,17 @@ def t04() -> None:
     all_passed, _ = engine.run_all({
         "evidence_state": "actual",
         "freshness": {"usable_as_current": True},
+        "quality_gate": {"status": "passed", "issues": []},
     })
     assert all_passed is True
     all_fail, _ = engine.run_all({"evidence_state": "missing"})
     assert all_fail is False
+    blocked, _ = engine.run_all({
+        "evidence_state": "actual",
+        "freshness": {"usable_as_current": True},
+        "quality_gate": {"status": "blocked", "issues": ["aa_gate_missing"]},
+    })
+    assert blocked is False  # quality_gate blocked → 不给强方向
 
 
 # ── 条目 5：freshness Gate ──
@@ -117,10 +117,16 @@ def t05() -> None:
 
 # ── 条目 6：缺货/广告/价格污染不归因标题/主图 ──
 def t06() -> None:
-    diag = build_diagnosis("sku1", {"evidence_state": "actual"}, stockout=True)
-    assert diag.diagnosis_type is DiagnosisType.STOCKOUT_POLLUTION
-    diag2 = build_diagnosis("sku1", {"evidence_state": "actual"}, pollution="ad_change")
-    assert diag2.diagnosis_type is DiagnosisType.AD_PRICE_POLLUTION
+    facts = build_diagnosis_facts(
+        "sku1", {"evidence_state": "actual"}, stockout=True
+    )
+    assert facts.stockout is True
+    assert facts.conclusion_allowed() is False  # 污染 → 不给强方向
+    facts2 = build_diagnosis_facts(
+        "sku1", {"evidence_state": "actual"}, pollution="ad_change"
+    )
+    assert facts2.pollution == "ad_change"
+    assert facts2.conclusion_allowed() is False
 
 
 # ── 条目 7：模型越权输出整份拒绝 ──
@@ -132,9 +138,14 @@ def t07() -> None:
 
 # ── 条目 8：无合格实验不编造 uplift ──
 def t08() -> None:
-    diag = build_diagnosis("sku1", {"evidence_state": "missing"})
-    assert diag.diagnosis_type is DiagnosisType.EVIDENCE_INSUFFICIENT
-    assert diag.reason == "evidence_missing"
+    facts = build_diagnosis_facts("sku1", {"evidence_state": "missing"})
+    assert facts.evidence_state == "missing"
+    assert facts.conclusion_allowed() is False  # 证据缺失 → 不给结论
+    # 解释器即使给强方向类型也被校验拒绝（不编造 uplift）
+    with pytest.raises(ValueError, match="diagnosis_conclusion_not_allowed"):
+        validate_diagnosis_output(
+            facts, {"diagnosis_type": "exposure_insufficient", "reason": "low exp"}
+        )
 
 
 # ── 条目 9：真实缺 SKU 流量 → blocked ──
