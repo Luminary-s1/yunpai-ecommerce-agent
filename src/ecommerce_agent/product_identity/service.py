@@ -320,6 +320,74 @@ class ProductIdentityService:
             ).fetchall()
         return [self._mapping_view(dict(row)) for row in rows]
 
+    def list_mappings(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        scope: DataScope = DataScope.OPERATIONAL,
+        latest_only: bool = True,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """List immutable mapping events without weakening product source scope."""
+        tenant_id = self._tenant_id(tenant_id)
+        scope_sql, scope_params = self._scope_condition(
+            DataScope(scope), alias="p"
+        )
+        latest_sql = ""
+        if latest_only:
+            latest_sql = """
+              AND e.mapping_version=(
+                SELECT MAX(latest.mapping_version)
+                FROM readonly_product_mapping_events AS latest
+                WHERE latest.tenant_id=e.tenant_id
+                  AND latest.store_id=e.store_id
+                  AND latest.connector_id=e.connector_id
+                  AND latest.sku_id=e.sku_id
+              )
+            """
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT e.*, p.source_kind AS canonical_source_kind,
+                       (
+                         SELECT MAX(current.mapping_version)
+                         FROM readonly_product_mapping_events AS current
+                         WHERE current.tenant_id=e.tenant_id
+                           AND current.store_id=e.store_id
+                           AND current.connector_id=e.connector_id
+                           AND current.sku_id=e.sku_id
+                       ) AS latest_mapping_version
+                FROM readonly_product_mapping_events AS e
+                JOIN readonly_canonical_products AS p
+                  ON p.tenant_id=e.tenant_id
+                 AND p.store_id=e.store_id
+                 AND p.canonical_product_id=e.canonical_product_id
+                WHERE e.tenant_id=? AND e.store_id=? AND {scope_sql}
+                {latest_sql}
+                ORDER BY e.created_at DESC, e.event_id DESC
+                LIMIT ?
+                """,
+                (
+                    tenant_id,
+                    store_id,
+                    *scope_params,
+                    self._bounded_read_limit(limit),
+                ),
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            row_value = dict(row)
+            item = self._mapping_view(row_value)
+            item["source_kind"] = str(row_value["canonical_source_kind"])
+            item["active"] = (
+                item["event_type"] == MappingEventType.CONFIRMED.value
+                and item["mapping_version"]
+                == int(row_value["latest_mapping_version"])
+            )
+            result.append(item)
+        return result
+
     def reconcile(
         self,
         tenant_id: str,
@@ -754,6 +822,58 @@ class ProductIdentityService:
             "rows": [self._reconciliation_row_view(row) for row in row_values],
             "created_at": run_value["created_at"],
         }
+
+    def list_reconciliations(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        scope: DataScope = DataScope.OPERATIONAL,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """List reconciliation summaries for the exact data scope requested."""
+        tenant_id = self._tenant_id(tenant_id)
+        data_scope = DataScope(scope)
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM readonly_product_reconciliation_runs
+                WHERE tenant_id=? AND store_id=? AND data_scope=?
+                ORDER BY created_at DESC, run_id DESC
+                LIMIT ?
+                """,
+                (
+                    tenant_id,
+                    store_id,
+                    data_scope.value,
+                    self._bounded_read_limit(limit),
+                ),
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            value = dict(row)
+            self._require_policy(str(value["policy_version"]))
+            result.append(
+                {
+                    "run_id": str(value["run_id"]),
+                    "store_id": str(value["store_id"]),
+                    "scope": str(value["data_scope"]),
+                    "policy_version": str(value["policy_version"]),
+                    "input_digest": str(value["input_digest"]),
+                    "mapping_snapshot_digest": str(
+                        value["mapping_snapshot_digest"]
+                    ),
+                    "total_rows": int(value["total_rows"]),
+                    "status_counts": {
+                        "matched": int(value["matched_rows"]),
+                        "ambiguous": int(value["ambiguous_rows"]),
+                        "unmapped": int(value["unmapped_rows"]),
+                        "rejected": int(value["rejected_rows"]),
+                    },
+                    "created_at": str(value["created_at"]),
+                }
+            )
+        return result
 
     def _reconcile_observation(
         self,
@@ -1349,6 +1469,12 @@ class ProductIdentityService:
     def _tenant_id(value: str) -> str:
         if not isinstance(value, str) or not value or value != value.strip() or len(value) > 128:
             raise ValueError("invalid_product_identity_tenant")
+        return value
+
+    @staticmethod
+    def _bounded_read_limit(value: int) -> int:
+        if value < 1 or value > 1000:
+            raise ValueError("product_identity_query_limit_invalid")
         return value
 
     def _require_policy(self, value: str) -> None:
