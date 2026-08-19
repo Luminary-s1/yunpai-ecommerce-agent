@@ -107,6 +107,7 @@ class RecommendationDetailToolInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     recommendation_id: str = Field(min_length=1, max_length=128)
+    store_id: str = Field(min_length=1, max_length=128)
 
 
 class OperationsService:
@@ -543,6 +544,7 @@ class OperationsService:
                     kind="read",
                     input_model=RecommendationListToolInput,
                     handler=self._list_recommendations_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "lifecycle", "risk_level": "L0"},
                 )
             )
@@ -557,6 +559,7 @@ class OperationsService:
                     kind="read",
                     input_model=RecommendationDetailToolInput,
                     handler=self._recommendation_audit_trail_tool,
+                    policy=self._recommendation_store_scope_policy,
                     metadata={"domain": "lifecycle", "risk_level": "L0"},
                 )
             )
@@ -609,6 +612,18 @@ class OperationsService:
         if not arguments.model_dump().get("store_id") and not cls._trusted_store_id(
             context
         ):
+            return "store_scope_required"
+        return None
+
+    @classmethod
+    def _recommendation_store_scope_policy(
+        cls, arguments: BaseModel, context: ToolExecutionContext
+    ) -> str | None:
+        """详情工具必须落在可信店铺内：store_id 与可信 store 冲突即拒。"""
+        denial = cls._catalog_store_scope_policy(arguments, context)
+        if denial:
+            return denial
+        if not cls._trusted_store_id(context):
             return "store_scope_required"
         return None
 
@@ -891,6 +906,15 @@ class OperationsService:
         self, arguments: BaseModel, context: ToolExecutionContext
     ) -> ToolResult:
         value = RecommendationDetailToolInput.model_validate(arguments.model_dump())
+        # 归属校验：建议必须属于请求的店铺（缺陷 1：防跨店铺读审计）
+        try:
+            rec = self.recommendations.get(
+                context.tenant_id, value.recommendation_id
+            )
+        except Exception:
+            return ToolResult(status="failed", error_code="recommendation_not_found")
+        if rec["target"]["store_id"] != value.store_id:
+            return ToolResult(status="failed", error_code="store_scope_mismatch")
         trail = self.recommendations.audit_trail(
             context.tenant_id, value.recommendation_id
         )
