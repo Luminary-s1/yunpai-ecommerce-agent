@@ -35,6 +35,7 @@ from .orders import OrderService, OrderUpsert
 from .registry import business_module_catalog
 from ..product_lifecycle.service import RecommendationPersistenceService
 from ..product_lifecycle.schemas import RecommendationState
+from ..product_read_model.query import ProductReadQuery
 
 if TYPE_CHECKING:
     from ..traffic_lab import TrafficAnalysisInterpreter
@@ -155,6 +156,7 @@ class OperationsService:
         )
         self.metrics = MetricsService(db, self.inventory)
         self.recommendations = RecommendationPersistenceService(db)
+        self.product_read = ProductReadQuery(db)
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]
