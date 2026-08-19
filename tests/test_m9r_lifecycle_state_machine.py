@@ -64,12 +64,12 @@ def test_invalid_transition_raises() -> None:
 
 
 def test_mark_stale_closes() -> None:
-    """事实更新 → 旧建议标 stale（closed）（对齐验收条目 5）。"""
+    """事实更新 → 旧建议标 stale（不是 closed，不原地改写历史）。"""
     sm = StateMachine(RecommendationState.OBSERVED)
     new_state, audit = sm.apply(
         TransitionAction.MARK_STALE, actor="ops-1", at=NOW, target="r1"
     )
-    assert new_state is RecommendationState.CLOSED
+    assert new_state is RecommendationState.STALE
     assert audit.action is TransitionAction.MARK_STALE
 
 

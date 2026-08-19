@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from ecommerce_agent.text_utils import contains_forbidden_token
+
 from .schemas import Recommendation, RecommendationType, validate_recommendation
 
 # 内部写白名单：本包允许的写动作（其余写 = 禁止）
@@ -51,11 +53,10 @@ class WriteBarrier:
 def validate_model_output(recommendation: Recommendation, output: Mapping[str, Any]) -> None:
     """模型输出校验：越权键命中 → 抛；否则通过。
 
-    失败暴露：禁止键（effect/平台权重等）出现在模型输出 → 整体拒绝。
+    失败暴露：禁止键（effect/平台权重等）出现在模型输出（含嵌套/自然语言）→ 整体拒绝。
     """
-    for key in FORBIDDEN_OUTPUT_KEYS:
-        if key in output:
-            raise ValueError(f"forbidden_output_key:{key}")
+    if contains_forbidden_token(output, FORBIDDEN_OUTPUT_KEYS):
+        raise ValueError("forbidden_output_key_recursive")
 
 
 def validate_full_recommendation(recommendation: Recommendation) -> None:

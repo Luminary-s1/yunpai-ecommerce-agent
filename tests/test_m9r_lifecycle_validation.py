@@ -49,9 +49,18 @@ def test_pricing_requires_cost_or_degraded() -> None:
     # 缺 cost_ready 且未 degraded → 抛
     with pytest.raises(ValueError, match="missing_required_facts"):
         validate_full_recommendation(_rec())
-    # degraded 建议可带缺失事实
+    # degraded 建议可带缺失事实，但必须列出缺什么（missing_evidence 非空）
     rec = _rec(facts={}, degraded=True)
-    validate_full_recommendation(rec)  # 不抛（degraded 允许缺事实）
+    rec = rec.model_copy(update={"missing_evidence": ["cost_ready"]})
+    validate_full_recommendation(rec)  # 不抛（degraded + 明确缺什么）
+    # cost_ready=None 视为缺失（非 degraded → 抛）
+    rec_none = _rec(facts={"cost_ready": None})
+    with pytest.raises(ValueError, match="missing_required_facts"):
+        validate_full_recommendation(rec_none)
+    # degraded 但 missing_evidence 为空 → 抛（degraded_requires_missing_evidence）
+    rec_degraded_empty = _rec(facts={}, degraded=True)
+    with pytest.raises(ValueError, match="degraded_requires_missing_evidence"):
+        validate_full_recommendation(rec_degraded_empty)
 
 
 def test_alternatives_required() -> None:
@@ -61,10 +70,16 @@ def test_alternatives_required() -> None:
         validate_full_recommendation(rec)
 
 def test_model_output_forbidden_key_rejected() -> None:
-    """模型输出含 effect/平台权重 → 整体拒绝。"""
+    """模型输出含 effect/平台权重 → 整体拒绝（含嵌套/自然语言）。"""
     rec = _rec(facts={"cost_ready": True})
     with pytest.raises(ValueError, match="forbidden_output_key"):
         validate_model_output(rec, {"effect": 0.5})
+    # 嵌套键
+    with pytest.raises(ValueError, match="forbidden_output_key"):
+        validate_model_output(rec, {"details": {"effect": 0.5}})
+    # 自然语言越权
+    with pytest.raises(ValueError, match="forbidden_output_key"):
+        validate_model_output(rec, {"notes": ["平台权重提升20%"]})
 
 
 def test_m10_contract_wraps() -> None:

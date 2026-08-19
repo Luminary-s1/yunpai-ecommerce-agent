@@ -1,25 +1,24 @@
-"""M9-R WP2 结构化流量诊断。
+"""M9-R WP2 流量诊断：确定性事实 + 模型语义校验（对齐 D-034）。
 
-边界声明：
-- 输入：证据视图（revision/experiment view）+ 可选分析运行。
-- 输出：Diagnosis 对象（冻结 pydantic 模型），或 None（无诊断可下时显式返回）。
+边界声明（D-034）：
+- 确定性代码回答「这个动作现在能不能安全执行」；模型回答「用户想要什么、下一步做什么」。
+- 本模块只产出**可执行事实**（证据状态、门禁、污染旗标、原始漏斗数值），
+  不替模型决定语义诊断类型。
+- 语义诊断类型（exposure/click/conversion 等）由模型产出，确定性代码只校验：
+  1. 类型在 DiagnosisType 白名单内；
+  2. 未命中 FORBIDDEN_KEYS（含嵌套/自然语言，递归）；
+  3. 可执行前提成立（证据不足/门禁未过时不得给强方向结论）。
 - 副作用：零——纯派生，不写库、不调用模型。
-- 确定性：诊断类型由字段值确定性推导；缺失字段 → reason 明确。
-
-诊断类型（对齐任务书）：
-- exposure_insufficient：曝光不足（曝光低且证据可用）
-- click_insufficient：点击不足（曝光够但点击率低）
-- conversion_insufficient：转化不足（点击够但转化低）
-- stockout_pollution：缺货污染（缺货期间指标不可信）
-- ad_price_pollution：广告/价格变更污染（实验窗口被污染）
-- evidence_insufficient：证据不足（无法下诊断）
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Mapping
 
 from pydantic import BaseModel, ConfigDict
+
+from ecommerce_agent.text_utils import contains_forbidden_token
 
 
 class DiagnosisType(StrEnum):
@@ -32,7 +31,7 @@ class DiagnosisType(StrEnum):
 
 
 class Diagnosis(BaseModel):
-    """结构化诊断（冻结，可追溯）。"""
+    """结构化诊断（冻结，可追溯）。由模型产出类型，代码校验后填充。"""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -43,93 +42,131 @@ class Diagnosis(BaseModel):
     degraded: bool = False
 
 
-# 确定性阈值（可随策略演进，改动须同步测试）
-_THRESHOLDS: dict[str, float] = {
-    "exposure_low": 100.0,    # 日曝光 < 100 → 曝光不足
-    "ctr_low": 0.01,          # CTR < 1% → 点击不足
-    "conv_low": 0.02,         # 转化率 < 2% → 转化不足
-}
+# 模型越权输出禁止键（含 effect/interval/sample_size/平台权重/平台算法）
+FORBIDDEN_DIAGNOSIS_KEYS: frozenset[str] = frozenset({
+    "effect",
+    "interval",
+    "sample_size",
+    "gate",
+    "平台权重",
+    "平台算法",
+})
 
 
-def build_diagnosis(
+@dataclass(frozen=True)
+class DiagnosisFacts:
+    """确定性可执行事实（D-034：只回答「能不能安全下结论」）。"""
+
+    sku_id: str
+    evidence_state: str | None
+    freshness: Mapping[str, Any] | None
+    quality_gate: str | None  # passed / blocked / None（无门禁信息）
+    quality_gate_issues: tuple[str, ...]
+    stockout: bool
+    pollution: str | None
+    exposures: float | None
+    clicks: float | None
+    conversions: float | None
+    degraded: bool = False
+
+    def conclusion_allowed(self) -> bool:
+        """能否给强方向结论：证据可用 + 门禁通过 + 无污染。
+
+        确定性：仅依赖固化事实，不依赖模型。
+        """
+        if self.evidence_state in (None, "missing"):
+            return False
+        if self.quality_gate == "blocked":
+            return False
+        if self.stockout or self.pollution is not None:
+            return False
+        return True
+
+
+def build_diagnosis_facts(
     sku_id: str,
     view: Mapping[str, Any],
     *,
     stockout: bool = False,
     pollution: str | None = None,
-) -> Diagnosis:
-    """从证据视图确定性推导诊断类型（无模型）。
-
-    规则（确定性）：
-    1. 缺货污染 → STOCKOUT_POLLUTION（优先，污染必须被明确标记）
-    2. 广告/价格污染 → AD_PRICE_POLLUTION
-    3. 证据不足（视图 evidence_state=missing）→ EVIDENCE_INSUFFICIENT
-    4. 曝光 < 阈值 → EXPOSURE_INSUFFICIENT
-    5. CTR < 阈值 → CLICK_INSUFFICIENT
-    6. 转化 < 阈值 → CONVERSION_INSUFFICIENT
-    7. 无命中 → EVIDENCE_INSUFFICIENT（带 reason="no_issue_detected"）
-    """
-    facts: dict[str, Any] = {
-        "evidence_state": view.get("evidence_state"),
-        "freshness": view.get("freshness"),
-    }
-    if stockout:
-        return Diagnosis(
-            diagnosis_type=DiagnosisType.STOCKOUT_POLLUTION,
-            sku_id=sku_id, reason="stockout_period_observed",
-            evidence_facts=facts, degraded=True,
-        )
-    if pollution is not None:
-        return Diagnosis(
-            diagnosis_type=DiagnosisType.AD_PRICE_POLLUTION,
-            sku_id=sku_id, reason=f"pollution:{pollution}",
-            evidence_facts=facts, degraded=True,
-        )
-    if view.get("evidence_state") in (None, "missing"):
-        return Diagnosis(
-            diagnosis_type=DiagnosisType.EVIDENCE_INSUFFICIENT,
-            sku_id=sku_id, reason="evidence_missing",
-            evidence_facts=facts,
-        )
+) -> DiagnosisFacts:
+    """从证据视图提取确定性可执行事实（不做任何语义分类）。"""
+    quality_gate = view.get("quality_gate")
+    if isinstance(quality_gate, Mapping):
+        gate_status = quality_gate.get("status")
+        issues = tuple(quality_gate.get("issues") or ())
+    else:
+        gate_status = quality_gate
+        issues = tuple(view.get("quality_gate_issues") or ())
     exposures = view.get("exposures")
     clicks = view.get("clicks")
     conversions = view.get("conversions")
-    if exposures is None or clicks is None:
-        return Diagnosis(
-            diagnosis_type=DiagnosisType.EVIDENCE_INSUFFICIENT,
-            sku_id=sku_id, reason="metrics_fields_missing",
-            evidence_facts=facts,
-        )
-    if exposures < _THRESHOLDS["exposure_low"]:
-        return Diagnosis(
-            diagnosis_type=DiagnosisType.EXPOSURE_INSUFFICIENT,
-            sku_id=sku_id, reason=f"exposures_below_threshold:{exposures}",
-            evidence_facts=facts,
-        )
-    ctr = clicks / exposures if exposures else 0.0
-    if ctr < _THRESHOLDS["ctr_low"]:
-        return Diagnosis(
-            diagnosis_type=DiagnosisType.CLICK_INSUFFICIENT,
-            sku_id=sku_id, reason=f"ctr_below_threshold:{ctr:.4f}",
-            evidence_facts=facts,
-        )
-    if conversions is not None:
-        conv_rate = conversions / clicks if clicks else 0.0
-        if conv_rate < _THRESHOLDS["conv_low"]:
-            return Diagnosis(
-                diagnosis_type=DiagnosisType.CONVERSION_INSUFFICIENT,
-                sku_id=sku_id, reason=f"conv_below_threshold:{conv_rate:.4f}",
-                evidence_facts=facts,
-            )
+    return DiagnosisFacts(
+        sku_id=sku_id,
+        evidence_state=view.get("evidence_state"),
+        freshness=view.get("freshness"),
+        quality_gate=gate_status,
+        quality_gate_issues=issues,
+        stockout=stockout,
+        pollution=pollution,
+        exposures=float(exposures) if exposures is not None else None,
+        clicks=float(clicks) if clicks is not None else None,
+        conversions=float(conversions) if conversions is not None else None,
+        degraded=stockout or pollution is not None,
+    )
+
+
+def validate_diagnosis_output(
+    facts: DiagnosisFacts,
+    produced: Mapping[str, Any],
+) -> Diagnosis:
+    """校验模型产出的语义诊断（D-034：代码只校验，不替模型选类型）。
+
+    失败暴露（零静默）：
+    - 类型不在白名单 → ValueError("diagnosis_type_not_allowlisted")
+    - 命中 FORBIDDEN_KEYS（递归，含嵌套/自然语言）→ ValueError("forbidden_output_key_recursive")
+    - 可执行前提不成立（结论不允许仍给强方向）→ ValueError("diagnosis_conclusion_not_allowed")
+    """
+    diagnosis_type_raw = produced.get("diagnosis_type")
+    try:
+        diagnosis_type = DiagnosisType(diagnosis_type_raw)
+    except (ValueError, TypeError):
+        raise ValueError(f"diagnosis_type_not_allowlisted:{diagnosis_type_raw}")
+    if contains_forbidden_token(produced, FORBIDDEN_DIAGNOSIS_KEYS):
+        raise ValueError("forbidden_output_key_recursive")
+    strong_types = {
+        DiagnosisType.EXPOSURE_INSUFFICIENT,
+        DiagnosisType.CLICK_INSUFFICIENT,
+        DiagnosisType.CONVERSION_INSUFFICIENT,
+        DiagnosisType.STOCKOUT_POLLUTION,
+        DiagnosisType.AD_PRICE_POLLUTION,
+    }
+    if diagnosis_type in strong_types and not facts.conclusion_allowed():
+        raise ValueError("diagnosis_conclusion_not_allowed")
     return Diagnosis(
-        diagnosis_type=DiagnosisType.EVIDENCE_INSUFFICIENT,
-        sku_id=sku_id, reason="no_issue_detected",
-        evidence_facts=facts,
+        diagnosis_type=diagnosis_type,
+        sku_id=facts.sku_id,
+        reason=produced.get("reason"),
+        evidence_facts={
+            "evidence_state": facts.evidence_state,
+            "freshness": facts.freshness,
+            "quality_gate": facts.quality_gate,
+            "quality_gate_issues": list(facts.quality_gate_issues),
+            "exposures": facts.exposures,
+            "clicks": facts.clicks,
+            "conversions": facts.conversions,
+            "stockout": facts.stockout,
+            "pollution": facts.pollution,
+        },
+        degraded=facts.degraded,
     )
 
 
 __all__ = [
+    "FORBIDDEN_DIAGNOSIS_KEYS",
     "Diagnosis",
+    "DiagnosisFacts",
     "DiagnosisType",
-    "build_diagnosis",
+    "build_diagnosis_facts",
+    "validate_diagnosis_output",
 ]

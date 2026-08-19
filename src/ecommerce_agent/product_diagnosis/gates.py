@@ -14,6 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from ecommerce_agent.text_utils import contains_forbidden_token
+
 
 @dataclass(frozen=True)
 class GateResult:
@@ -68,10 +70,9 @@ class GateEngine:
 
     @staticmethod
     def check_no_forbidden_output(output: Mapping[str, Any]) -> GateResult:
-        """越权输出 Gate：禁止键命中即整体拒绝。"""
-        for key in FORBIDDEN_KEYS:
-            if key in output:
-                return GateResult("output_scope", False, f"forbidden_output_key:{key}")
+        """越权输出 Gate：禁止键（含嵌套/自然语言）命中即整体拒绝。"""
+        if contains_forbidden_token(output, FORBIDDEN_KEYS):
+            return GateResult("output_scope", False, "forbidden_output_key_recursive")
         return GateResult("output_scope", True)
 
     def run_all(self, view: Mapping[str, Any]) -> tuple[bool, list[GateResult]]:

@@ -34,6 +34,7 @@ class RecommendationState(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
     OBSERVED = "observed"
+    STALE = "stale"
     CLOSED = "closed"
 
 
@@ -82,19 +83,28 @@ REQUIRED_FACTS: dict[RecommendationType, tuple[str, ...]] = {
 def validate_recommendation(recommendation: Recommendation) -> None:
     """构造后校验：required_facts 缺失 → 必须 degraded + 列 missing_evidence。
 
-    失败暴露：非 degraded 建议缺必需事实 → 抛 ValueError（不静默通过）。
+    失败暴露：
+    - 非 degraded 建议缺必需事实 → 抛 ValueError（不静默通过）。
+    - required 键值为 None/False 视为缺失（cost_ready=False 即未就绪）。
+    - degraded 建议必须列出缺什么（missing_evidence 非空），对齐任务书「缺什么、影响哪个数字」。
     """
     required = REQUIRED_FACTS[recommendation.type]
-    missing = [key for key in required if key not in recommendation.facts_snapshot]
+    facts = recommendation.facts_snapshot
+    missing = [
+        key for key in required
+        if key not in facts or facts.get(key) in (None, False)
+    ]
     if missing:
         if not recommendation.degraded:
             raise ValueError(
                 f"recommendation_missing_required_facts:{recommendation.type.value}:"
                 f"{','.join(missing)}"
             )
-    if recommendation.degraded and recommendation.missing_evidence:
-        # degraded 建议必须列出缺什么（对齐任务书「缺什么、影响哪个数字」）
-        pass  # missing_evidence 由调用方填充，此处校验非空由上层断言
+        if not recommendation.missing_evidence:
+            raise ValueError(
+                f"degraded_requires_missing_evidence:{recommendation.type.value}:"
+                f"{','.join(missing)}"
+            )
 
 
 __all__ = [

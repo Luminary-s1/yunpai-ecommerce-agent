@@ -167,12 +167,13 @@ class RecommendationPersistenceService:
                 raise RecommendationError("recommendation_not_found")
             # 幂等判重：同一逻辑事件（同 action+occurred_at+actor）重放 -> 复用
             existing = conn.execute(
-                "SELECT audit_id FROM product_recommendation_audit "
+                "SELECT * FROM product_recommendation_audit "
                 "WHERE tenant_id=? AND recommendation_id=? AND action=? AND occurred_at=? AND actor=?",
                 (tenant_id, recommendation_id, action.value, at_text, actor),
             ).fetchone()
             if existing is not None:
                 write_status = "idempotent"
+                audit_view = self.audit_view(dict(existing))
             else:
                 new_state, audit = StateMachine(
                     RecommendationState(str(rec["state"]))
@@ -208,9 +209,20 @@ class RecommendationPersistenceService:
                         audit_hash,
                     ),
                 )
+                audit_view = {
+                    "audit_id": None,
+                    "tenant_id": tenant_id,
+                    "recommendation_id": recommendation_id,
+                    "action": audit.action.value,
+                    "from_state": audit.from_state.value,
+                    "to_state": audit.to_state.value,
+                    "actor": audit.actor,
+                    "occurred_at": canonical_source_time(audit.at),
+                    "payload_hash": audit_hash,
+                }
         return {
             "recommendation": self.get(tenant_id, recommendation_id),
-            "audit": self.audit_trail(tenant_id, recommendation_id, limit=1)[-1],
+            "audit": audit_view,
             "write_status": write_status,
         }
 

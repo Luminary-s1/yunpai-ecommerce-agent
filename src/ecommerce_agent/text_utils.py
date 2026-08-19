@@ -4,7 +4,7 @@ import hashlib
 import math
 import re
 import struct
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 
 _CJK_OR_WORD = re.compile(r"[\u4e00-\u9fff]+|[A-Za-z]+|\d+(?:\.\d+)?")
@@ -133,3 +133,24 @@ def checksum(*parts: str) -> str:
 
 def extract_numbers(text: str) -> set[str]:
     return set(re.findall(r"\d+(?:\.\d+)?%?", text))
+
+
+def contains_forbidden_token(value: object, forbidden: frozenset[str]) -> bool:
+    """递归扫描任意结构化值是否命中禁止词条。
+
+    覆盖：
+    - Mapping：对键名与每个值递归（dict 键名可能是 forbidden 词）
+    - list/tuple：对每个元素递归
+    - str：子串匹配（自然语言越权，如「平台权重提升 20%」）
+    确定性：纯遍历，无 I/O、无随机。
+    """
+    if isinstance(value, Mapping):
+        for key in value:
+            if isinstance(key, str) and key in forbidden:
+                return True
+        return any(contains_forbidden_token(item, forbidden) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(contains_forbidden_token(item, forbidden) for item in value)
+    if isinstance(value, str):
+        return any(token in value for token in forbidden)
+    return False

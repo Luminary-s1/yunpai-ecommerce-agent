@@ -1,64 +1,132 @@
-"""M9-R WP2 结构化诊断测试：build_diagnosis 确定性推导。
+"""M9-R WP2 流量诊断测试：确定性事实 + 语义校验（对齐 D-034）。
 
-对齐验收标准：条目 6（缺货/广告/价格污染不被归因标题/主图）、条目 8（无合格实验不编造 uplift）。
+D-034：确定性代码只产出可执行事实，语义类型由解释器产出、代码只校验。
+验收点：事实值与证据一致、门禁能拒绝污染方向、白名单/越权递归生效、
+       解释器链路端到端可跑（不把 stub 的类型选择当验收断言）。
 """
 from __future__ import annotations
 
-from ecommerce_agent.product_diagnosis.diagnosis import DiagnosisType, build_diagnosis
+import pytest
+
+from ecommerce_agent.product_diagnosis.diagnosis import (
+    FORBIDDEN_DIAGNOSIS_KEYS,
+    DiagnosisType,
+    build_diagnosis_facts,
+    validate_diagnosis_output,
+)
+from ecommerce_agent.product_diagnosis.interpreter import (
+    RulesetDiagnosisInterpreter,
+    run_interpretation,
+)
 
 
-def test_stockout_pollution_priority() -> None:
-    """缺货污染 → 标记为 STOCKOUT_POLLUTION（不归因标题/主图）。"""
-    diag = build_diagnosis(
+def test_stockout_pollution_facts_deny_conclusion() -> None:
+    """缺货污染 → 事实 degraded + conclusion_allowed=False（不归因标题/主图）。"""
+    facts = build_diagnosis_facts(
         "sku1", {"evidence_state": "actual", "exposures": 50, "clicks": 10},
         stockout=True,
     )
-    assert diag.diagnosis_type is DiagnosisType.STOCKOUT_POLLUTION
-    assert diag.degraded is True
+    assert facts.stockout is True
+    assert facts.degraded is True
+    assert facts.conclusion_allowed() is False
 
 
-def test_ad_price_pollution() -> None:
-    diag = build_diagnosis(
+def test_pollution_facts_marked_degraded() -> None:
+    """广告/价格污染 → 事实 degraded + 污染旗标。"""
+    facts = build_diagnosis_facts(
         "sku1", {"evidence_state": "actual"}, pollution="ad_change"
     )
-    assert diag.diagnosis_type is DiagnosisType.AD_PRICE_POLLUTION
-    assert "ad_change" in (diag.reason or "")
+    assert facts.pollution == "ad_change"
+    assert facts.conclusion_allowed() is False
 
 
-def test_evidence_missing_gives_insufficient() -> None:
-    diag = build_diagnosis("sku1", {"evidence_state": "missing"})
-    assert diag.diagnosis_type is DiagnosisType.EVIDENCE_INSUFFICIENT
+def test_evidence_missing_denies_conclusion() -> None:
+    """证据缺失 → conclusion_allowed=False（不能下结论）。"""
+    facts = build_diagnosis_facts("sku1", {"evidence_state": "missing"})
+    assert facts.evidence_state == "missing"
+    assert facts.conclusion_allowed() is False
 
 
-def test_exposure_below_threshold() -> None:
-    diag = build_diagnosis(
-        "sku1", {"evidence_state": "actual", "exposures": 50, "clicks": 10}
+def test_quality_gate_blocked_denies_conclusion() -> None:
+    """quality_gate=blocked（缺 A/A/样本/窗口等）→ 不能给强方向结论。"""
+    facts = build_diagnosis_facts(
+        "sku1",
+        {
+            "evidence_state": "actual",
+            "exposures": 1000,
+            "clicks": 100,
+            "quality_gate": {"status": "blocked", "issues": ["aa_gate_missing"]},
+        },
     )
-    assert diag.diagnosis_type is DiagnosisType.EXPOSURE_INSUFFICIENT
+    assert facts.quality_gate == "blocked"
+    assert facts.conclusion_allowed() is False
 
 
-def test_click_insufficient_when_ctr_low() -> None:
-    # 曝光 1000（够），点击 5 → CTR 0.5% < 1% → 点击不足
-    diag = build_diagnosis(
-        "sku1", {"evidence_state": "actual", "exposures": 1000, "clicks": 5}
+def test_clean_facts_allow_conclusion() -> None:
+    """证据可用 + 门禁通过 + 无污染 → conclusion_allowed=True。"""
+    facts = build_diagnosis_facts(
+        "sku1",
+        {
+            "evidence_state": "actual",
+            "exposures": 1000,
+            "clicks": 100,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
     )
-    assert diag.diagnosis_type is DiagnosisType.CLICK_INSUFFICIENT
+    assert facts.conclusion_allowed() is True
 
 
-def test_conversion_insufficient_when_conv_low() -> None:
-    # 曝光 1000，点击 100（CTR 10%），转化 1 → 转化率 1% < 2% → 转化不足
-    diag = build_diagnosis(
-        "sku1", {"evidence_state": "actual", "exposures": 1000, "clicks": 100,
-                 "conversions": 1}
+def test_validate_rejects_not_allowlisted_type() -> None:
+    """解释器产出白名单外类型 → 拒绝。"""
+    facts = build_diagnosis_facts(
+        "sku1", {"evidence_state": "actual", "quality_gate": {"status": "passed"}}
     )
-    assert diag.diagnosis_type is DiagnosisType.CONVERSION_INSUFFICIENT
+    with pytest.raises(ValueError, match="diagnosis_type_not_allowlisted"):
+        validate_diagnosis_output(facts, {"diagnosis_type": "magic_answer"})
 
 
-def test_no_issue_detected_is_evidence_insufficient() -> None:
-    """无命中 → EVIDENCE_INSUFFICIENT（不编造问题）。"""
-    diag = build_diagnosis(
-        "sku1", {"evidence_state": "actual", "exposures": 1000, "clicks": 100,
-                 "conversions": 50}
+def test_validate_rejects_forbidden_recursive() -> None:
+    """解释器产出含 effect/平台权重（嵌套/自然语言）→ 拒绝。"""
+    facts = build_diagnosis_facts(
+        "sku1", {"evidence_state": "actual", "quality_gate": {"status": "passed"}}
     )
-    assert diag.diagnosis_type is DiagnosisType.EVIDENCE_INSUFFICIENT
-    assert diag.reason == "no_issue_detected"
+    with pytest.raises(ValueError, match="forbidden_output_key"):
+        validate_diagnosis_output(
+            facts, {"diagnosis_type": "click_insufficient", "details": {"effect": 0.5}}
+        )
+    with pytest.raises(ValueError, match="forbidden_output_key"):
+        validate_diagnosis_output(
+            facts,
+            {"diagnosis_type": "click_insufficient", "notes": ["平台权重提升20%"]},
+        )
+
+
+def test_validate_rejects_strong_conclusion_when_blocked() -> None:
+    """门禁 blocked 时解释器仍给强方向类型 → 拒绝（不编造结论）。"""
+    facts = build_diagnosis_facts(
+        "sku1",
+        {
+            "evidence_state": "actual",
+            "quality_gate": {"status": "blocked", "issues": ["aa_gate_missing"]},
+        },
+    )
+    with pytest.raises(ValueError, match="diagnosis_conclusion_not_allowed"):
+        validate_diagnosis_output(
+            facts, {"diagnosis_type": "exposure_insufficient", "reason": "low exp"}
+        )
+
+
+def test_interpreter_chain_end_to_end() -> None:
+    """解释器链路端到端可跑（facts → interpret → validate），产出合法诊断。"""
+    facts = build_diagnosis_facts(
+        "sku1",
+        {
+            "evidence_state": "actual",
+            "exposures": 50,
+            "clicks": 10,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
+    )
+    diagnosis = run_interpretation(facts, RulesetDiagnosisInterpreter())
+    assert diagnosis.diagnosis_type is DiagnosisType.EXPOSURE_INSUFFICIENT
+    assert diagnosis.evidence_facts["exposures"] == 50.0

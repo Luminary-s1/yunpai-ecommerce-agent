@@ -22,7 +22,7 @@ class TransitionAction(StrEnum):
     REJECT = "reject"            # awaiting_review → rejected
     OBSERVE = "observe"          # approved → observed
     CLOSE = "close"              # observed/rejected → closed
-    MARK_STALE = "mark_stale"    # 任何非终态 → closed（事实更新后旧建议作废）
+    MARK_STALE = "mark_stale"    # 任何非终态 → stale（事实更新后旧建议作废，不原地改写历史）
 
 
 @dataclass(frozen=True)
@@ -41,23 +41,23 @@ class AuditRecord:
 _TRANSITIONS: dict[RecommendationState, dict[TransitionAction, RecommendationState]] = {
     RecommendationState.DRAFT: {
         TransitionAction.SUBMIT: RecommendationState.AWAITING_REVIEW,
-        TransitionAction.MARK_STALE: RecommendationState.CLOSED,
+        TransitionAction.MARK_STALE: RecommendationState.STALE,
     },
     RecommendationState.AWAITING_REVIEW: {
         TransitionAction.APPROVE: RecommendationState.APPROVED,
         TransitionAction.REJECT: RecommendationState.REJECTED,
-        TransitionAction.MARK_STALE: RecommendationState.CLOSED,
+        TransitionAction.MARK_STALE: RecommendationState.STALE,
     },
     RecommendationState.APPROVED: {
         TransitionAction.OBSERVE: RecommendationState.OBSERVED,
-        TransitionAction.MARK_STALE: RecommendationState.CLOSED,
+        TransitionAction.MARK_STALE: RecommendationState.STALE,
     },
     RecommendationState.REJECTED: {
         TransitionAction.CLOSE: RecommendationState.CLOSED,
     },
     RecommendationState.OBSERVED: {
         TransitionAction.CLOSE: RecommendationState.CLOSED,
-        TransitionAction.MARK_STALE: RecommendationState.CLOSED,
+        TransitionAction.MARK_STALE: RecommendationState.STALE,
     },
     RecommendationState.CLOSED: {},
 }
