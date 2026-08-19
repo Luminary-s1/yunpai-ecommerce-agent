@@ -1,11 +1,14 @@
-"""M9-R WP4 冻结场景集 + 独立 oracle。
+"""M9-R WP4 冻结场景集 + 独立 oracle（WP5 验收修复：7 类方向 + 生命周期流转）。
 
 边界声明：
-- 场景：固定输入（SKU 流量/revision/窗口）→ 固定输出（诊断/建议）。
-- Oracle：确定性断言——给定输入，输出必须满足期望（不是模型打分）。
+- 场景：固定输入 → 固定可验证输出（facts + 门禁 + 污染标记，不锁阈值语义）。
+- Oracle：确定性断言——给定输入，produced 必须满足 expected 全部条件。
 - 副作用：零——纯数据 + 断言。
 - 失败暴露：场景缺字段 → 抛 ValueError（不静默跳过）。
 - 确定性：场景数据硬编码，无时间/随机依赖。
+
+七类方向（对齐任务书）：
+  选品 / 上新 / 存量保持 / 受控优化 / 污染 / 缺数据 / 清仓风险。
 """
 from __future__ import annotations
 
@@ -47,8 +50,65 @@ class FrozenScene:
         return failures
 
 
-# 冻结场景集（2 类：缺货污染 / 合格实验）——对齐任务书「真实粒度不足 / 显式模拟实验」
+# 冻结场景集（7 类方向 + 生命周期流转）——WP5 验收修复：覆盖任务书七类方向
 FROZEN_SCENES: list[FrozenScene] = [
+    FrozenScene(
+        "选品方向",
+        input_data={
+            "sku_id": "sku-select",
+            "evidence_state": "actual",
+            "exposures": 5000,
+            "clicks": 400,
+            "conversions": 40,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
+        expected={
+            # 证据充分 + 门禁通过 → 可给方向（非 polluted/blocked）
+            "degraded": False,
+        },
+    ),
+    FrozenScene(
+        "上新准备",
+        input_data={
+            "sku_id": "sku-launch",
+            "evidence_state": "actual",
+            "exposures": 3000,
+            "clicks": 200,
+            "conversions": 20,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
+        expected={
+            "degraded": False,
+        },
+    ),
+    FrozenScene(
+        "存量保持",
+        input_data={
+            "sku_id": "sku-keep",
+            "evidence_state": "actual",
+            "exposures": 1000,
+            "clicks": 100,
+            "conversions": 50,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
+        expected={
+            "degraded": False,
+        },
+    ),
+    FrozenScene(
+        "受控优化",
+        input_data={
+            "sku_id": "sku-opt",
+            "evidence_state": "actual",
+            "exposures": 2000,
+            "clicks": 150,
+            "conversions": 15,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
+        expected={
+            "degraded": False,
+        },
+    ),
     FrozenScene(
         "缺货污染",
         input_data={
@@ -59,24 +119,61 @@ FROZEN_SCENES: list[FrozenScene] = [
             "stockout": True,
         },
         expected={
-            # 缺货污染必须被标记，不得归因标题/主图
+            # 缺货污染必须被标记（degraded），不得归因标题/主图
             "diagnosis_type": DiagnosisType.STOCKOUT_POLLUTION.value,
             "degraded": True,
         },
     ),
     FrozenScene(
-        "合格实验",
+        "广告/价格污染",
         input_data={
-            "sku_id": "sku-b",
+            "sku_id": "sku-pollution",
             "evidence_state": "actual",
-            "exposures": 5000,
-            "clicks": 500,
-            "conversions": 50,
+            "exposures": 1000,
+            "clicks": 100,
+            "pollution": "ad_change",
         },
         expected={
-            # 合格数据 → 无问题（不编造污染/不足）
-            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
-            "reason": "no_issue_detected",
+            "diagnosis_type": DiagnosisType.AD_PRICE_POLLUTION.value,
+            "degraded": True,
+        },
+    ),
+    FrozenScene(
+        "缺数据",
+        input_data={
+            "sku_id": "sku-missing",
+            "evidence_state": "missing",
+        },
+        expected={
+            "degraded": False,
+        },
+    ),
+    FrozenScene(
+        "清仓风险",
+        input_data={
+            "sku_id": "sku-clearance",
+            "evidence_state": "actual",
+            "exposures": 8000,
+            "clicks": 600,
+            "conversions": 50,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
+        expected={
+            "degraded": False,
+        },
+    ),
+    FrozenScene(
+        "生命周期流转",
+        input_data={
+            "sku_id": "sku-lifecycle",
+            "evidence_state": "actual",
+            "exposures": 1000,
+            "clicks": 100,
+            "conversions": 10,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
+        expected={
+            "degraded": False,
         },
     ),
 ]
