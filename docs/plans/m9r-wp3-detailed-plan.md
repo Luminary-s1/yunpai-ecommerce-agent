@@ -125,7 +125,7 @@ class RecommendationOutput(BaseModel):
 | 4 | 缺成本/缺竞品时结论按证据降级 | ✅ | degraded + missing_evidence 断言（test_m9r_lifecycle_validation.py，5 用例） |
 | 5 | 重放幂等，旧建议标 stale | ✅ | 幂等测试（test_m9r_lifecycle_idempotency.py，3 用例） |
 | 6 | 每条建议带备选路径（上新/实验） | ✅ | B3 反例测试（test_m9r_lifecycle_alternatives.py，3 用例） |
-| 7 | 建议输出契约可被 M10-R 消费 | ✅ | interface.py + 缪海南 5 点评审落地（test_m9r_m10_contract.py，8 用例） |
+| 7 | 建议输出契约可被 M10-R 消费 | ✅ | interface.py + 缪海南 5 点评审落地（test_m9r_m10_contract.py，8 用例）；**2026-08-18 缪海南确认「5 点对上、无额外调整、契约按 v1 冻结、M10-R 消费侧照此」** |
 | 8 | 完整建议链条覆盖（选品→清仓） | ✅ | 类型注册表测试（test_m9r_lifecycle_validation.py） |
 
 > 收口证据：上述 7 个测试文件 37 passed in 8.81s（2026-08-18，分支 feature/m9r-read-model）。持久化表结构 v36 已交付（PR #19），业务写入方为后续独立工作包「WP3 持久化读写服务」。

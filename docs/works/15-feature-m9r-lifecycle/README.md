@@ -80,7 +80,7 @@ pytest tests/test_m9r_*.py tests/test_migrations.py tests/test_readonly_data_con
 
 | 事项 | 负责人 | 状态 |
 |---|---|---|
-| M10-R 契约评审 | 缪海南 | ✅ 5 点已落地（interface.py + 8 测试），回执待发 |
+| M10-R 契约评审 | 缪海南 | ✅ **已冻结（2026-08-18）**：5 点对上、无额外调整、契约按 v1 冻结、M10-R 消费侧照此（interface.py + 8 测试） |
 | v35/v36 占号 | 闫睿涵 | ✅ #18 已合并；v35 归 M7-R WP3，v36 归 M9-R WP3 |
 | WP5 独立验收 | 闫睿涵 | ⏳ 待 PR #19 合并后 |
 
