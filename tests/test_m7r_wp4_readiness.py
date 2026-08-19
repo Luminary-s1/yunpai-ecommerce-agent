@@ -486,6 +486,27 @@ def test_readonly_data_api_requires_admin_and_gets_never_mutate(tmp_path) -> Non
         assert other_store.json()["items"] == []
 
 
+def test_readonly_data_gets_reject_blank_store_id(tmp_path) -> None:
+    app = create_app(make_settings(tmp_path))
+    paths = (
+        "/v1/readonly-data/readiness",
+        "/v1/readonly-data/imports",
+        "/v1/readonly-data/row-issues",
+        "/v1/readonly-data/field-evidence",
+        "/v1/readonly-data/mappings",
+        "/v1/readonly-data/reconciliations",
+    )
+
+    with TestClient(app) as client:
+        for path in paths:
+            response = client.get(
+                path,
+                params={"store_id": " "},
+                headers=ADMIN_HEADERS,
+            )
+            assert response.status_code == 422, path
+
+
 class _ReadonlyConsoleStructure(HTMLParser):
     def __init__(self) -> None:
         super().__init__()

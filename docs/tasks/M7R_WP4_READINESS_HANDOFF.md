@@ -80,7 +80,8 @@ field evidence 与 import 引用。
 | `POST /v1/readonly-data/demo/load` | 显式装载隔离 Demo | 只写本地 Demo 事实并记录管理员审计 |
 
 列表端点 `limit` 为 1～1000；映射默认只返回每个平台 SKU 的最新裁决。读取未知 tenant、
-其他店铺或不匹配 scope 均返回空投影，不跨范围回退。
+其他店铺或不匹配 scope 均返回空投影，不跨范围回退。六个带 `store_id` 的 GET 共用同一
+查询约束；纯空白店铺 ID 返回 422，不把非法范围伪装成 200 空结果。
 
 下游应直接消费，例如：
 `GET /v1/readonly-data/readiness?store_id=<store>&scope=operational`。需要唯一料号时，还必须
@@ -133,8 +134,11 @@ fresh/stale/future、manifest partial 质量、字段证据关闭缺口、管理
 GET 零事实变更、映射历史 active 真值和页面显式动作。开发过程中保留了缺模块、fixture
 同时点领域冲突、缺审计事件和已撤销旧确认误标 active 的先红后绿证据。最终聚焦
 `9 passed`、WP1～WP4 关联集 `108 passed`、仓库全量
-`1034 passed, 24 warnings`（687.63 秒），无 failed/skipped/xfailed；24 条均为既有
-Traffic Lab 重复 Operation ID 告警。完整证据记录在 E-20260819-001。
+`1034 passed, 24 warnings`（687.63 秒），见 E-20260819-001。用户转交的独立复验报告随后
+记录聚焦/全量一致及 47/47 门禁外探针通过，并指出空白 `store_id` 返回 200 的非阻断 nit；
+开发方以原实现稳定复现 `1 failed` 后统一六个 GET 查询契约。当前聚焦 `10 passed`、关联集
+`109 passed`、全量 `1035 passed, 24 warnings`（335.51 秒），无 failed/skipped/xfailed；
+24 条仍均为既有 Traffic Lab 重复 Operation ID 告警。反馈收口证据见 E-20260819-002。
 
 ## 兼容与未完成边界
 

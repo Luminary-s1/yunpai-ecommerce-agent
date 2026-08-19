@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Annotated, Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -12,6 +12,12 @@ if TYPE_CHECKING:
     from .service import AgentService
 
 
+ReadonlyStoreIdQuery = Annotated[
+    str,
+    Query(min_length=1, max_length=128, pattern=r"^\S(?:.*\S)?$"),
+]
+
+
 def build_readonly_data_router(
     service: AgentService,
     require_admin: Callable[..., AdminPrincipal],
@@ -20,7 +26,7 @@ def build_readonly_data_router(
 
     @router.get("/readiness")
     def readiness(
-        store_id: str = Query(min_length=1, max_length=128),
+        store_id: ReadonlyStoreIdQuery,
         scope: DataScope = DataScope.OPERATIONAL,
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
@@ -32,7 +38,7 @@ def build_readonly_data_router(
 
     @router.get("/imports")
     def imports(
-        store_id: str = Query(min_length=1, max_length=128),
+        store_id: ReadonlyStoreIdQuery,
         scope: DataScope = DataScope.OPERATIONAL,
         limit: int = Query(default=100, ge=1, le=1000),
         admin: AdminPrincipal = Depends(require_admin),
@@ -50,7 +56,7 @@ def build_readonly_data_router(
 
     @router.get("/row-issues")
     def row_issues(
-        store_id: str = Query(min_length=1, max_length=128),
+        store_id: ReadonlyStoreIdQuery,
         import_id: str | None = Query(default=None, min_length=1, max_length=128),
         scope: DataScope = DataScope.OPERATIONAL,
         limit: int = Query(default=100, ge=1, le=1000),
@@ -70,7 +76,7 @@ def build_readonly_data_router(
 
     @router.get("/field-evidence")
     def field_evidence(
-        store_id: str = Query(min_length=1, max_length=128),
+        store_id: ReadonlyStoreIdQuery,
         scope: DataScope = DataScope.OPERATIONAL,
         limit: int = Query(default=100, ge=1, le=1000),
         admin: AdminPrincipal = Depends(require_admin),
@@ -88,7 +94,7 @@ def build_readonly_data_router(
 
     @router.get("/mappings")
     def mappings(
-        store_id: str = Query(min_length=1, max_length=128),
+        store_id: ReadonlyStoreIdQuery,
         scope: DataScope = DataScope.OPERATIONAL,
         latest_only: bool = True,
         limit: int = Query(default=100, ge=1, le=1000),
@@ -109,7 +115,7 @@ def build_readonly_data_router(
 
     @router.get("/reconciliations")
     def reconciliations(
-        store_id: str = Query(min_length=1, max_length=128),
+        store_id: ReadonlyStoreIdQuery,
         scope: DataScope = DataScope.OPERATIONAL,
         limit: int = Query(default=100, ge=1, le=1000),
         admin: AdminPrincipal = Depends(require_admin),
