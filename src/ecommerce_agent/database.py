@@ -44,11 +44,10 @@ class SessionScopeError(ValueError):
 
 class Database:
     # 占号裁定（负责人 08-13）：v31 归 PR #11、v32 归 F-322/负责人分支（均已合入
-    # 占号裁定（负责人 08-13）：v31 归 PR #11、v32 归 F-322/负责人分支（均已合入
     # main）、v33 归 knowledge/retrieval、v34 归 M7-R WP1 readonly data、
     # v35 归 M7-R WP3 product identity。
-    # 占号裁定（08-18）：v36 归 M9-R WP3 生命周期建议（本分支）、v37 归 M9-R
-    # 复审修复（复合主键 + stale + 内容不可变触发器）。
+    # 占号裁定（08-18）：v36 归 M9-R WP3 生命周期建议（本分支）。
+    # 占号裁定（08-19）：v37 归 M9-R WP5 验收修复（复合主键 + stale + 内容不可变触发器）。
     # 防同名方法静默覆盖事故，见 CONTRIBUTING「Schema 版本号占用登记」。
     SCHEMA_VERSION = 37
 
@@ -196,6 +195,9 @@ class Database:
             if 36 not in applied:
                 self._apply_v36(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (36, ?)", (utc_now(),))
+            # MERGE-GATE v37：M9-R WP5 验收修复，重建 product_recommendations
+            # （复合主键 + stale + 内容不可变触发器）与 product_recommendation_audit。
+            # 合迁移时必须保留 v36、v37 两个 if 块，SCHEMA_VERSION 取较大者。
             if 37 not in applied:
                 self._apply_v37(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (37, ?)", (utc_now(),))
@@ -3498,6 +3500,114 @@ class Database:
                 SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
             END;
         )
+
+    @staticmethod
+    def _apply_v37(conn: sqlite3.Connection) -> None:
+        # M9-R WP5 验收修复（占号裁定 08-19：v37 归 M9-R WP5）。
+        # 重建 product_recommendations：复合主键 (tenant_id, recommendation_id) 修复
+        # 全局主键跨租户冲突；state CHECK 补 stale；内容列不可变触发器防历史原地篡改。
+        # 重建 product_recommendation_audit：from/to_state CHECK 补 stale（FK 目标列不变）。
+        # 保留数据：rename→建新→INSERT SELECT→drop 旧→重建索引/触发器。
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            ALTER TABLE product_recommendations RENAME TO product_recommendations_old;
+            CREATE TABLE product_recommendations (
+                recommendation_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                recommendation_type TEXT NOT NULL
+                    CHECK(recommendation_type IN (
+                        '选品候选','上新准备','曝光/点击诊断','受控实验','保持观察',
+                        '定价候选','活动候选','补货联动','清仓预警'
+                    )),
+                store_id TEXT NOT NULL,
+                item_id TEXT,
+                sku_id TEXT,
+                facts_snapshot_json TEXT NOT NULL,
+                rationale TEXT NOT NULL,
+                missing_evidence_json TEXT NOT NULL,
+                alternatives_json TEXT NOT NULL,
+                state TEXT NOT NULL
+                    CHECK(state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed','stale'
+                    )),
+                degraded INTEGER NOT NULL DEFAULT 0 CHECK(degraded IN (0, 1)),
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (tenant_id, recommendation_id)
+            );
+            INSERT INTO product_recommendations
+                SELECT recommendation_id, tenant_id, recommendation_type, store_id, item_id,
+                       sku_id, facts_snapshot_json, rationale, missing_evidence_json,
+                       alternatives_json, state, degraded, payload_hash, created_at, updated_at
+                FROM product_recommendations_old;
+            DROP TABLE product_recommendations_old;
+            CREATE INDEX IF NOT EXISTS idx_product_recommendations_scope
+                ON product_recommendations(
+                    tenant_id, store_id, recommendation_type, state, created_at DESC
+                );
+            CREATE TRIGGER IF NOT EXISTS trg_product_recommendations_content_immutable
+            BEFORE UPDATE ON product_recommendations
+            WHEN NEW.recommendation_id<>OLD.recommendation_id
+              OR NEW.tenant_id<>OLD.tenant_id
+              OR NEW.recommendation_type<>OLD.recommendation_type
+              OR NEW.store_id<>OLD.store_id
+              OR NEW.item_id IS NOT OLD.item_id
+              OR NEW.sku_id IS NOT OLD.sku_id
+              OR NEW.facts_snapshot_json<>OLD.facts_snapshot_json
+              OR NEW.rationale<>OLD.rationale
+              OR NEW.missing_evidence_json<>OLD.missing_evidence_json
+              OR NEW.alternatives_json<>OLD.alternatives_json
+              OR NEW.degraded<>OLD.degraded
+              OR NEW.payload_hash<>OLD.payload_hash
+              OR NEW.created_at<>OLD.created_at
+            BEGIN
+                SELECT RAISE(ABORT, 'product_recommendations_content_immutable');
+            END;
+            ALTER TABLE product_recommendation_audit RENAME TO product_recommendation_audit_old;
+            CREATE TABLE product_recommendation_audit (
+                audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL,
+                recommendation_id TEXT NOT NULL,
+                action TEXT NOT NULL
+                    CHECK(action IN ('submit','approve','reject','observe','close','mark_stale')),
+                from_state TEXT NOT NULL
+                    CHECK(from_state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed','stale'
+                    )),
+                to_state TEXT NOT NULL
+                    CHECK(to_state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed','stale'
+                    )),
+                actor TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                FOREIGN KEY(tenant_id, recommendation_id)
+                    REFERENCES product_recommendations(tenant_id, recommendation_id)
+            );
+            INSERT INTO product_recommendation_audit
+                SELECT audit_id, tenant_id, recommendation_id, action, from_state, to_state,
+                       actor, occurred_at, payload_hash
+                FROM product_recommendation_audit_old;
+            DROP TABLE product_recommendation_audit_old;
+            CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_recommendation
+                ON product_recommendation_audit(recommendation_id, occurred_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_tenant_time
+                ON product_recommendation_audit(tenant_id, occurred_at DESC);
+            CREATE TRIGGER IF NOT EXISTS trg_product_recommendation_audit_immutable_update
+            BEFORE UPDATE ON product_recommendation_audit
+            BEGIN
+                SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_product_recommendation_audit_immutable_delete
+            BEFORE DELETE ON product_recommendation_audit
+            BEGIN
+                SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
+            END;
+            """
+        )
+        conn.execute("PRAGMA foreign_keys=ON")
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
