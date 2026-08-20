@@ -54,12 +54,16 @@ _TRANSITIONS: dict[RecommendationState, dict[TransitionAction, RecommendationSta
     },
     RecommendationState.REJECTED: {
         TransitionAction.CLOSE: RecommendationState.CLOSED,
+        TransitionAction.MARK_STALE: RecommendationState.STALE,
     },
     RecommendationState.OBSERVED: {
         TransitionAction.CLOSE: RecommendationState.CLOSED,
         TransitionAction.MARK_STALE: RecommendationState.STALE,
     },
     RecommendationState.CLOSED: {},
+    RecommendationState.STALE: {
+        TransitionAction.CLOSE: RecommendationState.CLOSED,  # 归档：stale 可关闭
+    },
 }
 
 

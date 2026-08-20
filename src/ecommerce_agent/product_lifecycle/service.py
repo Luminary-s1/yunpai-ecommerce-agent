@@ -95,7 +95,13 @@ class RecommendationPersistenceService:
 
     # ---- 写 ----
 
-    def create(self, tenant_id: str, recommendation: Recommendation) -> dict[str, Any]:
+    def create(
+        self,
+        tenant_id: str,
+        recommendation: Recommendation,
+        *,
+        actor: str = "system",
+    ) -> dict[str, Any]:
         tenant_id = _tenant_id(tenant_id)
         if recommendation.state is not RecommendationState.DRAFT:
             raise RecommendationError("recommendation_create_state_not_draft")
@@ -140,6 +146,20 @@ class RecommendationPersistenceService:
                         canonical_source_time(recommendation.updated_at),
                     ),
                 )
+        # C6/E7：create 初始审计（走通用 audit_log，product_recommendation_audit.action
+        # CHECK 不含 create，避免 v38 迁移占号）
+        self.db.audit(
+            "recommendation.create",
+            actor,
+            recommendation.recommendation_id,
+            {
+                "write_status": write_status,
+                "type": recommendation.type.value,
+                "store_id": recommendation.target.store_id,
+                "sku_id": recommendation.target.sku_id,
+            },
+            tenant_id,
+        )
         result = self.get(tenant_id, recommendation.recommendation_id)
         result["write_status"] = write_status
         return result
@@ -220,6 +240,19 @@ class RecommendationPersistenceService:
                     "occurred_at": canonical_source_time(audit.at),
                     "payload_hash": audit_hash,
                 }
+        # C6：状态流转系统审计（成功走 recommendation.state_transition）
+        self.db.audit(
+            "recommendation.state_transition",
+            actor,
+            recommendation_id,
+            {
+                "action": action.value,
+                "from_state": audit_view["from_state"],
+                "to_state": audit_view["to_state"],
+                "write_status": write_status,
+            },
+            tenant_id,
+        )
         return {
             "recommendation": self.get(tenant_id, recommendation_id),
             "audit": audit_view,
@@ -238,7 +271,26 @@ class RecommendationPersistenceService:
             ).fetchone()
         if row is None:
             raise RecommendationError("recommendation_not_found")
-        return self.recommendation_view(dict(row))
+        view = self.recommendation_view(dict(row))
+        self._verify_recommendation_hash(row, view)  # E5：读侧内容完整性校验
+        return view
+
+    @classmethod
+    def _verify_recommendation_hash(
+        cls, row: Any, view: dict[str, Any]
+    ) -> None:
+        """读侧内容完整性校验（E5）：重算内容指纹与 payload_hash 比对。
+
+        内容不可变触发器是写侧保护；读侧重算确保历史篡改（绕过触发器/直接改库）
+        被检出 → 抛 payload_hash_mismatch。
+        """
+        rec = cls._from_row(view)
+        recomputed = payload_digest(_recommendation_content_payload(rec))
+        stored = str(row["payload_hash"])
+        if recomputed != stored:
+            raise RecommendationError(
+                f"payload_hash_mismatch:recommendation:{view['recommendation_id']}"
+            )
 
     def list(
         self,
@@ -248,6 +300,11 @@ class RecommendationPersistenceService:
         state: RecommendationState | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
+        """列表读（E5 补强：逐条做 payload_hash 完整性校验）。
+
+        与 get/audit_trail 一致，list 也重算内容指纹与 payload_hash 比对；
+        篡改行在列表页即被检出（不静默），而非只有逐条 get 才暴露。
+        """
         tenant_id = _tenant_id(tenant_id)
         limit = _bounded_limit(limit, default=100, maximum=1000)
         clauses = ["tenant_id=?"]
@@ -265,7 +322,12 @@ class RecommendationPersistenceService:
                 "ORDER BY created_at DESC, recommendation_id ASC LIMIT ?",
                 params,
             ).fetchall()
-        return [self.recommendation_view(dict(row)) for row in rows]
+        views = []
+        for row in rows:
+            view = self.recommendation_view(dict(row))
+            self._verify_recommendation_hash(row, view)  # E5：列表读侧完整性
+            views.append(view)
+        return views
 
     def audit_trail(
         self,
@@ -283,7 +345,35 @@ class RecommendationPersistenceService:
                 "ORDER BY occurred_at ASC, audit_id ASC LIMIT ?",
                 (tenant_id, recommendation_id, limit),
             ).fetchall()
-        return [self.audit_view(dict(row)) for row in rows]
+        views = []
+        for row in rows:
+            view = self.audit_view(dict(row))
+            self._verify_audit_hash(row, view)  # E5：审计读侧完整性校验
+            views.append(view)
+        return views
+
+    @classmethod
+    def _verify_audit_hash(cls, row: Any, view: dict[str, Any]) -> None:
+        """审计读侧完整性校验（E5）：重算审计内容指纹与 payload_hash 比对。
+
+        不一致 → 抛 payload_hash_mismatch（读侧检出绕过触发器的历史篡改）。
+        """
+        audit = AuditRecord(
+            actor=view["actor"],
+            at=datetime.fromisoformat(view["occurred_at"]),
+            action=TransitionAction(view["action"]),
+            target=view["recommendation_id"],
+            from_state=RecommendationState(view["from_state"]),
+            to_state=RecommendationState(view["to_state"]),
+        )
+        recomputed = payload_digest(
+            _audit_content_payload(view["recommendation_id"], audit)
+        )
+        stored = str(row["payload_hash"])
+        if recomputed != stored:
+            raise RecommendationError(
+                f"payload_hash_mismatch:audit:{view['recommendation_id']}:{view['action']}"
+            )
 
     # ---- 视图 / 模型 ----
 

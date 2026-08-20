@@ -68,7 +68,7 @@ class Recommendation(BaseModel):
 
 # 前置事实依赖：每类型必须的 facts_snapshot 键（缺则降级）
 REQUIRED_FACTS: dict[RecommendationType, tuple[str, ...]] = {
-    RecommendationType.SELECTION: ("demand_signal",),
+    RecommendationType.SELECTION: ("demand_signal", "competitor_evidence"),
     RecommendationType.NEW_LAUNCH: ("item_ready", "stock_ready"),
     RecommendationType.DIAGNOSIS: ("traffic_facts",),
     RecommendationType.EXPERIMENT: ("revision_evidence",),
@@ -76,7 +76,7 @@ REQUIRED_FACTS: dict[RecommendationType, tuple[str, ...]] = {
     RecommendationType.PRICING: ("cost_ready",),       # 缺成本 → 不出正式利润安全价格
     RecommendationType.PROMOTION: ("campaign_window",),
     RecommendationType.RESTOCK: ("stock_facts",),
-    RecommendationType.CLEARANCE: ("clearance_signal",),
+    RecommendationType.CLEARANCE: ("clearance_signal", "competitor_evidence"),
 }
 
 

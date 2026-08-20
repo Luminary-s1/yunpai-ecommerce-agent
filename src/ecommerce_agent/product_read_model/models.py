@@ -32,6 +32,7 @@ from .errors import DataUnavailableError
 
 
 class Granularity(StrEnum):
+    HOURLY = "hourly"
     DAILY = "daily"
     MONTHLY = "monthly"
 
@@ -59,6 +60,7 @@ _TRUST_BY_STATE: dict[EvidenceState, set[DataTrust]] = {
 
 # period_key 格式校验（确定性：按粒度固定格式，不依赖时间源）
 _PERIOD_KEY_PATTERNS: dict[Granularity, str] = {
+    Granularity.HOURLY: r"\d{4}-\d{2}-\d{2}T\d{2}",   # YYYY-MM-DDTHH
     Granularity.DAILY: r"\d{4}-\d{2}-\d{2}",   # YYYY-MM-DD
     Granularity.MONTHLY: r"\d{4}-\d{2}",        # YYYY-MM
 }
@@ -85,7 +87,7 @@ class MetricValue(BaseModel):
     evidence_state: EvidenceState
     granularity: Granularity
     aggregate_rule: AggregateRule
-    period_key: str = Field(min_length=6, max_length=10)
+    period_key: str = Field(min_length=1, max_length=13)
     value: float | None = None
     import_manifest_id: str | None = None
     data_as_of: datetime | None = None
@@ -95,12 +97,13 @@ class MetricValue(BaseModel):
 
     @model_validator(mode="after")
     def _validate_evidence(self) -> Self:
-        # 1) 格式校验：period_key 必须匹配粒度
-        pattern = _PERIOD_KEY_PATTERNS[self.granularity]
-        if re.fullmatch(pattern, self.period_key) is None:
-            raise ValueError(
-                f"period_key_format_invalid:{self.granularity.value}:{self.period_key}"
-            )
+        # 1) 格式校验：period_key 必须匹配粒度（MISSING 允许占位符，不编造时间戳）
+        if self.evidence_state is not EvidenceState.MISSING:
+            pattern = _PERIOD_KEY_PATTERNS[self.granularity]
+            if re.fullmatch(pattern, self.period_key) is None:
+                raise ValueError(
+                    f"period_key_format_invalid:{self.granularity.value}:{self.period_key}"
+                )
 
         # 2) 口径推导：data_trust 未显式给时，按状态取唯一确定性默认
         if self.data_trust is None:

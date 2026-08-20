@@ -88,11 +88,132 @@ def test_recommendation_audit_endpoint_returns_200(tmp_path) -> None:
     app = create_app(settings)
     with TestClient(app) as client:
         response = client.get(
-            "/v1/products/recommendations/rec-1/audit",
+            "/v1/products/recommendations/rec-1/audit?store_id=store-a",
             headers=ADMIN_HEADERS,
         )
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_recommendation_detail_requires_store_id(tmp_path) -> None:
+    """详情路由 store_id 必填（E2）：缺 → 422。"""
+    settings = make_settings(tmp_path)
+    from ecommerce_agent.service import AgentService
+    svc = AgentService(settings)
+    svc.operations.recommendations.create("tenant-test", _rec())
+    svc.close()
+
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/products/recommendations/rec-1",
+            headers=ADMIN_HEADERS,
+        )
+    assert response.status_code == 422
+
+
+def test_recommendation_detail_cross_store_rejected(tmp_path) -> None:
+    """详情路由跨店铺 → 409（归属校验）。"""
+    settings = make_settings(tmp_path)
+    from ecommerce_agent.service import AgentService
+    svc = AgentService(settings)
+    svc.operations.recommendations.create("tenant-test", _rec())
+    svc.close()
+
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/products/recommendations/rec-1?store_id=store-b",
+            headers=ADMIN_HEADERS,
+        )
+    assert response.status_code == 409
+
+
+def test_recommendations_list_state_invalid_returns_400(tmp_path) -> None:
+    """list 的 state 参数非法 → 400（E1，不 500）。"""
+    settings = make_settings(tmp_path)
+    from ecommerce_agent.service import AgentService
+    svc = AgentService(settings)
+    svc.close()
+
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/products/recommendations?state=bogus",
+            headers=ADMIN_HEADERS,
+        )
+    assert response.status_code == 400
+
+
+def test_create_recommendation_endpoint(tmp_path) -> None:
+    """POST 创建建议（C1 生产入口）：强制 DRAFT + 落库。"""
+    settings = make_settings(tmp_path)
+    from ecommerce_agent.service import AgentService
+    svc = AgentService(settings)
+    svc.close()
+
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/products/recommendations",
+            headers=ADMIN_HEADERS,
+            json={
+                "recommendation_id": "rec-new",
+                "type": "保持观察",
+                "target": {"store_id": "store-a"},
+                "facts_snapshot": {},
+                "rationale": "observe",
+                "alternatives": ["受控实验"],
+            },
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["recommendation_id"] == "rec-new"
+    assert data["state"] == RecommendationState.DRAFT.value
+    assert data["write_status"] == "applied"
+
+
+def test_recommendation_transition_endpoint(tmp_path) -> None:
+    """POST 状态流转（C1 人工审核入口）：submit → awaiting_review。"""
+    settings = make_settings(tmp_path)
+    from ecommerce_agent.service import AgentService
+    svc = AgentService(settings)
+    svc.operations.recommendations.create(
+        "tenant-test", _rec(), actor="admin-test"
+    )
+    svc.close()
+
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/products/recommendations/rec-1/transition?store_id=store-a",
+            headers=ADMIN_HEADERS,
+            json={"action": "submit"},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["recommendation"]["state"] == RecommendationState.AWAITING_REVIEW.value
+    assert data["write_status"] == "applied"
+
+
+def test_recommendation_transition_cross_store_rejected(tmp_path) -> None:
+    """transition 跨店铺 → 409（归属校验，agentops 复审补齐）。"""
+    settings = make_settings(tmp_path)
+    from ecommerce_agent.service import AgentService
+    svc = AgentService(settings)
+    svc.operations.recommendations.create(
+        "tenant-test", _rec(), actor="admin-test"
+    )
+    svc.close()
+
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/products/recommendations/rec-1/transition?store_id=store-b",
+            headers=ADMIN_HEADERS,
+            json={"action": "submit"},
+        )
+    assert response.status_code == 409
 
 
 def test_endpoints_require_admin(tmp_path) -> None:

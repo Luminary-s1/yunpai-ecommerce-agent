@@ -26,7 +26,8 @@ class GateResult:
     reason: str | None = None
 
 
-# 模型越权输出禁止键（命中即整体拒绝）——确定性清单，随输出 schema 演进
+# 模型越权输出禁止键（命中即整体拒绝）——与 WP3 建议门禁共用完整集
+# （安全审查 #2：诊断/建议门禁标准必须一致，防越权表述穿透）
 FORBIDDEN_KEYS: frozenset[str] = frozenset({
     "effect",
     "interval",
@@ -34,6 +35,12 @@ FORBIDDEN_KEYS: frozenset[str] = frozenset({
     "gate",
     "平台权重",
     "平台算法",
+    "效果提升",
+    "权重提升",
+    "流量扶持",
+    "对标",
+    "竞品",
+    "行业",
 })
 
 
@@ -94,7 +101,12 @@ class GateEngine:
         return GateResult("quality_gate", True)
 
     def run_all(self, view: Mapping[str, Any]) -> tuple[bool, list[GateResult]]:
-        """组合判定：全部通过 → (True, results)；任一失败 → (False, results)。"""
+        """组合判定（证据三关）：全部通过 → (True, results)；任一失败 → (False, results)。
+
+        越权输出检查作用于模型输出（见 EvidenceBridge.run_gates 的 model_output 参数），
+        不在此处对证据视图做子串匹配——视图含 quality_gate/effect_estimate 等合法键，
+        误杀会破坏门禁。
+        """
         results = [
             self.check_evidence(view),
             self.check_freshness(view),

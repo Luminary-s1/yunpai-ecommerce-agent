@@ -183,9 +183,14 @@ def t11() -> None:
 
 # ── 条目 12：Demo 隔离不进入默认视图 ──
 def t12() -> None:
-    b = _bridge()
-    demo_view = b.get_revision_view("t1", "rev-demo")
-    assert demo_view["evidence_state"] == "demo"
+    b = _real_bridge()
+    with b.service.db.connect() as conn:
+        bucket_rev = conn.execute(
+            "SELECT listing_revision_id FROM traffic_metric_buckets WHERE tenant_id='tenant-a' LIMIT 1"
+        ).fetchone()["listing_revision_id"]
+    demo_view = b.get_revision_view("tenant-a", bucket_rev)
+    assert demo_view["evidence_state"] == "demo"  # virtual_taobao → demo
+    assert demo_view["source_provenance"]["source_type"] == "virtual"
     # Demo 源标记为 demo，operational 查询层据此过滤
 
 

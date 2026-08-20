@@ -26,13 +26,20 @@ ALLOWED_INTERNAL_WRITES: frozenset[str] = frozenset({
     "recommendation.audit",
 })
 
-# 越权输出禁止键（同 WP2，含平台权重）
+# 越权输出禁止键（同 WP2，含平台权重/效果类词/竞品对标）
 FORBIDDEN_OUTPUT_KEYS: frozenset[str] = frozenset({
     "effect",
     "interval",
     "sample_size",
+    "gate",
     "平台权重",
     "平台算法",
+    "效果提升",
+    "权重提升",
+    "流量扶持",
+    "对标",
+    "竞品",
+    "行业",
 })
 
 
@@ -60,10 +67,12 @@ def validate_model_output(recommendation: Recommendation, output: Mapping[str, A
 
 
 def validate_full_recommendation(recommendation: Recommendation) -> None:
-    """完整校验：类型事实 + 前置校验 + B3 alternatives。
+    """完整校验：类型事实 + 前置校验 + B3 alternatives + 越权输出扫描。
 
     - 非 degraded 建议缺必需事实 → 抛（validate_recommendation）
     - alternatives 必须含「上新」或「受控实验」（B3 硬边界：始终保留替代方案）
+    - 递归扫描建议内容（rationale/facts_snapshot/missing_evidence/alternatives）：
+      命中越权词（effect/平台权重/效果提升/竞品对标等）→ 整体拒绝（C5 接线）
     """
     validate_recommendation(recommendation)
     if not recommendation.alternatives:
@@ -75,6 +84,15 @@ def validate_full_recommendation(recommendation: Recommendation) -> None:
     )
     if not b3_compatible:
         raise ValueError("alternatives_must_include_launch_or_experiment")
+    # C5：建议内容递归扫越权词（不依赖 validate_model_output 被单独调用）
+    content: dict[str, Any] = {
+        "rationale": recommendation.rationale,
+        "facts_snapshot": recommendation.facts_snapshot,
+        "missing_evidence": list(recommendation.missing_evidence),
+        "alternatives": [a.value for a in recommendation.alternatives],
+    }
+    if contains_forbidden_token(content, FORBIDDEN_OUTPUT_KEYS):
+        raise ValueError("forbidden_output_key_recursive")
 
 
 __all__ = [

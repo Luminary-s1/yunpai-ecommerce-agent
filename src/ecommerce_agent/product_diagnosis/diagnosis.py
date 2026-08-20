@@ -42,7 +42,9 @@ class Diagnosis(BaseModel):
     degraded: bool = False
 
 
-# 模型越权输出禁止键（含 effect/interval/sample_size/平台权重/平台算法）
+# 模型越权输出禁止键（含 effect/interval/sample_size/平台权重/平台算法/
+# 效果类词/竞品对标——与 WP3 建议门禁共用完整集，安全审查 #2 修复：
+# 诊断输出不得含 validation.FORBIDDEN_OUTPUT_KEYS 之外的越权表述）
 FORBIDDEN_DIAGNOSIS_KEYS: frozenset[str] = frozenset({
     "effect",
     "interval",
@@ -50,6 +52,12 @@ FORBIDDEN_DIAGNOSIS_KEYS: frozenset[str] = frozenset({
     "gate",
     "平台权重",
     "平台算法",
+    "效果提升",
+    "权重提升",
+    "流量扶持",
+    "对标",
+    "竞品",
+    "行业",
 })
 
 
@@ -73,14 +81,29 @@ class DiagnosisFacts:
         """能否给强方向结论：证据可用 + 门禁通过 + 无污染。
 
         确定性：仅依赖固化事实，不依赖模型。
+        fail-closed（WP5 复审）：缺门禁信息（None）或 freshness 不可用一律拒绝，
+        只有 quality_gate == "passed" 才放行强方向结论（对齐验收「只有满足全部
+        Gate 才给强方向结论」）。
         """
         if self.evidence_state in (None, "missing"):
             return False
-        if self.quality_gate == "blocked":
+        if self.quality_gate != "passed":          # 缺门禁/blocked 一律拒绝
             return False
+        if self.freshness is not None:
+            if self.freshness.get("usable_as_current") is not True:
+                return False                       # freshness 不可用 → 拒绝
         if self.stockout or self.pollution is not None:
             return False
         return True
+
+
+# quality_gate.issues → 污染旗标 权威映射（B6：从证据自动反推污染，不靠调用方硬编码）
+# issue 码来自 M5-R TrafficAnalysisEngine._check_control_variables/_check_metric_quality
+_POLLUTION_ISSUE_CODES: dict[str, str] = {
+    "stock_not_available": "stockout",
+    "ad_spend_not_controlled": "ad_change",
+    "sale_price_changed": "price_change",
+}
 
 
 def build_diagnosis_facts(
@@ -90,14 +113,31 @@ def build_diagnosis_facts(
     stockout: bool = False,
     pollution: str | None = None,
 ) -> DiagnosisFacts:
-    """从证据视图提取确定性可执行事实（不做任何语义分类）。"""
+    """从证据视图提取确定性可执行事实（不做任何语义分类）。
+
+    B6 污染旗标自动反推：若调用方未显式传 stockout/pollution，则从
+    quality_gate.issues 反推（stock_not_available→stockout，
+    ad_spend_not_controlled/sale_price_changed→pollution）。显式传入优先级更高。
+    """
     quality_gate = view.get("quality_gate")
+    issues: tuple[str, ...]
     if isinstance(quality_gate, Mapping):
         gate_status = quality_gate.get("status")
         issues = tuple(quality_gate.get("issues") or ())
     else:
         gate_status = quality_gate
         issues = tuple(view.get("quality_gate_issues") or ())
+    # B6：未显式传污染旗标时从 issue 码反推
+    auto_stockout = any(code == "stock_not_available" for code in issues)
+    auto_pollution_codes = [
+        _POLLUTION_ISSUE_CODES[code]
+        for code in issues
+        if code in _POLLUTION_ISSUE_CODES and code != "stock_not_available"
+    ]
+    resolved_stockout = stockout or auto_stockout
+    resolved_pollution = pollution or (
+        auto_pollution_codes[0] if auto_pollution_codes else None
+    )
     exposures = view.get("exposures")
     clicks = view.get("clicks")
     conversions = view.get("conversions")
@@ -107,12 +147,12 @@ def build_diagnosis_facts(
         freshness=view.get("freshness"),
         quality_gate=gate_status,
         quality_gate_issues=issues,
-        stockout=stockout,
-        pollution=pollution,
+        stockout=resolved_stockout,
+        pollution=resolved_pollution,
         exposures=float(exposures) if exposures is not None else None,
         clicks=float(clicks) if clicks is not None else None,
         conversions=float(conversions) if conversions is not None else None,
-        degraded=stockout or pollution is not None,
+        degraded=resolved_stockout or resolved_pollution is not None,
     )
 
 

@@ -16,6 +16,12 @@ from .interface import (
     m10_type_from_recommendation,
     to_m10_contract,
 )
+from .engine import (
+    RecommendationCandidate,
+    RecommendationEngine,
+    RecommendationInterpreter,
+    RulesetRecommendationInterpreter,
+)
 from .schemas import (
     REQUIRED_FACTS,
     Recommendation,
@@ -43,12 +49,16 @@ __all__ = [
     "M10RecommendationType",
     "REQUIRED_FACTS",
     "Recommendation",
+    "RecommendationCandidate",
+    "RecommendationEngine",
     "RecommendationError",
+    "RecommendationInterpreter",
     "RecommendationOutput",
     "RecommendationPersistenceService",
     "RecommendationState",
     "RecommendationType",
     "RestockPayload",
+    "RulesetRecommendationInterpreter",
     "StateMachine",
     "TargetObject",
     "TransitionAction",

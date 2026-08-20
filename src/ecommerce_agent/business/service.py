@@ -158,6 +158,17 @@ class OperationsService:
         self.metrics = MetricsService(db, self.inventory)
         self.recommendations = RecommendationPersistenceService(db)
         self.product_read = ProductReadQuery(db)
+        # WP2 门禁生产消费者（B1）：EvidenceBridge 统一证据视图 + 确定性 Gate。
+        # product_diagnosis 不反向 import business，无循环依赖。
+        from ..product_diagnosis.bridge import EvidenceBridge
+
+        self.evidence_bridge = EvidenceBridge(self.traffic_lab.domain)
+        # WP3 闭环补缺：诊断 → 建议 生成引擎（D-034：Ruleset 占位 + 模型可注入）。
+        # 引擎纯能力（不接路由/不自动触发），由工作台/agent 工具显式调用后
+        # 走 RecommendationPersistenceService.create 落库。
+        from ..product_lifecycle.engine import RecommendationEngine
+
+        self.recommendation_engine = RecommendationEngine(self.inventory)
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]
@@ -429,6 +440,7 @@ class OperationsService:
                     kind="read",
                     input_model=MetricQuery,
                     handler=self._metric_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "metrics", "risk_level": "L0"},
                 )
             )
@@ -440,6 +452,8 @@ class OperationsService:
                     kind="read",
                     input_model=InventoryRiskToolInput,
                     handler=self._inventory_risk_tool,
+                    # 宽松 scope：store_id 可选，有 trusted 才校验冲突（缺省由服务端处理）
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "inventory", "risk_level": "L0"},
                 )
             )
@@ -451,6 +465,7 @@ class OperationsService:
                     kind="read",
                     input_model=CompetitorPriceToolInput,
                     handler=self._competitor_price_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "competitive_intelligence", "risk_level": "L0"},
                 )
             )
@@ -462,6 +477,7 @@ class OperationsService:
                     kind="read",
                     input_model=CompetitorPriceToolInput,
                     handler=self._competitor_price_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "competitive_intelligence", "risk_level": "L0"},
                 )
             )
@@ -473,6 +489,7 @@ class OperationsService:
                     kind="read",
                     input_model=MarketingDiagnosisQuery,
                     handler=self._marketing_diagnosis_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "marketing", "risk_level": "L0"},
                 )
             )
@@ -484,6 +501,7 @@ class OperationsService:
                     kind="read",
                     input_model=FinanceReportQuery,
                     handler=self._profit_reconciliation_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "finance", "risk_level": "L0"},
                 )
             )
@@ -891,9 +909,12 @@ class OperationsService:
     ) -> ToolResult:
         value = RecommendationListToolInput.model_validate(arguments.model_dump())
         state = RecommendationState(value.state) if value.state else None
+        # E3 修正：缺 store_id 时回落 trusted store（对齐 _product_search_tool 等），
+        # 避免缺省 → 返回该租户全店铺建议（跨店范围风险）。
+        store_id = value.store_id or self._trusted_store_id(context)
         items = self.recommendations.list(
             context.tenant_id,
-            store_id=value.store_id,
+            store_id=store_id,
             state=state,
             limit=value.limit,
         )

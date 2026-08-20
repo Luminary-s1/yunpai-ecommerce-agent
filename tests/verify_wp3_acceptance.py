@@ -37,7 +37,7 @@ def check(cid: str, desc: str, expected: str, fn) -> None:
 
 
 def _rec(rtype=RecommendationType.PRICING, facts=None, alternatives=None,
-         degraded=False) -> Recommendation:
+         degraded=False, missing_evidence=None) -> Recommendation:
     return Recommendation(
         recommendation_id="r1", type=rtype,
         target=TargetObject(store_id="s1", item_id="i1", sku_id="sku1"),
@@ -45,7 +45,8 @@ def _rec(rtype=RecommendationType.PRICING, facts=None, alternatives=None,
         rationale="test",
         alternatives=(alternatives if alternatives is not None
                       else [RecommendationType.EXPERIMENT]),
-        degraded=degraded, created_at=NOW, updated_at=NOW,
+        degraded=degraded, missing_evidence=missing_evidence or [],
+        created_at=NOW, updated_at=NOW,
     )
 
 
@@ -90,8 +91,9 @@ def t04() -> None:
         raise AssertionError("定价缺成本应抛（未 degraded）")
     except ValueError:
         pass
-    degraded = _rec(facts={}, degraded=True)
-    validate_full_recommendation(degraded)  # degraded 允许缺事实
+    # degraded 建议必须列缺失项（degraded_requires_missing_evidence）
+    degraded = _rec(facts={}, degraded=True, missing_evidence=["cost_ready"])
+    validate_full_recommendation(degraded)  # degraded 允许缺事实，但须列出缺什么
 
 
 def t05() -> None:
@@ -100,7 +102,7 @@ def t05() -> None:
     new_state, audit = sm.apply(
         TransitionAction.MARK_STALE, actor="ops-1", at=NOW, target="r1"
     )
-    assert new_state is RecommendationState.CLOSED  # stale → closed
+    assert new_state is RecommendationState.STALE  # 事实更新 → stale（非 closed）
     assert audit.action is TransitionAction.MARK_STALE
 
 

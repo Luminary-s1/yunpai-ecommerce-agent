@@ -153,6 +153,82 @@ def test_07_trace_import() -> None:
     assert models[0].net_sales.data_as_of == DATA_AS_OF
 
 
+def test_08_authoritative_service() -> None:
+    """query 路径每个值可回溯到权威域服务 + 来源（批次 1 复审成果）。
+
+    query 消费领域事实表（traffic_metric_buckets/inventory_balances/commerce_orders），
+    来源诚实化：authoritative_service=权威域服务名，import_manifest_id=领域来源标识
+    （source_id/connector），data_as_of=源时间。
+    """
+    from pathlib import Path
+    import tempfile
+
+    from ecommerce_agent.database import Database
+    from ecommerce_agent.product_read_model.query import ProductReadQuery
+
+    db = Database(Path(tempfile.mkdtemp()) / "wp1-authoritative.sqlite3")
+    db.initialize()
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO creative_assets(
+                asset_id, tenant_id, sha256, mime_type, width, height, storage_ref,
+                source_ref, feature_schema_version, payload_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "asset-1", "tenant-a", "e" * 64, "image/png", 1200, 1200,
+                "objects/a.png", "fixture://a", "image-v1", "f" * 64,
+                "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO listing_revisions(
+                id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no,
+                title, main_image_asset_id, sale_price, attributes_json, active_from,
+                active_to, source_updated_at, payload_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "rev-1", "tenant-a", "taobao_official", "store-a", "item-a", "sku-a", 1,
+                "测试商品", "asset-1", "109.00", '{"stock_status":"in_stock"}',
+                "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00",
+                "2026-08-10T00:00:00+00:00", "a" * 64,
+                "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO traffic_metric_buckets(
+                id, tenant_id, listing_revision_id, metric_start, metric_end,
+                bucket_granularity, traffic_source, impressions, clicks, visitors,
+                favorites, cart_adds, orders, sales_amount, ad_spend,
+                search_impressions, recommend_impressions, data_as_of, source_id,
+                payload_hash, quality_flags_json, version, created_at, updated_at,
+                connector_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "bucket-1", "tenant-a", "rev-1", "2026-08-10T00:00:00+00:00",
+                "2026-08-10T23:59:59+00:00", "day", "recommend", 1000, 80, 75,
+                8, 5, 2, "218.00", "0", 100, 900, "2026-08-10T12:00:00+00:00",
+                "src-1", "b" * 64, "[]", 1,
+                "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
+                "taobao_official",
+            ),
+        )
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
+    )
+    # 流量可回溯到权威域服务 + 来源 source_id
+    assert model.impressions.authoritative_service == "traffic_metric_buckets"
+    assert model.impressions.import_manifest_id == "src-1"
+    assert model.impressions.data_as_of is not None
+    # 非伪造 manifest id（不以 manifest- 开头），可回溯到领域来源
+    assert not model.impressions.import_manifest_id.startswith("manifest-")
+
+
 def test_09_granularity_preserved() -> None:
     assert sku().net_sales.granularity is Granularity.DAILY
     assert sku().net_sales.aggregate_rule is AggregateRule.SUM
@@ -230,7 +306,7 @@ check("④", "跨粒度/跨店/跨SKU/跨revision/缺失确定性检查", "✅",
 check("⑤", "缺字段→显示基础事实+阻断依赖结论", "✅", test_05_missing_projection)
 check("⑥", "竞品/退款数据域真实覆盖", "⚠️", lambda: None)
 check("⑦", "每个值回溯到 import manifest 和 data_as_of", "✅", test_07_trace_import)
-check("⑧", "每个值回溯到权威服务", "❌", lambda: None)
+check("⑧", "每个值回溯到权威服务", "✅", test_08_authoritative_service)
 check("⑨", "保留字段原始粒度", "✅", test_09_granularity_preserved)
 check("⑩", "来源追溯（source_system/import_manifest_id）", "✅", test_10_source_trace)
 check("⑪", "料号引用 material_code", "🔒", lambda: None)

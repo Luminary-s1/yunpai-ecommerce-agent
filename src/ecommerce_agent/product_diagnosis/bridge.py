@@ -20,7 +20,11 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from ecommerce_agent.connectors.provenance import read_source_provenance
-from ecommerce_agent.readonly_data.contracts import EvidenceState
+from ecommerce_agent.readonly_data.contracts import (
+    EvidenceState,
+    evidence_state_from_source_type,
+    source_type_from_connector,
+)
 from ecommerce_agent.traffic_lab.freshness import analysis_input_freshness
 from ecommerce_agent.traffic_lab.service import TrafficLabError, TrafficLabService
 
@@ -35,21 +39,13 @@ def _provenance_from(evidence: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _evidence_state(source_type: str | None) -> EvidenceState:
-    """provenance.source_type → evidence_state（virtual→demo，否则按 source_kind）。"""
-    if source_type == "virtual":
-        return EvidenceState.DEMO
-    if source_type in (None, "unknown", "mixed"):
-        return EvidenceState.MISSING
-    return EvidenceState.ACTUAL
+    """provenance.source_type → evidence_state（权威实现在 readonly_data.contracts）。"""
+    return evidence_state_from_source_type(source_type)
 
 
 def _source_type_from_connector(connector_id: str | None) -> str | None:
-    """按 connector_id 推导来源类型（确定性）：virtual_* → virtual，否则 operational。"""
-    if connector_id is None:
-        return None
-    if str(connector_id).startswith("virtual"):
-        return "virtual"
-    return "operational"
+    """按 connector_id 推导来源类型（权威实现在 readonly_data.contracts）。"""
+    return source_type_from_connector(connector_id)
 
 
 class EvidenceBridge:
@@ -82,6 +78,7 @@ class EvidenceBridge:
                 "source_provenance": None,
                 "freshness": None,
                 "data_as_of": None,
+                "quality_gate": None,
             }
         # 最新 bucket 的 data_as_of 作为 revision 的数据时间；来源按 bucket 的 connector
         latest = buckets[0]
@@ -90,18 +87,82 @@ class EvidenceBridge:
             "policy_version": "source-provenance-v1",
             "source_type": source_type,
             "virtual": source_type == "virtual",
-            "connectors": [latest["connector_id"]] if latest.get("connector_id") else [],
+            "connectors": (
+                [
+                    {
+                        "connector_id": str(latest["connector_id"]),
+                        "capability_version": None,
+                        "virtual": source_type == "virtual",
+                    }
+                ]
+                if latest.get("connector_id")
+                else []
+            ),
             "completeness": "complete",
             "basis": "traffic_metric_bucket",
         }
+        # 证据审查 #11：provenance 过校验器后再输出（防下游 read_source_provenance
+        # 抛 SourceProvenanceError）
+        provenance = read_source_provenance(
+            provenance, missing_basis="traffic_metric_bucket"
+        )
         return {
             "revision_id": revision_id,
             "evidence_state": _evidence_state(source_type).value,
             "source_provenance": provenance,
             "freshness": _bucket_freshness(buckets, row),
             "data_as_of": latest.get("data_as_of"),
+            "quality_gate": self._revision_quality_gate(
+                tenant_id, row["store_id"], row["sku_id"], revision_id
+            ),
             "bucket_count": len(buckets),
         }
+
+    def latest_revision_view(
+        self, tenant_id: str, *, store_id: str, sku_id: str
+    ) -> dict[str, Any]:
+        """SKU 最新 revision 的统一证据视图（门禁生产消费者入口）。
+
+        无 revision → 显式 missing 视图（不抛，缺数据是合法状态）。
+        """
+        revisions = self.service.list_revisions(
+            tenant_id, store_id=store_id, sku_id=sku_id, limit=1
+        )
+        if not revisions:
+            return {
+                "store_id": store_id,
+                "sku_id": sku_id,
+                "evidence_state": EvidenceState.MISSING.value,
+                "reason": "traffic_revision_not_found",
+                "source_provenance": None,
+                "freshness": None,
+                "data_as_of": None,
+                "quality_gate": None,
+            }
+        return self.get_revision_view(tenant_id, str(revisions[0]["id"]))
+
+    def _revision_quality_gate(
+        self, tenant_id: str, store_id: str, sku_id: str, revision_id: str
+    ) -> Any:
+        """revision 的 quality_gate：引用它的最新 experiment analysis run 的 gate。
+
+        无引用 → None（门禁拒绝，不编造——「无合格实验不编造」）。确定性：只读、
+        复用 M5-R listing_traffic_insights 聚合，不重算统计。
+        """
+        insights = self.service.listing_traffic_insights(
+            tenant_id, sku_id, store_id=store_id, limit=50
+        )
+        for insight in insights.get("insights", []):
+            experiment = insight.get("experiment", {})
+            if (
+                str(experiment.get("control_revision_id")) == revision_id
+                or str(experiment.get("treatment_revision_id")) == revision_id
+            ):
+                analysis = insight.get("analysis", {})
+                evidence = analysis.get("evidence")
+                if isinstance(evidence, Mapping):
+                    return evidence.get("quality_gate")
+        return None
 
     def get_experiment_view(self, tenant_id: str, experiment_id: str) -> dict[str, Any]:
         """experiment 统一视图：证据取最新 analysis run 的 evidence_json。"""
@@ -124,11 +185,20 @@ class EvidenceBridge:
         run = runs[0]
         evidence = run["evidence"] if isinstance(run.get("evidence"), Mapping) else {}
         provenance = _provenance_from(evidence)
+        # B2 修正：freshness 用 analysis_input_freshness（基于 input_snapshot 与当前库
+        # 比对），而非 evidence 顶层（不存在）；快照缺失 → stale（fail-closed）。
+        freshness = analysis_input_freshness(
+            self.service.db,
+            tenant_id,
+            experiment_id,
+            dict(evidence),
+            analysis_run_id=str(run.get("analysis_run_id")),
+        )
         return {
             "experiment_id": experiment_id,
             "evidence_state": _evidence_state(provenance.get("source_type")).value,
             "source_provenance": provenance,
-            "freshness": evidence.get("freshness"),
+            "freshness": freshness,
             "data_as_of": evidence.get("data_as_of"),
             "status": row.get("status"),
             "quality_gate": evidence.get("quality_gate"),
@@ -144,6 +214,14 @@ class EvidenceBridge:
             evidence = row["evidence"] if isinstance(row.get("evidence"), Mapping) else {}
             provenance = _provenance_from(evidence)
             quality_gate = evidence.get("quality_gate")
+            # B2 修正：freshness 用 analysis_input_freshness，而非 evidence 顶层（不存在）
+            freshness = analysis_input_freshness(
+                self.service.db,
+                tenant_id,
+                experiment_id,
+                dict(evidence),
+                analysis_run_id=str(row.get("analysis_run_id")),
+            )
             views.append(
                 {
                     "analysis_run_id": row.get("analysis_run_id"),
@@ -157,15 +235,28 @@ class EvidenceBridge:
                         "sample_size": row.get("sample_size"),
                         "quality_gate": quality_gate,
                     },
-                    "freshness": evidence.get("freshness"),
+                    "freshness": freshness,
                 }
             )
         return views
 
-    def run_gates(self, view: Mapping[str, Any]) -> tuple[bool, list[GateResult]]:
-        """确定性门禁组合：evidence + freshness + quality_gate（M5-R 已固化）。"""
+    def run_gates(
+        self,
+        view: Mapping[str, Any],
+        model_output: Mapping[str, Any] | None = None,
+    ) -> tuple[bool, list[GateResult]]:
+        """确定性门禁组合：evidence + freshness + quality_gate（证据三关）。
+
+        model_output 可选：提供时追加越权输出 Gate（模型不得改 effect/区间/样本量/Gate）。
+        越权检查作用于模型输出而非证据视图（视图含 quality_gate/effect_estimate 等合法键）。
+        """
         engine = GateEngine()
-        return engine.run_all(view)
+        all_passed, results = engine.run_all(view)
+        if model_output is not None:
+            forbidden_result = engine.check_no_forbidden_output(model_output)
+            results.append(forbidden_result)
+            all_passed = all_passed and forbidden_result.passed
+        return all_passed, results
 
 
 def _bucket_freshness(
