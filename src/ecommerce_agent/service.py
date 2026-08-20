@@ -45,6 +45,9 @@ from .prompts import SYSTEM_PROMPT, build_messages
 from .rag import KnowledgeBase
 from .quality import QualityService
 from .releases import ReleaseReplayRequest, ReleaseService
+from .readonly_data import ReadonlyDataService, ReadonlyReportIngestionService
+from .readonly_readiness import ReadonlyDemoService, ReadonlyReadinessService
+from .product_identity import ProductIdentityService
 from .schemas import ChatResponse, SourceItem
 from .text_utils import normalize_text, redact_sensitive
 from .taobao import TaobaoIntegrationService
@@ -127,6 +130,11 @@ class AgentService:
                 traffic_analysis_interpreter=traffic_analysis_interpreter,
             )
             self.operations.register_agent_tools(self.tools)
+            self.readonly_data = ReadonlyDataService(self.db)
+            self.readonly_ingestion = ReadonlyReportIngestionService(self.db)
+            self.product_identity = ProductIdentityService(self.db)
+            self.readonly_readiness = ReadonlyReadinessService(self.db)
+            self.readonly_demo = ReadonlyDemoService(self.db)
             if self.settings.model_enabled:
                 # 文案与报告解读可走真实模型；模型异常时服务内部自动降级到模板。
                 self.operations.ops_assistant.attach_model(self.model)

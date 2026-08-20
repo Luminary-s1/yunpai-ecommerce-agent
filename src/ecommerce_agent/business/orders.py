@@ -20,6 +20,9 @@ LogisticsStatus = Literal["pending", "collected", "in_transit", "delivered", "ex
 AfterSaleStatus = Literal[
     "requested", "reviewing", "approved", "rejected", "returning", "completed", "canceled"
 ]
+AfterSaleCaseType = Literal[
+    "refund", "return_refund", "exchange", "repair", "complaint"
+]
 
 CUSTOMER_SERVICE_STATUS = {
     "proposed": ("waiting", "等待客服"),
@@ -60,7 +63,7 @@ class AfterSaleCaseInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     case_id: str = Field(min_length=1, max_length=128)
-    case_type: Literal["refund", "return_refund", "exchange", "repair", "complaint"]
+    case_type: AfterSaleCaseType
     status: AfterSaleStatus
     requested_amount: Decimal = Field(default=Decimal("0"), ge=0)
     approved_amount: Decimal = Field(default=Decimal("0"), ge=0)
@@ -241,6 +244,165 @@ class OrderService:
                 )
                 for case in value.after_sales
             ],
+        )
+
+    def merge_logistics_snapshot(
+        self,
+        tenant_id: str,
+        *,
+        connector_id: str,
+        store_id: str,
+        order_id: str,
+        logistics: LogisticsSnapshotInput,
+        source_updated_at: datetime,
+        source_id: str | None,
+    ) -> dict[str, Any]:
+        current = self._current_order(
+            tenant_id,
+            connector_id=connector_id,
+            store_id=store_id,
+            order_id=order_id,
+        )
+        return self.upsert(
+            tenant_id,
+            self._merged_order_value(
+                current,
+                logistics=logistics,
+                after_sales=[
+                    AfterSaleCaseInput.model_validate(item)
+                    for item in current["after_sales"]
+                ],
+                source_updated_at=source_updated_at,
+                source_id=source_id,
+            ),
+        )
+
+    def merge_order_lines_snapshot(
+        self,
+        tenant_id: str,
+        value: OrderUpsert,
+    ) -> dict[str, Any]:
+        """Update order/line facts without erasing separately sourced child facts."""
+
+        if value.logistics is not None or value.after_sales:
+            raise ValueError("order_lines_snapshot_contains_child_facts")
+        try:
+            current = self._current_order(
+                tenant_id,
+                connector_id=value.connector_id,
+                store_id=value.store_id,
+                order_id=value.order_id,
+            )
+        except ValueError as exc:
+            if str(exc) != "order_not_found":
+                raise
+            return self.upsert(tenant_id, value)
+        logistics = (
+            LogisticsSnapshotInput.model_validate(current["logistics"])
+            if current["logistics"] is not None
+            else None
+        )
+        after_sales = [
+            AfterSaleCaseInput.model_validate(item)
+            for item in current["after_sales"]
+        ]
+        return self.upsert(
+            tenant_id,
+            value.model_copy(
+                update={
+                    "logistics": logistics,
+                    "after_sales": after_sales,
+                }
+            ),
+        )
+
+    def merge_after_sale_cases(
+        self,
+        tenant_id: str,
+        *,
+        connector_id: str,
+        store_id: str,
+        order_id: str,
+        cases: list[AfterSaleCaseInput],
+        source_updated_at: datetime,
+        source_id: str | None,
+    ) -> dict[str, Any]:
+        current = self._current_order(
+            tenant_id,
+            connector_id=connector_id,
+            store_id=store_id,
+            order_id=order_id,
+        )
+        by_case_id = {
+            item.case_id: item
+            for item in (
+                AfterSaleCaseInput.model_validate(value)
+                for value in current["after_sales"]
+            )
+        }
+        for case in cases:
+            by_case_id[case.case_id] = case
+        logistics = (
+            LogisticsSnapshotInput.model_validate(current["logistics"])
+            if current["logistics"] is not None
+            else None
+        )
+        return self.upsert(
+            tenant_id,
+            self._merged_order_value(
+                current,
+                logistics=logistics,
+                after_sales=[by_case_id[key] for key in sorted(by_case_id)],
+                source_updated_at=source_updated_at,
+                source_id=source_id,
+            ),
+        )
+
+    def _current_order(
+        self,
+        tenant_id: str,
+        *,
+        connector_id: str,
+        store_id: str,
+        order_id: str,
+    ) -> dict[str, Any]:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM commerce_orders
+                WHERE tenant_id=? AND connector_id=? AND store_id=?
+                  AND external_order_id=?
+                """,
+                (tenant_id, connector_id, store_id, order_id),
+            ).fetchone()
+        if row is None:
+            raise ValueError("order_not_found")
+        return self._row_by_internal_id(tenant_id, str(row["id"]))
+
+    @staticmethod
+    def _merged_order_value(
+        current: dict[str, Any],
+        *,
+        logistics: LogisticsSnapshotInput | None,
+        after_sales: list[AfterSaleCaseInput],
+        source_updated_at: datetime,
+        source_id: str | None,
+    ) -> OrderUpsert:
+        return OrderUpsert(
+            connector_id=current["connector_id"],
+            store_id=current["store_id"],
+            order_id=current["order_id"],
+            order_status=current["order_status"],
+            payment_status=current["payment_status"],
+            currency=current["currency"],
+            total_amount=current["total_amount"],
+            placed_at=current["placed_at"],
+            buyer_ref_hash=current["buyer_ref_hash"],
+            lines=[OrderLineInput.model_validate(item) for item in current["lines"]],
+            logistics=logistics,
+            after_sales=after_sales,
+            source_updated_at=source_updated_at,
+            source_id=source_id,
         )
 
     def list_orders(

@@ -19,9 +19,20 @@ from .contracts import (
     sanitize_report_row,
     schema_fingerprint,
 )
+from .adapters import (
+    REPORT_ADAPTERS,
+    ReportAdapter,
+    ReportAdapterRegistry,
+    ReportDomain,
+    ReportFileFormat,
+    ReportImportJob,
+    ReportImportRequest,
+)
+from .ingestion import ReadonlyReportIngestionService, source_manifest_key
 from .service import ReadonlyDataService
 
 __all__ = [
+    "REPORT_ADAPTERS",
     "REPORT_CONTRACTS",
     "DataQualitySummary",
     "DataScope",
@@ -31,9 +42,16 @@ __all__ = [
     "ImportReference",
     "QualityStatus",
     "ReadonlyDataService",
+    "ReadonlyReportIngestionService",
     "ReferenceKind",
     "ReportContractRegistry",
+    "ReportAdapter",
+    "ReportAdapterRegistry",
+    "ReportDomain",
+    "ReportFileFormat",
     "ReportFieldPolicy",
+    "ReportImportJob",
+    "ReportImportRequest",
     "RowDisposition",
     "RowIsolationIssue",
     "SanitizedReportRow",
@@ -42,4 +60,5 @@ __all__ = [
     "project_evidenced_value",
     "sanitize_report_row",
     "schema_fingerprint",
+    "source_manifest_key",
 ]

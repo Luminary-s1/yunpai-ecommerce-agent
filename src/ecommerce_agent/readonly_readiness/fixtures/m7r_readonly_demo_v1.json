@@ -1,0 +1,157 @@
+{
+  "fixture_id": "m7r-readonly-demo-v1",
+  "fixture_version": "1",
+  "source_system": "readonly_demo",
+  "source_timezone": "Asia/Shanghai",
+  "exported_at": "2026-08-19T02:15:00+00:00",
+  "data_as_of": "2026-08-19T00:00:00+00:00",
+  "canonical_product": {
+    "internal_part_number": "DEMO-PART-001",
+    "merchant_code": "DEMO-MERCHANT-001",
+    "item_id": "DEMO-ITEM-001",
+    "sku_id": "DEMO-SKU-001",
+    "title": "云湃演示恒温水壶"
+  },
+  "reports": [
+    {
+      "report_type": "catalog_snapshot",
+      "report_period": "2026-08-19 demo snapshot",
+      "rows": [
+        {
+          "store_id": "$store_id",
+          "item_id": "DEMO-ITEM-001",
+          "sku_id": "DEMO-SKU-001",
+          "title": "云湃演示恒温水壶",
+          "status": "active",
+          "sale_price": "129.00",
+          "currency": "CNY",
+          "merchant_code": "DEMO-MERCHANT-001"
+        }
+      ]
+    },
+    {
+      "report_type": "inventory_snapshot",
+      "report_period": "2026-08-19 demo snapshot",
+      "rows": [
+        {
+          "store_id": "$store_id",
+          "warehouse_id": "DEMO-WH-001",
+          "sku_id": "DEMO-SKU-001",
+          "on_hand": "20",
+          "reserved": "2",
+          "inbound": "5",
+          "average_daily_sales": "1.5"
+        }
+      ]
+    },
+    {
+      "report_type": "order_snapshot",
+      "report_period": "2026-08-19 demo snapshot",
+      "rows": [
+        {
+          "store_id": "$store_id",
+          "order_id": "DEMO-ORDER-001",
+          "order_status": "shipped",
+          "payment_status": "paid",
+          "currency": "CNY",
+          "total_amount": "129.00",
+          "placed_at": "2026-08-19T08:00:00",
+          "line_id": "DEMO-LINE-001",
+          "sku_id": "DEMO-SKU-001",
+          "title": "云湃演示恒温水壶",
+          "quantity": "1",
+          "unit_price": "129.00"
+        }
+      ]
+    },
+    {
+      "report_type": "fulfillment_snapshot",
+      "report_period": "2026-08-19 demo snapshot",
+      "data_as_of": "2026-08-19T01:00:00+00:00",
+      "rows": [
+        {
+          "store_id": "$store_id",
+          "order_id": "DEMO-ORDER-001",
+          "carrier": "DEMO-CARRIER",
+          "tracking_no_masked": "DEMO****0001",
+          "logistics_status": "in_transit",
+          "last_event": "演示包裹运输中",
+          "last_event_at": "2026-08-19T09:00:00"
+        }
+      ]
+    },
+    {
+      "report_type": "operations_daily",
+      "report_period": "2026-08-19 demo day",
+      "rows": [
+        {
+          "store_id": "$store_id",
+          "metric_date": "2026-08-19",
+          "channel": "demo_search",
+          "visitors": "100",
+          "orders": "10",
+          "sales_amount": "1290.00",
+          "ad_spend": "100.00",
+          "currency": "CNY"
+        }
+      ]
+    },
+    {
+      "report_type": "marketing_daily",
+      "report_period": "2026-08-19 demo day",
+      "rows": [
+        {
+          "store_id": "$store_id",
+          "campaign_id": "DEMO-CAMPAIGN-001",
+          "metric_date": "2026-08-19",
+          "campaign_name": "演示搜索推广",
+          "channel": "demo_search",
+          "objective": "conversion",
+          "status": "active",
+          "spend": "100.00",
+          "attributed_revenue": "500.00",
+          "attributed_orders": "5",
+          "impressions": "1000",
+          "clicks": "100",
+          "currency": "CNY"
+        }
+      ]
+    },
+    {
+      "report_type": "refund_snapshot",
+      "report_period": "2026-08-19 demo snapshot",
+      "data_as_of": "2026-08-19T02:00:00+00:00",
+      "rows": [
+        {
+          "store_id": "$store_id",
+          "order_id": "DEMO-ORDER-001",
+          "case_id": "DEMO-CASE-001",
+          "case_type": "refund",
+          "status": "approved",
+          "requested_amount": "10.00",
+          "approved_amount": "10.00",
+          "reason_code": "demo_reason",
+          "opened_at": "2026-08-19T09:10:00",
+          "updated_at": "2026-08-19T09:20:00"
+        }
+      ]
+    },
+    {
+      "report_type": "settlement_statement",
+      "report_period": "2026-08 demo statement",
+      "rows": [
+        {
+          "store_id": "$store_id",
+          "statement_key": "DEMO-STMT-001",
+          "period_start": "2026-08-01",
+          "period_end": "2026-08-19",
+          "gross_sales": "1000.00",
+          "refund_amount": "100.00",
+          "fee_amount": "50.00",
+          "settlement_amount": "850.00",
+          "currency": "CNY"
+        }
+      ]
+    }
+  ]
+}

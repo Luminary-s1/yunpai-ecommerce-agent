@@ -44,9 +44,10 @@ class SessionScopeError(ValueError):
 
 class Database:
     # 占号裁定（负责人 08-13）：v31 归 PR #11、v32 归 F-322/负责人分支（均已合入
-    # main）、v33 归 knowledge/retrieval、v34 归 M7-R WP1 readonly data。
+    # main）、v33 归 knowledge/retrieval、v34 归 M7-R WP1 readonly data、
+    # v35 归 M7-R WP3 product identity。
     # 防同名方法静默覆盖事故，见 CONTRIBUTING「Schema 版本号占用登记」。
-    SCHEMA_VERSION = 34
+    SCHEMA_VERSION = 35
 
     def __init__(self, path: Path):
         self.path = path
@@ -174,9 +175,9 @@ class Database:
             if 30 not in applied:
                 self._apply_v30(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (30, ?)", (utc_now(),))
-            # MERGE-GATE PR-11: main 有 v32+v33+v34、没有 _apply_v31。
+            # MERGE-GATE PR-11: 当前线有 v32+v33+v34+v35、没有 _apply_v31。
             # 合 PR #11 时必须补上 if 31 / _apply_v31（workspace 表），
-            # 并保留下面三块；不得回退 SCHEMA_VERSION 或覆盖 v32-v34。
+            # 并保留下面四块；不得回退 SCHEMA_VERSION 或覆盖 v32-v35。
             if 32 not in applied:
                 self._apply_v32(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (32, ?)", (utc_now(),))
@@ -186,6 +187,9 @@ class Database:
             if 34 not in applied:
                 self._apply_v34(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (34, ?)", (utc_now(),))
+            if 35 not in applied:
+                self._apply_v35(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (35, ?)", (utc_now(),))
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -3215,6 +3219,208 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v35(conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS readonly_canonical_products (
+                canonical_product_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                internal_part_number TEXT NOT NULL,
+                merchant_code TEXT,
+                title TEXT NOT NULL,
+                normalized_title TEXT NOT NULL,
+                source_kind TEXT NOT NULL
+                    CHECK(source_kind IN ('actual','manual','demo')),
+                source_reference TEXT,
+                policy_version TEXT NOT NULL,
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                created_at TEXT NOT NULL,
+                UNIQUE(tenant_id, canonical_product_id),
+                UNIQUE(tenant_id, store_id, canonical_product_id),
+                UNIQUE(tenant_id, store_id, internal_part_number)
+            );
+            CREATE INDEX IF NOT EXISTS idx_readonly_canonical_products_scope
+                ON readonly_canonical_products(
+                    tenant_id, store_id, merchant_code, normalized_title
+                );
+
+            CREATE TABLE IF NOT EXISTS readonly_product_mapping_events (
+                event_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                connector_id TEXT NOT NULL,
+                sku_id TEXT NOT NULL,
+                mapping_version INTEGER NOT NULL CHECK(mapping_version >= 1),
+                expected_version INTEGER NOT NULL CHECK(expected_version >= 0),
+                event_type TEXT NOT NULL
+                    CHECK(event_type IN ('confirmed','revoked')),
+                canonical_product_id TEXT NOT NULL,
+                item_id TEXT,
+                merchant_code TEXT,
+                decision_key TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                actor_ref TEXT NOT NULL,
+                source_import_id TEXT,
+                supersedes_event_id TEXT,
+                policy_version TEXT NOT NULL,
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                created_at TEXT NOT NULL,
+                UNIQUE(tenant_id, event_id),
+                UNIQUE(tenant_id, store_id, event_id),
+                UNIQUE(
+                    tenant_id, store_id, connector_id, sku_id, mapping_version
+                ),
+                UNIQUE(tenant_id, store_id, decision_key),
+                FOREIGN KEY(tenant_id, store_id, canonical_product_id)
+                    REFERENCES readonly_canonical_products(
+                        tenant_id, store_id, canonical_product_id
+                    ),
+                FOREIGN KEY(tenant_id, store_id, source_import_id)
+                    REFERENCES readonly_import_manifests(
+                        tenant_id, store_id, import_id
+                    ),
+                FOREIGN KEY(tenant_id, store_id, supersedes_event_id)
+                    REFERENCES readonly_product_mapping_events(
+                        tenant_id, store_id, event_id
+                    ),
+                CHECK(
+                    (mapping_version = 1 AND supersedes_event_id IS NULL)
+                    OR
+                    (mapping_version > 1 AND supersedes_event_id IS NOT NULL)
+                )
+            );
+            CREATE INDEX IF NOT EXISTS idx_readonly_product_mapping_events_scope
+                ON readonly_product_mapping_events(
+                    tenant_id, store_id, connector_id, sku_id,
+                    mapping_version DESC
+                );
+
+            CREATE TABLE IF NOT EXISTS readonly_product_reconciliation_runs (
+                run_id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                data_scope TEXT NOT NULL
+                    CHECK(data_scope IN ('operational','demo','all')),
+                policy_version TEXT NOT NULL,
+                input_digest TEXT NOT NULL CHECK(length(input_digest) = 64),
+                mapping_snapshot_digest TEXT NOT NULL
+                    CHECK(length(mapping_snapshot_digest) = 64),
+                total_rows INTEGER NOT NULL CHECK(total_rows >= 1),
+                matched_rows INTEGER NOT NULL CHECK(matched_rows >= 0),
+                ambiguous_rows INTEGER NOT NULL CHECK(ambiguous_rows >= 0),
+                unmapped_rows INTEGER NOT NULL CHECK(unmapped_rows >= 0),
+                rejected_rows INTEGER NOT NULL CHECK(rejected_rows >= 0),
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                created_at TEXT NOT NULL,
+                UNIQUE(tenant_id, run_id),
+                UNIQUE(tenant_id, store_id, run_id),
+                UNIQUE(
+                    tenant_id, store_id, policy_version, input_digest,
+                    mapping_snapshot_digest
+                ),
+                CHECK(
+                    total_rows = matched_rows + ambiguous_rows
+                        + unmapped_rows + rejected_rows
+                )
+            );
+            CREATE INDEX IF NOT EXISTS idx_readonly_product_reconciliation_runs_scope
+                ON readonly_product_reconciliation_runs(
+                    tenant_id, store_id, created_at DESC, run_id DESC
+                );
+
+            CREATE TABLE IF NOT EXISTS readonly_product_reconciliation_rows (
+                row_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                row_number INTEGER NOT NULL CHECK(row_number >= 1),
+                source_domain TEXT NOT NULL
+                    CHECK(source_domain IN ('catalog','inventory','order','unknown')),
+                source_reference TEXT,
+                connector_id TEXT,
+                sku_id TEXT,
+                item_id TEXT,
+                merchant_code TEXT,
+                terminal_status TEXT NOT NULL
+                    CHECK(terminal_status IN (
+                        'matched','ambiguous','unmapped','rejected'
+                    )),
+                canonical_product_id TEXT,
+                internal_part_number TEXT,
+                reason TEXT NOT NULL,
+                candidate_product_ids_json TEXT NOT NULL,
+                evidence_keys_json TEXT NOT NULL,
+                input_digest TEXT NOT NULL CHECK(length(input_digest) = 64),
+                created_at TEXT NOT NULL,
+                UNIQUE(run_id, row_number),
+                FOREIGN KEY(tenant_id, store_id, run_id)
+                    REFERENCES readonly_product_reconciliation_runs(
+                        tenant_id, store_id, run_id
+                    ),
+                FOREIGN KEY(tenant_id, store_id, canonical_product_id)
+                    REFERENCES readonly_canonical_products(
+                        tenant_id, store_id, canonical_product_id
+                    ),
+                CHECK(
+                    (terminal_status = 'matched'
+                        AND canonical_product_id IS NOT NULL
+                        AND internal_part_number IS NOT NULL)
+                    OR
+                    (terminal_status <> 'matched'
+                        AND canonical_product_id IS NULL
+                        AND internal_part_number IS NULL)
+                )
+            );
+            CREATE INDEX IF NOT EXISTS idx_readonly_product_reconciliation_rows_scope
+                ON readonly_product_reconciliation_rows(
+                    tenant_id, store_id, run_id, row_number
+                );
+
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_canonical_products_immutable_update
+            BEFORE UPDATE ON readonly_canonical_products
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_canonical_product_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_canonical_products_immutable_delete
+            BEFORE DELETE ON readonly_canonical_products
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_canonical_product_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_product_mapping_events_immutable_update
+            BEFORE UPDATE ON readonly_product_mapping_events
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_product_mapping_event_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_product_mapping_events_immutable_delete
+            BEFORE DELETE ON readonly_product_mapping_events
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_product_mapping_event_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_product_reconciliation_runs_immutable_update
+            BEFORE UPDATE ON readonly_product_reconciliation_runs
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_product_reconciliation_run_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_product_reconciliation_runs_immutable_delete
+            BEFORE DELETE ON readonly_product_reconciliation_runs
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_product_reconciliation_run_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_product_reconciliation_rows_immutable_update
+            BEFORE UPDATE ON readonly_product_reconciliation_rows
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_product_reconciliation_row_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_readonly_product_reconciliation_rows_immutable_delete
+            BEFORE DELETE ON readonly_product_reconciliation_rows
+            BEGIN
+                SELECT RAISE(ABORT, 'readonly_product_reconciliation_row_immutable');
+            END;
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -3247,6 +3453,26 @@ class Database:
                 "tenant_id", "dataset_key", "store_id", "record_date", "channel",
                 "visitors", "orders", "sales_amount", "ad_spend", "source_format",
                 "payload_hash", "version",
+            },
+            "readonly_canonical_products": {
+                "tenant_id", "store_id", "internal_part_number", "merchant_code",
+                "normalized_title", "source_kind", "policy_version", "payload_hash",
+            },
+            "readonly_product_mapping_events": {
+                "tenant_id", "store_id", "connector_id", "sku_id", "mapping_version",
+                "expected_version",
+                "event_type", "canonical_product_id", "supersedes_event_id",
+                "policy_version", "payload_hash",
+            },
+            "readonly_product_reconciliation_runs": {
+                "tenant_id", "store_id", "data_scope", "policy_version", "input_digest",
+                "mapping_snapshot_digest", "total_rows", "matched_rows",
+                "ambiguous_rows", "unmapped_rows", "rejected_rows", "payload_hash",
+            },
+            "readonly_product_reconciliation_rows": {
+                "tenant_id", "store_id", "run_id", "row_number", "source_domain",
+                "terminal_status", "canonical_product_id", "internal_part_number",
+                "reason", "candidate_product_ids_json", "evidence_keys_json", "input_digest",
             },
             "creative_assets": {
                 "asset_id", "tenant_id", "sha256", "mime_type", "width", "height",

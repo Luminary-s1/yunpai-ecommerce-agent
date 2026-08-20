@@ -41,6 +41,7 @@ from .ops_assistant_api import build_ops_assistant_router
 from .outbox import OutboxReconcileRequest
 from .rate_limit import RateLimitError, SlidingWindowRateLimiter
 from .release_api import build_release_router
+from .readonly_data_api import build_readonly_data_router
 from .simulation_api import build_simulation_router
 from .traffic_lab_api import build_traffic_lab_router
 from .schemas import (
@@ -189,6 +190,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_admin_router(service, require_admin))
     app.include_router(build_governance_router(service, require_admin))
     app.include_router(build_release_router(service, require_admin))
+    app.include_router(build_readonly_data_router(service, require_admin))
     app.include_router(build_evaluation_router(service, require_admin))
     app.include_router(build_simulation_router(service, require_admin))
     app.include_router(build_traffic_lab_router(service, require_admin))

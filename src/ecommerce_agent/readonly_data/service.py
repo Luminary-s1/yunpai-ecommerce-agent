@@ -35,6 +35,33 @@ class ReadonlyDataService:
     def __init__(self, db: Database):
         self.db = db
 
+    def preflight_import(
+        self, tenant_id: str, value: ImportManifestInput
+    ) -> dict[str, Any] | None:
+        """Reject stale/conflicting files before any domain service is called.
+
+        A byte-identical source replay returns the immutable manifest already recorded.
+        Row issues are intentionally not recomputed on replay: they are part of that
+        manifest's frozen observation, not a function of today's downstream state.
+        """
+
+        tenant_id = self._tenant_id(tenant_id)
+        with self.db.connect() as conn:
+            existing = self._latest_import_row(conn, tenant_id, value)
+        if existing is None:
+            return None
+        incoming_payload = self._manifest_input_payload(value)
+        existing_payload = self._stored_manifest_input_payload(dict(existing))
+        decision = decide_write(
+            existing_source_time=str(existing["exported_at"]),
+            existing_payload_hash=payload_digest(existing_payload),
+            incoming_source_time=canonical_source_time(value.exported_at),
+            incoming_payload_hash=payload_digest(incoming_payload),
+        )
+        if decision == "idempotent":
+            return self._manifest_view(dict(existing))
+        return None
+
     def record_import(
         self,
         tenant_id: str,
@@ -45,17 +72,9 @@ class ReadonlyDataService:
         tenant_id = self._tenant_id(tenant_id)
         issues = sorted(row_issues, key=lambda issue: issue.row_number)
         quality = self._quality(value, issues)
-        manifest_payload = value.model_dump(mode="json")
-        exported_at = canonical_source_time(value.exported_at)
-        data_as_of = (
-            canonical_source_time(value.data_as_of) if value.data_as_of is not None else None
-        )
-        manifest_payload["exported_at"] = exported_at
-        manifest_payload["data_as_of"] = data_as_of
-        manifest_payload["references"] = sorted(
-            manifest_payload["references"],
-            key=lambda reference: (reference["kind"], reference["reference"]),
-        )
+        manifest_payload = self._manifest_input_payload(value)
+        exported_at = str(manifest_payload["exported_at"])
+        data_as_of = manifest_payload["data_as_of"]
         issue_payloads = [issue.model_dump(mode="json") for issue in issues]
         contract_hash = payload_digest(
             {
@@ -68,26 +87,7 @@ class ReadonlyDataService:
         write_status = "applied"
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            existing = conn.execute(
-                """
-                SELECT import_id, exported_at, payload_hash
-                FROM readonly_import_manifests
-                WHERE tenant_id=? AND store_id=? AND source_kind=?
-                  AND source_system=? AND report_type=? AND report_period=?
-                  AND mapping_version=?
-                ORDER BY exported_at DESC, import_id DESC
-                LIMIT 1
-                """,
-                (
-                    tenant_id,
-                    value.store_id,
-                    value.source_kind.value,
-                    value.source_system,
-                    value.report_type,
-                    value.report_period,
-                    value.mapping_version,
-                ),
-            ).fetchone()
+            existing = self._latest_import_row(conn, tenant_id, value)
             if existing is not None:
                 decision = decide_write(
                     existing_source_time=str(existing["exported_at"]),
@@ -159,6 +159,66 @@ class ReadonlyDataService:
         result = self.get_import(tenant_id, import_id)
         result["write_status"] = write_status
         return result
+
+    @staticmethod
+    def _latest_import_row(
+        conn: Any, tenant_id: str, value: ImportManifestInput
+    ) -> Any | None:
+        return conn.execute(
+            """
+            SELECT * FROM readonly_import_manifests
+            WHERE tenant_id=? AND store_id=? AND source_kind=?
+              AND source_system=? AND report_type=? AND report_period=?
+              AND mapping_version=?
+            ORDER BY exported_at DESC, import_id DESC
+            LIMIT 1
+            """,
+            (
+                tenant_id,
+                value.store_id,
+                value.source_kind.value,
+                value.source_system,
+                value.report_type,
+                value.report_period,
+                value.mapping_version,
+            ),
+        ).fetchone()
+
+    @staticmethod
+    def _manifest_input_payload(value: ImportManifestInput) -> dict[str, Any]:
+        payload = value.model_dump(mode="json")
+        payload["exported_at"] = canonical_source_time(value.exported_at)
+        payload["data_as_of"] = (
+            canonical_source_time(value.data_as_of)
+            if value.data_as_of is not None
+            else None
+        )
+        payload["references"] = sorted(
+            payload["references"],
+            key=lambda reference: (reference["kind"], reference["reference"]),
+        )
+        return payload
+
+    @staticmethod
+    def _stored_manifest_input_payload(row: dict[str, Any]) -> dict[str, Any]:
+        quality = json.loads(str(row["quality_json"]))
+        return {
+            "store_id": str(row["store_id"]),
+            "source_kind": str(row["source_kind"]),
+            "source_system": str(row["source_system"]),
+            "report_type": str(row["report_type"]),
+            "report_period": str(row["report_period"]),
+            "exported_at": str(row["exported_at"]),
+            "schema_fingerprint": str(row["schema_fingerprint"]),
+            "content_digest": str(row["content_digest"]),
+            "mapping_version": str(row["mapping_version"]),
+            "parsed_rows": int(quality["total_rows"]),
+            "data_as_of": str(row["data_as_of"]) if row["data_as_of"] else None,
+            "references": sorted(
+                json.loads(str(row["references_json"])),
+                key=lambda reference: (reference["kind"], reference["reference"]),
+            ),
+        }
 
     def get_import(self, tenant_id: str, import_id: str) -> dict[str, Any]:
         tenant_id = self._tenant_id(tenant_id)

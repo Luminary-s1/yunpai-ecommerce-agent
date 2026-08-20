@@ -252,6 +252,7 @@
         <button class="active" data-view="overview">经营总览</button>
         <button data-view="service">智能客服</button>
         <button data-view="commerce">商品库存</button>
+        <button data-view="readonly-data">数据准备度</button>
         <button data-view="forecasting">需求预测</button>
         <button data-view="orders">订单售后</button>
         <button data-view="competitive">竞品分析</button>
@@ -357,6 +358,31 @@
           <div class="grid kpis" id="commerceKpis"></div>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>商品事实</h3><span class="muted" id="catalogAsOf"></span></div><div class="table-wrap"><table><thead><tr><th>SKU</th><th>商品</th><th>店铺</th><th>售价</th><th>状态</th><th>版本</th><th>数据时间</th></tr></thead><tbody id="catalogRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>库存风险</h3></div><div class="table-wrap"><table><thead><tr><th>SKU</th><th>仓库</th><th>可售</th><th>覆盖天数</th><th>风险</th><th>建议补货</th><th>数据时间</th></tr></thead><tbody id="inventoryRows"></tbody></table></div></article>
+        </section>
+
+        <section class="view" id="view-readonly-data">
+          <div class="section-head">
+            <div><h2>只读数据准备度</h2><p>统一查看来源、覆盖、水位、质量、商品映射与明确缺口</p></div>
+            <div class="toolbar">
+              <input class="input" id="readonlyStore" value="readonly-demo-store" placeholder="店铺 ID" aria-label="准备度店铺 ID">
+              <select class="input" id="readonlyScope" aria-label="准备度数据范围"><option value="operational" selected>运营数据</option><option value="demo">Demo 数据</option><option value="all">全部数据</option></select>
+              <button class="button" id="loadReadonlyReadiness">只读查询</button>
+              <button class="button primary" id="loadReadonlyDemo">显式装载安全 Demo</button>
+            </div>
+          </div>
+          <div class="notice" id="readonlyBoundary">打开页面和执行查询只读取固化证据；只有点击“显式装载安全 Demo”才会写入本地隔离 Demo 数据，不调用模型、不连接平台、不执行平台写入。</div>
+          <div class="grid kpis" id="readonlySummary" style="margin:14px 0"></div>
+          <article class="panel">
+            <div class="panel-head"><h3>八类数据域准备度</h3><span class="muted" id="readonlyPolicyMeta">等待查询</span></div>
+            <div class="table-wrap"><table><thead><tr><th>数据域 / 报表</th><th>来源</th><th>覆盖 / 水位</th><th>时效</th><th>质量</th><th>映射</th><th>manifest 追溯</th></tr></thead><tbody id="readonlyDomainRows"></tbody></table></div>
+          </article>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel"><div class="panel-head"><h3>明确数据缺口</h3><span class="muted">页面与 API 同一投影</span></div><div class="table-wrap"><table><thead><tr><th>缺口</th><th>证据状态</th><th>影响 / 原因</th></tr></thead><tbody id="readonlyGapRows"></tbody></table></div></article>
+            <article class="panel"><div class="panel-head"><h3>商品身份对账</h3><span class="muted" id="readonlyIdentityMeta">尚未运行</span></div><div class="table-wrap"><table><thead><tr><th>SKU / 连接器</th><th>映射</th><th>来源 / 版本</th><th>决策证据</th></tr></thead><tbody id="readonlyMappingRows"></tbody></table></div></article>
+          </div>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>导入 manifest</h3><span class="muted">每个数字均回链 import_id</span></div><div class="table-wrap"><table><thead><tr><th>来源</th><th>报表 / 周期</th><th>数据时间</th><th>质量</th><th>manifest</th></tr></thead><tbody id="readonlyImportRows"></tbody></table></div></article>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>隔离行明细</h3></div><div class="table-wrap"><table><thead><tr><th>manifest / 行</th><th>处置</th><th>原因</th><th>字段 / 摘要</th></tr></thead><tbody id="readonlyIssueRows"></tbody></table></div></article>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>字段证据状态</h3><span class="muted">actual / manual / demo / missing</span></div><div class="table-wrap"><table><thead><tr><th>字段</th><th>状态</th><th>数据时间</th><th>原因</th><th>证据</th></tr></thead><tbody id="readonlyEvidenceRows"></tbody></table></div></article>
         </section>
 
         <section class="view" id="view-forecasting">
@@ -923,6 +949,9 @@
       evaluationSuite: null,
       simulationFixture: null,
       simulationReport: null,
+      readonlyProjection: null,
+      readonlyDetails: null,
+      readonlyDemo: null,
       trafficInsights: null,
       trafficExperimentDetail: null,
       forecastDemand: null,
@@ -937,7 +966,7 @@
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
 
-    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', forecasting: '需求预测', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
+    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', 'readonly-data': '数据准备度', forecasting: '需求预测', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
     const sourceLabels = { api:'API 会话', channel:'渠道会话', simulation:'虚拟验收', evaluation:'隔离评测' };
     const $ = (id) => document.getElementById(id);
 
@@ -2254,6 +2283,89 @@
       finally { button.disabled = false; }
     }
 
+    const readonlyLabels = {
+      ready:'就绪', attention:'需关注', missing:'缺失', fresh:'新鲜', stale:'过期', future:'未来时间',
+      passed:'通过', partial:'部分通过', failed:'失败', matched:'已匹配', not_run:'未对账',
+      not_observed:'未观察', not_applicable:'不适用', actual:'真实导出', manual:'人工录入', demo:'Demo',
+      mixed:'混合来源', confirmed:'已确认', revoked:'已撤销', active:'生效', ambiguous:'歧义',
+      unmapped:'未映射', rejected:'拒绝', quarantined:'隔离'
+    };
+    const readonlyKind = (status) => ({ ready:'ok', fresh:'ok', passed:'ok', matched:'ok', actual:'ok', manual:'info', demo:'info', confirmed:'ok', active:'ok', attention:'warn', partial:'warn', stale:'warn', future:'warn', not_run:'warn', not_observed:'warn', ambiguous:'warn', unmapped:'warn', missing:'bad', failed:'bad', rejected:'bad', revoked:'bad', quarantined:'warn', mixed:'info', not_applicable:'' }[status] || '');
+    const readonlyBadge = (status) => `<span class="status ${readonlyKind(status)}">${escapeHtml(readonlyLabels[status] || status || '-')}</span>`;
+    const readonlyDomainLabels = { catalog:'商品', inventory:'库存', orders:'订单', fulfillment:'物流', operations:'经营', marketing:'营销', refunds:'售后', finance:'财务' };
+
+    function renderReadonlyData() {
+      const projection = state.readonlyProjection;
+      const details = state.readonlyDetails || {};
+      if (!projection) return;
+      const summary = projection.summary;
+      $('readonlySummary').innerHTML = [
+        ['整体状态', readonlyLabels[summary.status] || summary.status, `${projection.scope} · ${formatTime(projection.as_of)}`],
+        ['可用数据域', summary.available_domains, `共 ${summary.total_domains} 类`],
+        ['需关注 / 缺失', `${summary.domain_counts.attention} / ${summary.domain_counts.missing}`, '由 API 统一判定'],
+        ['明确缺口', summary.open_gap_count, '进货、采购、运输、翻新']
+      ].map(([label,value,meta]) => `<div class="kpi"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(value)}</span><span class="meta">${escapeHtml(meta)}</span></div>`).join('');
+      $('readonlyPolicyMeta').textContent = `${projection.policy_version} · ${projection.trace.manifest_count} 个 manifest${projection.trace.projection_truncated ? ' · 已截断' : ''}`;
+      $('readonlyBoundary').innerHTML = `<strong>只读边界：</strong>${escapeHtml(projection.store_id)} · ${escapeHtml(projection.scope)}。查询不导入、不重建、不调用模型、不执行平台写入；Demo 仅由右上角按钮显式装载。`;
+      $('readonlyDomainRows').innerHTML = projection.domains.map((item) => {
+        const coverage = item.coverage.start ? `${formatTime(item.coverage.start)}<div class="muted">至 ${formatTime(item.coverage.end)}</div>` : '-';
+        const watermark = item.watermark ? `<div class="mono muted">${escapeHtml(item.watermark.import_id)}</div>` : '';
+        const quality = item.quality ? `${readonlyBadge(item.quality.status)}<div class="muted">接收 ${item.quality.accepted_rows} · 隔离 ${item.quality.quarantined_rows} · 拒绝 ${item.quality.rejected_rows}</div>` : '-';
+        const mappingCounts = item.mapping.status_counts || {};
+        const mappingMeta = Object.entries(mappingCounts).filter(([,count]) => Number(count)).map(([key,count]) => `${readonlyLabels[key] || key} ${count}`).join(' · ');
+        return `<tr><td><strong>${escapeHtml(readonlyDomainLabels[item.domain] || item.domain)}</strong><div>${escapeHtml(item.report_type)}</div><div class="muted">${escapeHtml(item.grain)} · ${escapeHtml(item.mapping_version)}</div></td><td>${readonlyBadge(item.source.kind)}<div class="muted">${item.source.systems.map(escapeHtml).join(' · ') || '无来源'}</div></td><td>${coverage}${watermark}</td><td>${readonlyBadge(item.freshness.status)}<div class="muted">${item.freshness.age_hours === null ? '-' : `${item.freshness.age_hours}h / ${item.freshness.max_age_hours}h`}</div></td><td>${quality}</td><td>${readonlyBadge(item.mapping.status)}<div class="muted">${escapeHtml(mappingMeta)}</div></td><td>${item.trace.import_count} 个<div class="mono muted">${item.trace.import_ids.map(escapeHtml).join('<br>') || '-'}</div></td></tr>`;
+      }).join('');
+      $('readonlyGapRows').innerHTML = projection.gaps.map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><div class="mono muted">${escapeHtml(item.field_key)}</div></td><td>${readonlyBadge(item.evidence_state)}</td><td>${escapeHtml(item.impact)}<div class="mono muted">${escapeHtml(item.reason)}</div></td></tr>`).join('');
+
+      const identity = projection.product_identity;
+      const identityCounts = identity.status_counts || {};
+      $('readonlyIdentityMeta').textContent = identity.run_id ? `${identity.run_id} · 匹配 ${identityCounts.matched || 0} / ${identity.total_rows || 0}` : '尚无对应范围的对账运行';
+      const mappings = details.mappings || [];
+      $('readonlyMappingRows').innerHTML = mappings.length ? mappings.map((item) => `<tr><td><strong class="mono">${escapeHtml(item.sku_id)}</strong><div class="muted">${escapeHtml(item.connector_id)}</div></td><td>${readonlyBadge(item.active ? 'active' : item.event_type)}<div class="mono muted">${escapeHtml(item.canonical_product_id)}</div></td><td>${readonlyBadge(item.source_kind)}<div class="muted">v${item.mapping_version} · ${formatTime(item.created_at)}</div></td><td>${escapeHtml(item.reason)}<div class="mono muted">${escapeHtml(item.source_import_id || '人工决策')}</div></td></tr>`).join('') : '<tr><td colspan="4"><div class="empty">暂无人工映射事件</div></td></tr>';
+      const imports = details.imports || [];
+      $('readonlyImportRows').innerHTML = imports.length ? imports.map((item) => `<tr><td>${readonlyBadge(item.source_kind)}<div>${escapeHtml(item.source_system)}</div></td><td><strong>${escapeHtml(item.report_type)}</strong><div class="muted">${escapeHtml(item.report_period)} · ${escapeHtml(item.mapping_version)}</div></td><td>${formatTime(item.data_as_of || item.exported_at)}<div class="muted">导出 ${formatTime(item.exported_at)}</div></td><td>${readonlyBadge(item.quality.status)}<div class="muted">${item.accepted_rows}/${item.quality.total_rows} 接收</div></td><td class="mono">${escapeHtml(item.import_id)}</td></tr>`).join('') : '<tr><td colspan="5"><div class="empty">当前范围暂无导入 manifest</div></td></tr>';
+      const issues = details.issues || [];
+      $('readonlyIssueRows').innerHTML = issues.length ? issues.map((item) => `<tr><td class="mono">${escapeHtml(item.import_id)}<div>第 ${item.row_number} 行</div></td><td>${readonlyBadge(item.disposition)}</td><td>${escapeHtml(item.reason)}</td><td>${item.field_keys.map(escapeHtml).join(' · ') || '-'}<div class="mono muted">${escapeHtml(item.raw_row_digest)}</div></td></tr>`).join('') : '<tr><td colspan="4"><div class="empty">没有隔离或拒绝行</div></td></tr>';
+      const evidence = details.evidence || [];
+      $('readonlyEvidenceRows').innerHTML = evidence.length ? evidence.map((item) => `<tr><td><strong>${escapeHtml(item.field_key)}</strong><div class="muted">${escapeHtml(item.scope)}</div></td><td>${readonlyBadge(item.evidence_state)}</td><td>${formatTime(item.data_as_of)}</td><td>${escapeHtml(item.reason)}</td><td class="mono">${escapeHtml(item.import_id || item.evidence_id)}</td></tr>`).join('') : '<tr><td colspan="5"><div class="empty">当前范围暂无字段证据</div></td></tr>';
+    }
+
+    async function loadReadonlyData() {
+      const storeId = $('readonlyStore').value.trim();
+      if (!storeId) return toast('请输入店铺 ID');
+      const scope = $('readonlyScope').value;
+      const query = `store_id=${encodeURIComponent(storeId)}&scope=${encodeURIComponent(scope)}&limit=200`;
+      const [projection, imports, issues, evidence, mappings, reconciliations] = await Promise.all([
+        api(`/v1/readonly-data/readiness?store_id=${encodeURIComponent(storeId)}&scope=${encodeURIComponent(scope)}`),
+        api(`/v1/readonly-data/imports?${query}`),
+        api(`/v1/readonly-data/row-issues?${query}`),
+        api(`/v1/readonly-data/field-evidence?${query}`),
+        api(`/v1/readonly-data/mappings?${query}`),
+        api(`/v1/readonly-data/reconciliations?${query}`)
+      ]);
+      state.readonlyProjection = projection;
+      state.readonlyDetails = { imports:imports.items, issues:issues.items, evidence:evidence.items, mappings:mappings.items, reconciliations:reconciliations.items };
+      renderReadonlyData();
+    }
+
+    async function loadReadonlyDemo() {
+      const storeId = $('readonlyStore').value.trim();
+      if (!storeId) return toast('请输入 Demo 店铺 ID');
+      const button = $('loadReadonlyDemo');
+      button.disabled = true;
+      button.textContent = '装载中…';
+      try {
+        state.readonlyDemo = await api('/v1/readonly-data/demo/load', {
+          method:'POST',
+          body:JSON.stringify({ fixture_id:'m7r-readonly-demo-v1', store_id:storeId, confirm_demo:true })
+        });
+        $('readonlyScope').value = 'demo';
+        await loadReadonlyData();
+        toast(`Demo 已验证：${state.readonlyDemo.summary.reports_total} 类报表，运营范围未受影响`);
+      } catch (error) { toast(error.message); }
+      finally { button.disabled = false; button.textContent = '显式装载安全 Demo'; }
+    }
+
     const simulationModuleNames = {
       catalog:'商品', orders:'订单', inventory:'库存', metrics:'经营指标',
       competitive_intelligence:'竞品分析', competitive_monitoring:'竞品监控',
@@ -2541,6 +2653,7 @@
       if (view === 'overview') return loadOverview();
       if (view === 'service') return Promise.all([loadConversations(), loadHandoffs()]);
       if (view === 'commerce') return loadCommerce();
+      if (view === 'readonly-data') return loadReadonlyData();
       if (view === 'forecasting') return loadForecasting();
       if (view === 'orders') return loadOrders();
       if (view === 'competitive') return loadCompetitive();
@@ -2717,6 +2830,9 @@
       finally { button.disabled = false; }
     });
     $('runVirtualSimulation').addEventListener('click', () => runVirtualSimulation());
+    $('loadReadonlyReadiness').addEventListener('click', () => loadReadonlyData().catch((error) => toast(error.message)));
+    $('loadReadonlyDemo').addEventListener('click', () => loadReadonlyDemo());
+    $('readonlyScope').addEventListener('change', () => loadReadonlyData().catch((error) => toast(error.message)));
     $('loadForecastEvidence').addEventListener('click', () => loadForecasting().catch((error) => toast(error.message)));
     $('runForecast').addEventListener('click', () => runForecasting());
     $('loadTrafficInsights').addEventListener('click', () => loadTrafficLab().catch((error) => toast(error.message)));
