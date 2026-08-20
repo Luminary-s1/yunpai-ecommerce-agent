@@ -2,6 +2,12 @@
 
 本目录只记录本次由个人分支合并到 fork `main` 的工作，不追溯此前历史。上游 `upstream/main` 未执行合并或推送；F-107 与 F-109 明确排除。
 
+## 里程碑验收归档
+
+- [M7-R WP5 只读经营数据验收归档](15-feature-m7r-readonly-data/README.md)：WP1 作为公共
+  基建先行合入，WP2～WP4 经 PR #20 合入，merge tip 为 `f6bb47c`；F-323 的代码级、本机
+  Gate 已关闭，真实平台字段、真实经营结论和生产放行仍未获批。
+
 [浏览 11 项真实运行截图](evidence.html)。每个子目录也各自保存一张 `verification.png`；图片均为真实 PNG 数据，不再使用仅复述测试结论的摘要卡片作为验证证据。
 
 ## 合并顺序

@@ -1,0 +1,2 @@
+# M7-R WP5 reports are immutable byte-for-byte evidence; do not normalize or text-diff them.
+docs/works/15-feature-m7r-readonly-data/M7R_WP5_ACCEPTANCE_REPORT_20260819*.md -text -diff

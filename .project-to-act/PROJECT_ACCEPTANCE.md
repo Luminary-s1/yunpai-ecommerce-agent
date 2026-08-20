@@ -5,6 +5,18 @@
 
 ## 当前验收结论
 
+- 结论：2026-08-20 M7-R WP1～WP4 已在固定代码对象上通过 WP5 代码级、本机技术 Gate，
+  PR #20 已合入 `main`，证据 ID 为 E-20260820-001。WP1 因是 M8-R～M10-R 共用基建而
+  先行合入，PR base `48013b1` 已包含 WP1；缪海南独立验收的 WP2～WP4 head 为
+  `ece61e1`，最终 merge tip 为 `f6bb47c`。原独立报告记录 PR 自带 `85 passed`、独立探针
+  `6/6`、含探针全量 `1041 passed / 0 failed`，并建议合入；实施方补充报告在固定 head 上
+  补齐 WP1～WP4 矩阵、`104 passed` 聚焦、`1035 passed, 24 warnings` 全量、mutation
+  红→绿及桌面/窄屏证据。用户转交的第二轮独立 double-check 核对报告/截图哈希、PR 与祖先
+  关系，并复现命令链、mutation 和截图内容。合入后又在干净 detached merge tip 上得到
+  `104 passed in 16.74s`、全量 `1035 passed, 24 warnings in 421.29s`，无
+  failed/skipped/xfailed；compileall、whitespace、后台 JavaScript 与 project-to-act 均通过。
+  F-323 的代码级本机里程碑据此标记完成，Gate 为 G-M7R-WP5-001 / G-M7R-ALL-001。该
+  签署不包含真实平台字段全覆盖、真实经营结论、生产发布/权限/写能力或 M8-R～M10-R 完成。
 - 结论：2026-08-19 M7-R WP4 数据准备度 API、只读工作台与端到端 Demo 已形成开发者本机
   候选 `fe828a0`，初始证据 E-20260819-001、独立反馈收口 E-20260819-002。
   `readonly-readiness-v1` 从 WP1 manifest /
@@ -484,6 +496,21 @@
 
 ## 证据索引
 
+- E-20260820-001：M7-R WP5 独立验收归档、PR #20 合入与 merge-tip 复验。WP1 功能提交
+  `0b54a247` 和集成提交 `e127c397` 已在 PR base `48013b1` 的祖先链，故 PR #20 只承载
+  WP2～WP4 差异但 WP5 验收对象仍是 WP1～WP4 组合态。缪海南原报告 SHA-256 为
+  `007edc5001f39e4aba26e6361b75152625a52a7f61ac5281699d33e5580aa794`，记录自带
+  `85 passed`、独立探针 `6/6`、含探针全量 `1041 passed / 0 failed`；实施方补充报告
+  SHA-256 为 `458a743b1a450f8ec2b4488557cbca853611e51052fcfdb911fae63fc990d19e`，补齐固定
+  对象、WP1～WP4 矩阵、`104 passed` 聚焦、`1035 passed, 24 warnings` 全量、隔离
+  mutation 红→绿及桌面/窄屏证据，且明确不代签独立验收。用户转交的第二轮 independent
+  double-check 复核两份报告及三张截图哈希、PR/提交/树/祖先关系、命令链、mutation 和截图
+  内容均一致。PR #20 head `ece61e1` 于 2026-08-20 合入为 `f6bb47c`；干净 detached
+  merge tip 再得聚焦 `104 passed in 16.74s`、全量 `1035 passed, 24 warnings in
+  421.29s`，无 failed/skipped/xfailed，compileall、diff、后台 JavaScript 与 project-to-act
+  均通过。原报告、补充报告和三张浏览器证据归档于
+  `docs/works/15-feature-m7r-readonly-data/` 与 `docs/screenshots/m7r-wp5-20260819/`。仅关闭
+  F-323 代码级本机里程碑，不豁免真实平台字段、真实经营数据、生产放行/写能力或 M8-R～M10-R。
 - E-20260813-025：F-322 main 合入与 post-merge 复验。PR #14 将 head `298eede` clean merge 为 main `ee5e443`；PR #11 留言固定 v31 并要求后续保留 v31/v32。精确 main detached worktree 的导入路径核对通过，交叉 `51 passed`，全量 `770 passed, 1 xfailed`（282.54 秒），静态与台账门禁通过。首次 cwd 错误运行已作废，不计入证据；不关闭 PR #10 v33 改号或尚未完成的 PR #11 实际集成 Gate。
 - E-20260813-024：v31 占号先行合入与 F-322 v32 合并回归。PR #13（单文件 2+/1-、无 CI、mergeable clean）转 Ready 后以 `60c8052` 合入 origin/main；当前分支以 `76c2c85` 合入该 main，只解析 `CONTRIBUTING.md` 为 v31/v32/v33 顺序，4 个既有未提交文件未进入 merge commit。日历/身份/迁移/灾备 `51 passed`，全量 `770 passed, 1 xfailed`（282.56 秒），compileall、JS、AST migration 唯一性、diff 与台账校验通过。该证据只覆盖 PR #13 的占号通知 + F-322；main 尚无 PR #11 的 `_apply_v31` 代码，也不关闭 PR #10 改号或 E-023 的实际 v31/v32 页面整合待办。
 - E-20260813-023：F-322 远端与 v31/v32 合成核验。HTTP/1.1 fetch 成功刷新两远端及 origin PR refs；最新 `origin/main=dbf2027`，F-322 合并树干净且 v32 在全部 refs 中唯一。发现开放 PR #10 的知识唯一索引与 PR #11 的 workspace 会话表分别使用同名 `_apply_v31`；F-322 不改该既有冲突。PR #11 + F-322 临时合成树保留 v31/v32 后，交叉聚焦 `62 passed`，全量 `805 passed, 1 xfailed, 2 failed`。PR #11 单独可复现其中 workspace 旧 URL 断言失败；另一项是合成后 Forecasting 测试仍访问 `/admin` 而高级控制台已移至 `/admin/advanced`。临时仅对齐两条断言后 `2 passed`；未写回当前分支，故不声称合成全量 Gate 已通过。
@@ -638,6 +665,8 @@
 
 | Gate ID | 日期 | Gate | 对象 | 结果 | 证据 ID | 豁免与确认人 |
 |---|---|---|---|---|---|---|
+| G-M7R-ALL-001 | 2026-08-20 | M7-R WP1～WP4 完整代码级本机门 | v34 统一导入/隐私/来源/证据、八类报表规范化、v35 商品身份与对账、readiness API/页面、显式隔离 Demo、WP5 独立报告与 merge-tip 回归 | 通过；PR #20 已合入并在 `f6bb47c` 复验 | E-20260820-001 | 仅关闭 F-323 代码级本机里程碑；不豁免真实平台字段/数据、真实经营结论、生产发布/权限/写能力或 M8-R～M10-R |
+| G-M7R-WP5-001 | 2026-08-20 | M7-R WP5 独立验收与合入后复验门 | 原独立报告与 6 项探针、补充验收矩阵、mutation 红→绿、桌面/390px、报告/截图哈希 double-check、精确 merge-tip 聚焦/全量/静态门禁 | 通过；独立签署原件保持不变，补充证据不代签 | E-20260820-001 | 只签署已验证代码对象和本机技术 Gate；真实平台接入、业务签署与生产 Gate 无豁免 |
 | G-FORECAST-PLANNING-CONTRACT-001 | 2026-08-13 | Forecast/Planning 联合配置与 current plan 门 | 7/14/30、lead+review/max-stock required days、legacy POST guard、no partial write、GET/tool no superseded plan | 通过 | E-20260813-013 | 仅限本机 API/虚拟策略证据；未运行全量，不豁免真实补货策略、长稳、自动动作或生产 Gate |
 | G-DEMAND-SKU-UNIVERSE-001 | 2026-08-13 | store-wide Demand SKU universe 门 | order∪inventory、explicit scope、true zero/coverage missing/cold start、tenant/store isolation、response/audit digest | 通过 | E-20260813-012 | 仅限本机公开领域服务与合成/虚拟数据；未运行全量，不豁免真实 coverage 声明、完整商品主数据、长稳或生产 Gate |
 | G-FORECAST-FINAL-FALLBACK-001 | 2026-08-13 | Forecast final-stage 候选回退门 | ranking/baseline gate 重选、final-only failure、attempt/failure 固化、全部可用候选失败、v1 read compatibility | 通过 | E-20260813-011 | 仅限本机合成序列与代码契约；未运行全量，不豁免真实数据分布、长稳、库存业务验收或生产 Gate |
@@ -704,6 +733,13 @@
 
 ## 验收记录
 
+- 2026-08-20：完成 M7-R WP5 正式收口。WP1 因公共基建需要先行合入，PR #20 只包含
+  WP2～WP4；补充报告将验收对象明确为 base 中 WP1 与 head `ece61e1` 的 WP2～WP4 组合态，
+  且不改写缪海南原独立报告。第二轮独立 double-check 对报告/截图哈希、PR 拓扑、detached
+  命令链、mutation 与截图逐项复核通过。PR #20 合入 `main` 为 `f6bb47c` 后，merge tip
+  聚焦 `104 passed`、全量 `1035 passed, 24 warnings`，静态与台账门禁均通过。原始报告、
+  补充报告和三张浏览器证据已按原字节归档；F-323 仅按代码级本机范围完成，真实平台、真实
+  经营与生产边界继续保留。见 E-20260820-001、G-M7R-WP5-001、G-M7R-ALL-001。
 - 2026-08-17：在不接触既有脏 main worktree 的前提下，从 `origin/main` `9619383` 建立隔离
   worktree，将 WP1 `0b54a24` 和 D-046/v34 集成提交 `e127c39` 快进推送到 main。全量
   `950 passed, 24 warnings`，compileall、责任矩阵、迁移唯一性、whitespace 和账本校验通过；
