@@ -5,7 +5,11 @@
 """
 from __future__ import annotations
 
-from ecommerce_agent.product_workbench.eval import EvalResult, MechanismEvalRunner
+from ecommerce_agent.product_workbench.eval import (
+    EvalResult,
+    MechanismEvalRunner,
+    _EVAL_CREATED_AT,
+)
 from ecommerce_agent.product_workbench.scenes import FROZEN_SCENES
 
 
@@ -77,3 +81,145 @@ def test_eval_result_type() -> None:
     runner = MechanismEvalRunner()
     results = runner.run_all()
     assert all(isinstance(r, EvalResult) for r in results)
+
+
+def test_eval_produces_recommendation_type() -> None:
+    """机制 Eval 产出建议类型（诊断 → 建议生产链路，非只测 degraded）。
+
+    反假绿：每个 PASS 场景的 recommendation_type 必须与冻结场景 expected
+    一致；若删除 eval.py 的 recommendation 层（或解释器产出错误建议类型），
+    本测试必须 FAIL。
+    """
+    from ecommerce_agent.product_workbench.scenes import FROZEN_SCENES
+
+    runner = MechanismEvalRunner()
+    results = runner.run_all()
+    # 场景名 → expected.recommendation_type
+    expected_by_name = {
+        scene.name: scene.expected.get("recommendation_type")
+        for scene in FROZEN_SCENES
+    }
+    # 每个场景必须有推荐类型预期
+    assert all(v is not None for v in expected_by_name.values()), (
+        "冻结场景缺 recommendation_type 预期"
+    )
+    # 重跑每个场景，断言 produced 的 recommendation_type 与预期一致
+    for scene in FROZEN_SCENES:
+        r = runner.run_scene(scene)
+        assert r.passed, f"{scene.name} 未通过: {r.failures}"
+        # 直接重放 produced（scene.run_oracle 已校验 diagnosis_type + recommendation_type）
+        # 双保险：显式断言 recommendation_type 匹配预期
+        produced = _replay_produced(runner, scene)
+        assert produced["recommendation_type"] == expected_by_name[scene.name], (
+            f"{scene.name} 建议类型 {produced['recommendation_type']} != "
+            f"预期 {expected_by_name[scene.name]}"
+        )
+
+
+def _replay_produced(runner, scene) -> dict:
+    """重放单场景的 produced（诊断 + 建议全链），用于显式断言。"""
+    from ecommerce_agent.product_diagnosis.diagnosis import build_diagnosis_facts
+    from ecommerce_agent.product_diagnosis.interpreter import run_interpretation
+
+    d = scene.input_data
+    facts = build_diagnosis_facts(
+        d["sku_id"],
+        {
+            "evidence_state": d.get("evidence_state"),
+            "exposures": d.get("exposures"),
+            "clicks": d.get("clicks"),
+            "conversions": d.get("conversions"),
+            "quality_gate": d.get("quality_gate"),
+        },
+        stockout=d.get("stockout", False),
+        pollution=d.get("pollution"),
+    )
+    diag = run_interpretation(facts, runner.interpreter)
+    from ecommerce_agent.product_read_model.models import (
+        AggregateRule,
+        Granularity,
+        MetricValue,
+        SKUReadModel,
+    )
+    from ecommerce_agent.readonly_data.contracts import EvidenceState
+
+    _missing = MetricValue.missing(
+        Granularity.DAILY, AggregateRule.SUM, "2026-08-17", "eval"
+    )
+    sku = SKUReadModel(
+        tenant_id="t1",
+        store_id="store-eval",
+        item_id="item-eval",
+        sku_id=d["sku_id"],
+        revision=1,
+        impressions=_missing,
+        clicks=_missing,
+        add_to_cart=_missing,
+        orders=_missing,
+        payments=_missing,
+        refunds=_missing,
+        net_sales=_missing,
+        sellable_stock=_missing,
+        in_transit_stock=_missing,
+    )
+    rec = runner.recommendation_engine.generate(
+        tenant_id="t1",
+        diagnosis=diag,
+        sku=sku,
+        recommendation_id="eval-rec",
+        created_at=_EVAL_CREATED_AT,
+    )
+    return {
+        "diagnosis_type": diag.diagnosis_type.value,
+        "degraded": diag.degraded,
+        "recommendation_type": rec.type.value,
+    }
+
+
+def test_eval_mutation_wrong_direction_fails() -> None:
+    """P1-4 反证 mutation：解释器对缺货返回错误方向 → eval 必须失败。
+
+    复验指出「让解释器始终返回错误的 EVIDENCE_INSUFFICIENT，9 个场景仍有
+    7 个 PASS」——oracle 只锁 degraded 不锁方向导致自洽假绿。修复后
+    oracle 锁 diagnosis_type + recommendation_type，错误方向必须 FAIL。
+    """
+    from ecommerce_agent.product_diagnosis.diagnosis import DiagnosisType
+    from ecommerce_agent.product_diagnosis.interpreter import DiagnosisInterpreter
+
+    class _WrongInterpreter(DiagnosisInterpreter):
+        """故意错误：缺货污染场景返回 EVIDENCE_INSUFFICIENT（错误方向）。"""
+
+        def interpret(self, facts):
+            from ecommerce_agent.product_diagnosis.diagnosis import DiagnosisFacts
+            from typing import Any, Mapping
+
+            if facts.stockout:
+                return {"diagnosis_type": "evidence_insufficient", "reason": "mutation"}
+            if facts.evidence_state in (None, "missing"):
+                return {"diagnosis_type": "evidence_insufficient", "reason": "evidence_missing"}
+            return {"diagnosis_type": "evidence_insufficient", "reason": "mutation"}
+
+    runner = MechanismEvalRunner(interpreter=_WrongInterpreter())
+    results = runner.run_all()
+    stockout = next(r for r in results if r.scene_name == "缺货污染")
+    # 缺货污染：错误方向必须 FAIL（不 PASS）
+    assert stockout.passed is False, (
+        f"mutation 后缺货污染仍 PASS（oracle 未锁方向，自洽假绿）：{stockout.failures}"
+    )
+
+
+def test_eval_mutation_always_evidence_insufficient_fails() -> None:
+    """P1-4 反证 mutation：解释器对所有场景返回 EVIDENCE_INSUFFICIENT → 必失败。"""
+    from ecommerce_agent.product_diagnosis.interpreter import DiagnosisInterpreter
+
+    class _AlwaysInsufficient(DiagnosisInterpreter):
+        def interpret(self, facts):
+            return {"diagnosis_type": "evidence_insufficient", "reason": "always"}
+
+    runner = MechanismEvalRunner(interpreter=_AlwaysInsufficient())
+    results = runner.run_all()
+    # 广告/价格污染场景：错误方向必须 FAIL（oracle 锁 AD_PRICE_POLLUTION）
+    pollution = next(r for r in results if r.scene_name == "广告/价格污染")
+    assert pollution.passed is False, (
+        f"mutation 后广告/价格污染仍 PASS：{pollution.failures}"
+    )

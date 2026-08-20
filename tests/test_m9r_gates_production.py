@@ -145,6 +145,79 @@ def test_latest_revision_view_has_quality_gate_key(tmp_path) -> None:
     assert view["quality_gate"] is None
 
 
+def _seed_revision_for_item(db: Database, *, item_id: str, revision_id: str,
+                            connector_id: str = "taobao_official",
+                            source_type: str = "actual") -> None:
+    """种一个 item 的 revision + day bucket（复用 bucket 公共字段）。"""
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO listing_revisions(
+                id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no,
+                title, main_image_asset_id, sale_price, attributes_json, active_from,
+                active_to, source_updated_at, payload_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                revision_id, "tenant-a", connector_id, "store-a", item_id, "sku-a", 1,
+                f"测试-{item_id}", "asset-1", "109.00", '{"stock_status":"in_stock"}',
+                "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00",
+                "2026-08-10T00:00:00+00:00", "a" * 64,
+                "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO traffic_metric_buckets(
+                id, tenant_id, listing_revision_id, metric_start, metric_end,
+                bucket_granularity, traffic_source, impressions, clicks, visitors,
+                favorites, cart_adds, orders, sales_amount, ad_spend,
+                search_impressions, recommend_impressions, data_as_of, source_id,
+                payload_hash, quality_flags_json, version, created_at, updated_at,
+                connector_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"bucket-{revision_id}", "tenant-a", revision_id,
+                "2026-08-10T00:00:00+00:00", "2026-08-10T23:59:59+00:00", "day",
+                "recommend", 1000, 80, 75, 8, 5, 2, "218.00", "0", 100, 900,
+                "2026-08-10T12:00:00+00:00", f"src-{revision_id}", "b" * 64, "[]", 1,
+                "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
+                connector_id,
+            ),
+        )
+
+
+def test_bridge_revision_isolated_by_item(tmp_path) -> None:
+    """P0-3 反例：同店同 SKU 下不同 item 的 revision 不串读。
+
+    item-a 有 revision-1（actual）、item-b 有 revision-2（virtual/demo），
+    请求 item-a 的 evidence-gates 必须返回 item-a 的 revision-1，而不是
+    全库最新（item-b 的 revision-2）。
+    """
+    ops = _ops(tmp_path)  # 已有 rev-1 = item-a
+    db = ops.db
+    # item-b 再种一个 revision-2（virtual/demo），revision_no 更大、时间更新
+    _seed_revision_for_item(
+        db, item_id="item-b", revision_id="rev-2",
+        connector_id="simulation_official", source_type="virtual",
+    )
+    # item-a 请求 → 必须命中 item-a 自己的 rev-1（actual），不得跨 item 取 rev-2
+    view = ops.evidence_bridge.latest_revision_view(
+        "tenant-a", store_id="store-a", sku_id="sku-a", item_id="item-a"
+    )
+    assert view["revision_id"] == "rev-1", (
+        f"item-a 门禁串读到 {view['revision_id']}"
+    )
+    assert view["evidence_state"] == EvidenceState.ACTUAL.value
+    # item-b 请求 → 命中 rev-2
+    view_b = ops.evidence_bridge.latest_revision_view(
+        "tenant-a", store_id="store-a", sku_id="sku-a", item_id="item-b"
+    )
+    assert view_b["revision_id"] == "rev-2"
+
+
+
 def test_pollution_autodetected_from_quality_gate_issues() -> None:
     """B6：quality_gate.issues 含 stock_not_available → 自动标 stockout+degraded。"""
     facts = build_diagnosis_facts(

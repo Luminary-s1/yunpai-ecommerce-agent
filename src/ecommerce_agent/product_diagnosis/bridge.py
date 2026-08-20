@@ -119,14 +119,17 @@ class EvidenceBridge:
         }
 
     def latest_revision_view(
-        self, tenant_id: str, *, store_id: str, sku_id: str
+        self, tenant_id: str, *, store_id: str, sku_id: str,
+        item_id: str | None = None,
     ) -> dict[str, Any]:
         """SKU 最新 revision 的统一证据视图（门禁生产消费者入口）。
 
         无 revision → 显式 missing 视图（不抛，缺数据是合法状态）。
+        item_id 参与过滤：同店同 SKU 不同 item 的 revision 不得串读
+        （WP1 metrics 的 item 隔离延伸到 WP2/门禁链路）。
         """
         revisions = self.service.list_revisions(
-            tenant_id, store_id=store_id, sku_id=sku_id, limit=1
+            tenant_id, store_id=store_id, sku_id=sku_id, item_id=item_id, limit=1
         )
         if not revisions:
             return {

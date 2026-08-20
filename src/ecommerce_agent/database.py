@@ -3428,8 +3428,10 @@ class Database:
             BEGIN
                 SELECT RAISE(ABORT, 'readonly_product_reconciliation_row_immutable');
             END;
+            """
         )
 
+    @staticmethod
     def _apply_v36(conn: sqlite3.Connection) -> None:
         # M9-R WP3 生命周期建议持久化（占号裁定 08-18：v36 归 M9-R WP3，v35 归 M7-R WP3）。
         # product_recommendations 可变（state 随状态机落库），不加不可变触发器；
@@ -3499,6 +3501,7 @@ class Database:
             BEGIN
                 SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
             END;
+            """
         )
 
     @staticmethod
@@ -3508,6 +3511,12 @@ class Database:
         # 全局主键跨租户冲突；state CHECK 补 stale；内容列不可变触发器防历史原地篡改。
         # 重建 product_recommendation_audit：from/to_state CHECK 补 stale（FK 目标列不变）。
         # 保留数据：rename→建新→INSERT SELECT→drop 旧→重建索引/触发器。
+        #
+        # 外键开关必须在事务外切换：SQLite 在事务内对 PRAGMA foreign_keys 的改动不会
+        # 即时生效。这里先提交 pending 事务（各版本迁移幂等，失败重跑只会重放 37），
+        # 关闭外键完成表重建，再恢复开启。若中途失败，前序版本已提交、37 未提交，
+        # 下一次 initialize 从 37 继续且数据不丢（外键开启状态下的升级路径）。
+        conn.commit()
         conn.execute("PRAGMA foreign_keys=OFF")
         conn.executescript(
             """

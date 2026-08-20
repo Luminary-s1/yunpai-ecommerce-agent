@@ -65,6 +65,9 @@ FROZEN_SCENES: list[FrozenScene] = [
         expected={
             # 证据充分 + 门禁通过 → 可给方向（非 polluted/blocked）
             "degraded": False,
+            # 锁定语义方向：干净数据 → EVIDENCE_INSUFFICIENT 占位（无 issue 检出）
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
         },
     ),
     FrozenScene(
@@ -79,6 +82,8 @@ FROZEN_SCENES: list[FrozenScene] = [
         },
         expected={
             "degraded": False,
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
         },
     ),
     FrozenScene(
@@ -93,6 +98,8 @@ FROZEN_SCENES: list[FrozenScene] = [
         },
         expected={
             "degraded": False,
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
         },
     ),
     FrozenScene(
@@ -107,6 +114,8 @@ FROZEN_SCENES: list[FrozenScene] = [
         },
         expected={
             "degraded": False,
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
         },
     ),
     FrozenScene(
@@ -122,6 +131,7 @@ FROZEN_SCENES: list[FrozenScene] = [
             # 缺货污染必须被标记（degraded），不得归因标题/主图
             "diagnosis_type": DiagnosisType.STOCKOUT_POLLUTION.value,
             "degraded": True,
+            "recommendation_type": "补货联动",
         },
     ),
     FrozenScene(
@@ -136,6 +146,7 @@ FROZEN_SCENES: list[FrozenScene] = [
         expected={
             "diagnosis_type": DiagnosisType.AD_PRICE_POLLUTION.value,
             "degraded": True,
+            "recommendation_type": "定价候选",
         },
     ),
     FrozenScene(
@@ -146,6 +157,8 @@ FROZEN_SCENES: list[FrozenScene] = [
         },
         expected={
             "degraded": False,
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
         },
     ),
     FrozenScene(
@@ -160,6 +173,8 @@ FROZEN_SCENES: list[FrozenScene] = [
         },
         expected={
             "degraded": False,
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
         },
     ),
     FrozenScene(
@@ -174,6 +189,8 @@ FROZEN_SCENES: list[FrozenScene] = [
         },
         expected={
             "degraded": False,
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
         },
     ),
 ]

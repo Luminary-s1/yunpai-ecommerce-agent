@@ -154,3 +154,7 @@ for cid, desc, exp, ok, actual in RESULTS:
     print(f"{cid:<7}{desc:<36}{exp:<6}{('PASS' if ok else '**FAIL**'):<8}{actual}")
 print("-" * 95)
 print(f"结论: {'✅ 全部 PASS' if all_ok else '❌ 有 FAIL 项，需修复'}")
+# FAIL 时返回非零退出码（防 CI/人工只看退出状态误判）。
+import sys
+if not all_ok:
+    sys.exit(1)

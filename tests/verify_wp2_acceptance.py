@@ -5,7 +5,15 @@
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pytest
+
+# 直接以脚本方式执行（PYTHONPATH=src python tests/verify_wp2_acceptance.py）时，
+# sys.path[0] 是 tests/ 而非仓库根，导致 `from tests.test_m9r_diagnosis_bridge`
+# 报 ModuleNotFoundError。把仓库根插回 sys.path，使 tests 作为 namespace 包可导入。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ecommerce_agent.product_diagnosis.bridge import EvidenceBridge
 from ecommerce_agent.product_diagnosis.diagnosis import (
@@ -216,3 +224,6 @@ for cid, desc, exp, ok, actual in RESULTS:
     print(f"{cid:<7}{desc:<36}{exp:<6}{('PASS' if ok else '**FAIL**'):<8}{actual}")
 print("-" * 95)
 print(f"结论: {'✅ 全部 PASS' if all_ok else '❌ 有 FAIL 项，需修复'}")
+# FAIL 时必须返回非零退出码，否则 CI/人工只看退出状态会误判通过（P1-1 假绿）。
+if not all_ok:
+    sys.exit(1)

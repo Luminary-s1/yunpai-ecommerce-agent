@@ -29,6 +29,24 @@ from ecommerce_agent.product_lifecycle.state_machine import TransitionAction
 from ecommerce_agent.service import AgentService
 
 
+def _redact_json(value: Any) -> Any:
+    """递归脱敏任意 JSON 值（dict/list/str/scalar），PII 不入自由文本/嵌套字段。
+
+    入口唯一集中处：HTTP create 对所有持久化自由字段统一调用，保证
+    rationale、facts_snapshot（含嵌套）、missing_evidence 一致脱敏。
+    """
+    from ecommerce_agent.text_utils import redact_sensitive
+
+    if isinstance(value, dict):
+        return {k: _redact_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_json(v) for v in value]
+    if isinstance(value, str):
+        redacted, _ = redact_sensitive(value)
+        return redacted
+    return value
+
+
 class CreateRecommendationRequest(BaseModel):
     """POST 创建建议的请求（created_at/updated_at 服务端生成，强制 DRAFT）。
 
@@ -76,19 +94,22 @@ def build_workbench_router(
     ) -> dict[str, Any]:
         """创建生命周期建议（强制 DRAFT，B3 alternatives 校验，写审计）。
 
-        安全 #9：rationale 脱敏后落库（模型幻觉 PII 不入库）。
+        安全 #9：rationale / facts_snapshot（含嵌套字段）/ missing_evidence
+        统一脱敏后落库（模型幻觉 PII 不入库，任何自由文本/嵌套 JSON 字段都不例外）。
         """
         from ecommerce_agent.text_utils import redact_sensitive
 
         now = datetime.now(UTC)
         rationale, _ = redact_sensitive(payload.rationale)
+        facts_snapshot = _redact_json(payload.facts_snapshot)
+        missing_evidence = _redact_json(payload.missing_evidence)
         rec = Recommendation(
             recommendation_id=payload.recommendation_id,
             type=payload.type,
             target=payload.target,
-            facts_snapshot=payload.facts_snapshot,
+            facts_snapshot=facts_snapshot,
             rationale=rationale,
-            missing_evidence=payload.missing_evidence,
+            missing_evidence=missing_evidence,
             alternatives=payload.alternatives,
             degraded=payload.degraded,
             created_at=now,
@@ -180,7 +201,7 @@ def build_workbench_router(
             admin.tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id
         )
         gate_view = service.operations.evidence_bridge.latest_revision_view(
-            admin.tenant_id, store_id=store_id, sku_id=sku_id
+            admin.tenant_id, store_id=store_id, sku_id=sku_id, item_id=item_id
         )
         all_passed, gates = service.operations.evidence_bridge.run_gates(gate_view)
         # D4：由门禁/证据推导"为什么暂不能建议"
@@ -242,7 +263,7 @@ def build_workbench_router(
         不强给结论（fail-closed）。
         """
         view = service.operations.evidence_bridge.latest_revision_view(
-            admin.tenant_id, store_id=store_id, sku_id=sku_id
+            admin.tenant_id, store_id=store_id, sku_id=sku_id, item_id=item_id
         )
         all_passed, gates = service.operations.evidence_bridge.run_gates(view)
         return {

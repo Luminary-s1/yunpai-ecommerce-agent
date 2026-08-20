@@ -1,7 +1,7 @@
 """M9-R WP4 机制 Eval runner：复用冻结场景 + 确定性事实 + 语义校验（D-034）。
 
 边界声明：
-- 输入：冻结场景集 + 诊断解释器。
+- 输入：冻结场景集 + 诊断解释器 + 建议引擎。
 - 输出：EvalResult（每个场景的通过/失败）。
 - 副作用：零——纯派生，不写库、不调用模型。
 - 复用边界：场景 runner 复用 F-121/F-122 的 simulation-evidence-v1 契约精神
@@ -9,10 +9,13 @@
 - 失败暴露：诊断校验抛异常 → 场景记为失败（不静默）。
 - 确定性：场景输入固定 → 输出确定性断言。
 - D-034：确定性代码只产出可执行事实 + 校验；语义类型由解释器产出。
+- 生产链路：诊断 → 建议 全链断言（diagnosis_type + recommendation_type），
+  防止自洽假绿（只断言 degraded 不锁方向）。
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Callable
 
 from ecommerce_agent.product_diagnosis.diagnosis import (
@@ -24,8 +27,12 @@ from ecommerce_agent.product_diagnosis.interpreter import (
     RulesetDiagnosisInterpreter,
     run_interpretation,
 )
+from ecommerce_agent.product_lifecycle.engine import RecommendationEngine
 
 from .scenes import FrozenScene
+
+# 确定性：Eval 固定时点，无时间源（对齐 eval 纯派生边界）。
+_EVAL_CREATED_AT = datetime(2026, 8, 20, tzinfo=UTC)
 
 
 @dataclass
@@ -38,7 +45,7 @@ class EvalResult:
 
 
 class MechanismEvalRunner:
-    """机制 Eval：对每个冻结场景跑 oracle 断言。
+    """机制 Eval：对每个冻结场景跑 oracle 断言（诊断 + 建议全链）。
 
     用法：
       runner = MechanismEvalRunner()
@@ -54,9 +61,10 @@ class MechanismEvalRunner:
         self.scenes = scenes or _default_scenes()
         self.interpreter = interpreter or RulesetDiagnosisInterpreter()
         self.facts_fn = facts_fn
+        self.recommendation_engine = RecommendationEngine()
 
     def run_scene(self, scene: FrozenScene) -> EvalResult:
-        """跑单场景：输入 → 确定性事实 → 解释器 → 校验 → oracle 断言。"""
+        """跑单场景：输入 → 确定性事实 → 解释器 → 建议引擎 → oracle 断言。"""
         input_data = scene.input_data
         try:
             facts: DiagnosisFacts = self.facts_fn(
@@ -77,6 +85,43 @@ class MechanismEvalRunner:
                 "degraded": diag.degraded,
                 "reason": diag.reason,
             }
+            # 诊断 → 建议 生产链路：引擎产出建议候选（类型 + 理由），
+            # 使 Eval 断言实际建议方向而非只验证 degraded。
+            from ecommerce_agent.product_read_model.models import (
+                AggregateRule,
+                Granularity,
+                MetricValue,
+                SKUReadModel,
+            )
+            from ecommerce_agent.readonly_data.contracts import EvidenceState
+
+            _missing = MetricValue.missing(
+                Granularity.DAILY, AggregateRule.SUM, "2026-08-17", "eval"
+            )
+            sku = SKUReadModel(
+                tenant_id="t1",
+                store_id=input_data.get("store_id", "store-eval"),
+                item_id="item-eval",
+                sku_id=input_data["sku_id"],
+                revision=1,
+                impressions=_missing,
+                clicks=_missing,
+                add_to_cart=_missing,
+                orders=_missing,
+                payments=_missing,
+                refunds=_missing,
+                net_sales=_missing,
+                sellable_stock=_missing,
+                in_transit_stock=_missing,
+            )
+            rec = self.recommendation_engine.generate(
+                tenant_id="t1",
+                diagnosis=diag,
+                sku=sku,
+                recommendation_id="eval-rec",
+                created_at=_EVAL_CREATED_AT,
+            )
+            produced["recommendation_type"] = rec.type.value
         except Exception as exc:  # noqa: BLE001
             return EvalResult(scene.name, False, [f"eval_error:{exc}"])
         failures = scene.run_oracle(produced)
