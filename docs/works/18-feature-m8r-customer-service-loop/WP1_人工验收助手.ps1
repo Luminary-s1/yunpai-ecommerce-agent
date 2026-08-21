@@ -1,17 +1,17 @@
 ﻿param(
     [string]$BaseUrl = "http://127.0.0.1:8091",
     [string]$Tester = "谢良璇",
+    [string]$RuntimeRoot = "F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime",
     [switch]$AutoConfirm
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
-$runtimeRoot = "F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime"
-$evidenceDir = Join-Path $runtimeRoot "wp1-manual-evidence"
+$evidenceDir = Join-Path $RuntimeRoot "wp1-manual-evidence"
 New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$transcriptPath = Join-Path $evidenceDir "谢良璇_WP1人工验收过程_$stamp.txt"
-$resultPath = Join-Path $evidenceDir "谢良璇_WP1人工验收结果_$stamp.json"
+$transcriptPath = Join-Path $evidenceDir ($Tester + "_WP1人工验收过程_" + $stamp + ".txt")
+$resultPath = Join-Path $evidenceDir ($Tester + "_WP1人工验收结果_" + $stamp + ".json")
 $observations = @()
 
 function Write-Section {
@@ -40,7 +40,7 @@ function Confirm-Observation {
     Write-Host "人工观察重点：$Expected" -ForegroundColor Yellow
     if ($AutoConfirm) {
         $answer = "Y"
-        Write-Host "开发侧演练自动确认：Y（不能替代谢良璇正式人工验收）"
+        Write-Host "开发侧演练自动确认：Y（不能替代 $Tester 正式人工验收）"
     }
     else {
         $answer = Read-Host "请亲自查看上方结果。符合预期请输入 Y，不符合请输入 N"
@@ -467,7 +467,7 @@ try {
         Write-Warning "本次只是开发侧演练，不能把 WP1 标记为人工验收通过。"
     }
     elseif ($manualPassed) {
-        Write-Host "谢良璇已逐项确认；可进入证据整理，但仍不替代缪海南 WP5 独立验收。" -ForegroundColor Green
+        Write-Host "$Tester 已逐项确认；可进入证据整理，但仍不替代缪海南 WP5 独立验收。" -ForegroundColor Green
     }
     else {
         Write-Warning "至少一项人工观察未通过，WP1 保持未完成。"

@@ -111,6 +111,20 @@ def build_customer_service_workbench_router(
         payload: ShadowFeedbackRequest,
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
+        with service.db.connect() as conn:
+            shadow_message = conn.execute(
+                """
+                SELECT 1
+                FROM messages m
+                JOIN sessions s ON s.id=m.session_id AND s.tenant_id=m.tenant_id
+                WHERE m.id=? AND m.tenant_id=? AND m.role='assistant'
+                  AND s.source_type='simulation' AND s.source_reference LIKE ?
+                LIMIT 1
+                """,
+                (message_id, admin.tenant_id, f"{SHADOW_SOURCE_PREFIX}%"),
+            ).fetchone()
+        if shadow_message is None:
+            raise HTTPException(status_code=404, detail="shadow_message_not_found")
         corrected, corrected_redacted = redact_sensitive(payload.corrected_answer or "")
         note, note_redacted = redact_sensitive(payload.note or "")
         evidence, evidence_redacted = redact_sensitive(payload.evidence_source or "")

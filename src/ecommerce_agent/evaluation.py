@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .connectors.provenance import SourceType
 from .database import Database, utc_now
 from .policy import sanitize_context
 from .releases import ReleaseError, ReleaseService
@@ -55,7 +56,7 @@ class EvaluationExpectation(BaseModel):
     expected_fact_tool: str | None = Field(default=None, min_length=1, max_length=128)
     min_fact_evidence: int | None = Field(default=None, ge=0, le=100)
     expected_freshness_status: Literal["current", "stale", "future", "unknown"] | None = None
-    expected_source_type: Literal["actual", "manual", "demo", "virtual", "unknown"] | None = None
+    expected_source_type: SourceType | None = None
     require_source_completeness: bool = False
     require_data_as_of: bool = False
     expected_human_task_persisted: bool | None = None

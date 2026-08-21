@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from ecommerce_agent.business.catalog import CatalogItemUpsert, CatalogService
 from ecommerce_agent.business.inventory import InventoryBalanceUpsert, InventoryService
@@ -18,7 +19,9 @@ from ecommerce_agent.business.orders import (
 from ecommerce_agent.connectors import ConnectorRegistry, VirtualTaobaoConnector
 from ecommerce_agent.customer_service_facts import (
     CUSTOMER_SERVICE_FIELD_WHITELISTS,
+    CustomerAfterSalesFactsInput,
     CustomerServiceFactsService,
+    CustomerSalesFactsInput,
 )
 from ecommerce_agent.database import Database
 from ecommerce_agent.product_identity import (
@@ -36,6 +39,28 @@ from ecommerce_agent.tools import ToolExecutionContext, ToolRegistry
 
 
 NOW = datetime(2026, 8, 20, 4, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("model", "payload"),
+    [
+        (CustomerSalesFactsInput, {"store_id": " ", "sku_id": "SKU-1"}),
+        (CustomerSalesFactsInput, {"store_id": "store-a", "sku_id": "\t"}),
+        (
+            CustomerAfterSalesFactsInput,
+            {"store_id": " ", "order_id": "ORDER-1"},
+        ),
+        (
+            CustomerAfterSalesFactsInput,
+            {"store_id": "store-a", "order_id": "\n"},
+        ),
+    ],
+)
+def test_fact_tool_inputs_reject_blank_scope_values(
+    model: type[BaseModel], payload: dict[str, str]
+) -> None:
+    with pytest.raises(ValidationError):
+        model.model_validate(payload)
 
 
 class SecondaryVirtualTaobaoConnector(VirtualTaobaoConnector):

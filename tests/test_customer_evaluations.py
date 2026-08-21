@@ -43,6 +43,20 @@ def _thresholds(**overrides) -> EvaluationThresholds:
     return EvaluationThresholds.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    "source_type",
+    ["virtual", "operational", "mixed", "unknown"],
+)
+def test_evaluation_expectation_uses_authoritative_source_types(source_type: str) -> None:
+    expectation = EvaluationExpectation(expected_source_type=source_type)
+    assert expectation.expected_source_type == source_type
+
+
+def test_evaluation_expectation_rejects_evidence_state_as_source_type() -> None:
+    with pytest.raises(ValidationError):
+        EvaluationExpectation(expected_source_type="actual")
+
+
 def _case(
     case_key: str = "case-product",
     *,

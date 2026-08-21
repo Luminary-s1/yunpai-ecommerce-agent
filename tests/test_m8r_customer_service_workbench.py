@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from conftest import make_settings
+from conftest import make_settings, principal_for
 from ecommerce_agent.api import create_app
 from ecommerce_agent.business.catalog import CatalogItemUpsert, CatalogService
 from ecommerce_agent.business.inventory import InventoryBalanceUpsert, InventoryService
@@ -173,6 +173,42 @@ def test_shadow_catalog_browsing_is_read_only_and_feedback_reuses_governance(
             "/v1/admin/customer-service-shadow/feedback", headers=ADMIN_HEADERS
         ).json()
         assert history[0]["candidate_status"] == "pending"
+
+
+def test_shadow_feedback_rejects_operational_messages(tmp_path) -> None:
+    app = create_app(make_settings(tmp_path))
+    with TestClient(app) as client:
+        service = app.state.agent
+        response = service.chat(
+            principal_for(service),
+            "operational-feedback",
+            "尺码怎么选",
+        )
+        with service.db.connect() as conn:
+            before = {
+                table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                for table in ("feedback", "evolution_candidates")
+            }
+
+        feedback = client.post(
+            f"/v1/admin/customer-service-shadow/messages/{response.message_id}/feedback",
+            headers=ADMIN_HEADERS,
+            json={
+                "rating": -1,
+                "corrected_answer": "人工修正答复",
+                "note": "普通会话不得进入影子反馈治理",
+                "evidence_source": "review-boundary-test",
+            },
+        )
+
+        assert feedback.status_code == 404
+        assert feedback.json()["detail"] == "shadow_message_not_found"
+        with service.db.connect() as conn:
+            after = {
+                table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                for table in ("feedback", "evolution_candidates")
+            }
+        assert after == before
 
 
 def test_wp4_evaluation_endpoint_explicitly_uses_shadow_mode(tmp_path) -> None:

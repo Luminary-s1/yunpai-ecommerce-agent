@@ -57,14 +57,14 @@ CUSTOMER_SERVICE_FIELD_WHITELISTS = MappingProxyType(
 
 
 class CustomerSalesFactsInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     store_id: str = Field(min_length=1, max_length=128)
     sku_id: str = Field(min_length=1, max_length=128)
 
 
 class CustomerAfterSalesFactsInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     store_id: str = Field(min_length=1, max_length=128)
     order_id: str = Field(min_length=1, max_length=128)

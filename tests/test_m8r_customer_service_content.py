@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from conftest import make_settings
 from ecommerce_agent.api import create_app
@@ -30,6 +31,20 @@ from ecommerce_agent.readonly_data import (
 
 
 EXPORTED_AT = datetime(2026, 8, 17, 10, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"question": "   ", "store_id": "store-a"},
+        {"question": "多久发货", "store_id": "\t"},
+        {"question": "多久发货", "store_id": "store-a", "sku_id": " "},
+        {"question": "多久发货", "store_id": "store-a", "scenario": " "},
+    ],
+)
+def test_context_request_rejects_blank_scoped_values(payload) -> None:
+    with pytest.raises(ValidationError):
+        CustomerServiceContextRequest.model_validate(payload)
 
 
 def _manifest(

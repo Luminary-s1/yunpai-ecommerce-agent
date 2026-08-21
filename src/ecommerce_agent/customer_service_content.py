@@ -59,12 +59,21 @@ class CustomerServiceContentImportRequest(BaseModel):
 
 
 class CustomerServiceContextRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        str_strip_whitespace=True,
+    )
 
     question: str = Field(min_length=1, max_length=4000)
     store_id: str = Field(min_length=1, max_length=128)
-    sku_id: str | None = Field(default=None, max_length=128)
-    scenario: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")
+    sku_id: str | None = Field(default=None, min_length=1, max_length=128)
+    scenario: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=80,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
     now: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @field_validator("now")
