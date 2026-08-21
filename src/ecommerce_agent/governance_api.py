@@ -8,6 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from .auth import AdminPrincipal
+from .customer_service_content import (
+    CustomerServiceContentImportRequest,
+    CustomerServiceContextRequest,
+)
 from .knowledge_engine.memory_service import MEMORY_CATEGORIES, KnowledgeMemoryService
 from .knowledge_management import (
     KnowledgeCreateRequest,
@@ -47,6 +51,37 @@ def build_governance_router(
     require_admin: Callable[..., AdminPrincipal],
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/admin", tags=["governance"])
+
+    @router.post("/customer-service/content/import", status_code=201)
+    def import_customer_service_content(
+        payload: CustomerServiceContentImportRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        try:
+            return service.customer_service_content.import_content(
+                admin.tenant_id,
+                payload,
+                actor=admin.admin_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @router.post("/customer-service/content/context")
+    def preview_customer_service_context(
+        payload: CustomerServiceContextRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return service.customer_service_content.build_context(admin.tenant_id, payload)
+
+    @router.get("/customer-service/content/{item_id}/trace")
+    def trace_customer_service_content(
+        item_id: str,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        try:
+            return service.customer_service_content.get_trace(admin.tenant_id, item_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @router.get("/knowledge")
     def list_knowledge(

@@ -133,9 +133,22 @@ def business_module_catalog() -> list[BusinessModule]:
             module_id="customer_service",
             display_name="客服与售后协同",
             status="available",
-            responsibilities=["有界 ReAct", "知识问答", "渠道运行与人工接管"],
-            boundaries=["无真实权限时使用虚拟接口", "不确定结果不得宣称完成"],
-            agent_tools=[],
+            responsibilities=[
+                "有界 ReAct",
+                "知识问答",
+                "销售与售后可信事实投影",
+                "渠道运行与人工接管",
+            ],
+            boundaries=[
+                "无真实权限时使用虚拟接口",
+                "订单事实必须绑定可信订单号与店铺号",
+                "过期或来源不明的事实不得冒充当前状态",
+                "不确定结果不得宣称完成",
+            ],
+            agent_tools=[
+                "get_customer_sales_facts",
+                "get_customer_after_sales_facts",
+            ],
         ),
         BusinessModule(
             module_id="customer_service_evaluation",

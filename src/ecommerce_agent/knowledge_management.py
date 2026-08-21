@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .database import Database, utc_now
 from .rag import KnowledgeBase
@@ -30,6 +31,13 @@ class KnowledgeCreateRequest(BaseModel):
     layer: KnowledgeLayer
     store_id: str | None = Field(default=None, max_length=128)
     sku_id: str | None = Field(default=None, max_length=128)
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_effective_period(self) -> "KnowledgeCreateRequest":
+        _validate_effective_period(self.effective_from, self.effective_to)
+        return self
 
 
 class KnowledgeReviseRequest(BaseModel):
@@ -40,6 +48,13 @@ class KnowledgeReviseRequest(BaseModel):
     answer: str | None = Field(default=None, min_length=2, max_length=2000)
     keywords: str | None = Field(default=None, max_length=500)
     source: str | None = Field(default=None, min_length=3, max_length=500)
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_effective_period(self) -> "KnowledgeReviseRequest":
+        _validate_effective_period(self.effective_from, self.effective_to)
+        return self
 
 
 class KnowledgeTransitionRequest(BaseModel):
@@ -135,7 +150,13 @@ class KnowledgeManagementService:
                 status="candidate",
                 review_status="draft",
             )
-        self.db.audit("knowledge.draft_created", actor, item_id, request.model_dump(), tenant_id)
+        self.db.audit(
+            "knowledge.draft_created",
+            actor,
+            item_id,
+            request.model_dump(mode="json"),
+            tenant_id,
+        )
         return self._require(tenant_id, item_id)
 
     def revise(
@@ -156,6 +177,16 @@ class KnowledgeManagementService:
                     ).fetchone()[0]
                 )
             values = request.model_dump(exclude={"expected_record_version"}, exclude_none=True)
+            effective_from = (
+                request.effective_from
+                if "effective_from" in request.model_fields_set
+                else current["effective_from"]
+            )
+            effective_to = (
+                request.effective_to
+                if "effective_to" in request.model_fields_set
+                else current["effective_to"]
+            )
             new_id = self.knowledge.add_document(
                 category=current["category"],
                 intent=current["intent"],
@@ -172,6 +203,8 @@ class KnowledgeManagementService:
                 store_id=current["store_id"],
                 sku_id=current["sku_id"],
                 review_status="draft",
+                effective_from=effective_from,
+                effective_to=effective_to,
             )
         self.db.audit(
             "knowledge.version_created",
@@ -208,6 +241,13 @@ class KnowledgeManagementService:
         if current["record_version"] != request.expected_record_version:
             raise KnowledgeLifecycleError("knowledge version conflict")
         now = utc_now()
+        effective_from = datetime.fromisoformat(str(current["effective_from"]))
+        if effective_from.tzinfo is None or effective_from.utcoffset() is None:
+            raise KnowledgeLifecycleError("knowledge effective_from must include timezone")
+        if effective_from > datetime.fromisoformat(now):
+            raise KnowledgeLifecycleError(
+                "knowledge cannot be approved before effective_from"
+            )
         with self.db._write_lock, self.db.connect() as conn:
             # 多租户修复（P1-1）：retire 旧 active 只限本租户行（tenant_id=?）。
             # 此前 (tenant_id=? OR tenant_id IS NULL) 会让租户影子编辑 approve 时
@@ -227,11 +267,10 @@ class KnowledgeManagementService:
                 """
                 UPDATE knowledge
                 SET status='active', review_status='approved', approved_by=?,
-                    effective_from=?, effective_to=NULL, record_version=record_version+1,
-                    updated_at=?
+                    record_version=record_version+1, updated_at=?
                 WHERE id=? AND tenant_id=? AND record_version=? AND status='candidate'
                 """,
-                (actor, now, now, item_id, tenant_id, request.expected_record_version),
+                (actor, now, item_id, tenant_id, request.expected_record_version),
             )
             if cursor.rowcount != 1:
                 raise KnowledgeLifecycleError("knowledge version conflict")
@@ -543,7 +582,8 @@ class KnowledgeManagementService:
         with self.db._write_lock, self.db.connect() as conn:
             cursor = conn.execute(
                 """
-                UPDATE knowledge SET status=?, review_status=?, effective_to=?,
+                UPDATE knowledge SET status=?, review_status=?,
+                    effective_to=CASE WHEN ?=1 THEN ? ELSE effective_to END,
                     record_version=record_version+1, updated_at=?
                 WHERE id=? AND tenant_id=? AND record_version=?
                   AND status=? AND review_status=?
@@ -551,7 +591,8 @@ class KnowledgeManagementService:
                 (
                     to_status,
                     to_review,
-                    now if close else None,
+                    int(close),
+                    now,
                     now,
                     item_id,
                     tenant_id,
@@ -595,3 +636,14 @@ class KnowledgeManagementService:
             raise KnowledgeLifecycleError("product layer requires store_id and sku_id")
         if layer in {"platform", "industry"} and (store_id or sku_id):
             raise KnowledgeLifecycleError("global layers cannot have store_id or sku_id")
+
+
+def _validate_effective_period(
+    effective_from: datetime | None,
+    effective_to: datetime | None,
+) -> None:
+    for value in (effective_from, effective_to):
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("knowledge effective timestamps must be timezone-aware")
+    if effective_from is not None and effective_to is not None and effective_to <= effective_from:
+        raise ValueError("knowledge effective_to must be after effective_from")

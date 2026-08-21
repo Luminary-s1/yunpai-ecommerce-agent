@@ -25,6 +25,7 @@ from .channel_agent import ChannelAgentError
 from .chat_sessions_api import build_chat_sessions_router
 from .config import Settings, is_loopback_host
 from .customer_test_api import build_customer_test_router
+from .customer_service_workbench_api import build_customer_service_workbench_router
 from .database import SessionScopeError
 from .evolution import EvolutionError, EvolutionService
 from .evaluation_api import build_evaluation_router
@@ -192,6 +193,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_release_router(service, require_admin))
     app.include_router(build_readonly_data_router(service, require_admin))
     app.include_router(build_evaluation_router(service, require_admin))
+    app.include_router(build_customer_service_workbench_router(service, require_admin))
     app.include_router(build_simulation_router(service, require_admin))
     app.include_router(build_traffic_lab_router(service, require_admin))
     app.include_router(build_customer_test_router(service, require_local_customer_test))

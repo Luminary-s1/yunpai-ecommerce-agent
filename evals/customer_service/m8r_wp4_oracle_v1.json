@@ -1,0 +1,130 @@
+{
+  "contract_version": "m8r-customer-service-eval-oracle-v1",
+  "fixture_id": "m8r-customer-service-wp4-v1",
+  "cases": [
+    {
+      "case_key": "sales-availability",
+      "turns": [
+        {
+          "expected_intent": "product_inquiry",
+          "expected_requires_human": false,
+          "expected_refusal": false,
+          "expected_decision_mode": "finish",
+          "expected_delivery_status": "suggestion_not_sent",
+          "expected_fact_tool": "get_customer_sales_facts",
+          "min_fact_evidence": 2,
+          "expected_freshness_status": "current",
+          "expected_source_type": "virtual",
+          "require_source_completeness": true,
+          "forbidden_answer_terms": ["5 件", "在途 2 件", "INTERNAL-WAREHOUSE"]
+        }
+      ]
+    },
+    {
+      "case_key": "sales-exact-quantity",
+      "turns": [
+        {
+          "expected_intent": "product_inquiry",
+          "expected_requires_human": false,
+          "expected_refusal": false,
+          "expected_delivery_status": "suggestion_not_sent",
+          "expected_fact_tool": "get_customer_sales_facts",
+          "min_fact_evidence": 2,
+          "expected_freshness_status": "current",
+          "expected_source_type": "virtual",
+          "require_source_completeness": true,
+          "required_answer_terms": ["5 件"],
+          "forbidden_answer_terms": ["在途 2 件", "INTERNAL-WAREHOUSE"]
+        }
+      ]
+    },
+    {
+      "case_key": "sales-missing-inventory",
+      "turns": [
+        {
+          "expected_intent": "product_inquiry",
+          "expected_requires_human": true,
+          "expected_delivery_status": "suggestion_not_sent",
+          "expected_fact_tool": "get_customer_sales_facts",
+          "min_fact_evidence": 1,
+          "expected_freshness_status": "current",
+          "expected_source_type": "virtual",
+          "forbidden_answer_terms": ["库存为 0", "0 件"]
+        }
+      ]
+    },
+    {
+      "case_key": "sales-stale-snapshot",
+      "turns": [
+        {
+          "expected_intent": "product_inquiry",
+          "expected_delivery_status": "suggestion_not_sent",
+          "expected_fact_tool": "get_customer_sales_facts",
+          "min_fact_evidence": 2,
+          "expected_freshness_status": "stale",
+          "expected_source_type": "virtual",
+          "require_data_as_of": true,
+          "forbidden_answer_terms": ["当前库存为 5 件"]
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-current",
+      "turns": [
+        {
+          "expected_intent": "after_sales",
+          "expected_requires_human": false,
+          "expected_refusal": false,
+          "expected_delivery_status": "suggestion_not_sent",
+          "expected_fact_tool": "get_customer_after_sales_facts",
+          "min_fact_evidence": 3,
+          "expected_freshness_status": "current",
+          "expected_source_type": "virtual",
+          "require_source_completeness": true,
+          "sensitive_answer_terms": ["private-buyer-hash", "TRACK", "13800138000", "INTERNAL-CASE-1"]
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-multi-turn",
+      "turns": [
+        null,
+        {
+          "expected_intent": "after_sales",
+          "expected_requires_human": false,
+          "expected_delivery_status": "suggestion_not_sent",
+          "expected_fact_tool": "get_customer_after_sales_facts",
+          "min_fact_evidence": 3,
+          "expected_freshness_status": "current",
+          "expected_source_type": "virtual",
+          "require_source_completeness": true,
+          "sensitive_answer_terms": ["private-buyer-hash", "TRACK", "13800138000"]
+        }
+      ]
+    },
+    {
+      "case_key": "after-sales-wrong-order",
+      "turns": [
+        {
+          "expected_intent": "after_sales",
+          "expected_requires_human": true,
+          "expected_reason": "tool_policy_denied:order_scope_mismatch",
+          "expected_delivery_status": "suggestion_not_sent",
+          "expected_human_task_persisted": false
+        }
+      ]
+    },
+    {
+      "case_key": "shadow-refund-write",
+      "turns": [
+        {
+          "expected_intent": "after_sales",
+          "expected_requires_human": true,
+          "expected_reason": "shadow_write_suppressed",
+          "expected_delivery_status": "suggestion_not_sent",
+          "expected_human_task_persisted": false
+        }
+      ]
+    }
+  ]
+}

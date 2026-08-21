@@ -14,7 +14,7 @@ from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 os.environ.setdefault("LANGGRAPH_STRICT_MSGPACK", "true")
 
@@ -29,10 +29,12 @@ from .channel_sdk.mockchat import MockChatChannelAdapter
 from .channel_sdk.taobao_adapter import TaobaoChannelAdapter
 from .config import Settings
 from .context_builder import ContextBuilder
+from .customer_service_content import CustomerServiceContentService
+from .customer_service_facts import CustomerServiceFactsService
 from .database import Database, SessionScopeError, utc_now
 from .disaster_recovery import DataDirectoryLock
 from .evaluation import EvaluationRunRequest, EvaluationService
-from .graph import MODEL_UNAVAILABLE_HANDOFF_ANSWER, build_graph, verify_response
+from .graph import build_graph, prepare_generation, verify_response
 from .handoff import HandoffService
 from .handoff_dispatch import HandoffDispatchService
 from .handoff_staffing import HandoffStaffingService
@@ -41,7 +43,6 @@ from .knowledge_seed import seed_records
 from .llm import ModelGateway
 from .maintenance import MaintenanceService
 from .policy import sanitize_context
-from .prompts import SYSTEM_PROMPT, build_messages
 from .rag import KnowledgeBase
 from .quality import QualityService
 from .releases import ReleaseReplayRequest, ReleaseService
@@ -49,10 +50,9 @@ from .readonly_data import ReadonlyDataService, ReadonlyReportIngestionService
 from .readonly_readiness import ReadonlyDemoService, ReadonlyReadinessService
 from .product_identity import ProductIdentityService
 from .schemas import ChatResponse, SourceItem
-from .text_utils import normalize_text, redact_sensitive
+from .text_utils import redact_sensitive
 from .taobao import TaobaoIntegrationService
 from .sops import SopService
-from .tokens import count_tokens
 from .tools import ToolRegistry
 from .traffic_lab import TrafficAnalysisModelInterpreter
 
@@ -85,6 +85,13 @@ class AgentService:
             self.admin = AdminConsoleService(self.db, self.contexts)
             self.knowledge = KnowledgeBase(self.db)
             self.knowledge_management = KnowledgeManagementService(self.db, self.knowledge)
+            self.readonly_data = ReadonlyDataService(self.db)
+            self.customer_service_content = CustomerServiceContentService(
+                db=self.db,
+                readonly_data=self.readonly_data,
+                knowledge=self.knowledge,
+                lifecycle=self.knowledge_management,
+            )
             # P1-2 接入：店铺级长期记忆服务（此前仅有定义，生产零调用——A1 修复）。
             # 延迟导入避免触发 knowledge_engine 包 __init__ → graph_api → service 循环导入。
             from .knowledge_engine.memory_service import KnowledgeMemoryService
@@ -130,7 +137,11 @@ class AgentService:
                 traffic_analysis_interpreter=traffic_analysis_interpreter,
             )
             self.operations.register_agent_tools(self.tools)
-            self.readonly_data = ReadonlyDataService(self.db)
+            self.customer_service_facts = CustomerServiceFactsService(
+                self.db,
+                connectors=self.operations.connectors,
+            )
+            self.customer_service_facts.register_agent_tools(self.tools)
             self.readonly_ingestion = ReadonlyReportIngestionService(self.db)
             self.product_identity = ProductIdentityService(self.db)
             self.readonly_readiness = ReadonlyReadinessService(self.db)
@@ -208,6 +219,7 @@ class AgentService:
                 tools=self.tools,
                 sops=self.sops,
                 contexts=self.contexts,
+                customer_service_content=self.customer_service_content,
                 memory=self.memory,
             )
             self.graph = builder.compile(checkpointer=self.checkpointer)
@@ -440,10 +452,7 @@ class AgentService:
 
         if "generate" in self.graph.get_state(config).next:
             deltas, model_fallback, trace_step = self._generation_deltas(state)
-            parts: list[str] = []
-            for delta in deltas:
-                parts.append(delta)
-                yield {"event": "delta", "text": delta}
+            parts = list(deltas)
             draft = "".join(parts).strip()
             generation_state = {
                 **state,
@@ -464,7 +473,19 @@ class AgentService:
                 },
                 as_node="verify",
             )
-            state = self.graph.invoke(None, config=config)
+            if verified["review_route"] == "pass":
+                # Do not persist a successful assistant message until every verified
+                # delta has been consumed. Closing the stream mid-reply therefore
+                # preserves the existing no-partial-message contract.
+                for delta in parts:
+                    yield {"event": "delta", "text": delta}
+                state = self.graph.invoke(None, config=config)
+            else:
+                # An unsafe or degraded draft must never reach the client. Complete
+                # the graph first, then emit only the final handoff/retry wording.
+                state = self.graph.invoke(None, config=config)
+                if state.get("answer"):
+                    yield {"event": "delta", "text": state["answer"]}
 
         duration_ms = (time.perf_counter() - started) * 1000
         self.db.record_metric(
@@ -485,50 +506,10 @@ class AgentService:
         self,
         state: dict[str, Any],
     ) -> tuple[Iterator[str], bool, str]:
-        verified_result = (
-            state.get("tool_result")
-            if state.get("tool_result", {}).get("postcondition_met")
-            else None
-        )
-        if not state.get("retrieved") and not verified_result:
-            return (
-                iter((MODEL_UNAVAILABLE_HANDOFF_ANSWER,)),
-                True,
-                "generate:no_evidence",
-            )
-
-        top_document = state["retrieved"][0] if state.get("retrieved") else None
-        if (
-            top_document
-            and state["decision"].get("reason") == "approved_knowledge_reuse"
-            and self.settings.rag_direct_approved_answer
-            and top_document["source"].startswith("evolution:")
-            # 精确匹配才复用（对齐 graph deliberate 同逻辑）
-            and normalize_text(top_document["question"])
-            == normalize_text(state["normalized_input"])
-        ):
-            return iter((top_document["answer"],)), False, "generate:approved_knowledge"
-
-        total = int(
-            self.settings.model_context_limit_tokens
-            * self.settings.context_budget_ratio
-        )
-        available = max(
-            0,
-            total
-            - count_tokens(SYSTEM_PROMPT)
-            - count_tokens(state["normalized_input"]),
-        )
-        messages = build_messages(
-            question=state["normalized_input"],
-            documents=state["retrieved"],
-            context=state["context_bundle"],
-            history=state["context_bundle"].get("recent_history", []),
-            verified_tool_result=verified_result,
-            knowledge_budget_tokens=available * 6 // 10,
-            prompt_variant=(state.get("intent_routing") or {}).get("prompt_variant"),
-        )
-        return self.model.stream_generate(messages), False, "generate:stream"
+        plan = prepare_generation(state, self.settings)
+        if plan.fixed_text is not None:
+            return iter((plan.fixed_text,)), plan.model_fallback, plan.trace_step
+        return self.model.stream_generate(plan.messages), False, plan.trace_step
 
     @staticmethod
     def _response_from_state(
@@ -563,6 +544,7 @@ class AgentService:
             context_snapshot_id=state.get("context_snapshot_id"),
             context_readiness=state.get("context_readiness"),
             evidence_ids=state.get("context_evidence_ids", []),
+            suggestion=state.get("customer_service_suggestion"),
         )
 
     def _prepare_invocation(
@@ -743,6 +725,8 @@ class AgentService:
         suite_id: str,
         request: EvaluationRunRequest,
         actor: str,
+        *,
+        execution_mode: Literal["live", "shadow"] = "live",
     ) -> dict[str, Any]:
         self.evaluations.get_suite(tenant_id, suite_id, include_cases=False)
         self.settings.data_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -801,7 +785,7 @@ class AgentService:
                                 turn["message"],
                                 turn["context"],
                                 idempotency_key=f"{request.run_key}:{case['case_key']}:{index}",
-                                execution_mode="live",
+                                execution_mode=execution_mode,
                                 source_type="evaluation",
                                 source_reference=request.run_key,
                             )

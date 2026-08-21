@@ -166,6 +166,7 @@ class ContextBuilder:
         history: list[dict[str, Any]],
         history_budget_tokens: int | None = None,
         tool_result: dict[str, Any] | None = None,
+        customer_service_content: dict[str, Any] | None = None,
         parent_snapshot_id: str | None = None,
     ) -> ContextSnapshot:
         safe_context = _safe_value(trusted_context)
@@ -183,6 +184,7 @@ class ContextBuilder:
         )
         safe_history = _safe_value(recent_history)
         safe_tool_result = _safe_value(tool_result or {})
+        safe_customer_service_content = _safe_value(customer_service_content or {})
         conflicts = self._conflicts(safe_context)
         if safe_context.get("authorized") is not True:
             safe_context = {
@@ -261,6 +263,48 @@ class ContextBuilder:
                         "intent": item.get("intent"),
                         "risk_level": item.get("risk_level"),
                         "required_context": item.get("required_context", []),
+                    },
+                )
+            )
+        for item in safe_customer_service_content.get("scripts", []):
+            evidence.append(
+                self._evidence(
+                    "customer_service_script",
+                    str(item.get("id", "unknown")),
+                    authority="human_approved_script",
+                    freshness="active",
+                    source_version=item.get("version"),
+                    summary={
+                        key: item.get(key)
+                        for key in (
+                            "source",
+                            "intent",
+                            "risk_level",
+                            "store_id",
+                            "sku_id",
+                            "approved_by",
+                            "effective_from",
+                            "effective_to",
+                        )
+                    },
+                )
+            )
+        for item in safe_customer_service_content.get("keyword_signals", []):
+            evidence.append(
+                self._evidence(
+                    "customer_service_keyword_signal",
+                    str(item.get("knowledge_id", "unknown")),
+                    authority="advisory_only",
+                    freshness="active",
+                    source_version=item.get("version"),
+                    summary={
+                        key: item.get(key)
+                        for key in (
+                            "keyword",
+                            "scenario",
+                            "risk_level",
+                            "source",
+                        )
                     },
                 )
             )
@@ -346,6 +390,7 @@ class ContextBuilder:
             },
             "sop_evidence": safe_sops,
             "knowledge_evidence": safe_documents,
+            "customer_service_content": safe_customer_service_content,
             "product_advisor": safe_advisor,
             "available_tools": safe_tools,
             "output_constraints": {
@@ -353,6 +398,10 @@ class ContextBuilder:
                 "channel": safe_context.get("platform") or "api",
                 "verified_business_result_required": True,
                 "conflict_policy": "handoff",
+                "customer_service": (
+                    (safe_tool_result.get("output") or {}).get("response_policy")
+                    or {}
+                ),
             },
             "recent_history": safe_history,
             "recent_history_meta": recent_history_meta,

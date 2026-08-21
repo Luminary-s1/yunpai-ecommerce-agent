@@ -183,6 +183,29 @@ def test_admin_console_page_and_audit_api(tmp_path) -> None:
         assert "/v1/admin/evaluations/overview" in page.text
         assert "/v1/admin/evaluations/suites" in page.text
         assert "renderEvaluationRun" in page.text
+        assert 'id="view-shadow-service"' in page.text
+        assert 'id="mobileViewSelect" aria-label="移动端页面导航"' in page.text
+        assert ".nav { display: none; }" in page.text
+        assert "mobileViewSelect.add(new Option" in page.text
+        assert "mobileViewSelect.addEventListener('change'" in page.text
+        assert "销售与售后客服影子评审" in page.text
+        assert "只读浏览不会运行 Agent" in page.text
+        assert 'id="shadowCaseList"' in page.text
+        assert 'id="runShadowCase"' in page.text
+        assert 'id="shadowFeedbackForm"' in page.text
+        assert 'id="runShadowEvaluation"' in page.text
+        assert page.text.count('class="shadow-responsive-table"') == 3
+        assert "#view-shadow-service .shadow-responsive-table td::before" in page.text
+        assert 'data-label="场景运行"' in page.text
+        assert 'data-label="核心指标"' in page.text
+        assert 'class="shadow-mobile-value"' in page.text
+        assert "#view-shadow-service .table-wrap { overflow-x: hidden; }" in page.text
+        assert "/v1/admin/customer-service-shadow/scenarios" in page.text
+        assert "/v1/admin/customer-service-shadow/runs?limit=100" in page.text
+        assert "/v1/admin/customer-service-shadow/feedback?limit=100" in page.text
+        assert "/v1/admin/customer-service-shadow/evaluations/prepare" in page.text
+        assert "/v1/admin/customer-service-shadow/evaluations/runs" in page.text
+        assert "oracle_fields_visible_to_runner" in page.text
         assert "虚拟店铺场景验收" in page.text
         assert 'id="simulationScenarioRows"' in page.text
         assert 'id="simulationDetail"' in page.text

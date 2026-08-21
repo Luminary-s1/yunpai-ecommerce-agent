@@ -72,6 +72,8 @@ class AgentState(TypedDict, total=False):
     context_readiness: str
     context_evidence_ids: list[str]
     context_conflicts: list[dict[str, Any]]
+    customer_service_content: dict[str, Any]
+    customer_service_suggestion: dict[str, Any] | None
 
 
 class ChatRequest(BaseModel):
@@ -93,6 +95,22 @@ class SourceItem(BaseModel):
     score: float
 
 
+class CustomerServiceSuggestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contract_version: Literal["customer-service-suggestion-v1"]
+    execution_mode: Literal["live", "shadow"]
+    delivery_status: Literal["runtime_response", "suggestion_not_sent"]
+    decision: dict[str, Any]
+    knowledge: dict[str, Any]
+    facts: dict[str, Any]
+    model: dict[str, Any]
+    context_snapshot_id: str | None = None
+    context_evidence_ids: list[str] = Field(default_factory=list)
+    degradation: dict[str, Any] | None = None
+    human_task: dict[str, Any] | None = None
+
+
 class ChatResponse(BaseModel):
     message_id: str
     trace_id: str
@@ -111,6 +129,7 @@ class ChatResponse(BaseModel):
     context_snapshot_id: str | None = None
     context_readiness: str | None = None
     evidence_ids: list[str] = Field(default_factory=list)
+    suggestion: CustomerServiceSuggestion | None = None
 
 
 class CustomerTestChatRequest(BaseModel):

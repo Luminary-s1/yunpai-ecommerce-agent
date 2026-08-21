@@ -40,6 +40,8 @@
     .nav { display: grid; gap: 4px; padding-top: 16px; }
     .nav button { width: 100%; min-height: 40px; border: 0; border-radius: 5px; background: transparent; color: var(--nav-muted); text-align: left; padding: 0 12px; }
     .nav button:hover, .nav button.active { color: #fff; background: #294049; }
+    .mobile-nav { display: none; }
+    .mobile-nav label { color: var(--nav-muted); font-size: 11px; }
     .sidebar-foot { margin-top: auto; padding: 14px 10px 0; border-top: 1px solid #304047; color: var(--nav-muted); font-size: 12px; line-height: 1.7; }
     .main { min-width: 0; }
     .topbar { min-height: 60px; padding: 10px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--paper); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
@@ -170,6 +172,23 @@
     .assertion-mark.bad { background: var(--red-soft); color: var(--red); }
     .coverage-strip { display: flex; flex-wrap: wrap; gap: 7px; }
     #simulationDetail { scroll-margin-top: 76px; }
+    .shadow-layout { display: grid; grid-template-columns: minmax(360px, .82fr) minmax(0, 1.18fr); gap: 14px; align-items: start; }
+    .shadow-case-list { max-height: 610px; overflow: auto; }
+    .shadow-case { width: 100%; min-height: 74px; padding: 11px 13px; border: 0; border-bottom: 1px solid var(--line); background: #fff; color: var(--ink); text-align: left; }
+    .shadow-case:hover, .shadow-case.active { background: #eef7f5; }
+    .shadow-case strong { display: block; margin-bottom: 5px; font-size: 13px; }
+    .shadow-case-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--muted); font-size: 11px; }
+    .shadow-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .shadow-review-block { min-width: 0; }
+    .shadow-review-block h4 { margin: 0 0 7px; color: var(--muted); font-size: 12px; }
+    .shadow-run-turn { padding: 12px; border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 4px; background: var(--surface); }
+    .shadow-run-turn + .shadow-run-turn { margin-top: 9px; }
+    .shadow-run-answer { margin: 8px 0; white-space: pre-wrap; line-height: 1.65; }
+    .shadow-fact-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 9px; }
+    .shadow-fact { min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-size: 11px; overflow-wrap: anywhere; }
+    .shadow-fact strong { display: block; margin-top: 3px; font-size: 12px; }
+    .shadow-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+    #shadowRunResult, #shadowEvaluationResult { max-height: 560px; overflow: auto; }
     .alert-list { display: grid; gap: 8px; }
     .alert { padding: 10px 11px; border: 1px solid #efcfc9; border-left: 3px solid var(--red); border-radius: 4px; font-size: 12px; line-height: 1.55; }
     .login { position: fixed; inset: 0; z-index: 100; background: rgba(18, 29, 34, .72); display: grid; place-items: center; padding: 20px; }
@@ -203,14 +222,15 @@
       .module-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .conversation-layout { grid-template-columns: 320px minmax(0, 1fr); }
       .simulation-layout { grid-template-columns: 1fr; }
+      .shadow-layout { grid-template-columns: 1fr; }
     }
     @media (max-width: 760px) {
       .shell { display: block; }
       .sidebar { position: static; height: auto; padding: 12px; }
       .brand { padding: 2px 6px 10px; }
-      .nav { display: flex; overflow-x: auto; padding-top: 10px; scrollbar-width: none; }
-      .nav::-webkit-scrollbar { display: none; }
-      .nav button { width: auto; min-width: max-content; }
+      .nav { display: none; }
+      .mobile-nav { display: grid; gap: 6px; padding-top: 10px; }
+      .mobile-nav .input { width: 100%; }
       .sidebar-foot { display: none; }
       .topbar { padding: 10px 14px; }
       .topbar h1 { font-size: 16px; }
@@ -221,6 +241,7 @@
       .conversation-list { border-right: 0; border-bottom: 1px solid var(--line); max-height: 300px; overflow: auto; }
       .table-wrap { max-height: 440px; }
       .message { max-width: 90%; }
+      .shadow-review-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 460px) {
       .grid.kpis, .module-grid { grid-template-columns: 1fr; }
@@ -235,6 +256,35 @@
       .form-grid .wide { grid-column: auto; }
       .evidence-grid { grid-template-columns: minmax(0, 1fr); }
       .queue-assignment-row { grid-template-columns: minmax(0, 1fr) 76px 66px; gap: 6px; }
+      .shadow-fact-grid { grid-template-columns: 1fr; }
+      #view-shadow-service .shadow-responsive-table { min-width: 0; table-layout: auto; }
+      #view-shadow-service .shadow-responsive-table thead { display: none; }
+      #view-shadow-service .shadow-responsive-table,
+      #view-shadow-service .shadow-responsive-table tbody,
+      #view-shadow-service .shadow-responsive-table tr,
+      #view-shadow-service .shadow-responsive-table td { display: block; width: 100%; }
+      #view-shadow-service .shadow-responsive-table tr { padding: 7px 0; border-bottom: 1px solid var(--line); }
+      #view-shadow-service .shadow-responsive-table tr:last-child { border-bottom: 0; }
+      #view-shadow-service .shadow-responsive-table td {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 8px;
+        padding: 6px 12px;
+        border-bottom: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      #view-shadow-service .shadow-responsive-table td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      #view-shadow-service .shadow-responsive-table td[colspan] { display: block; padding: 0; }
+      #view-shadow-service .shadow-responsive-table td[colspan]::before { display: none; }
+      #view-shadow-service .shadow-mobile-value { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+      #view-shadow-service .shadow-responsive-table .mono { min-width: 0; }
+      #view-shadow-service .table-wrap { overflow-x: hidden; }
     }
     @media (max-height: 760px) and (min-width: 761px) {
       .sidebar { padding-top: 12px; padding-bottom: 12px; }
@@ -263,6 +313,7 @@
         <button data-view="knowledge">知识与 SOP</button>
         <button data-view="wiki">知识库</button>
         <button data-view="quality">质检 VOC</button>
+        <button data-view="shadow-service">客服影子评审</button>
         <button data-view="evaluations">客服评测</button>
         <button data-view="simulation">场景验收</button>
         <button data-view="channels">渠道接待</button>
@@ -270,6 +321,10 @@
         <button data-view="modules">功能模块</button>
         <button data-view="audit">审计记录</button>
       </nav>
+      <div class="mobile-nav">
+        <label for="mobileViewSelect">页面</label>
+        <select class="input" id="mobileViewSelect" aria-label="移动端页面导航"></select>
+      </div>
       <div class="sidebar-foot"><div>0.23.0 运营控制台版</div><div><a href="/customer-test" style="color:#b9d9d3">独立顾客测试</a></div><div id="sidebarMode">受控执行模式</div></div>
     </aside>
 
@@ -621,6 +676,70 @@
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>质检结果</h3></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>会话</th><th>得分</th><th>问题</th><th>复核</th><th>操作</th></tr></thead><tbody id="qualityRows"></tbody></table></div></article>
         </section>
 
+        <section class="view" id="view-shadow-service">
+          <div class="section-head">
+            <div><h2>销售与售后客服影子评审</h2><p>固定输入、独立 Oracle、影子建议、人工反馈与隔离评测</p></div>
+            <button class="button" id="refreshShadowService">刷新记录</button>
+          </div>
+          <div class="notice"><strong>只读浏览不会运行 Agent</strong><div>切换案例、刷新记录和查看旧报告不会产生会话或人工任务。只有点击“运行影子场景”或“开始隔离评测”才会执行；影子建议不会发送给客户。</div></div>
+          <div class="shadow-layout" style="margin-top:14px">
+            <article class="panel">
+              <div class="panel-head"><h3>固定评审场景</h3><span class="muted" id="shadowCaseCount">0 个</span></div>
+              <div class="shadow-case-list" id="shadowCaseList"><div class="empty">正在读取固定场景</div></div>
+            </article>
+            <article class="panel" id="shadowCaseDetail">
+              <div class="empty">选择左侧场景查看输入和人工检查标准</div>
+            </article>
+          </div>
+
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel">
+              <div class="panel-head"><h3>显式运行影子场景</h3><span class="status info">不会发送</span></div>
+              <div class="panel-body stack">
+                <div class="field"><label for="shadowRunKey">本次运行标识</label><input class="input mono" id="shadowRunKey" placeholder="例如 manual-20260821-01"></div>
+                <button class="button primary" id="runShadowCase" disabled>运行影子场景</button>
+                <div class="notice" id="shadowRunNotice">先选择一个固定场景。运行后只会新增 simulation 会话和消息。</div>
+              </div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3>逐轮建议与事实证据</h3><span class="muted" id="shadowRunMeta">尚未运行</span></div>
+              <div class="panel-body stack" id="shadowRunResult"><div class="empty">显式运行后查看回答、风险、证据、时效与来源</div></div>
+            </article>
+          </div>
+
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel">
+              <div class="panel-head"><h3>人工评审反馈</h3><span class="status warn">进入治理候选</span></div>
+              <form class="panel-body form-grid" id="shadowFeedbackForm">
+                <div class="field"><label for="shadowFeedbackRating">人工结论</label><select class="input" id="shadowFeedbackRating"><option value="1">通过</option><option value="-1">需改进</option></select></div>
+                <div class="field"><label for="shadowFeedbackEvidence">核对依据</label><input class="input" id="shadowFeedbackEvidence" value="M8-R WP4 人工影子评审" minlength="4"></div>
+                <div class="field wide"><label for="shadowFeedbackCorrection">建议答复（需改进时填写）</label><textarea class="input" id="shadowFeedbackCorrection" maxlength="1200"></textarea></div>
+                <div class="field wide"><label for="shadowFeedbackNote">评审说明</label><textarea class="input" id="shadowFeedbackNote" maxlength="1000"></textarea></div>
+                <div class="wide"><button class="button primary" id="submitShadowFeedback" type="submit" disabled>提交人工反馈</button></div>
+              </form>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3>隔离评测</h3><span class="status info">临时数据库副本</span></div>
+              <div class="panel-body stack">
+                <div class="notice"><strong>输入与 Oracle 分离</strong><div id="shadowFixtureMeta">尚未读取固定数据哈希</div></div>
+                <div class="shadow-actions">
+                  <button class="button" id="prepareShadowEvaluation">准备并冻结评测集</button>
+                  <div class="field" style="flex:1 1 220px"><label for="shadowEvaluationRunKey">评测运行标识</label><input class="input mono" id="shadowEvaluationRunKey" placeholder="例如 wp4-acceptance-01"></div>
+                  <button class="button primary" id="runShadowEvaluation">开始隔离评测</button>
+                </div>
+                <div class="notice" id="shadowEvaluationNotice">评测会在临时数据库副本运行，不写入主库会话、人工任务或渠道发送队列。</div>
+              </div>
+            </article>
+          </div>
+
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel"><div class="panel-head"><h3>人工反馈与候选状态</h3></div><div class="table-wrap"><table class="shadow-responsive-table"><thead><tr><th>时间</th><th>场景运行</th><th>结论</th><th>候选</th></tr></thead><tbody id="shadowFeedbackRows"></tbody></table></div></article>
+            <article class="panel"><div class="panel-head"><h3>隔离评测结果</h3></div><div class="panel-body stack" id="shadowEvaluationResult"><div class="empty">运行或选择历史评测查看指标和失败明细</div></div></article>
+          </div>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>影子运行记录</h3><span class="muted">查看不会再次运行</span></div><div class="table-wrap"><table class="shadow-responsive-table"><thead><tr><th>时间</th><th>场景 / 会话</th><th>回答</th><th>决策</th><th>操作</th></tr></thead><tbody id="shadowRunRows"></tbody></table></div></article>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>WP4 评测报告</h3><span class="muted">历史报告只读</span></div><div class="table-wrap"><table class="shadow-responsive-table"><thead><tr><th>时间</th><th>运行</th><th>结果</th><th>核心指标</th><th>操作</th></tr></thead><tbody id="shadowEvaluationRows"></tbody></table></div></article>
+        </section>
+
         <section class="view" id="view-evaluations">
           <div class="section-head"><div><h2>客服 Agent 评测</h2><p>版本化标注集、隔离多轮运行、回归比较与发布门禁</p></div><button class="button" id="refreshEvaluations">刷新</button></div>
           <div class="grid kpis" id="evaluationKpis"></div>
@@ -947,6 +1066,15 @@
       evaluationReleases: [],
       selectedEvaluationSuite: null,
       evaluationSuite: null,
+      shadowDefinition: null,
+      shadowCases: [],
+      selectedShadowCase: null,
+      shadowRuns: [],
+      shadowFeedback: [],
+      shadowEvaluationSuite: null,
+      shadowEvaluationRuns: [],
+      shadowRun: null,
+      shadowMessageId: null,
       simulationFixture: null,
       simulationReport: null,
       readonlyProjection: null,
@@ -966,7 +1094,7 @@
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
 
-    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', 'readonly-data': '数据准备度', forecasting: '需求预测', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
+    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', 'readonly-data': '数据准备度', forecasting: '需求预测', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', 'shadow-service': '客服影子评审', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
     const sourceLabels = { api:'API 会话', channel:'渠道会话', simulation:'虚拟验收', evaluation:'隔离评测' };
     const $ = (id) => document.getElementById(id);
 
@@ -993,7 +1121,7 @@
     const formatTime = (value) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-';
     const money = (value, currency = 'CNY') => `${currency} ${Number(value || 0).toFixed(2)}`;
     const pct = (value) => value === null || value === undefined ? '-' : `${(Number(value) * 100).toFixed(1)}%`;
-    const statusClass = (status) => ({ available:'ok', active:'ok', approved:'ok', completed:'ok', succeeded:'ok', passed:'ok', frozen:'ok', compensated:'ok', sent:'ok', bot:'ok', resolved:'ok', assigned:'ok', interface:'info', evaluated:'info', human:'info', acknowledged:'info', running:'info', processing:'info', shadow:'info', leased:'info', not_run:'info', away:'warn', proposed:'warn', candidate:'warn', pending:'warn', waiting:'warn', draft:'warn', paused:'warn', accepted:'warn', working:'warn', waiting_input:'warn', waiting_approval:'warn', uncertain:'warn', compensation_uncertain:'warn', open:'warn', queued:'warn', retry:'warn', skipped:'warn', offline:'bad', inactive:'bad', disabled:'bad', blocked:'bad', error:'bad', dead_letter:'bad', input_required:'bad', review:'info', planned:'warn', failed:'bad', compensation_failed:'bad', retired:'bad', canceled:'bad', cancelled:'bad', rejected:'bad' }[status] || '');
+    const statusClass = (status) => ({ available:'ok', current:'ok', active:'ok', approved:'ok', completed:'ok', succeeded:'ok', passed:'ok', frozen:'ok', compensated:'ok', sent:'ok', bot:'ok', resolved:'ok', assigned:'ok', interface:'info', evaluated:'info', human:'info', acknowledged:'info', running:'info', processing:'info', shadow:'info', virtual:'info', suggestion_not_sent:'info', leased:'info', not_run:'info', away:'warn', stale:'warn', proposed:'warn', candidate:'warn', pending:'warn', waiting:'warn', draft:'warn', paused:'warn', accepted:'warn', working:'warn', waiting_input:'warn', waiting_approval:'warn', uncertain:'warn', compensation_uncertain:'warn', open:'warn', queued:'warn', retry:'warn', skipped:'warn', offline:'bad', inactive:'bad', disabled:'bad', blocked:'bad', error:'bad', dead_letter:'bad', input_required:'bad', review:'info', planned:'warn', failed:'bad', compensation_failed:'bad', retired:'bad', canceled:'bad', cancelled:'bad', rejected:'bad' }[status] || '');
 
     function toast(message) {
       const node = $('toast');
@@ -1129,6 +1257,7 @@
       state.currentView = view;
       document.querySelectorAll('.view').forEach((node) => node.classList.toggle('active', node.id === `view-${view}`));
       document.querySelectorAll('.nav button').forEach((node) => node.classList.toggle('active', node.dataset.view === view));
+      $('mobileViewSelect').value = view;
       $('viewTitle').textContent = titles[view];
       loadView(view).catch((error) => toast(error.message));
     }
@@ -1958,6 +2087,154 @@
       }));
     }
 
+    const shadowScenarioLabels = {
+      sales: '销售咨询',
+      after_sales: '售后咨询',
+      safety: '安全边界',
+      development: '开发集',
+      holdout: '留出集'
+    };
+
+    function shadowLabel(value) { return shadowScenarioLabels[value] || value || '-'; }
+
+    function renderShadowCaseDetail(caseItem) {
+      if (!caseItem) {
+        $('shadowCaseDetail').innerHTML = '<div class="empty">选择左侧场景查看输入和人工检查标准</div>';
+        $('runShadowCase').disabled = true;
+        return;
+      }
+      const input = caseItem.turns.map((turn, index) => ({ turn:index + 1, message:turn.message, context:turn.context || {} }));
+      const oracle = caseItem.oracle?.turns || [];
+      $('shadowCaseDetail').innerHTML = `<div class="panel-head"><div><h3>${escapeHtml(caseItem.case_key)}</h3><div class="muted">${escapeHtml(shadowLabel(caseItem.scenario))} · ${escapeHtml(shadowLabel(caseItem.partition))}</div></div><span class="status ${caseItem.partition === 'holdout' ? 'warn' : 'info'}">${escapeHtml(shadowLabel(caseItem.partition))}</span></div><div class="panel-body stack"><div class="notice"><strong>来源引用</strong><div class="mono">${escapeHtml(caseItem.source_ref || '-')}</div></div><div class="shadow-review-grid"><div class="shadow-review-block"><h4>交给 Agent 的固定输入</h4><pre class="json-view">${escapeHtml(JSON.stringify(input, null, 2))}</pre></div><div class="shadow-review-block"><h4>仅供人工与评分器核对的 Oracle</h4><pre class="json-view">${escapeHtml(JSON.stringify(oracle, null, 2))}</pre></div></div></div>`;
+      $('runShadowCase').disabled = false;
+    }
+
+    function selectShadowCase(caseKey) {
+      state.selectedShadowCase = caseKey;
+      document.querySelectorAll('[data-shadow-case]').forEach((node) => node.classList.toggle('active', node.dataset.shadowCase === caseKey));
+      renderShadowCaseDetail(state.shadowCases.find((item) => item.case_key === caseKey));
+    }
+
+    function renderShadowCases() {
+      $('shadowCaseCount').textContent = `${state.shadowCases.length} 个`;
+      $('shadowCaseList').innerHTML = state.shadowCases.length ? state.shadowCases.map((item) => `<button class="shadow-case" data-shadow-case="${escapeHtml(item.case_key)}"><strong>${escapeHtml(item.case_key)}</strong><span class="shadow-case-meta"><span class="status ${item.partition === 'holdout' ? 'warn' : 'info'}">${escapeHtml(shadowLabel(item.partition))}</span><span>${escapeHtml(shadowLabel(item.scenario))}</span><span>${item.turns.length} 轮</span></span></button>`).join('') : '<div class="empty">没有固定评审场景</div>';
+      document.querySelectorAll('[data-shadow-case]').forEach((node) => node.addEventListener('click', () => selectShadowCase(node.dataset.shadowCase)));
+      const selected = state.shadowCases.some((item) => item.case_key === state.selectedShadowCase) ? state.selectedShadowCase : state.shadowCases[0]?.case_key;
+      if (selected) selectShadowCase(selected); else renderShadowCaseDetail(null);
+    }
+
+    function shadowFactCard(label, value, status = '') {
+      return `<div class="shadow-fact"><span class="muted">${escapeHtml(label)}</span><strong class="${status ? `status ${statusClass(status)}` : ''}">${escapeHtml(value ?? '-')}</strong></div>`;
+    }
+
+    function renderShadowRun(run) {
+      state.shadowRun = run;
+      const responses = run?.responses || [];
+      const last = responses[responses.length - 1] || null;
+      state.shadowMessageId = last?.message_id || null;
+      $('submitShadowFeedback').disabled = !state.shadowMessageId;
+      $('shadowRunMeta').textContent = run ? `${run.case_key || '历史记录'} · ${run.run_key || run.session_id || '-'}` : '尚未运行';
+      if (!responses.length) {
+        $('shadowRunResult').innerHTML = '<div class="empty">没有可显示的影子建议</div>';
+        return;
+      }
+      $('shadowRunResult').innerHTML = responses.map((response, index) => {
+        const suggestion = response.suggestion || {};
+        const decision = suggestion.decision || {};
+        const facts = suggestion.facts || {};
+        const evidenceIds = facts.evidence_ids || [];
+        const sources = response.sources || [];
+        const humanTask = suggestion.human_task;
+        const assertion = run.assertion?.actual?.turns?.[index];
+        const assertionHtml = assertion ? `<div style="margin-top:10px"><strong>逐项断言</strong><div class="assertion-list" style="margin-top:7px">${assertion.violations.length ? assertion.violations.map((code) => `<div class="assertion"><span class="assertion-mark bad">×</span><span>${escapeHtml(code)}</span></div>`).join('') : '<div class="assertion"><span class="assertion-mark ok">✓</span><span>本轮所有 Oracle 检查通过</span></div>'}</div></div>` : '<div class="muted" style="margin-top:9px">历史摘要未保存逐项断言；请查看对应隔离评测报告或重新显式运行。</div>';
+        return `<div class="shadow-run-turn"><div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><strong>第 ${index + 1} 轮</strong><div class="mono muted">${escapeHtml(response.message_id || '-')}</div></div><span class="status ${statusClass(suggestion.delivery_status)}">${escapeHtml(suggestion.delivery_status || '未记录交付状态')}</span></div><div class="shadow-run-answer">${escapeHtml(response.answer || '')}</div><div class="coverage-strip"><span class="status ${response.requires_human ? 'warn' : 'ok'}">${response.requires_human ? '需要人工' : '无需人工'}</span><span class="status ${statusClass(response.risk_level)}">风险 ${escapeHtml(response.risk_level || '-')}</span><span class="status info">${escapeHtml(decision.mode || '-')}</span></div><div class="shadow-fact-grid">${shadowFactCard('事实工具', facts.tool_name)}${shadowFactCard('事实证据', `${evidenceIds.length} 条`)}${shadowFactCard('新鲜度', facts.freshness_status, facts.freshness_status)}${shadowFactCard('来源类型', facts.source_type, facts.source_type)}${shadowFactCard('数据时间', facts.data_as_of)}${shadowFactCard('路由原因', response.reason || decision.reason)}</div><div class="mono muted" style="margin-top:9px">事实证据：${escapeHtml(evidenceIds.join(' · ') || '无')}<br>知识引用：${escapeHtml(sources.map((item) => item.id || item.knowledge_key || item.source || '').filter(Boolean).join(' · ') || '无')}<br>人工任务：${escapeHtml(humanTask ? `${humanTask.status || '-'} · persisted=${humanTask.persisted}` : '无')}</div>${assertionHtml}</div>`;
+      }).join('');
+    }
+
+    function renderStoredShadowRun(item) {
+      const caseKey = String(item.source_reference || '').split(':').pop();
+      renderShadowRun({
+        case_key:caseKey,
+        run_key:item.external_session_id,
+        session_id:item.external_session_id,
+        responses:[{
+          message_id:item.message_id,
+          answer:item.answer,
+          intent:item.intent,
+          risk_level:item.risk_level,
+          reason:item.route_reason,
+          requires_human:Boolean(item.suggestion?.human_task?.required),
+          sources:[],
+          suggestion:item.suggestion
+        }]
+      });
+      selectShadowCase(caseKey);
+    }
+
+    function renderShadowHistories() {
+      $('shadowRunRows').innerHTML = state.shadowRuns.length ? state.shadowRuns.map((item, index) => {
+        const suggestion = item.suggestion || {};
+        const decision = suggestion.decision || {};
+        const caseKey = String(item.source_reference || '').split(':').pop();
+        return `<tr><td data-label="时间"><div class="shadow-mobile-value">${formatTime(item.created_at)}</div></td><td data-label="场景 / 会话"><div class="shadow-mobile-value"><strong>${escapeHtml(caseKey)}</strong><div class="mono muted">${escapeHtml(item.external_session_id)}</div></div></td><td data-label="回答"><div class="shadow-mobile-value">${escapeHtml(String(item.answer || '').slice(0, 90))}</div></td><td data-label="决策"><div class="shadow-mobile-value"><span class="status ${statusClass(suggestion.delivery_status)}">${escapeHtml(suggestion.delivery_status || '-')}</span><div class="muted">${escapeHtml(decision.mode || item.route_reason || '-')}</div></div></td><td data-label="操作"><div class="shadow-mobile-value"><button class="button small" data-shadow-run-index="${index}">查看</button></div></td></tr>`;
+      }).join('') : '<tr><td colspan="5"><div class="empty">尚无影子运行记录</div></td></tr>';
+      document.querySelectorAll('[data-shadow-run-index]').forEach((node) => node.addEventListener('click', () => renderStoredShadowRun(state.shadowRuns[Number(node.dataset.shadowRunIndex)])));
+
+      $('shadowFeedbackRows').innerHTML = state.shadowFeedback.length ? state.shadowFeedback.map((item) => `<tr><td data-label="时间"><div class="shadow-mobile-value">${formatTime(item.created_at)}</div></td><td data-label="场景运行"><div class="shadow-mobile-value"><div class="mono">${escapeHtml(item.external_session_id)}</div><div class="muted">${escapeHtml(item.message_id)}</div></div></td><td data-label="结论"><div class="shadow-mobile-value"><span class="status ${item.rating > 0 ? 'ok' : 'warn'}">${item.rating > 0 ? '通过' : '需改进'}</span><div class="muted">${escapeHtml(item.note || '未填写说明')}</div></div></td><td data-label="候选"><div class="shadow-mobile-value">${item.candidate_id ? `<span class="status ${statusClass(item.candidate_status)}">${escapeHtml(item.candidate_status)}</span><div class="mono muted">${escapeHtml(item.candidate_id)}</div>` : '<span class="muted">未生成候选</span>'}</div></td></tr>`).join('') : '<tr><td colspan="4"><div class="empty">尚无人工反馈</div></td></tr>';
+    }
+
+    function renderShadowEvaluation(run) {
+      const metrics = run?.metrics || {};
+      const failures = (run?.results || []).filter((item) => !item.passed);
+      if (!run) {
+        $('shadowEvaluationResult').innerHTML = '<div class="empty">运行或选择历史评测查看指标和失败明细</div>';
+        return;
+      }
+      const metricCards = [
+        ['通过率', pct(metrics.pass_rate)],
+        ['回答准确率', pct(metrics.answer_accuracy)],
+        ['幻觉率', pct(metrics.hallucination_rate)],
+        ['拒答率', pct(metrics.refusal_rate)],
+        ['证据覆盖率', pct(metrics.evidence_coverage)],
+        ['来源完整率', pct(metrics.source_completeness_rate)],
+        ['转人工合理率', pct(metrics.handoff_reasonableness)],
+        ['敏感输出率', pct(metrics.sensitive_output_rate)]
+      ].map(([label,value]) => shadowFactCard(label, value)).join('');
+      const failureHtml = failures.length ? failures.map((item) => `<div class="notice" style="border-left-color:${item.severe ? 'var(--red)' : 'var(--amber)'}"><strong>${escapeHtml(item.case_key)} · ${escapeHtml(item.scenario)}</strong><div>${escapeHtml((item.violations || []).join('，') || (item.actual || {}).error_type || '未通过')}</div></div>`).join('') : '<div class="status ok">无失败用例</div>';
+      $('shadowEvaluationResult').innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px"><div><strong>${escapeHtml(run.run_key || '-')}</strong><div class="mono muted">${escapeHtml(run.id || '-')}</div></div><span class="status ${statusClass(run.status)}">${escapeHtml(run.status || '-')}</span></div><div class="shadow-fact-grid">${metricCards}</div><div class="stack"><strong>失败明细</strong>${failureHtml}</div>`;
+    }
+
+    function renderShadowEvaluationRows() {
+      $('shadowEvaluationRows').innerHTML = state.shadowEvaluationRuns.length ? state.shadowEvaluationRuns.map((item) => {
+        const metrics = item.metrics || {};
+        return `<tr><td data-label="时间"><div class="shadow-mobile-value">${formatTime(item.created_at)}</div></td><td data-label="运行"><div class="shadow-mobile-value"><strong>${escapeHtml(item.run_key)}</strong><div class="mono muted">${escapeHtml(item.id)}</div></div></td><td data-label="结果"><div class="shadow-mobile-value"><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span><div class="muted">${metrics.passed_cases ?? 0}/${metrics.total_cases ?? 0} 通过</div></div></td><td data-label="核心指标"><div class="shadow-mobile-value">通过率 ${pct(metrics.pass_rate)}<div class="muted">证据 ${pct(metrics.evidence_coverage)} · 来源 ${pct(metrics.source_completeness_rate)}</div></div></td><td data-label="操作"><div class="shadow-mobile-value"><button class="button small" data-shadow-eval-run="${escapeHtml(item.id)}">查看</button></div></td></tr>`;
+      }).join('') : '<tr><td colspan="5"><div class="empty">尚无 WP4 评测报告</div></td></tr>';
+      document.querySelectorAll('[data-shadow-eval-run]').forEach((node) => node.addEventListener('click', async () => {
+        try { renderShadowEvaluation(await api(`/v1/admin/evaluations/runs/${encodeURIComponent(node.dataset.shadowEvalRun)}`)); }
+        catch (error) { toast(error.message); }
+      }));
+    }
+
+    async function loadShadowService() {
+      const [definition, runs, feedback, suites] = await Promise.all([
+        api('/v1/admin/customer-service-shadow/scenarios'),
+        api('/v1/admin/customer-service-shadow/runs?limit=100'),
+        api('/v1/admin/customer-service-shadow/feedback?limit=100'),
+        api('/v1/admin/evaluations/suites?limit=200')
+      ]);
+      state.shadowDefinition = definition;
+      state.shadowCases = definition.cases || [];
+      state.shadowRuns = runs;
+      state.shadowFeedback = feedback;
+      const matchingSuites = suites.filter((item) => item.suite_key === 'm8r.customer-service.wp4');
+      state.shadowEvaluationSuite = matchingSuites.sort((a, b) => Number(b.version) - Number(a.version))[0] || null;
+      state.shadowEvaluationRuns = state.shadowEvaluationSuite ? await api(`/v1/admin/evaluations/runs?suite_id=${encodeURIComponent(state.shadowEvaluationSuite.id)}&limit=100`) : [];
+      $('shadowFixtureMeta').innerHTML = `输入 <span class="mono">${escapeHtml(String(definition.input_hash || '').slice(0, 16))}…</span> · Oracle <span class="mono">${escapeHtml(String(definition.oracle_hash || '').slice(0, 16))}…</span> · Runner 可见 Oracle 字段 ${definition.runner_contract?.oracle_fields_visible_to_runner?.length || 0} 个`;
+      renderShadowCases();
+      renderShadowHistories();
+      renderShadowEvaluationRows();
+    }
+
     function editableEvaluationCases(cases) {
       return cases.map((item) => ({
         case_key:item.case_key,
@@ -2664,6 +2941,7 @@
       if (view === 'knowledge') return loadGovernance();
       if (view === 'wiki') return loadWiki();
       if (view === 'quality') return loadQuality();
+      if (view === 'shadow-service') return loadShadowService();
       if (view === 'evaluations') return loadEvaluations();
       if (view === 'simulation') return loadSimulation();
       if (view === 'channels') return loadChannelConversations();
@@ -2672,7 +2950,13 @@
       if (view === 'audit') return loadAudit();
     }
 
-    document.querySelectorAll('.nav button').forEach((node) => node.addEventListener('click', () => switchView(node.dataset.view)));
+    const mobileViewSelect = $('mobileViewSelect');
+    document.querySelectorAll('.nav button').forEach((node) => {
+      node.addEventListener('click', () => switchView(node.dataset.view));
+      mobileViewSelect.add(new Option(node.textContent.trim(), node.dataset.view));
+    });
+    mobileViewSelect.value = state.currentView;
+    mobileViewSelect.addEventListener('change', () => switchView(mobileViewSelect.value));
     document.querySelectorAll('[data-go]').forEach((node) => node.addEventListener('click', () => switchView(node.dataset.go)));
     $('refreshButton').addEventListener('click', () => loadView(state.currentView).then(() => toast('数据已刷新')).catch((error) => toast(error.message)));
     $('refreshOpsAssistant').addEventListener('click', () => loadOpsAssistant().catch((error) => toast(error.message)));
@@ -3107,6 +3391,78 @@
       }
     });
     $('channelMode').addEventListener('change', () => loadChannelConversations().catch((error) => toast(error.message)));
+    $('refreshShadowService').addEventListener('click', () => loadShadowService().then(() => toast('影子评审记录已刷新')).catch((error) => toast(error.message)));
+    $('runShadowCase').addEventListener('click', async () => {
+      const caseKey = state.selectedShadowCase;
+      const runKey = $('shadowRunKey').value.trim() || `manual-${Date.now()}`;
+      if (!caseKey) return toast('请先选择固定场景');
+      $('shadowRunKey').value = runKey;
+      $('runShadowCase').disabled = true;
+      $('shadowRunNotice').innerHTML = '<strong>影子场景运行中</strong><div>正在生成未发送的建议，并核对事实证据与安全边界。</div>';
+      try {
+        const result = await api(`/v1/admin/customer-service-shadow/scenarios/${encodeURIComponent(caseKey)}/runs`, { method:'POST', body:JSON.stringify({ run_key:runKey }) });
+        $('shadowRunNotice').innerHTML = `<strong>影子运行完成</strong><div>${result.responses.length} 轮建议均保存在 simulation 范围，未发送给客户。</div>`;
+        $('shadowRunNotice').style.borderLeftColor = 'var(--teal)';
+        await loadShadowService();
+        renderShadowRun(result);
+        $('shadowRunKey').value = `manual-${Date.now()}`;
+      } catch (error) {
+        $('shadowRunNotice').innerHTML = `<strong>影子运行失败</strong><div>${escapeHtml(error.message)}</div>`;
+        $('shadowRunNotice').style.borderLeftColor = 'var(--red)';
+        toast(error.message);
+      } finally { $('runShadowCase').disabled = !state.selectedShadowCase; }
+    });
+    $('shadowFeedbackForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!state.shadowMessageId) return toast('请先运行或选择一条影子建议');
+      const rating = Number($('shadowFeedbackRating').value);
+      const correctedAnswer = $('shadowFeedbackCorrection').value.trim();
+      const note = $('shadowFeedbackNote').value.trim();
+      const evidenceSource = $('shadowFeedbackEvidence').value.trim();
+      if (rating < 0 && correctedAnswer.length < 2) return toast('标记需改进时，请填写建议答复');
+      if (evidenceSource.length < 4) return toast('核对依据至少需要 4 个字符');
+      $('submitShadowFeedback').disabled = true;
+      try {
+        const saved = await api(`/v1/admin/customer-service-shadow/messages/${encodeURIComponent(state.shadowMessageId)}/feedback`, { method:'POST', body:JSON.stringify({ rating, corrected_answer:correctedAnswer || null, note:note || null, evidence_source:evidenceSource }) });
+        toast(saved.status === 'candidate_pending' ? '反馈已提交，并生成待审核候选' : '人工反馈已提交');
+        $('shadowFeedbackCorrection').value = '';
+        $('shadowFeedbackNote').value = '';
+        await loadShadowService();
+      } catch (error) { toast(error.message); }
+      finally { $('submitShadowFeedback').disabled = !state.shadowMessageId; }
+    });
+    $('prepareShadowEvaluation').addEventListener('click', async () => {
+      $('prepareShadowEvaluation').disabled = true;
+      $('shadowEvaluationNotice').innerHTML = '<strong>正在准备评测集</strong><div>固定输入与独立 Oracle 将分别校验哈希并冻结。</div>';
+      try {
+        const suite = await api('/v1/admin/customer-service-shadow/evaluations/prepare', { method:'POST' });
+        $('shadowEvaluationNotice').innerHTML = `<strong>评测集已冻结</strong><div>${escapeHtml(suite.suite_key)} v${suite.version} · ${suite.case_count} 个场景</div><div class="mono muted">${escapeHtml(suite.dataset_hash || '-')}</div>`;
+        $('shadowEvaluationNotice').style.borderLeftColor = 'var(--teal)';
+        await loadShadowService();
+      } catch (error) {
+        $('shadowEvaluationNotice').innerHTML = `<strong>评测集准备失败</strong><div>${escapeHtml(error.message)}</div>`;
+        $('shadowEvaluationNotice').style.borderLeftColor = 'var(--red)';
+        toast(error.message);
+      } finally { $('prepareShadowEvaluation').disabled = false; }
+    });
+    $('runShadowEvaluation').addEventListener('click', async () => {
+      const runKey = $('shadowEvaluationRunKey').value.trim() || `wp4-${Date.now()}`;
+      $('shadowEvaluationRunKey').value = runKey;
+      $('runShadowEvaluation').disabled = true;
+      $('shadowEvaluationNotice').innerHTML = '<strong>隔离评测运行中</strong><div>真实 Agent 正在临时数据库副本中执行 8 个固定场景；主库会话、人工任务和发送队列不会增加。</div>';
+      try {
+        const result = await api('/v1/admin/customer-service-shadow/evaluations/runs', { method:'POST', body:JSON.stringify({ run_key:runKey }) });
+        $('shadowEvaluationNotice').innerHTML = `<strong>${result.status === 'passed' ? 'WP4 评测通过' : 'WP4 评测未通过'}</strong><div>${result.passed_cases ?? result.metrics?.passed_cases ?? 0}/${result.total_cases ?? result.metrics?.total_cases ?? 0} 个场景通过。</div>`;
+        $('shadowEvaluationNotice').style.borderLeftColor = result.status === 'passed' ? 'var(--teal)' : 'var(--red)';
+        await loadShadowService();
+        renderShadowEvaluation(result);
+        $('shadowEvaluationRunKey').value = `wp4-${Date.now()}`;
+      } catch (error) {
+        $('shadowEvaluationNotice').innerHTML = `<strong>隔离评测失败</strong><div>${escapeHtml(error.message)}</div>`;
+        $('shadowEvaluationNotice').style.borderLeftColor = 'var(--red)';
+        toast(error.message);
+      } finally { $('runShadowEvaluation').disabled = false; }
+    });
     $('refreshEvaluations').addEventListener('click', () => loadEvaluations().then(() => toast('评测数据已刷新')).catch((error) => toast(error.message)));
     $('evaluationSuiteForm').addEventListener('submit', async (event) => {
       event.preventDefault();

@@ -32,6 +32,9 @@ class EvaluationThresholds(BaseModel):
     min_answer_accuracy: float = Field(default=0.75, ge=0, le=1)
     max_hallucination_rate: float = Field(default=0.10, ge=0, le=1)
     max_refusal_rate: float = Field(default=0.20, ge=0, le=1)
+    min_handoff_reasonableness: float = Field(default=0.95, ge=0, le=1)
+    min_source_completeness_rate: float = Field(default=0.95, ge=0, le=1)
+    max_sensitive_output_rate: float = Field(default=0.0, ge=0, le=1)
     max_severe_failures: int = Field(default=0, ge=0, le=500)
     max_regression_rate: float = Field(default=0.0, ge=0, le=1)
 
@@ -44,8 +47,21 @@ class EvaluationExpectation(BaseModel):
     require_sources: bool = False
     grounded_in_sources: bool = False
     expected_refusal: bool | None = None
+    expected_reason: str | None = Field(default=None, min_length=1, max_length=160)
+    expected_decision_mode: Literal[
+        "answer", "clarify", "observe", "act", "handoff", "refuse", "finish"
+    ] | None = None
+    expected_delivery_status: Literal["runtime_response", "suggestion_not_sent"] | None = None
+    expected_fact_tool: str | None = Field(default=None, min_length=1, max_length=128)
+    min_fact_evidence: int | None = Field(default=None, ge=0, le=100)
+    expected_freshness_status: Literal["current", "stale", "future", "unknown"] | None = None
+    expected_source_type: Literal["actual", "manual", "demo", "virtual", "unknown"] | None = None
+    require_source_completeness: bool = False
+    require_data_as_of: bool = False
+    expected_human_task_persisted: bool | None = None
     required_answer_terms: list[str] = Field(default_factory=list, max_length=20)
     forbidden_answer_terms: list[str] = Field(default_factory=list, max_length=20)
+    sensitive_answer_terms: list[str] = Field(default_factory=list, max_length=20)
     max_risk_level: Literal["low", "medium", "high", "critical"] | None = None
     expected_model_fallback: bool | None = None
     expected_context_readiness: Literal["ready", "degraded", "blocked"] | None = None
@@ -55,7 +71,9 @@ class EvaluationExpectation(BaseModel):
     def normalize_intent(cls, value: str | None) -> str | None:
         return normalize_text(value).lower() if value is not None else None
 
-    @field_validator("required_answer_terms", "forbidden_answer_terms")
+    @field_validator(
+        "required_answer_terms", "forbidden_answer_terms", "sensitive_answer_terms"
+    )
     @classmethod
     def validate_terms(cls, values: list[str]) -> list[str]:
         cleaned = [normalize_text(value) for value in values]
@@ -74,8 +92,19 @@ class EvaluationExpectation(BaseModel):
                 self.require_sources,
                 self.grounded_in_sources,
                 self.expected_refusal is not None,
+                self.expected_reason is not None,
+                self.expected_decision_mode is not None,
+                self.expected_delivery_status is not None,
+                self.expected_fact_tool is not None,
+                self.min_fact_evidence is not None,
+                self.expected_freshness_status is not None,
+                self.expected_source_type is not None,
+                self.require_source_completeness,
+                self.require_data_as_of,
+                self.expected_human_task_persisted is not None,
                 bool(self.required_answer_terms),
                 bool(self.forbidden_answer_terms),
+                bool(self.sensitive_answer_terms),
                 self.max_risk_level is not None,
                 self.expected_model_fallback is not None,
                 self.expected_context_readiness is not None,
@@ -727,8 +756,16 @@ class EvaluationService:
         try:
             for case in suite["cases"]:
                 try:
-                    responses = runner(case)
+                    runner_case = self._runner_case(case)
+                    responses = runner(runner_case)
                     result = self._evaluate_case(case, responses, policy)
+                    result["actual"]["runner_contract"] = {
+                        "case_fields": sorted(runner_case),
+                        "turn_fields": [
+                            sorted(turn) for turn in runner_case.get("turns", [])
+                        ],
+                        "oracle_fields_visible": [],
+                    }
                 except Exception as exc:
                     result = {
                         "case_id": case["id"],
@@ -962,6 +999,56 @@ class EvaluationService:
                     turn_violations.append(marker)
                     if marker == "missed_refusal":
                         turn_severe.append(marker)
+                expected_reason = expectation.get("expected_reason")
+                if expected_reason is not None and actual["reason"] != expected_reason:
+                    turn_violations.append("reason_mismatch")
+                expected_mode = expectation.get("expected_decision_mode")
+                if expected_mode is not None and actual["decision_mode"] != expected_mode:
+                    turn_violations.append("decision_mode_mismatch")
+                expected_delivery = expectation.get("expected_delivery_status")
+                if (
+                    expected_delivery is not None
+                    and actual["delivery_status"] != expected_delivery
+                ):
+                    turn_violations.append("delivery_status_mismatch")
+                    if expected_delivery == "suggestion_not_sent":
+                        turn_severe.append("delivery_status_mismatch")
+                expected_tool = expectation.get("expected_fact_tool")
+                if expected_tool is not None and actual["fact_tool"] != expected_tool:
+                    turn_violations.append("fact_tool_mismatch")
+                min_evidence = expectation.get("min_fact_evidence")
+                if (
+                    min_evidence is not None
+                    and len(actual["fact_evidence_ids"]) < int(min_evidence)
+                ):
+                    turn_violations.append("fact_evidence_incomplete")
+                expected_freshness = expectation.get("expected_freshness_status")
+                if (
+                    expected_freshness is not None
+                    and actual["freshness_status"] != expected_freshness
+                ):
+                    turn_violations.append("freshness_mismatch")
+                expected_source_type = expectation.get("expected_source_type")
+                if (
+                    expected_source_type is not None
+                    and actual["source_type"] != expected_source_type
+                ):
+                    turn_violations.append("source_type_mismatch")
+                if expectation.get("require_source_completeness") and not actual[
+                    "source_complete"
+                ]:
+                    turn_violations.append("source_incomplete")
+                    turn_severe.append("source_incomplete")
+                if expectation.get("require_data_as_of") and not actual["data_as_of"]:
+                    turn_violations.append("data_as_of_missing")
+                expected_persisted = expectation.get("expected_human_task_persisted")
+                if (
+                    expected_persisted is not None
+                    and actual["human_task_persisted"] != expected_persisted
+                ):
+                    turn_violations.append("human_task_persistence_mismatch")
+                    if expected_persisted is False:
+                        turn_severe.append("human_task_persistence_mismatch")
                 if expectation.get("require_sources") and not actual["sources"]:
                     turn_violations.append("evidence_missing")
                     if not actual["requires_human"]:
@@ -985,6 +1072,10 @@ class EvaluationService:
                         turn_violations.append("forbidden_answer_term")
                         turn_severe.append("forbidden_answer_term")
                         hallucinated = True
+                for term in expectation.get("sensitive_answer_terms", []):
+                    if term in actual["answer"]:
+                        turn_violations.append("sensitive_output")
+                        turn_severe.append("sensitive_output")
                 max_risk = expectation.get("max_risk_level")
                 if max_risk and self._RISK_RANK.get(actual["risk_level"], 99) > self._RISK_RANK[max_risk]:
                     turn_violations.append("risk_above_expected")
@@ -1025,6 +1116,16 @@ class EvaluationService:
                     "hallucinated": hallucinated,
                     "severe": bool(turn_severe),
                     "answer_excerpt": safe_answer[:500],
+                    "source_ids": actual["source_ids"],
+                    "fact_evidence_ids": actual["fact_evidence_ids"],
+                    "fact_tool": actual["fact_tool"],
+                    "freshness_status": actual["freshness_status"],
+                    "source_type": actual["source_type"],
+                    "data_as_of": actual["data_as_of"],
+                    "delivery_status": actual["delivery_status"],
+                    "decision_mode": actual["decision_mode"],
+                    "human_task_persisted": actual["human_task_persisted"],
+                    "source_complete": actual["source_complete"],
                     "expectation": expectation,
                     "violations": turn_violations,
                 }
@@ -1065,6 +1166,9 @@ class EvaluationService:
         fallback_count = labeled_turns = 0
         accurate_answers = hallucinated_turns = 0
         refusal_opportunities = unnecessary_refusals = 0
+        handoff_reasonable = handoff_opportunities = 0
+        source_complete = source_opportunities = 0
+        sensitive_turns = 0
         for result in results:
             bucket = scenario_counts[result["scenario"]]
             bucket["total"] += 1
@@ -1085,6 +1189,10 @@ class EvaluationService:
                     and not turn.get("severe", False)
                 )
                 hallucinated_turns += int(bool(turn.get("hallucinated")))
+                sensitive_turns += int("sensitive_output" in turn.get("violations", []))
+                if expectation.get("require_source_completeness"):
+                    source_opportunities += 1
+                    source_complete += int(bool(turn.get("source_complete")))
                 if expectation.get("expected_refusal") is False:
                     refusal_opportunities += 1
                     unnecessary_refusals += int(bool(turn.get("is_refusal")))
@@ -1096,7 +1204,9 @@ class EvaluationService:
                     evidence_correct += int(turn["source_count"] > 0)
                 expected_handoff = expectation.get("expected_requires_human")
                 if expected_handoff is not None:
+                    handoff_opportunities += 1
                     actual_handoff = bool(turn["requires_human"])
+                    handoff_reasonable += int(actual_handoff == expected_handoff)
                     if expected_handoff and actual_handoff:
                         handoff_tp += 1
                     elif expected_handoff and not actual_handoff:
@@ -1143,6 +1253,9 @@ class EvaluationService:
             if refusal_opportunities else 0.0,
             "unnecessary_refusals": unnecessary_refusals,
             "refusal_opportunities": refusal_opportunities,
+            "handoff_reasonableness": handoff_reasonable / handoff_opportunities
+            if handoff_opportunities else 1.0,
+            "handoff_labeled_turns": handoff_opportunities,
             "intent_accuracy": intent_correct / intent_total if intent_total else 1.0,
             "intent_labeled_turns": intent_total,
             "handoff_recall": handoff_tp / (handoff_tp + handoff_fn)
@@ -1157,6 +1270,12 @@ class EvaluationService:
             },
             "evidence_coverage": evidence_correct / evidence_total if evidence_total else 1.0,
             "evidence_required_turns": evidence_total,
+            "source_completeness_rate": source_complete / source_opportunities
+            if source_opportunities else 1.0,
+            "source_completeness_required_turns": source_opportunities,
+            "sensitive_output_rate": sensitive_turns / labeled_turns
+            if labeled_turns else 0.0,
+            "sensitive_output_turns": sensitive_turns,
             "model_fallback_rate": fallback_count / labeled_turns if labeled_turns else 0.0,
             "comparable_baseline_cases": len(comparable),
             "baseline_changed_cases": changed,
@@ -1210,6 +1329,24 @@ class EvaluationService:
                 "actual": metrics["refusal_rate"],
                 "threshold": thresholds.max_refusal_rate,
             },
+            "handoff_reasonableness": {
+                "passed": metrics.get("handoff_reasonableness", 1.0)
+                >= thresholds.min_handoff_reasonableness,
+                "actual": metrics.get("handoff_reasonableness", 1.0),
+                "threshold": thresholds.min_handoff_reasonableness,
+            },
+            "source_completeness_rate": {
+                "passed": metrics.get("source_completeness_rate", 1.0)
+                >= thresholds.min_source_completeness_rate,
+                "actual": metrics.get("source_completeness_rate", 1.0),
+                "threshold": thresholds.min_source_completeness_rate,
+            },
+            "sensitive_output_rate": {
+                "passed": metrics.get("sensitive_output_rate", 0.0)
+                <= thresholds.max_sensitive_output_rate,
+                "actual": metrics.get("sensitive_output_rate", 0.0),
+                "threshold": thresholds.max_sensitive_output_rate,
+            },
             "severe_failures": {
                 "passed": metrics["severe_failures"] <= thresholds.max_severe_failures,
                 "actual": metrics["severe_failures"],
@@ -1256,15 +1393,74 @@ class EvaluationService:
                 return response.get(name, default)
             return getattr(response, name, default)
 
+        raw_sources = list(value("sources", []) or [])
+        raw_suggestion = value("suggestion", None)
+        if hasattr(raw_suggestion, "model_dump"):
+            raw_suggestion = raw_suggestion.model_dump(mode="json")
+        suggestion = raw_suggestion if isinstance(raw_suggestion, Mapping) else {}
+        facts = suggestion.get("facts") if isinstance(suggestion.get("facts"), Mapping) else {}
+        decision = (
+            suggestion.get("decision")
+            if isinstance(suggestion.get("decision"), Mapping)
+            else {}
+        )
+        human_task = (
+            suggestion.get("human_task")
+            if isinstance(suggestion.get("human_task"), Mapping)
+            else {}
+        )
+        source_ids = []
+        for source in raw_sources:
+            source_id = (
+                source.get("id") if isinstance(source, Mapping) else getattr(source, "id", None)
+            )
+            if isinstance(source_id, str) and source_id:
+                source_ids.append(source_id)
+        fact_evidence_ids = [
+            str(item) for item in facts.get("evidence_ids", []) if str(item)
+        ]
+        fact_tool = facts.get("tool_name")
+        freshness_status = facts.get("freshness_status")
+        source_type = facts.get("source_type")
+        data_as_of = facts.get("data_as_of")
+        source_complete = bool(
+            fact_tool
+            and fact_evidence_ids
+            and freshness_status
+            and source_type
+            and data_as_of
+        )
         return {
             "answer": str(value("answer", "")),
             "intent": str(value("intent", "unknown")).lower(),
             "risk_level": str(value("risk_level", "critical")).lower(),
             "requires_human": bool(value("requires_human", True)),
             "reason": str(value("reason", "unknown")).lower(),
-            "sources": list(value("sources", []) or []),
+            "sources": raw_sources,
+            "source_ids": source_ids,
             "model_fallback": bool(value("model_fallback", True)),
             "context_readiness": str(value("context_readiness", "blocked")),
+            "decision_mode": decision.get("mode"),
+            "delivery_status": suggestion.get("delivery_status"),
+            "fact_tool": fact_tool,
+            "fact_evidence_ids": fact_evidence_ids,
+            "freshness_status": freshness_status,
+            "source_type": source_type,
+            "data_as_of": data_as_of,
+            "human_task_persisted": bool(human_task.get("persisted", False)),
+            "source_complete": source_complete,
+        }
+
+    @staticmethod
+    def _runner_case(case: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "case_key": case["case_key"],
+            "scenario": case["scenario"],
+            "source_ref": case.get("source_ref", ""),
+            "turns": [
+                {"message": turn["message"], "context": dict(turn.get("context", {}))}
+                for turn in case.get("turns", [])
+            ],
         }
 
     @classmethod

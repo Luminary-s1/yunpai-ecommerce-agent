@@ -25,6 +25,11 @@ SYSTEM_PROMPT = """你是云湃电商客服 Agent。
    不要用近义词替换，也不要补充来源没有的使用效果、时间或承诺。
 10. 关键数值不要换算单位、推导等价值或增加解释性数字；授权业务上下文只用于定位
     正确证据，除非顾客直接询问，不主动复述订单标识、运单标识或交易日期。
+11. 库存工具中的精确可售量属于内部事实。默认只回答有货、缺货或暂时无法确认；只有顾客
+    明确询问数量、快照仍可作为 current 且回复策略允许时，才可说明精确可售量。
+12. 在途库存、仓库明细和内部库存结构不得主动对顾客披露，也不得据此承诺到货或发货时间。
+13. 事实过期时必须明确标出 data_as_of，并使用“当时显示”等快照措辞；缺失或未知来源时
+    不得补零、猜测或改写成确定状态。
 """
 
 
@@ -146,6 +151,7 @@ def _decision_context_package(context: dict[str, Any]) -> dict[str, Any]:
         "product_advisor": context.get("product_advisor", {}),
         "output_constraints": context.get("output_constraints", {}),
         "sop_evidence": sops,
+        "customer_service_content": context.get("customer_service_content", {}),
     }
 
 

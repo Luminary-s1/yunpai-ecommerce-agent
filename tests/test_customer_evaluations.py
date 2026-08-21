@@ -487,6 +487,7 @@ def test_actual_agent_evaluation_is_isolated_from_primary_runtime(tmp_path) -> N
                 "sessions": conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0],
                 "messages": conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0],
                 "handoffs": conn.execute("SELECT COUNT(*) FROM handoff_tasks").fetchone()[0],
+                "outbox": conn.execute("SELECT COUNT(*) FROM channel_outbox").fetchone()[0],
             }
         report = service.run_evaluation_suite(
             "tenant-test",
@@ -501,6 +502,7 @@ def test_actual_agent_evaluation_is_isolated_from_primary_runtime(tmp_path) -> N
                 "sessions": conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0],
                 "messages": conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0],
                 "handoffs": conn.execute("SELECT COUNT(*) FROM handoff_tasks").fetchone()[0],
+                "outbox": conn.execute("SELECT COUNT(*) FROM channel_outbox").fetchone()[0],
             }
         assert after == before
     finally:
