@@ -37,7 +37,7 @@ def _fast_database_initialize(_migration_template, monkeypatch):
 
     只在测试环境生效（tests/conftest.py），生产不受影响。
     复制用 shutil.copy：SQLite WAL 已 checkpoint 合并到主文件，复制完整。
-    关键豁免：目标库已存在（如 v36→v37 升级测试先 _seed_v36 建旧库）时
+    关键豁免：目标库已存在（如迁移升级测试先铺旧库）时
     必须走真实 initialize 触发升级，不能覆盖复制模板。
     """
     from ecommerce_agent.database import Database

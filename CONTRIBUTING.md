@@ -285,12 +285,12 @@ available。旧代码、API、数据库迁移和测试仍需保持兼容。
 | **33** | M3 | 知识库 / `main` | knowledge_key active 唯一索引 + `retrieval_logs` | 已合并（PR #10 / `1906365`） |
 | **34** | M7-R | Readonly Data / `main` | import manifest、field evidence、row isolation issue（WP1） | 已合并（WP1） |
 | **35** | M7-R WP3 | Product Identity / `main` | 商品/SKU/商家编码/料号身份映射 | 已合并（M7-R WP3） |
-| **36** | M9-R WP3 | 商品生命周期建议 | `product_recommendations` / `product_recommendation_audit`（`_apply_v36`） | **已预留，运行迁移未合并** |
-| **37** | M9-R WP5 | 验收修复 | `product_recommendations` 复合主键 + stale + 内容不可变触发器（`_apply_v37`） | **占用中，未合并** |
-| 38+ | *（空闲）* | | | |
+| **36** | M9-R WP3 | 商品生命周期建议 | `product_recommendations` / `product_recommendation_audit`（`_apply_v36`，含 WP5 验收修复最终形态：复合主键 + stale + 内容不可变触发器） | **已预留，运行迁移未合并** |
+| **37** | M10-R WP3 | 订购单草稿与交付跟踪 | `purchase_order_drafts`（`_apply_v37`） | 已占号（群公告 08-20），未合并 |
+| **38** | M10-R WP4 | 费用底账与三层利润 | 利润 ledger（`_apply_v38`） | 已占号（群公告 08-20），未合并 |
 
 旧 M5 工作包 3 对 v28 的预留已随路线冻结取消；M5-R 的 `_apply_v28` 已合入 `main`。
-26–30、32、33、34、35 已在 `main`。**31 仍未进入 `main`**，`main` 的 `initialize()` 目前是 30→32→33→34→35，故意没有 `_apply_v31`。**35 由 M7-R WP3（Product Identity）占用，36 由 M9-R WP3（生命周期建议）占用，37 由 M9-R WP5（验收修复）占用**，下一空闲号从 **38** 起。
+26–30、32、33、34、35 已在 `main`。**31 仍未进入 `main`**，`main` 的 `initialize()` 目前是 30→32→33→34→35，故意没有 `_apply_v31`。**35 由 M7-R WP3（Product Identity）占用，36 由 M9-R WP3（生命周期建议）占用，37 由 M10-R WP3（订购单）占用，38 由 M10-R WP4（费用底账）占用**，下一空闲号从 **39** 起。
 
 ### 合并 PR #11 前必扫（PR #10 与 M7-R WP1/WP3 合入后）
 

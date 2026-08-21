@@ -47,9 +47,10 @@ class Database:
     # main）、v33 归 knowledge/retrieval、v34 归 M7-R WP1 readonly data、
     # v35 归 M7-R WP3 product identity。
     # 占号裁定（08-18）：v36 归 M9-R WP3 生命周期建议（本分支）。
-    # 占号裁定（08-19）：v37 归 M9-R WP5 验收修复（复合主键 + stale + 内容不可变触发器）。
+    # v37/v38 归 M10-R（群公告占号 08-20：v37 订购单、v38 费用底账），
+    # WP5 验收修复最终形态已并入本分支 v36（复合主键 + stale + 内容不可变触发器）。
     # 防同名方法静默覆盖事故，见 CONTRIBUTING「Schema 版本号占用登记」。
-    SCHEMA_VERSION = 37
+    SCHEMA_VERSION = 36
 
     def __init__(self, path: Path):
         self.path = path
@@ -195,12 +196,8 @@ class Database:
             if 36 not in applied:
                 self._apply_v36(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (36, ?)", (utc_now(),))
-            # MERGE-GATE v37：M9-R WP5 验收修复，重建 product_recommendations
-            # （复合主键 + stale + 内容不可变触发器）与 product_recommendation_audit。
-            # 合迁移时必须保留 v36、v37 两个 if 块，SCHEMA_VERSION 取较大者。
-            if 37 not in applied:
-                self._apply_v37(conn)
-                conn.execute("INSERT INTO schema_migrations VALUES (37, ?)", (utc_now(),))
+            # MERGE-GATE：v36 已含 M9-R 生命周期最终形态（复合主键 + stale + 内容不可变
+            # 触发器）。v37/v38 归 M10-R（群公告占号 08-20），本分支不再占用。
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -3434,94 +3431,13 @@ class Database:
     @staticmethod
     def _apply_v36(conn: sqlite3.Connection) -> None:
         # M9-R WP3 生命周期建议持久化（占号裁定 08-18：v36 归 M9-R WP3，v35 归 M7-R WP3）。
-        # product_recommendations 可变（state 随状态机落库），不加不可变触发器；
-        # product_recommendation_audit 追加式审计日志，不可变（UPDATE/DELETE 拒绝）。
+        # 含 M9-R WP5 验收修复最终形态：复合主键 (tenant_id, recommendation_id) 防
+        # 全局主键跨租户冲突；state CHECK 含 stale；recommendations 内容列不可变触发器
+        # 防历史原地篡改（state/degraded/updated_at 除外）；audit 追加式审计日志不可变。
+        # v37/v38 归 M10-R（群公告占号 08-20），本分支只占 v36。
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS product_recommendations (
-                recommendation_id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                recommendation_type TEXT NOT NULL
-                    CHECK(recommendation_type IN (
-                        '选品候选','上新准备','曝光/点击诊断','受控实验','保持观察',
-                        '定价候选','活动候选','补货联动','清仓预警'
-                    )),
-                store_id TEXT NOT NULL,
-                item_id TEXT,
-                sku_id TEXT,
-                facts_snapshot_json TEXT NOT NULL,
-                rationale TEXT NOT NULL,
-                missing_evidence_json TEXT NOT NULL,
-                alternatives_json TEXT NOT NULL,
-                state TEXT NOT NULL
-                    CHECK(state IN (
-                        'draft','awaiting_review','approved','rejected','observed','closed'
-                    )),
-                degraded INTEGER NOT NULL DEFAULT 0 CHECK(degraded IN (0, 1)),
-                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                UNIQUE(tenant_id, recommendation_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_product_recommendations_scope
-                ON product_recommendations(
-                    tenant_id, store_id, recommendation_type, state, created_at DESC
-                );
-            CREATE TABLE IF NOT EXISTS product_recommendation_audit (
-                audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tenant_id TEXT NOT NULL,
-                recommendation_id TEXT NOT NULL,
-                action TEXT NOT NULL
-                    CHECK(action IN ('submit','approve','reject','observe','close','mark_stale')),
-                from_state TEXT NOT NULL
-                    CHECK(from_state IN (
-                        'draft','awaiting_review','approved','rejected','observed','closed'
-                    )),
-                to_state TEXT NOT NULL
-                    CHECK(to_state IN (
-                        'draft','awaiting_review','approved','rejected','observed','closed'
-                    )),
-                actor TEXT NOT NULL,
-                occurred_at TEXT NOT NULL,
-                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
-                FOREIGN KEY(tenant_id, recommendation_id)
-                    REFERENCES product_recommendations(tenant_id, recommendation_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_recommendation
-                ON product_recommendation_audit(recommendation_id, occurred_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_tenant_time
-                ON product_recommendation_audit(tenant_id, occurred_at DESC);
-            CREATE TRIGGER IF NOT EXISTS trg_product_recommendation_audit_immutable_update
-            BEFORE UPDATE ON product_recommendation_audit
-            BEGIN
-                SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
-            END;
-            CREATE TRIGGER IF NOT EXISTS trg_product_recommendation_audit_immutable_delete
-            BEFORE DELETE ON product_recommendation_audit
-            BEGIN
-                SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
-            END;
-            """
-        )
-
-    @staticmethod
-    def _apply_v37(conn: sqlite3.Connection) -> None:
-        # M9-R WP5 验收修复（占号裁定 08-19：v37 归 M9-R WP5）。
-        # 重建 product_recommendations：复合主键 (tenant_id, recommendation_id) 修复
-        # 全局主键跨租户冲突；state CHECK 补 stale；内容列不可变触发器防历史原地篡改。
-        # 重建 product_recommendation_audit：from/to_state CHECK 补 stale（FK 目标列不变）。
-        # 保留数据：rename→建新→INSERT SELECT→drop 旧→重建索引/触发器。
-        #
-        # 外键开关必须在事务外切换：SQLite 在事务内对 PRAGMA foreign_keys 的改动不会
-        # 即时生效。这里先提交 pending 事务（各版本迁移幂等，失败重跑只会重放 37），
-        # 关闭外键完成表重建，再恢复开启。若中途失败，前序版本已提交、37 未提交，
-        # 下一次 initialize 从 37 继续且数据不丢（外键开启状态下的升级路径）。
-        conn.commit()
-        conn.execute("PRAGMA foreign_keys=OFF")
-        conn.executescript(
-            """
-            ALTER TABLE product_recommendations RENAME TO product_recommendations_old;
-            CREATE TABLE product_recommendations (
                 recommendation_id TEXT NOT NULL,
                 tenant_id TEXT NOT NULL,
                 recommendation_type TEXT NOT NULL
@@ -3546,12 +3462,6 @@ class Database:
                 updated_at TEXT NOT NULL,
                 PRIMARY KEY (tenant_id, recommendation_id)
             );
-            INSERT INTO product_recommendations
-                SELECT recommendation_id, tenant_id, recommendation_type, store_id, item_id,
-                       sku_id, facts_snapshot_json, rationale, missing_evidence_json,
-                       alternatives_json, state, degraded, payload_hash, created_at, updated_at
-                FROM product_recommendations_old;
-            DROP TABLE product_recommendations_old;
             CREATE INDEX IF NOT EXISTS idx_product_recommendations_scope
                 ON product_recommendations(
                     tenant_id, store_id, recommendation_type, state, created_at DESC
@@ -3574,8 +3484,7 @@ class Database:
             BEGIN
                 SELECT RAISE(ABORT, 'product_recommendations_content_immutable');
             END;
-            ALTER TABLE product_recommendation_audit RENAME TO product_recommendation_audit_old;
-            CREATE TABLE product_recommendation_audit (
+            CREATE TABLE IF NOT EXISTS product_recommendation_audit (
                 audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tenant_id TEXT NOT NULL,
                 recommendation_id TEXT NOT NULL,
@@ -3595,11 +3504,6 @@ class Database:
                 FOREIGN KEY(tenant_id, recommendation_id)
                     REFERENCES product_recommendations(tenant_id, recommendation_id)
             );
-            INSERT INTO product_recommendation_audit
-                SELECT audit_id, tenant_id, recommendation_id, action, from_state, to_state,
-                       actor, occurred_at, payload_hash
-                FROM product_recommendation_audit_old;
-            DROP TABLE product_recommendation_audit_old;
             CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_recommendation
                 ON product_recommendation_audit(recommendation_id, occurred_at DESC);
             CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_tenant_time
@@ -3616,7 +3520,6 @@ class Database:
             END;
             """
         )
-        conn.execute("PRAGMA foreign_keys=ON")
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:

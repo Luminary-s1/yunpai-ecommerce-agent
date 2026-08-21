@@ -264,3 +264,55 @@ def test_v36_validate_schema_detects_missing_recommendation_tables(tmp_path) -> 
 
     with pytest.raises(RuntimeError, match="database schema validation failed"):
         db.initialize()
+
+
+def test_v36_composite_pk_allows_cross_tenant_same_id(tmp_path) -> None:
+    """T9（WP5 缺陷 6 反证）：复合主键 (tenant_id, recommendation_id)，
+    跨租户同 recommendation_id 可共存（原全局主键跨租户冲突已修复）。"""
+    db = Database(tmp_path / "lifecycle-v36-pk.sqlite3")
+    db.initialize()
+
+    with db.connect() as conn:
+        _insert_recommendation(conn, recommendation_id="rec-1", tenant_id="tenant-a")
+        _insert_recommendation(conn, recommendation_id="rec-1", tenant_id="tenant-b")
+        rows = conn.execute(
+            "SELECT tenant_id, recommendation_id FROM product_recommendations WHERE recommendation_id='rec-1'"
+        ).fetchall()
+    assert {(r["tenant_id"], r["recommendation_id"]) for r in rows} == {
+        ("tenant-a", "rec-1"), ("tenant-b", "rec-1"),
+    }
+
+
+def test_v36_content_columns_immutable_state_mutable(tmp_path) -> None:
+    """T10（WP5 缺陷 3 反证）：内容列 UPDATE 被拒，仅 state/updated_at 可变。
+
+    防历史建议被原地篡改；状态机落库仍是唯一写入口。
+    """
+    db = Database(tmp_path / "lifecycle-v36-immutable.sqlite3")
+    db.initialize()
+
+    with db.connect() as conn:
+        _insert_recommendation(conn, recommendation_id="rec-1", tenant_id="tenant-a")
+
+    with pytest.raises(sqlite3.IntegrityError, match="product_recommendations_content_immutable"):
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE product_recommendations SET rationale='hacked' "
+                "WHERE tenant_id='tenant-a' AND recommendation_id='rec-1'"
+            )
+    with pytest.raises(sqlite3.IntegrityError, match="product_recommendations_content_immutable"):
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE product_recommendations SET payload_hash='c'*64 "
+                "WHERE tenant_id='tenant-a' AND recommendation_id='rec-1'"
+            )
+    # state 可更新（状态机落库）
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE product_recommendations SET state='awaiting_review', updated_at='2026-08-18T12:00:00+00:00' "
+            "WHERE tenant_id='tenant-a' AND recommendation_id='rec-1'"
+        )
+        row = conn.execute(
+            "SELECT state FROM product_recommendations WHERE tenant_id='tenant-a' AND recommendation_id='rec-1'"
+        ).fetchone()
+    assert row["state"] == "awaiting_review"
