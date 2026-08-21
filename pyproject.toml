@@ -41,7 +41,8 @@ ecommerce_agent = ["fixtures/*.json", "fixtures/prompt_templates.json"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-# 全量回归：临时库固定到 D 盘（防 C 盘膨胀 + 跨盘 I/O）。
 # 注意：不要加 -n 并行——SQLite 单文件库在并行下会锁竞争，实测 4 worker
 # 反而更慢（20min vs 16min）且引入 "unable to open database file" 假失败。
-addopts = "--basetemp=D:/yunpai-ecommerce-agent/.pytest-tmp -v --tb=short"
+# basetemp 不再硬编码（跨平台可复现）：由 tests/conftest.py 的 pytest_configure
+# 读取 PYTEST_BASETEMP 环境变量注入；未设置时用系统临时目录（平台无关）。
+addopts = "-v --tb=short"

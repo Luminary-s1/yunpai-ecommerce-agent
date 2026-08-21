@@ -223,3 +223,15 @@ def test_eval_mutation_always_evidence_insufficient_fails() -> None:
     assert pollution.passed is False, (
         f"mutation 后广告/价格污染仍 PASS：{pollution.failures}"
     )
+    # 缺货污染场景：错误方向必须 FAIL（oracle 锁 STOCKOUT_POLLUTION）
+    stockout = next(r for r in results if r.scene_name == "缺货污染")
+    assert stockout.passed is False, (
+        f"mutation 后缺货污染仍 PASS：{stockout.failures}"
+    )
+    # P4 目标（第三波）：选品/上新/存量/受控/缺数据/清仓/生命周期等"期望
+    # EVIDENCE_INSUFFICIENT+保持观察"的场景，若引擎扩展后 oracle 锁真实方向，
+    # mutation 应使 ≥8/10 场景失败。当前阶段（引擎未扩展）污染类场景已锁方向。
+    failed = [r.scene_name for r in results if not r.passed]
+    assert len(failed) >= 2, (
+        f"mutation 后失败场景应至少含污染类: {failed}"
+    )

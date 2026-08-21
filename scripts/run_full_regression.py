@@ -188,6 +188,30 @@ def _pytest_cmd() -> str | None:
         return None
 
 
+def _parse_failed_test_nodes(stdout: str) -> list[str]:
+    """从 pytest 输出解析失败测试节点（FAILED 行）。"""
+    nodes: list[str] = []
+    for line in (stdout or "").splitlines():
+        m = re.search(r"FAILED (\S+)", line)
+        if m and m.group(1) not in nodes:
+            nodes.append(m.group(1))
+    return nodes
+
+
+def _base_for_attribution() -> str | None:
+    """推荐回归对照 Base：HEAD 的父提交 SHA（干净时），否则 origin/main。"""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD~1"], capture_output=True, text=True,
+            encoding="utf-8", timeout=15,
+        )
+        if proc.returncode == 0 and (proc.stdout or "").strip():
+            return (proc.stdout or "").strip()[:12]
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
 def main() -> int:
     allow_dirty = "--allow-dirty" in sys.argv
 
@@ -262,6 +286,21 @@ def main() -> int:
     stdout = proc.stdout or ""
     stderr = proc.stderr or ""
     diagnostics = _fallback_diagnostics(stdout, stderr)
+    # T3.9（P5，阻断5 修复）：回归归因必须 Base 对照复跑，禁止凭记忆判定"既有失败"。
+    # returncode != 0 时强制提示：先在固定 Base（origin/main 或父提交）复跑失败用例，
+    # 只有 "Base 通过 / Head 失败" 才算本 PR 引入的回归。
+    if proc.returncode not in (0, None):
+        failed_nodes = _parse_failed_test_nodes(stdout)
+        base_hint = _base_for_attribution()
+        diagnostics.append(
+            "回归归因（P5 规范）：以下失败必须先在固定 Base 复跑对照——"
+            "`git checkout <BASE_SHA> && pytest <失败用例>` 通过 / Head 失败 才算 PR 引入，"
+            "禁止凭记忆/经验判定既有失败。"
+        )
+        if failed_nodes:
+            diagnostics.append("失败用例: " + "; ".join(failed_nodes[:10]))
+        if base_hint:
+            diagnostics.append(f"建议 Base: {base_hint}")
     _write_report(cmd, proc.returncode, stdout, stderr, diagnostics, started)
 
     # 3. 控制台输出（capture 后回放，保证即使管道损坏也有可见输出）

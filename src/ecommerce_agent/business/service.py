@@ -208,12 +208,23 @@ class OperationsService:
             tenant_id, store_id=store_id, sku_id=sku_id, item_id=item_id
         )
         all_passed, gates = self.evidence_bridge.run_gates(gate_view)
+        # T2.3（P3 修复）：gate 结论必须成为诊断输入，而非响应附件。
+        # 原始 gate_view.quality_gate 可能 status="passed" 但显式 gate（aa/sample/
+        # window/control）失败 → run_all 返回 all_passed=False。诊断 facts 必须消费
+        # 组合结论（blocked），使 conclusion_allowed 拒绝强方向——"gate 是闸门不是装饰品"。
+        gate_quality = (
+            "passed"
+            if all_passed
+            else {"status": "blocked", "issues": list(
+                g.reason for g in gates if not g.passed
+            )}
+        )
         facts = build_diagnosis_facts(
             sku_id,
             {
                 "evidence_state": gate_view.get("evidence_state"),
                 "freshness": gate_view.get("freshness"),
-                "quality_gate": gate_view.get("quality_gate"),
+                "quality_gate": gate_quality,
                 "exposures": model.impressions.value
                 if model.impressions.evidence_state.value != "missing" else None,
                 "clicks": model.clicks.value
@@ -237,6 +248,59 @@ class OperationsService:
                 ],
             },
         }
+
+    def generate_and_persist_recommendation(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        item_id: str,
+        sku_id: str,
+        recommendation_id: str,
+        actor: str = "admin",
+    ) -> dict[str, Any]:
+        """生产语义链闭环（P3 修复，阻断3）：诊断 → 引擎建议 → 校验 → 落库。
+
+        任务书要求"基于固化事实和流量诊断，由模型产生语义建议，经代码校验后固化"——
+        这是唯一生产入口。recommendation_engine.generate 在生产路径只有一个调用点（此处），
+        workbench_api 的 POST /recommendations 是管理员手工提交旁路，不走模型语义链。
+
+        流程：diagnose()（读模型→门禁→诊断）→ engine.generate()（解释器→facts→校验）
+        → recommendations.create()（落库 DRAFT + 审计）。零平台写动作（B4）。
+        """
+        from datetime import UTC, datetime
+
+        from ..product_diagnosis.diagnosis import Diagnosis, DiagnosisType
+        from ..product_lifecycle.engine import RecommendationEngine
+
+        # 1. 诊断（复用生产 diagnose 门禁链）
+        diagnosis_result = self.diagnose(
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id
+        )
+        # 2. 引擎产出建议候选（模型解释器或 Ruleset 降级）。
+        #    从 diagnose() 输出构造冻结 Diagnosis（evidence_facts 已固化证据）。
+        diag = Diagnosis(
+            diagnosis_type=DiagnosisType(diagnosis_result["diagnosis_type"]),
+            sku_id=sku_id,
+            reason=diagnosis_result.get("reason"),
+            evidence_facts=diagnosis_result["evidence_facts"],
+            degraded=diagnosis_result["degraded"],
+        )
+        model = self.product_read.sku_read_model(
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id
+        )
+        engine: RecommendationEngine = self.recommendation_engine
+        recommendation = engine.generate(
+            tenant_id=tenant_id,
+            diagnosis=diag,
+            sku=model,
+            recommendation_id=recommendation_id,
+            created_at=datetime.now(UTC),
+        )
+        # 3. 落库（create 内部校验 + 幂等）
+        return self.recommendations.create(
+            tenant_id, recommendation, actor=actor
+        )
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]

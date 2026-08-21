@@ -14,6 +14,21 @@ from ecommerce_agent.auth import Principal
 from ecommerce_agent.knowledge_engine.neo4j_client import Neo4jClient
 
 
+def pytest_configure(config):
+    """平台无关 basetemp（T3.6，阻断6 修复）：从 PYTEST_BASETEMP 注入。
+
+    原 pyproject addopts 硬编码 D:/yunpai-ecommerce-agent/.pytest-tmp，
+    在 macOS/Linux 干净环境直接跑产生 55 errors。改为：开发者用
+    PYTEST_BASETEMP 环境变量指定（本机 D 盘优化走本地配置），
+    未设置时用系统默认临时目录（平台无关）。
+    """
+    import os
+
+    override = os.environ.get("PYTEST_BASETEMP")
+    if override:
+        config.option.basetemp = os.path.abspath(override)
+
+
 @pytest.fixture(scope="session")
 def _migration_template():
     """全量测试提速：预建一个跑完全部迁移的模板库。

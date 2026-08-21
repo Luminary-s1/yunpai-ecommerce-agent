@@ -84,6 +84,7 @@ class OrderUpsert(BaseModel):
     connector_id: str = Field(min_length=1, max_length=128)
     store_id: str = Field(min_length=1, max_length=128)
     order_id: str = Field(min_length=1, max_length=128)
+    item_id: str | None = Field(default=None, max_length=128)  # P1: 链接展示维度（SKU 共享数据留 NULL）
     order_status: OrderStatus
     payment_status: PaymentStatus
     currency: str = Field(default="CNY", min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
@@ -153,10 +154,10 @@ class OrderService:
                     """
                     INSERT INTO commerce_orders(
                         id, tenant_id, connector_id, store_id, external_order_id,
-                        order_status, payment_status, currency, total_amount,
+                        item_id, order_status, payment_status, currency, total_amount,
                         placed_at, buyer_ref_hash, source_id, source_updated_at,
                         payload_hash, version, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(tenant_id, connector_id, store_id, external_order_id)
                     DO UPDATE SET
                         order_status=excluded.order_status,
@@ -170,7 +171,7 @@ class OrderService:
                     """,
                     (
                         internal_id, tenant_id, value.connector_id, value.store_id,
-                        value.order_id, value.order_status, value.payment_status,
+                        value.order_id, value.item_id, value.order_status, value.payment_status,
                         value.currency, str(value.total_amount),
                         canonical_source_time(value.placed_at), value.buyer_ref_hash,
                         value.source_id, source_time, payload_hash, version, now, now,

@@ -371,6 +371,13 @@
           </div>
           <div class="notice" id="m9rWhyNot"></div>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>生命周期建议</h3><span class="muted" id="m9rRecMeta">等待查询</span></div><div class="table-wrap"><table><thead><tr><th>ID</th><th>类型</th><th>状态</th><th>降级</th><th>理由</th><th>创建时间</th></tr></thead><tbody id="m9rRecRows"></tbody></table></div></article>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>建议操作</h3><span class="muted">显式点击，人工审核，零平台写动作（B2/B4）</span></div><div class="panel-body stack">
+            <div class="form-grid">
+              <label class="wide">基于当前 SKU 诊断生成建议（模型语义链 → DRAFT）<input class="input" id="m9rNewRecId" value="rec-" placeholder="建议 ID（幂等）"></label>
+            </div>
+            <div class="toolbar"><button class="button primary" id="m9rGenerateRec">生成建议（模型）</button></div>
+            <div class="muted" id="m9rRecActionMsg"></div>
+          </div></article>
         </section>
 
         <section class="view" id="view-readonly-data">
@@ -1697,6 +1704,25 @@
       // 生命周期建议
       $('m9rRecMeta').textContent = `${recs.length} 条建议（只读展示，不自动批准）`;
       $('m9rRecRows').innerHTML = recs.length ? recs.map((r) => `<tr><td class="mono">${escapeHtml(r.recommendation_id)}</td><td>${escapeHtml(r.type)}</td><td><span class="status ${r.state === 'approved' ? 'ok' : r.state === 'closed' || r.state === 'stale' ? 'muted' : 'info'}">${escapeHtml(r.state)}</span></td><td>${r.degraded ? '<span class="status warn">降级</span>' : '否'}</td><td>${escapeHtml(r.rationale)}</td><td>${formatTime(r.created_at)}</td></tr>`).join('') : '<tr><td colspan="6"><div class="empty">暂无生命周期建议</div></td></tr>';
+    }
+
+    // T3.4 建议生成（P3 生产语义链）：诊断 → 引擎 → 校验 → 落库（显式点击）
+    async function m9rGenerateRecommendation() {
+      const storeId = $('m9rStore').value.trim() || 'store-a';
+      const itemId = $('m9rItem').value.trim() || 'item-a';
+      const skuId = $('m9rSku').value.trim() || 'sku-a';
+      const recId = $('m9rNewRecId').value.trim() || `rec-${Date.now()}`;
+      const base = `/v1/products/${encodeURIComponent(storeId)}/${encodeURIComponent(itemId)}/${encodeURIComponent(skuId)}`;
+      try {
+        const result = await api(`${base}/recommendation/generate`, {
+          method: 'POST',
+          body: JSON.stringify({ recommendation_id: recId })
+        });
+        $('m9rRecActionMsg').innerHTML = `<span class="status ok">已生成</span> <strong class="mono">${escapeHtml(result.recommendation_id)}</strong> · ${escapeHtml(result.type)} · 状态 <strong>${escapeHtml(result.state)}</strong> · <span class="muted">${result.degraded ? '降级' : '正常'}</span>`;
+        loadM9rWorkbench();
+      } catch (err) {
+        $('m9rRecActionMsg').innerHTML = `<span class="status bad">失败</span> ${escapeHtml(String(err))}`;
+      }
     }
 
     async function loadOrders() {
@@ -3049,6 +3075,7 @@
     });
     $('filterCommerce').addEventListener('click', () => loadCommerce().catch((error) => toast(error.message)));
     $('m9rLoadWorkbench').addEventListener('click', () => loadM9rWorkbench().catch((error) => toast(error.message)));
+    $('m9rGenerateRec').addEventListener('click', () => m9rGenerateRecommendation().catch((error) => toast(error.message)));
     $('filterOrders').addEventListener('click', () => loadOrders().catch((error) => toast(error.message)));
     $('orderServiceScope').addEventListener('change', () => loadOrders().catch((error) => toast(error.message)));
     $('analyzeSku').addEventListener('click', () => analyzeSku().catch((error) => toast(error.message)));

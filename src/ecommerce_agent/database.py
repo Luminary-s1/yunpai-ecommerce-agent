@@ -3520,6 +3520,19 @@ class Database:
             END;
             """
         )
+        # P1（WP5 反例③）：item 隔离贯穿读模型 —— 库存/订单补 item_id 列（可选，
+        # SKU 级共享数据留 NULL，所有 item 可见；链接专属数据 tag item_id，按 item 过滤）。
+        # 保留原唯一键（SKU 粒度语义，见 M9-R 任务书"每项指标保留真实粒度"），不重建表。
+        Database._ensure_column(conn, "inventory_balances", "item_id", "TEXT")
+        Database._ensure_column(conn, "commerce_orders", "item_id", "TEXT")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_inventory_balances_item "
+            "ON inventory_balances(tenant_id, store_id, sku_id, item_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_commerce_orders_item "
+            "ON commerce_orders(tenant_id, store_id, item_id)"
+        )
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:

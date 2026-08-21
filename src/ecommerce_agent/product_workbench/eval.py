@@ -67,6 +67,10 @@ class MechanismEvalRunner:
         """跑单场景：输入 → 确定性事实 → 解释器 → 建议引擎 → oracle 断言。"""
         input_data = scene.input_data
         try:
+            # P2 fail-closed 契约（WP5 反例①）：场景必须显式声明 freshness，
+            # 缺失即记失败——不让"没传 freshness"变成"跳过 freshness 检查"。
+            if "freshness" not in input_data:
+                return EvalResult(scene.name, False, ["scene_missing_freshness"])
             facts: DiagnosisFacts = self.facts_fn(
                 input_data["sku_id"],
                 {
@@ -75,6 +79,7 @@ class MechanismEvalRunner:
                     "clicks": input_data.get("clicks"),
                     "conversions": input_data.get("conversions"),
                     "quality_gate": input_data.get("quality_gate"),
+                    "freshness": input_data.get("freshness"),
                 },
                 stockout=input_data.get("stockout", False),
                 pollution=input_data.get("pollution"),

@@ -63,7 +63,26 @@ def test_quality_gate_blocked_denies_conclusion() -> None:
 
 
 def test_clean_facts_allow_conclusion() -> None:
-    """证据可用 + 门禁通过 + 无污染 → conclusion_allowed=True。"""
+    """证据可用 + 门禁通过 + freshness 可用 + 无污染 → conclusion_allowed=True。"""
+    facts = build_diagnosis_facts(
+        "sku1",
+        {
+            "evidence_state": "actual",
+            "exposures": 1000,
+            "clicks": 100,
+            "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
+        },
+    )
+    assert facts.conclusion_allowed() is True
+
+
+def test_missing_freshness_rejects_conclusion() -> None:
+    """P2 修复（WP5 反例①）：freshness 缺失（None）→ conclusion_allowed=False。
+
+    复验暴露：freshness=None 时旧代码跳过检查返回 True（fail-open），
+    反转后缺失一律拒绝（fail-closed）。
+    """
     facts = build_diagnosis_facts(
         "sku1",
         {
@@ -73,7 +92,8 @@ def test_clean_facts_allow_conclusion() -> None:
             "quality_gate": {"status": "passed", "issues": []},
         },
     )
-    assert facts.conclusion_allowed() is True
+    assert facts.freshness is None
+    assert facts.conclusion_allowed() is False
 
 
 def test_validate_rejects_not_allowlisted_type() -> None:
@@ -125,6 +145,7 @@ def test_interpreter_chain_end_to_end() -> None:
             "exposures": 50,
             "clicks": 10,
             "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
         },
     )
     diagnosis = run_interpretation(facts, RulesetDiagnosisInterpreter())

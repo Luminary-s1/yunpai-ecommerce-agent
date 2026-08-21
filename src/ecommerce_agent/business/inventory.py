@@ -18,6 +18,7 @@ class InventoryBalanceUpsert(BaseModel):
     store_id: str = Field(min_length=1, max_length=128)
     warehouse_id: str = Field(min_length=1, max_length=128)
     sku_id: str = Field(min_length=1, max_length=128)
+    item_id: str | None = Field(default=None, max_length=128)  # P1: 链接展示维度（SKU 共享数据留 NULL）
     on_hand: Decimal = Field(ge=0)
     reserved: Decimal = Field(default=Decimal("0"), ge=0)
     inbound: Decimal = Field(default=Decimal("0"), ge=0)
@@ -75,9 +76,9 @@ class InventoryService:
                 """
                 INSERT INTO inventory_balances(
                     id, tenant_id, connector_id, store_id, warehouse_id, sku_id,
-                    on_hand, reserved, inbound, average_daily_sales, source_id,
+                    item_id, on_hand, reserved, inbound, average_daily_sales, source_id,
                     source_updated_at, payload_hash, version, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(tenant_id, connector_id, store_id, warehouse_id, sku_id)
                 DO UPDATE SET
                     on_hand=excluded.on_hand, reserved=excluded.reserved,
@@ -96,6 +97,7 @@ class InventoryService:
                     value.store_id,
                     value.warehouse_id,
                     value.sku_id,
+                    value.item_id,
                     str(value.on_hand),
                     str(value.reserved),
                     str(value.inbound),

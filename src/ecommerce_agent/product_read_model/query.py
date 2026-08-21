@@ -171,6 +171,7 @@ class ProductReadQuery:
             "active_to": row["active_to"],
             "connector_id": row["connector_id"],
             "revision_id": row["id"],
+            "item_id": item_id,  # P1: 窗口消费侧透传 item_id，聚合按链接过滤
         }
 
     def _traffic_facts(
@@ -246,10 +247,11 @@ class ProductReadQuery:
                        MAX(source_id) AS latest_source_id
                 FROM inventory_balances
                 WHERE tenant_id=? AND store_id=? AND sku_id=?
+                  AND (item_id = ? OR item_id IS NULL)
                   AND source_updated_at>=? AND source_updated_at<=?
                 """,
                 (
-                    tenant_id, store_id, sku_id,
+                    tenant_id, store_id, sku_id, window["item_id"],
                     window["active_from"],
                     window["active_to"] or "9999-12-31T23:59:59+00:00",
                 ),
@@ -304,10 +306,11 @@ class ProductReadQuery:
                 FROM commerce_orders o
                 JOIN commerce_order_lines l ON l.order_id=o.id
                 WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
+                  AND (o.item_id = ? OR o.item_id IS NULL)
                   AND o.placed_at>=? AND o.placed_at<=?
                 """,
                 (
-                    tenant_id, store_id, sku_id,
+                    tenant_id, store_id, sku_id, window["item_id"],
                     window["active_from"],
                     window["active_to"] or "9999-12-31T23:59:59+00:00",
                 ),
@@ -324,13 +327,14 @@ class ProductReadQuery:
                     SELECT DISTINCT o.id FROM commerce_orders o
                     JOIN commerce_order_lines l2 ON l2.order_id=o.id
                     WHERE o.tenant_id=? AND o.store_id=? AND l2.sku_id=?
+                      AND (o.item_id = ? OR o.item_id IS NULL)
                       AND o.placed_at>=? AND o.placed_at<=?
                 )
                 GROUP BY l.order_id HAVING COUNT(*) > 1
                 LIMIT 1
                 """,
                 (
-                    tenant_id, store_id, sku_id,
+                    tenant_id, store_id, sku_id, window["item_id"],
                     window["active_from"],
                     window["active_to"] or "9999-12-31T23:59:59+00:00",
                 ),
@@ -346,12 +350,13 @@ class ProductReadQuery:
                     JOIN commerce_orders o ON o.id=a.order_id
                     JOIN commerce_order_lines l ON l.order_id=o.id
                     WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
+                      AND (o.item_id = ? OR o.item_id IS NULL)
                       AND a.case_type IN ('refund','return_refund')
                       AND a.status IN ('approved','completed')
                       AND o.placed_at>=? AND o.placed_at<=?
                     """,
                     (
-                        tenant_id, store_id, sku_id,
+                        tenant_id, store_id, sku_id, window["item_id"],
                         window["active_from"],
                         window["active_to"] or "9999-12-31T23:59:59+00:00",
                     ),

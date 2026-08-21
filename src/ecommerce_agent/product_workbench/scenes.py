@@ -61,6 +61,7 @@ FROZEN_SCENES: list[FrozenScene] = [
             "clicks": 400,
             "conversions": 40,
             "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
         },
         expected={
             # 证据充分 + 门禁通过 → 可给方向（非 polluted/blocked）
@@ -79,6 +80,7 @@ FROZEN_SCENES: list[FrozenScene] = [
             "clicks": 200,
             "conversions": 20,
             "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
         },
         expected={
             "degraded": False,
@@ -95,6 +97,7 @@ FROZEN_SCENES: list[FrozenScene] = [
             "clicks": 100,
             "conversions": 50,
             "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
         },
         expected={
             "degraded": False,
@@ -111,6 +114,7 @@ FROZEN_SCENES: list[FrozenScene] = [
             "clicks": 150,
             "conversions": 15,
             "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
         },
         expected={
             "degraded": False,
@@ -126,6 +130,7 @@ FROZEN_SCENES: list[FrozenScene] = [
             "exposures": 1000,
             "clicks": 100,
             "stockout": True,
+            "freshness": {"usable_as_current": True},
         },
         expected={
             # 缺货污染必须被标记（degraded），不得归因标题/主图
@@ -142,6 +147,7 @@ FROZEN_SCENES: list[FrozenScene] = [
             "exposures": 1000,
             "clicks": 100,
             "pollution": "ad_change",
+            "freshness": {"usable_as_current": True},
         },
         expected={
             "diagnosis_type": DiagnosisType.AD_PRICE_POLLUTION.value,
@@ -154,6 +160,7 @@ FROZEN_SCENES: list[FrozenScene] = [
         input_data={
             "sku_id": "sku-missing",
             "evidence_state": "missing",
+            "freshness": {"usable_as_current": True},
         },
         expected={
             "degraded": False,
@@ -170,6 +177,7 @@ FROZEN_SCENES: list[FrozenScene] = [
             "clicks": 600,
             "conversions": 50,
             "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
         },
         expected={
             "degraded": False,
@@ -186,8 +194,28 @@ FROZEN_SCENES: list[FrozenScene] = [
             "clicks": 100,
             "conversions": 10,
             "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
         },
         expected={
+            "degraded": False,
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
+        },
+    ),
+    FrozenScene(
+        "freshness 缺失",
+        input_data={
+            "sku_id": "sku-no-freshness",
+            "evidence_state": "actual",
+            "exposures": 5000,
+            "clicks": 400,
+            "conversions": 40,
+            "quality_gate": {"status": "passed", "issues": []},
+            "freshness": None,  # 显式 None → conclusion_allowed 拒绝（P2 fail-closed）
+        },
+        expected={
+            # EVIDENCE_INSUFFICIENT 非强方向（不降级），freshness 缺失验证在
+            # "强方向被拒"（见 test_m9r_diagnosis_freshness_none.py 的强方向反例）
             "degraded": False,
             "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
             "recommendation_type": "保持观察",

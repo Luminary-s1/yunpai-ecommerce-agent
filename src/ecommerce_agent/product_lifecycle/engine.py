@@ -267,7 +267,13 @@ class RecommendationEngine:
         sku: SKUReadModel,
         rtype: RecommendationType,
     ) -> dict[str, Any]:
-        """按建议类型填前置事实（缺则键缺失 → required_facts 触发降级）。"""
+        """按建议类型填前置事实（缺则键缺失 → required_facts 触发降级）。
+
+        T3.1（P4 修复）：覆盖任务书全部 9 类建议——不再对 SELECTION/NEW_LAUNCH/
+        PROMOTION/CLEARANCE 抛 recommendation_type_not_supported。缺信号的方向
+        返回空 dict（required_facts 键缺失 → 引擎显式降级 degraded + missing_evidence），
+        而非崩溃——Eval 场景可断言真实方向可达。
+        """
         if rtype is RecommendationType.RESTOCK:
             return self._stock_facts(tenant_id, sku, diagnosis)
         if rtype is RecommendationType.PRICING:
@@ -277,8 +283,24 @@ class RecommendationEngine:
         if rtype is RecommendationType.DIAGNOSIS:
             return self._traffic_facts(sku)
         if rtype is RecommendationType.KEEP_OBSERVE:
-            return {"diagnosis_facts": dict(diagnosis.evidence_facts)}
-        raise ValueError(f"recommendation_type_not_supported:{rtype.value}")
+            # P3 修复：evidence_facts 含 quality_gate/quality_gate_issues 等键名，
+            # 递归越权扫描（FORBIDDEN_OUTPUT_KEYS 含 "gate"）会误杀"保持观察"建议。
+            # 只保留确定性业务事实（不含越权词命中的证据门禁键）。
+            _ALLOWED_EVIDENCE_KEYS = {
+                "evidence_state", "exposures", "clicks", "conversions",
+                "stockout", "pollution", "reason",
+            }
+            return {
+                "diagnosis_facts": {
+                    k: v for k, v in diagnosis.evidence_facts.items()
+                    if k in _ALLOWED_EVIDENCE_KEYS
+                }
+            }
+        # T3.1：其余方向（SELECTION/NEW_LAUNCH/EXPERIMENT/PROMOTION/CLEARANCE）
+        # 需要对应信号域（demand/竞品/活动窗口/库存周转/清仓信号）——V1 无这些
+        # 信号源时返回空 dict，REQUIRED_FACTS 触发显式降级（degraded + missing_evidence），
+        # 不抛 recommendation_type_not_supported。模型/后续 M 扩展信号后自然填充。
+        return {}
 
     def _stock_facts(
         self,

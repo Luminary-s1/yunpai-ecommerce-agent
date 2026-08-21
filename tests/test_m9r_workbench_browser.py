@@ -30,15 +30,39 @@ from ecommerce_agent.config import Settings
 
 from conftest import make_settings
 
+# T3.7（阻断6 修复）：浏览器探测跨平台——Windows Edge 优先，macOS/Linux 回退
+# Chromium/Chrome。缺失时显式 skip（附"需在 Windows/有浏览器的环境补跑"），
+# 不做静默无痕的整模块跳过。
 EDGE_PATH = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 EDGE_ALT = r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+_EDGE_ALT_ALT = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+_CHROMIUM_ALT = r"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+
+def _browser_channel() -> str | None:
+    """返回 playwright 可用的浏览器 channel，或 None（无可用浏览器）。
+
+    Windows：msedge（既有路径）；macOS/Linux：chrome/chromium 回退。
+    """
+    if Path(EDGE_PATH).is_file() or Path(EDGE_ALT).is_file():
+        return "msedge"
+    if Path(_EDGE_ALT_ALT).is_file():
+        return "chrome"
+    if Path(_CHROMIUM_ALT).is_file():
+        return "chrome"
+    return None
+
 
 pytest.importorskip(
     "playwright", reason="playwright 未安装（需在 .venv 依赖声明）"
 )
+_BROWSER_CHANNEL = _browser_channel()
 pytestmark = pytest.mark.skipif(
-    not (Path(EDGE_PATH).is_file() or Path(EDGE_ALT).is_file()),
-    reason="Edge headless not available for browser gate",
+    _BROWSER_CHANNEL is None,
+    reason=(
+        "未找到可用浏览器（Windows Edge / Chrome）。浏览器门禁需在有浏览器的环境"
+        "补跑（Windows: Edge；macOS/Linux: Chrome）。"
+    ),
 )
 
 BASE_URL = "http://127.0.0.1:8765"
@@ -102,7 +126,7 @@ def test_m9r_workbench_view_renders(_server) -> None:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="msedge", headless=True)
+        browser = p.chromium.launch(channel=_BROWSER_CHANNEL, headless=True)
         page = browser.new_page(viewport={"width": 1280, "height": 720})
         try:
             _open_workbench(page)
@@ -120,6 +144,39 @@ def test_m9r_workbench_view_renders(_server) -> None:
             browser.close()
 
 
+def test_m9r_workbench_generate_recommendation(_server) -> None:
+    """操作契约（T3.5）：点击"生成建议"按钮 → 生产语义链落库 → 列表出现该建议。
+
+    验证任务书"显式点击 + 审计"操作契约，而非仅只读渲染。
+    """
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(channel=_BROWSER_CHANNEL, headless=True)
+        page = browser.new_page(viewport={"width": 1280, "height": 720})
+        try:
+            _open_workbench(page)
+            # 填建议 ID + 点击生成按钮（显式操作）
+            page.fill("#m9rNewRecId", "rec-browser-1")
+            page.click("#m9rGenerateRec")
+            # 等待生成结果消息出现（成功或失败均渲染到 m9rRecActionMsg）
+            page.wait_for_selector("#m9rRecActionMsg", timeout=10000)
+            page.wait_for_timeout(1000)
+            msg = page.locator("#m9rRecActionMsg").inner_text()
+            assert "已生成" in msg, f"生成建议失败: {msg}"
+            # 列表刷新后出现该建议
+            page.wait_for_selector(
+                "#m9rRecRows tr:has-text('rec-browser-1')", timeout=10000
+            )
+            # 建议行状态为 draft
+            row_text = page.locator(
+                "#m9rRecRows tr:has-text('rec-browser-1')"
+            ).inner_text()
+            assert "draft" in row_text, f"建议未落为 draft: {row_text}"
+        finally:
+            browser.close()
+
+
 def test_m9r_workbench_desktop_no_overflow(_server) -> None:
     """1280×720 桌面：页面无横向溢出 + console 无错误。
 
@@ -129,7 +186,7 @@ def test_m9r_workbench_desktop_no_overflow(_server) -> None:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="msedge", headless=True)
+        browser = p.chromium.launch(channel=_BROWSER_CHANNEL, headless=True)
         page = browser.new_page(viewport={"width": 1280, "height": 720})
         try:
             _open_workbench(page)
@@ -159,7 +216,7 @@ def test_m9r_workbench_narrow_no_overflow(_server) -> None:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="msedge", headless=True)
+        browser = p.chromium.launch(channel=_BROWSER_CHANNEL, headless=True)
         page = browser.new_page(viewport={"width": 390, "height": 844})
         try:
             _open_workbench(page)

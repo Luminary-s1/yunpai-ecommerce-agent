@@ -84,14 +84,17 @@ class DiagnosisFacts:
         fail-closed（WP5 复审）：缺门禁信息（None）或 freshness 不可用一律拒绝，
         只有 quality_gate == "passed" 才放行强方向结论（对齐验收「只有满足全部
         Gate 才给强方向结论」）。
+        断言示例：DiagnosisFacts(freshness=None).conclusion_allowed() is False
+        ——缺失即拒绝，禁止写成 `is not None`（那会跳过检查 fail-open）。
         """
         if self.evidence_state in (None, "missing"):
             return False
         if self.quality_gate != "passed":          # 缺门禁/blocked 一律拒绝
             return False
-        if self.freshness is not None:
-            if self.freshness.get("usable_as_current") is not True:
-                return False                       # freshness 不可用 → 拒绝
+        if self.freshness is None:
+            return False                           # freshness 缺失 → 拒绝（fail-closed）
+        if self.freshness.get("usable_as_current") is not True:
+            return False                           # freshness 不可用 → 拒绝
         if self.stockout or self.pollution is not None:
             return False
         return True

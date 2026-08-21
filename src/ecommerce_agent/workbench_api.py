@@ -65,6 +65,18 @@ class CreateRecommendationRequest(BaseModel):
     degraded: bool = False
 
 
+class RecommendationGenerateRequest(BaseModel):
+    """POST 生成建议请求（P3 生产语义链：模型产建议，客户端只指定 ID）。
+
+    诊断 → 引擎 → 校验 → 落库 全在服务端，客户端不提供 type/rationale/
+    facts_snapshot（防旁路模型语义链）。recommendation_id 由客户端指定（幂等）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    recommendation_id: str = Field(min_length=1, max_length=128)
+
+
 class TransitionRequest(BaseModel):
     """POST 状态流转请求（actor 服务端强制为 admin.admin_id，防审计归因伪造）。"""
 
@@ -177,6 +189,29 @@ def build_workbench_router(
             store_id=store_id,
             item_id=item_id,
             sku_id=sku_id,
+        )
+
+    @router.post("/{store_id}/{item_id}/{sku_id}/recommendation/generate")
+    def generate_recommendation(
+        store_id: str,
+        item_id: str,
+        sku_id: str,
+        payload: RecommendationGenerateRequest,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """生产语义链闭环（P3 修复，阻断3）：诊断 → 引擎建议 → 校验 → 落库。
+
+        任务书"基于固化事实和流量诊断，由模型产生语义建议，经代码校验后固化"
+        的唯一生产入口。POST /recommendations（管理员手工提交）是旁路，不走模型链。
+        返回 DRAFT 建议 + 审计落痕。零平台写动作（B4）。
+        """
+        return service.operations.generate_and_persist_recommendation(
+            admin.tenant_id,
+            store_id=store_id,
+            item_id=item_id,
+            sku_id=sku_id,
+            recommendation_id=payload.recommendation_id,
+            actor=admin.admin_id,
         )
 
     @router.get("/{store_id}/{item_id}/{sku_id}/read-model")

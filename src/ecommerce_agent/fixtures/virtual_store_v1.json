@@ -386,6 +386,11 @@
       "id": "D20", "module": "forecasting", "title": "读取虚拟商品的固化预测与库存计划证据",
       "input": {"operation": "OperationsService.sync + DemandFactService + ForecastRunService + InventoryPlanningService + ToolRegistry.execute", "tools": ["get_demand_forecast", "get_inventory_plan"], "mode": "observe", "arguments": {"store_id": "virtual-shop-001", "sku_id": "YP-SKU-001"}, "virtual": true},
       "expected": ["订单与库存只经公开同步及领域服务进入且标记 virtual=true", "预测和库存计划固化后由两个 read 工具读取且前后证据完全一致", "输出引用 run、库存快照、policy 与数据质量并明确不现场计算", "不存在采购、付款、库存调整或其他自动动作"]
+    },
+    {
+      "id": "D21", "module": "product_lifecycle", "title": "虚拟 SKU 生成生命周期建议并停留在草稿",
+      "input": {"operation": "OperationsService.generate_and_persist_recommendation", "parameters": {"store_id": "virtual-shop-001", "item_id": "item-001", "sku_id": "YP-SKU-001", "recommendation_id": "sim-rec-001"}, "virtual": true},
+      "expected": ["建议生成后强制 DRAFT 且不触发任何平台动作", "建议包含证据快照与缺失项（missing_evidence）", "不存在自动发布、改价、换图、报名活动或下架清仓动作"]
     }
   ]
 }
