@@ -178,6 +178,11 @@ class ProductReadQuery:
             SELECT active_from, active_to, connector_id, id
             FROM listing_revisions
             WHERE tenant_id=? AND store_id=? AND item_id=? AND sku_id=? AND revision_no=?
+            -- A4（盲点 #4 修复）：listing_revisions UNIQUE 含 connector_id——同
+            -- (store,item,sku,revision_no) 多 connector 各一行合法。加确定性 ORDER BY
+            -- （source_updated_at 最新 + id 尾键），避免 fetchone() 任取一行
+            ORDER BY source_updated_at DESC, id DESC
+            LIMIT 1
             """,
             (tenant_id, store_id, item_id, sku_id, revision),
         ).fetchone()
@@ -208,7 +213,10 @@ class ProductReadQuery:
                        b.metric_start, b.metric_end, b.bucket_granularity
                 FROM traffic_metric_buckets b
                 WHERE b.tenant_id=? AND b.listing_revision_id=?
-                ORDER BY b.metric_start DESC LIMIT 1
+                -- A2（盲点 #16 修复）：保持"取最新一天 bucket"语义（任务书 L142 粒度不足
+                -- 时展示可用事实），加 id 唯一尾键保证同 metric_start 多行（不同
+                -- traffic_source）时确定取一行
+                ORDER BY b.metric_start DESC, b.id DESC LIMIT 1
                 """,
                 (tenant_id, window["revision_id"]),
             ).fetchone()
@@ -263,14 +271,14 @@ class ProductReadQuery:
             row = conn.execute(
                 f"""
                 -- R1/R2 来源同源（确定性）：connector_id/source_id 来自 source_updated_at
-                -- 最新的一行（全局 ORDER BY + LIMIT 1 取整行），禁止分区 rn=1 多行任取、
-                -- 禁止分别 MAX 拼凑（那会产生数据库中不存在的组合）。
+                -- 最新的一行（全局 ORDER BY + 唯一尾键 + LIMIT 1 取整行），禁止分区 rn=1
+                -- 多行任取、禁止分别 MAX 拼凑（那会产生数据库中不存在的组合）。
                 WITH latest AS (
                     SELECT connector_id, source_id
                     FROM inventory_balances
                     WHERE tenant_id=? AND store_id=? AND sku_id=? AND {cte_item_cond}
                       AND source_updated_at>=? AND source_updated_at<=?
-                    ORDER BY source_updated_at DESC, version DESC
+                    ORDER BY source_updated_at DESC, version DESC, id DESC
                     LIMIT 1
                 )
                 SELECT COALESCE(SUM(CAST(on_hand AS REAL)), 0) AS on_hand_total,
@@ -323,6 +331,13 @@ class ProductReadQuery:
 
         粒度诚实：只聚合 revision 窗口内的订单（placed_at 落在 active_from/active_to），
         period_key 用窗口起始，而非"全生命周期 SUM 标 DAILY"。
+
+        A7（盲点 #12 边界声明）：item 隔离是**订单级**归属——commerce_orders.item_id
+        决定订单归属哪个 item（commerce_order_lines 无 item_id 列，行级无法独立归属）。
+        同一订单内若含其他 item 成交的 sku 行（订单级归属与行级不一致），V1 按订单级
+        归属处理（行级 item 隔离需 schema 扩展，非 V1 范围）。查询 item-b 的 sku-x
+        不会拿到 item-a 订单（订单级 item 过滤有效）；反向把含其他 item 行的订单
+        算入订单归属 item 是订单级语义的已知边界。
         """
         with self.db.connect() as conn:
             window = self._revision_window(
@@ -333,18 +348,26 @@ class ProductReadQuery:
             # R1 方案 B（显式共享语义）：单 item 时 NULL 共享订单可投影，多 item 不广播。
             single_item = self._sku_item_count(conn, tenant_id, store_id, sku_id) <= 1
             item_cond = "(o.item_id=? OR o.item_id IS NULL)" if single_item else "o.item_id=?"
+            cte_item_cond = "(o.item_id=? OR o.item_id IS NULL)" if single_item else "o.item_id=?"
             row = conn.execute(
                 f"""
                 -- R2 来源同源（确定性）：connector_id/source_id 取自 source_updated_at
-                -- 最新的一行（全局 ORDER BY + LIMIT 1 取整行），禁止分区 rn=1 多行任取、
-                -- 禁止分别 MAX 拼凑（那会产生数据库中不存在的组合）。item 过滤与
-                -- 聚合口径一致：单 item 含共享行，多 item 严格匹配（不广播）。
+                -- 最新的一行（全局 ORDER BY + 唯一尾键 + LIMIT 1 取整行），禁止分区 rn=1
+                -- 多行任取、禁止分别 MAX 拼凑（那会产生数据库中不存在的组合）。
+                -- 作用域与主聚合一致：按 sku_id 过滤（JOIN order_lines），item 条件
+                -- 用 cte_item_cond（单 item 含 NULL 共享行，多 item 严格匹配不广播）。
                 WITH latest AS (
-                    SELECT connector_id, source_id
-                    FROM commerce_orders
-                    WHERE tenant_id=? AND store_id=? AND item_id=?
-                      AND placed_at>=? AND placed_at<=?
-                    ORDER BY source_updated_at DESC, version DESC
+                    SELECT o.connector_id, o.source_id, o.id
+                    FROM commerce_orders o
+                    JOIN commerce_order_lines l ON l.order_id=o.id
+                    WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
+                      AND {cte_item_cond}
+                      AND o.placed_at>=? AND o.placed_at<=?
+                      -- A1（盲点 #7 修复）：来源行与聚合行同口径——只统计有效支付状态
+                      -- 订单（canceled/unpaid 不计入 payments/gross/net_sales，任务书 L60/L66）
+                      AND o.order_status IN ('paid','fulfilling','shipped','delivered')
+                      AND o.payment_status IN ('paid','partially_refunded')
+                    ORDER BY o.source_updated_at DESC, o.version DESC, o.id DESC
                     LIMIT 1
                 )
                 SELECT COUNT(l.id) AS line_count,
@@ -358,9 +381,12 @@ class ProductReadQuery:
                 WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
                   AND {item_cond}
                   AND o.placed_at>=? AND o.placed_at<=?
+                  -- A1（盲点 #7 修复）：只统计有效支付状态订单
+                  AND o.order_status IN ('paid','fulfilling','shipped','delivered')
+                  AND o.payment_status IN ('paid','partially_refunded')
                 """,
                 (
-                    tenant_id, store_id, window["item_id"],
+                    tenant_id, store_id, sku_id, window["item_id"],
                     window["active_from"],
                     window["active_to"] or "9999-12-31T23:59:59+00:00",
                     tenant_id, store_id, sku_id, window["item_id"],
@@ -382,8 +408,14 @@ class ProductReadQuery:
                     WHERE o.tenant_id=? AND o.store_id=? AND l2.sku_id=?
                       AND {item_cond}
                       AND o.placed_at>=? AND o.placed_at<=?
+                      -- A1：multi_line 判定同口径——只统计有效支付状态订单
+                      AND o.order_status IN ('paid','fulfilling','shipped','delivered')
+                      AND o.payment_status IN ('paid','partially_refunded')
                 )
-                GROUP BY l.order_id HAVING COUNT(*) > 1
+                -- A3（盲点 #6 修复）：按 SKU 数判定多行（COUNT(DISTINCT sku_id) > 1），
+                -- 而非行数——同 SKU 拆多行（qty 拆分）仍可精确归 SKU，只有含多个
+                -- 不同 SKU 的订单退款才无法归属
+                GROUP BY l.order_id HAVING COUNT(DISTINCT l.sku_id) > 1
                 LIMIT 1
                 """,
                 (
@@ -407,6 +439,9 @@ class ProductReadQuery:
                       AND a.case_type IN ('refund','return_refund')
                       AND a.status IN ('approved','completed')
                       AND o.placed_at>=? AND o.placed_at<=?
+                      -- A1（盲点 #7 修复）：退款只统计有效支付状态订单的退款
+                      AND o.order_status IN ('paid','fulfilling','shipped','delivered')
+                      AND o.payment_status IN ('paid','partially_refunded')
                     """,
                     (
                         tenant_id, store_id, sku_id, window["item_id"],
@@ -457,6 +492,10 @@ class ProductReadQuery:
             "reason": None,
             "refund_reason": refund_reason,
             "net_sales_reason": net_sales_reason,
+            # A8（盲点 #3 修复）：订单域是 revision 窗口聚合（payments/refunds/net_sales
+            # SUM 整个窗口），粒度必须标 WINDOW 而非默认 DAILY——避免消费方误当日粒度
+            # 与"窗口 SUM 标 DAILY"式静默混粒度（任务书 L141，模块头注释自禁）。
+            "granularity": Granularity.WINDOW,
             "period_key": (window["active_from"] or "")[:10] or None,
         }
 
@@ -508,23 +547,51 @@ class ProductReadQuery:
     def _product_mapping(
         self, tenant_id: str, store_id: str, item_id: str, sku_id: str
     ) -> dict[str, Any] | None:
-        """SKU → canonical 映射（最新事件，按 item 过滤；revoked 使映射失效）。
+        """SKU → canonical 映射（按权威 connector + item 过滤；revoked 使映射失效）。
 
-        R2（证据诚实）：同 SKU 不同 item 可能有各自映射，必须带 item_id 过滤，
-        禁止只按 tenant/store/sku 取全局最新（那会跨 item 串料号）。
-        revoked 语义对齐 M7-R get_latest_mapping：取最新事件（不过滤 event_type），
-        最新事件是 revoked → 无映射（映射被撤销即失效，禁止回落到旧 confirmed 复活）。
+        R2（证据诚实）：
+        - 同 SKU 不同 item 可能有各自映射，必须带 item_id 过滤（不跨 item 串料号）。
+        - mapping_version 是每 (tenant,store,connector,sku) 独立序列，必须按权威
+          connector 过滤（否则跨 connector 取最大 version 会用 demo 高 version 掩盖
+          operational 的 revoked）。权威 connector = 该 SKU listing_revisions 最新行
+          （对齐 M7-R get_latest_mapping 的 connector 作用域）。
+        - revoked 语义：取最新事件（不过滤 event_type），最新事件是 revoked → 无映射。
         """
         with self.db.connect() as conn:
+            # 权威 connector：该 SKU 在 listing_revisions 的"最新"revision 所属 connector。
+            # ⚠️ 不能按 revision_no DESC 选——revision_no 是每 (tenant,connector,store,item,sku)
+            # 独立序列（database.py UNIQUE 含 connector_id），跨 connector 数值不可比
+            # （demo 高 revision_no 会掩盖 operational 低 revision_no）。必须按跨 connector
+            # 可比的真实时间 source_updated_at（NULL 排最后），加 id 尾键确定性。
+            rev_row = conn.execute(
+                """
+                SELECT connector_id FROM listing_revisions
+                WHERE tenant_id=? AND store_id=? AND item_id=? AND sku_id=?
+                  AND connector_id IS NOT NULL
+                -- A5（盲点 #14 修复）：同 source_updated_at 平局时不用 revision_no 跨
+                -- connector 比较（每 connector 独立序列不可比），用 id 尾键确定
+                ORDER BY source_updated_at DESC, id DESC
+                LIMIT 1
+                """,
+                (tenant_id, store_id, item_id, sku_id),
+            ).fetchone()
+            connector_id = rev_row["connector_id"] if rev_row else None
+            if connector_id is None:
+                return None
             row = conn.execute(
                 """
                 SELECT m.event_type, m.canonical_product_id, m.item_id, m.merchant_code
                 FROM readonly_product_mapping_events m
-                WHERE m.tenant_id=? AND m.store_id=? AND m.sku_id=?
+                WHERE m.tenant_id=? AND m.store_id=? AND m.connector_id=?
+                  AND m.sku_id=?
                   AND (m.item_id = ? OR m.item_id IS NULL)
-                ORDER BY m.mapping_version DESC, m.event_id DESC LIMIT 1
+                -- A5（盲点 #14 连带）：item 优先匹配——同 connector 下若存在本 item 的
+                -- 映射事件则取它，NULL 共享事件仅作回退（避免取到其他 item 的映射）
+                ORDER BY CASE WHEN m.item_id = ? THEN 0 ELSE 1 END,
+                         m.mapping_version DESC, m.event_id DESC
+                LIMIT 1
                 """,
-                (tenant_id, store_id, sku_id, item_id),
+                (tenant_id, store_id, connector_id, sku_id, item_id, item_id),
             ).fetchone()
         if row is None or row["event_type"] == "revoked":
             return None
@@ -586,7 +653,10 @@ class ProductReadQuery:
                 SELECT competitor_price, observed_at, source_id, connector_id
                 FROM competitor_observations
                 WHERE tenant_id=? AND store_id=? AND subject_sku=?
-                ORDER BY observed_at DESC LIMIT 1
+                -- A6（盲点 #15 修复）：同 observed_at 多行（多竞品/多 connector）时
+                -- 加唯一尾键确定（connector_id + competitor_sku + id），避免任取
+                ORDER BY observed_at DESC, connector_id, competitor_sku, id DESC
+                LIMIT 1
                 """,
                 (tenant_id, store_id, sku_id),
             ).fetchone()

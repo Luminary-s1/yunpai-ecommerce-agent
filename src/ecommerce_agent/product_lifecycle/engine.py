@@ -105,7 +105,7 @@ _RECOMMENDATION_SYSTEM_PROMPT = """\
 可选建议类型（严格取值）：
 - 选品候选 / 上新准备 / 曝光/点击诊断 / 受控实验 / 保持观察 / 定价候选 / 活动候选 / 补货联动 / 清仓预警
 
-缺成本时不得输出"一定提价 N 元"一类的正式利润安全价格；缺竞品时不得假装有行业对标。严格按用户消息中的 output_schema 返回一个 JSON object。\
+缺成本时不得输出"一定提价 N 元"一类的正式利润安全价格；缺少参照证据时不得虚构对标价格或参照结论，如实说明缺少哪些参照数据即可。严格按用户消息中的 output_schema 返回一个 JSON object。\
 """
 
 
@@ -303,6 +303,13 @@ class RecommendationEngine:
         # 满足时产出非降级真实方向，缺时仍显式降级（degraded + missing_evidence）。
         # REQUIRED_FACTS 键是顶层的（schemas.py validate_recommendation 要求 facts.get(key)），
         # 所以不能套在 "selection_facts" 等子 dict 里。
+        # ⚠️ V1 生产边界（诚实标注）：生产诊断链（diagnose/validate_diagnosis_output）
+        # 的 evidence_facts 只含固定 9 键（evidence_state/freshness/quality_gate/exposures
+        # 等），不含 demand_signal/competitor_evidence 等信号键——因此 SELECTION/
+        # NEW_LAUNCH/CLEARANCE 在生产恒走降级路径（missing_evidence 列明缺键）。
+        # 非降级真实方向仅在信号被注入时可达（Eval 场景注入 required_signals 验证引擎
+        # 能力），生产可达需后续扩展信号源（如 M 期接入 demand/竞品数据）。不得在
+        # 无信号源时把裸布尔当证据满足（无来源/引用校验）——这正是透传的边界。
         if rtype in (
             RecommendationType.SELECTION,
             RecommendationType.NEW_LAUNCH,

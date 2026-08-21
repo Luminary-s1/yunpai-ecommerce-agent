@@ -97,15 +97,31 @@ def test_model_unavailable_never_gives_strong_direction(tmp_path) -> None:
 
     db = Database(tmp_path / "diag-r3.sqlite3")
     db.initialize()
+    # C3（盲点 #10 修复）：种真实低曝光数据（exposures=50）——若 Ruleset 阈值路径
+    # 接管默认生产诊断，会触发 exposure_insufficient（强方向）；修复前本测试用
+    # no-such-sku 无数据天然 missing，测不到"低曝光强方向被阻断"。
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO creative_assets(asset_id, tenant_id, sha256, mime_type, width, height, storage_ref, source_ref, feature_schema_version, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("asset-1", "tenant-a", "e" * 64, "image/png", 1200, 1200, "objects/a.png", "fixture://a", "image-v1", "f" * 64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO listing_revisions(id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no, title, main_image_asset_id, sale_price, attributes_json, active_from, active_to, source_updated_at, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rev-1", "tenant-a", "virtual_taobao", "store-a", "item-a", "sku-a", 1, "测试商品", "asset-1", "109.00", '{}', "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00", "2026-08-10T00:00:00+00:00", "a" * 64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+        # 低曝光 bucket（exposures=50，Ruleset 阈值 < 100 触发 exposure_insufficient）
+        conn.execute(
+            "INSERT INTO traffic_metric_buckets(id, tenant_id, listing_revision_id, metric_start, metric_end, bucket_granularity, traffic_source, impressions, clicks, visitors, favorites, cart_adds, orders, sales_amount, ad_spend, search_impressions, recommend_impressions, data_as_of, source_id, payload_hash, quality_flags_json, version, created_at, updated_at, connector_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("bucket-low", "tenant-a", "rev-1", "2026-08-10T00:00:00+00:00", "2026-08-10T23:59:59+00:00", "day", "recommend", 50, 4, 3, 1, 1, 0, "0.00", "0", 5, 45, "2026-08-10T12:00:00+00:00", "src-low", "b" * 64, "[]", 1, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00", "virtual_taobao"),
+        )
     ops = OperationsService(db)  # 默认 model_semantic_enabled=False
     # 低曝光（50）在 Ruleset 下会触发 exposure_insufficient（强方向），
     # 但模型语义不可用时必须返回 model_unavailable，而非强方向。
     result = ops.diagnose(
-        "tenant-a", store_id="store-a", item_id="item-a", sku_id="no-such-sku"
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
     )
-    # 无 SKU 数据本身会 missing，但关键是：即使有数据，R3 也确保
-    # model_semantic_enabled=False 时不给强方向（此处因无数据天然 missing）。
-    # 核心断言：model_unavailable 语义在任何情况下都不产生强方向。
+    # 有真实低曝光数据：若 Ruleset 阈值路径接管，diagnosis_type 会是
+    # exposure_insufficient（强方向）——R3 必须阻断为 model_unavailable 占位。
     assert result["diagnosis_type"] == "evidence_insufficient"
     assert result["degraded"] is True
     # 显式确认 Ruleset 阈值路径不接管默认生产诊断（不再给 exposure_insufficient）

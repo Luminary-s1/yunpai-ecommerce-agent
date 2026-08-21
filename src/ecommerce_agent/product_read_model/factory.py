@@ -89,7 +89,8 @@ def _data_trust_for(evidence_state: EvidenceState, override: DataTrust | None) -
 
 
 def _period_key(value: datetime, granularity: Granularity) -> str:
-    """按粒度生成 period_key：monthly→"YYYY-MM"，daily→"YYYY-MM-DD"，hourly→"YYYY-MM-DDTHH"。"""
+    """按粒度生成 period_key：monthly→"YYYY-MM"，daily→"YYYY-MM-DD"，hourly→"YYYY-MM-DDTHH"，
+    window→"YYYY-MM-DD"（窗口起始日，A8 粒度诚实）。"""
     if granularity is Granularity.MONTHLY:
         return value.strftime("%Y-%m")
     if granularity is Granularity.HOURLY:

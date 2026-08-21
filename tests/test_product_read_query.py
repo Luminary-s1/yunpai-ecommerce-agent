@@ -202,7 +202,7 @@ def test_query_product_and_competitor_domains(tmp_path) -> None:
         )
         conn.execute(
             "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("ev-1", "tenant-a", "store-a", "taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
+            ("ev-1", "tenant-a", "store-a", "virtual_taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
         )
         conn.execute(
             "INSERT INTO competitor_observations(id, tenant_id, connector_id, store_id, subject_sku, competitor_name, competitor_sku, subject_price, competitor_price, currency, source_type, source_ref, is_estimate, observed_at, source_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -273,6 +273,16 @@ def test_query_revoked_mapping_returns_none(tmp_path) -> None:
     db = Database(tmp_path / "query-revoked.sqlite3")
     db.initialize()
     with db.connect() as conn:
+        # 权威 connector 来源：该 SKU 的 listing_revisions（_product_mapping 按它过滤）
+        # 先种 creative_assets（listing_revisions.main_image_asset_id 外键引用）
+        conn.execute(
+            "INSERT INTO creative_assets(asset_id, tenant_id, sha256, mime_type, width, height, storage_ref, source_ref, feature_schema_version, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("asset-1", "tenant-a", "e" * 64, "image/png", 1200, 1200, "objects/a.png", "fixture://a", "image-v1", "f" * 64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO listing_revisions(id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no, title, main_image_asset_id, sale_price, attributes_json, active_from, active_to, source_updated_at, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rev-1", "tenant-a", "virtual_taobao", "store-a", "item-a", "sku-a", 1, "测试商品", "asset-1", "109.00", '{}', "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00", "2026-08-10T00:00:00+00:00", "a"*64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
         conn.execute(
             "INSERT INTO readonly_canonical_products(canonical_product_id, tenant_id, store_id, internal_part_number, merchant_code, title, normalized_title, source_kind, source_reference, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             ("cp-1", "tenant-a", "store-a", "mpn-1", "mc-1", "测试商品标题", "测试商品标题", "actual", "ref-1", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
@@ -280,12 +290,12 @@ def test_query_revoked_mapping_returns_none(tmp_path) -> None:
         # confirmed v1（supersedes_event_id 必须 NULL，v1 无前驱）
         conn.execute(
             "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("ev-1", "tenant-a", "store-a", "taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", None, "a"*64, "2026-08-10T00:00:00+00:00"),
+            ("ev-1", "tenant-a", "store-a", "virtual_taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", None, "a"*64, "2026-08-10T00:00:00+00:00"),
         )
         # revoked v2（最新，supersedes_event_id 引用 v1）
         conn.execute(
             "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("ev-2", "tenant-a", "store-a", "taobao", "sku-a", 2, 1, "revoked", "cp-1", "item-a", None, "dk-2", "unmatch", "actor", "v1", "ev-1", "b"*64, "2026-08-11T00:00:00+00:00"),
+            ("ev-2", "tenant-a", "store-a", "virtual_taobao", "sku-a", 2, 1, "revoked", "cp-1", "item-a", None, "dk-2", "unmatch", "actor", "v1", "ev-1", "b"*64, "2026-08-11T00:00:00+00:00"),
         )
     query = ProductReadQuery(db)
     model = query.sku_read_model(
@@ -302,6 +312,16 @@ def test_query_mapping_confirmed_after_revoke_restores(tmp_path) -> None:
     db = Database(tmp_path / "query-reconfirm.sqlite3")
     db.initialize()
     with db.connect() as conn:
+        # 权威 connector 来源：该 SKU 的 listing_revisions（_product_mapping 按它过滤）
+        # 先种 creative_assets（listing_revisions.main_image_asset_id 外键引用）
+        conn.execute(
+            "INSERT INTO creative_assets(asset_id, tenant_id, sha256, mime_type, width, height, storage_ref, source_ref, feature_schema_version, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("asset-1", "tenant-a", "e" * 64, "image/png", 1200, 1200, "objects/a.png", "fixture://a", "image-v1", "f" * 64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO listing_revisions(id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no, title, main_image_asset_id, sale_price, attributes_json, active_from, active_to, source_updated_at, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rev-1", "tenant-a", "virtual_taobao", "store-a", "item-a", "sku-a", 1, "测试商品", "asset-1", "109.00", '{}', "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00", "2026-08-10T00:00:00+00:00", "a"*64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
         conn.execute(
             "INSERT INTO readonly_canonical_products(canonical_product_id, tenant_id, store_id, internal_part_number, merchant_code, title, normalized_title, source_kind, source_reference, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             ("cp-1", "tenant-a", "store-a", "mpn-1", "mc-1", "测试商品标题", "测试商品标题", "actual", "ref-1", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
@@ -312,7 +332,7 @@ def test_query_mapping_confirmed_after_revoke_restores(tmp_path) -> None:
             supersedes = None if ver == 1 else f"ev-{ver - 1}"
             conn.execute(
                 "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (ev, "tenant-a", "store-a", "taobao", "sku-a", ver, ver - 1, etype, "cp-1", "item-a", "mc-1", f"dk-{ver}", "match", "actor", "v1", supersedes, "a"*64, "2026-08-10T00:00:00+00:00"),
+                (ev, "tenant-a", "store-a", "virtual_taobao", "sku-a", ver, ver - 1, etype, "cp-1", "item-a", "mc-1", f"dk-{ver}", "match", "actor", "v1", supersedes, "a"*64, "2026-08-10T00:00:00+00:00"),
             )
     query = ProductReadQuery(db)
     model = query.sku_read_model(
@@ -322,3 +342,54 @@ def test_query_mapping_confirmed_after_revoke_restores(tmp_path) -> None:
     assert model.material_code == "mpn-1"
     assert model.merchant_code == "mc-1"
     assert model.title == "测试商品标题"
+
+
+def test_query_mapping_not_hidden_by_other_connector_version(tmp_path) -> None:
+    """P0-3 反例：跨 connector 高 version 不得掩盖权威 connector 的映射。
+
+    审查发现：_product_mapping 原不过滤 connector_id，跨连接器按 mapping_version
+    DESC 取最大——demo 连接器高 version 可能掩盖 operational 连接器的 revoked。
+    修复后按权威 connector（listing_revisions 最新行）过滤，只查该 connector 的映射。
+    """
+    db = Database(tmp_path / "query-multi-conn.sqlite3")
+    db.initialize()
+    with db.connect() as conn:
+        # 权威 connector 来源 + asset（listing_revisions 外键）
+        conn.execute(
+            "INSERT INTO creative_assets(asset_id, tenant_id, sha256, mime_type, width, height, storage_ref, source_ref, feature_schema_version, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("asset-1", "tenant-a", "e" * 64, "image/png", 1200, 1200, "objects/a.png", "fixture://a", "image-v1", "f" * 64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO listing_revisions(id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no, title, main_image_asset_id, sale_price, attributes_json, active_from, active_to, source_updated_at, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rev-1", "tenant-a", "virtual_taobao", "store-a", "item-a", "sku-a", 1, "测试商品", "asset-1", "109.00", '{}', "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00", "2026-08-10T00:00:00+00:00", "a"*64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+
+        # taobao：高 revision_no(5) 但旧 source_updated_at(08-09)——若权威 connector 按
+        # revision_no DESC 选会错选 taobao（掩盖 operational）；应按 source_updated_at 选
+        conn.execute(
+            "INSERT INTO listing_revisions(id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no, title, main_image_asset_id, sale_price, attributes_json, active_from, active_to, source_updated_at, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rev-ta", "tenant-a", "taobao", "store-a", "item-a", "sku-a", 5, "测试商品", "asset-1", "109.00", '{}', "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00", "2026-08-09T00:00:00+00:00", "b"*64, "2026-08-09T00:00:00+00:00", "2026-08-09T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO readonly_canonical_products(canonical_product_id, tenant_id, store_id, internal_part_number, merchant_code, title, normalized_title, source_kind, source_reference, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("cp-1", "tenant-a", "store-a", "mpn-1", "mc-1", "测试商品标题", "测试商品标题", "actual", "ref-1", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        # 权威 connector（virtual_taobao）：v1 confirmed
+        conn.execute(
+            "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ev-vt1", "tenant-a", "store-a", "virtual_taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", None, "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        # 非权威 connector（taobao）：v2 revoked（高 version，若跨 connector 取最大会被选到）
+        conn.execute(
+            "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ev-ta2", "tenant-a", "store-a", "taobao", "sku-a", 2, 1, "revoked", "cp-1", "item-a", None, "dk-2", "unmatch", "actor", "v1", "ev-vt1", "b"*64, "2026-08-11T00:00:00+00:00"),
+        )
+    query = ProductReadQuery(db)
+    model = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+    # 修复前：跨 connector 取 mapping_version 最大 → taobao v2 revoked → 映射为 None（掩盖）
+    # 修复后：按权威 connector virtual_taobao 过滤 → v1 confirmed → 映射保留
+    assert model.material_code == "mpn-1", (
+        f"权威 connector 的映射被跨 connector 高 version 掩盖: {model.material_code}"
+    )

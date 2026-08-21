@@ -108,6 +108,7 @@ class RecommendationPersistenceService:
         validate_full_recommendation(recommendation)  # B3 + required_facts 写屏障语义
         payload_hash = payload_digest(_recommendation_content_payload(recommendation))
         write_status = "applied"
+        existing_rec_id: str | None = None  # B3：内容级幂等命中的已有建议 ID
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             existing = conn.execute(
@@ -120,7 +121,26 @@ class RecommendationPersistenceService:
                     raise RecommendationError("recommendation_conflict")
                 write_status = "idempotent"
             else:
-                conn.execute(
+                # B3（盲点 #5 修复）：内容级幂等兜底——同一 SKU 同证据内容（payload_hash
+                # 相同）已存在时，即使 recommendation_id 不同（调用方重试换 ID / 两个
+                # 操作员各自生成），也返回已有建议而非重复创建（任务书 WP3 L365
+                # "同一证据重放不重复创建建议"）。
+                existing_content = conn.execute(
+                    "SELECT recommendation_id FROM product_recommendations "
+                    "WHERE tenant_id=? AND sku_id=? AND payload_hash=? "
+                    "LIMIT 1",
+                    (
+                        tenant_id,
+                        recommendation.target.sku_id,
+                        payload_hash,
+                    ),
+                ).fetchone()
+                if existing_content is not None:
+                    write_status = "idempotent"
+                    existing_rec_id = str(existing_content["recommendation_id"])
+                else:
+                    existing_rec_id = None
+                    conn.execute(
                     """
                     INSERT INTO product_recommendations(
                         recommendation_id, tenant_id, recommendation_type, store_id, item_id,
@@ -160,9 +180,23 @@ class RecommendationPersistenceService:
             },
             tenant_id,
         )
-        result = self.get(tenant_id, recommendation.recommendation_id)
+        # B3（盲点 #5 修复）：内容级幂等命中时返回**已有建议**（新 ID 未落库）
+        result_id = existing_rec_id if write_status == "idempotent" and existing_rec_id else recommendation.recommendation_id
+        result = self.get(tenant_id, result_id)
         result["write_status"] = write_status
         return result
+
+    def _find_existing_by_content(
+        self, tenant_id: str, sku_id: str, payload_hash: str
+    ) -> str | None:
+        """B3：内容级幂等查找——同 SKU 同 payload_hash 的已有建议 ID（无则 None）。"""
+        with self.db.connect() as conn:
+            row = conn.execute(
+                "SELECT recommendation_id FROM product_recommendations "
+                "WHERE tenant_id=? AND sku_id=? AND payload_hash=? LIMIT 1",
+                (tenant_id, sku_id, payload_hash),
+            ).fetchone()
+        return str(row["recommendation_id"]) if row else None
 
     def record_transition(
         self,

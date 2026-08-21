@@ -100,3 +100,74 @@ def test_stock_item_keep_observe_default() -> None:
     all_types = {t.value for t in RecommendationType}
     assert "改标题" not in all_types
     assert "换主图" not in all_types
+
+
+def test_price_conclusion_without_cost_ready_rejected() -> None:
+    """B2（盲点 #4 修复）：缺成本时 rationale 含价格动作结论 → 确定性拒绝。
+
+    任务书 WP3 L364"缺成本时不能输出正式利润安全价格"。修复前只有 prompt 软约束，
+    模型产出"建议提价 2 元"可过校验落库。修复后 missing_evidence 含 cost_ready 且
+    rationale 含提价/降价等动作词 → ValueError（确定性硬校验）。
+    """
+    from datetime import UTC, datetime
+
+    import pytest
+
+    from ecommerce_agent.product_lifecycle.engine import RecommendationEngine
+    from ecommerce_agent.product_lifecycle.schemas import (
+        RecommendationType,
+    )
+    from ecommerce_agent.product_diagnosis.diagnosis import (
+        Diagnosis,
+        DiagnosisType,
+    )
+    from ecommerce_agent.product_read_model.models import (
+        AggregateRule,
+        Granularity,
+        MetricValue,
+        SKUReadModel,
+    )
+
+    _missing = MetricValue.missing(
+        Granularity.DAILY, AggregateRule.SUM, "2026-08-17", "test"
+    )
+    sku = SKUReadModel(
+        tenant_id="t1", store_id="store-1", item_id="item-1", sku_id="sku-1",
+        revision=1, impressions=_missing, clicks=_missing, add_to_cart=_missing,
+        orders=_missing, payments=_missing, refunds=_missing, net_sales=_missing,
+        sellable_stock=_missing, in_transit_stock=_missing,
+    )
+    diag = Diagnosis(
+        diagnosis_type=DiagnosisType.AD_PRICE_POLLUTION,
+        sku_id="sku-1",
+        reason="pollution:price_change",
+        evidence_facts={
+            "evidence_state": "actual", "freshness": {"usable_as_current": True},
+            "quality_gate": "passed", "quality_gate_issues": [],
+            "exposures": 1000.0, "clicks": 100.0, "conversions": 10.0,
+            "stockout": False, "pollution": "price_change",
+        },
+        degraded=True,
+    )
+
+    class _PriceInterpreter:
+        """mock 建议解释器：产出 PRICING 类型 + 价格动作结论 rationale。"""
+
+        def interpret(self, diagnosis):
+            from ecommerce_agent.product_lifecycle.engine import (
+                RecommendationCandidate,
+            )
+
+            return RecommendationCandidate(
+                type=RecommendationType.PRICING,
+                rationale="竞争价格偏低，建议提价 2 元",
+            )
+
+    engine = RecommendationEngine(interpreter=_PriceInterpreter())
+    # 缺成本（PRICING facts_snapshot 恒空 → missing_evidence 含 cost_ready）
+    # + rationale 含"提价" → 确定性拒绝
+    with pytest.raises(ValueError, match="price_conclusion_without_cost_ready"):
+        engine.generate(
+            tenant_id="t1", diagnosis=diag, sku=sku,
+            recommendation_id="rec-price", created_at=datetime(2026, 8, 20, tzinfo=UTC),
+        )

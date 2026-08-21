@@ -1,16 +1,17 @@
 # M9-R WP5 独立验收报告（第 4 轮）
 
 > 验收人：闫睿涵（WP5 独立验收）
-> 验收对象：PR #19 head `1d53871`，base `454b35c9000ab279ffdbf115f80afdf3e031ee73`
-> 验收日期：2026-08-21
+> 验收对象：PR #19 head `0302c1a`，base `454b35c9000ab279ffdbf115f80afdf3e031ee73`
+> 验收日期：2026-08-21（第 4 轮）
 > 本轮只做独立验收；未修改 PR 代码、未合并、未 approve。
+> **状态更新（2026-08-22）**：第 5 轮修复已完成（head `0302c1a`，对应第 4 轮复验 7 个阻断项 R1-R7），全量回归 1273 passed + 浏览器 4 passed，待闫睿涵重新复验。
 
 ## 1. 固定验收对象
 
 | 字段 | 值 |
 |---|---|
-| Head | `1d53871` |
-| Head tree | `24fcf48d7a509704634d44af970e3e54a6c981ed` |
+| Head | `0302c1a` |
+| Head tree | `a32a4bbd48f16763fed084510317f4408d2d5f7e` |
 | Base | `454b35c9000ab279ffdbf115f80afdf3e031ee73` |
 | worktree 干净 | 是（detached `D:/m9r-verify`，`git status --short` 无输出） |
 
@@ -53,6 +54,24 @@
 | 4 | Eval 假覆盖 + 页面缺操作契约 | P4 | 引擎覆盖全 9 类建议 + 页面生成按钮 + mutation 锁方向 |
 | 5 | Head 引入全量回归 | P5 | 虚拟店 D21 场景 + 模块注册一致性 |
 | 6 | 配置/浏览器不可跨平台 | P5 | basetemp 移出 addopts + 浏览器跨平台 skip |
+
+## 5a. 第 5 轮修复内容（head `0302c1a`，对应第 4 轮复验 7 阻断项）
+
+第 4 轮复验（闫睿涵，2026-08-21T12:19:37Z）确认 7 个阻断项，第 5 轮按 R1-R7 修复：
+
+| # | 第 4 轮阻断项 | 修复 | 证据 |
+|---|---|---|---|
+| R1 | item 隔离击穿（冲突键不含 item_id） | 冲突更新写 item_id；查询单 item 共享/多 item 严格 | test_m9r_item_isolation_overlap 4 passed |
+| R2a | net_sales=gross 冒充净销 | 多行订单→MISSING + 独立 net_sales_reason | test_m9r_query_source_honesty 11 passed + mutation |
+| R2b | 商品映射不带 item_id、revoked 复活 | 取最新事件 revoked→None；按权威 connector 过滤 | test_product_read_query 10 passed + mutation |
+| R2c | 来源分别 MAX 拼凑 | CTE 去分区全局 LIMIT 1 + sku 过滤 + 唯一尾键 | 跨 SKU/平局反例通过 |
+| R3 | D-034 默认路径阈值给强方向 | diagnose() 结构化 degradation_reasons | test_m9r_diagnosis_production 5 passed |
+| R4 | WP4 页面缺下钻 | HTML/JS 补 revision/insights/诊断/审核 | 浏览器 test_m9r_workbench_browser 4 passed |
+| R5 | Eval 假覆盖 | DIRECTION_SCENES + 信号透传非降级方向 + V1 边界标注 | test_m9r_mechanism_eval 12 passed |
+| R6 | 跨平台测试失败 | _scan_src 纯 Python 替代 grep | test_m9r_production_recommendation_chain 4 passed |
+| R7 | 文档不可复现 | Base/计数/EOF/浏览器 skip 修正 | git diff --check 干净 |
+
+**第 5 轮验收证据**：全量回归 **1273 passed**（21:02）；浏览器 **4 passed**；R1 遗留 SQL `#` 注释 bug 已修（78 失败→全绿）。**待闫睿涵重新复验**。
 
 ## 6. WP 验收矩阵
 

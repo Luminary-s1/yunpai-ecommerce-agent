@@ -93,12 +93,6 @@ def build_workbench_router(
     recommendations = service.operations.recommendations
     product_read = service.operations.product_read
 
-    def call(method, *args, **kwargs):
-        try:
-            return method(*args, **kwargs)
-        except Exception as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-
     @router.post("/recommendations")
     def create_recommendation(
         payload: CreateRecommendationRequest,

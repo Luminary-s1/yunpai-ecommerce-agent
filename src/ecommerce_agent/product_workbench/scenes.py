@@ -292,11 +292,6 @@ DIRECTION_SCENES: list[FrozenScene] = [
     if s.name in _DIRECTION_EXPECTED
 ]
 
-# 方向场景所需的 REQUIRED_FACTS 信号键（供测试注入 Diagnosis.evidence_facts 用）
-DIRECTION_REQUIRED_SIGNALS: dict[str, tuple[str, ...]] = {
-    name: tuple(keys) for name, keys in _DIRECTION_SIGNALS.items()
-}
-
 
 __all__ = [
     "FROZEN_SCENES",

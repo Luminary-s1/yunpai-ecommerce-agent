@@ -93,6 +93,27 @@ def validate_full_recommendation(recommendation: Recommendation) -> None:
     }
     if contains_forbidden_token(content, FORBIDDEN_OUTPUT_KEYS):
         raise ValueError("forbidden_output_key_recursive")
+    # B2（盲点 #4 修复）：缺成本时不得输出正式价格结论（任务书 WP3 L364
+    # "缺成本时不能输出正式利润安全价格"）。missing_evidence 含 cost_ready 且
+    # rationale 含价格动作结论（提价/降价/安全价/定价）→ 确定性拒绝——不能只靠
+    # prompt 软约束，必须是代码硬校验（模型输出经此校验才落库 DRAFT）。
+    if "cost_ready" in recommendation.missing_evidence and _contains_price_conclusion(
+        recommendation.rationale
+    ):
+        raise ValueError("price_conclusion_without_cost_ready")
+
+
+# B2：价格动作结论词（缺成本时 rationale 不得含这些**动作结论**）。
+# 注意：不含"安全价/定价"——那些常出现在诚实声明里（"无法输出正式安全价格"），
+# 只有动作词（提价/降价/涨价/调价）才表示已给出价格结论。
+_PRICE_CONCLUSION_TOKENS: tuple[str, ...] = (
+    "提价", "降价", "涨价", "调价",
+)
+
+
+def _contains_price_conclusion(text: str) -> bool:
+    """rationale 是否含价格动作结论（缺成本时禁止）。"""
+    return any(token in text for token in _PRICE_CONCLUSION_TOKENS)
 
 
 __all__ = [

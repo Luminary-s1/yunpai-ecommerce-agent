@@ -66,3 +66,84 @@ def test_stale_is_closed_state() -> None:
     # 事实更新后，旧建议经 mark_stale 转换到 CLOSED（见 state_machine 测试）
     # 此处锁语义：CLOSED 是终态，新建议用新签名
     assert RecommendationState.CLOSED.value == "closed"
+
+
+def test_content_idempotency_different_id_returns_existing(tmp_path) -> None:
+    """B3（盲点 #5 修复）：同证据不同 recommendation_id → 内容级幂等返回已有建议。
+
+    任务书 WP3 L365"同一证据重放不重复创建建议"。修复前幂等键只有
+    (tenant, recommendation_id)——调用方重试换 ID 会重复创建。修复后按
+    (tenant, sku_id, payload_hash) 内容级兜底，第二条返回已有建议（idempotent）。
+    """
+    from datetime import UTC, datetime
+
+    from ecommerce_agent.database import Database
+    from ecommerce_agent.product_lifecycle.engine import RecommendationEngine
+    from ecommerce_agent.product_lifecycle.schemas import (
+        RecommendationState,
+        RecommendationType,
+    )
+    from ecommerce_agent.product_lifecycle.service import (
+        RecommendationPersistenceService,
+    )
+    from ecommerce_agent.product_diagnosis.diagnosis import (
+        Diagnosis,
+        DiagnosisType,
+    )
+    from ecommerce_agent.product_read_model.models import (
+        AggregateRule,
+        Granularity,
+        MetricValue,
+        SKUReadModel,
+    )
+
+    db = Database(tmp_path / "content-idem.sqlite3")
+    db.initialize()
+    service = RecommendationPersistenceService(db)
+
+    _missing = MetricValue.missing(
+        Granularity.DAILY, AggregateRule.SUM, "2026-08-17", "test"
+    )
+    sku = SKUReadModel(
+        tenant_id="t1", store_id="store-1", item_id="item-1", sku_id="sku-1",
+        revision=1, impressions=_missing, clicks=_missing, add_to_cart=_missing,
+        orders=_missing, payments=_missing, refunds=_missing, net_sales=_missing,
+        sellable_stock=_missing, in_transit_stock=_missing,
+    )
+    diag = Diagnosis(
+        diagnosis_type=DiagnosisType.STOCKOUT_POLLUTION,
+        sku_id="sku-1",
+        reason="stockout_period_observed",
+        evidence_facts={
+            "evidence_state": "actual", "freshness": {"usable_as_current": True},
+            "quality_gate": "passed", "quality_gate_issues": [],
+            "exposures": 1000.0, "clicks": 100.0, "conversions": 10.0,
+            "stockout": True, "pollution": None,
+        },
+        degraded=True,
+    )
+    engine = RecommendationEngine()
+
+    def _make_rec(rec_id: str):
+        return engine.generate(
+            tenant_id="t1", diagnosis=diag, sku=sku,
+            recommendation_id=rec_id, created_at=datetime(2026, 8, 20, tzinfo=UTC),
+        )
+
+    # 第一次创建（rec-a）
+    rec_a = _make_rec("rec-a")
+    r1 = service.create("t1", rec_a)
+    assert r1["write_status"] == "applied"
+    # 同证据不同 ID（rec-b，模拟调用方重试换 ID）→ 内容级幂等，返回已有
+    rec_b = _make_rec("rec-b")
+    r2 = service.create("t1", rec_b)
+    assert r2["write_status"] == "idempotent", f"应内容级幂等: {r2['write_status']}"
+    # 返回的是已有建议（rec-a），不是新 ID
+    assert r2["recommendation_id"] == "rec-a"
+    # 库内只有一条（未重复创建）
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT COUNT(*) AS c FROM product_recommendations "
+            "WHERE tenant_id='t1' AND sku_id='sku-1'"
+        ).fetchone()
+    assert int(rows["c"]) == 1, f"同证据不应重复创建: {rows['c']}"

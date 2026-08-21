@@ -352,9 +352,74 @@ class OperationsService:
             created_at=datetime.now(UTC),
         )
         # 3. 落库（create 内部校验 + 幂等）
-        return self.recommendations.create(
+        created = self.recommendations.create(
             tenant_id, recommendation, actor=actor
         )
+        # B4（盲点 #6 修复）：同 SKU 旧建议自动 stale——事实更新后旧建议作废，
+        # 不原地改写历史（任务书 WP3 L365"事实更新后旧建议标 stale"）。
+        # 新落库的建议除外，其余同 SKU 非终态建议标记 stale。
+        self._mark_older_recommendations_stale(
+            tenant_id,
+            store_id=store_id,
+            sku_id=sku_id,
+            keep_recommendation_id=str(created.get("recommendation_id") or recommendation_id),
+            actor=actor,
+        )
+        return created
+
+    def _mark_older_recommendations_stale(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        sku_id: str,
+        keep_recommendation_id: str,
+        actor: str,
+    ) -> None:
+        """B4：把同 SKU 其他非终态建议标记 stale（新建议保留）。
+
+        终态（STALE/CLOSED）不动；只对 DRAFT/AWAITING_REVIEW/APPROVED/REJECTED/
+        OBSERVED 等非终态旧建议标记 stale，使工作台展示的总是最新结论。
+        """
+        from datetime import UTC, datetime
+
+        from ..product_lifecycle.schemas import RecommendationState
+        from ..product_lifecycle.service import RecommendationPersistenceService
+        from ..product_lifecycle.state_machine import TransitionAction
+
+        stale_states = (
+            RecommendationState.STALE,
+            RecommendationState.CLOSED,
+        )
+        active_states = [
+            s.value
+            for s in RecommendationState
+            if s not in stale_states
+        ]
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT recommendation_id FROM product_recommendations
+                WHERE tenant_id=? AND store_id=? AND sku_id=?
+                  AND state IN ({",".join("?" for _ in active_states)})
+                """,
+                (tenant_id, store_id, sku_id, *active_states),
+            ).fetchall()
+        if isinstance(self.recommendations, RecommendationPersistenceService):
+            for row in rows:
+                old_id = str(row["recommendation_id"])
+                if old_id == keep_recommendation_id:
+                    continue
+                try:
+                    self.recommendations.record_transition(
+                        tenant_id,
+                        old_id,
+                        action=TransitionAction.MARK_STALE,
+                        actor=actor,
+                        at=datetime.now(UTC),
+                    )
+                except Exception:  # noqa: BLE001 — 旧建议标记 stale 失败不阻断主流程
+                    pass
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]

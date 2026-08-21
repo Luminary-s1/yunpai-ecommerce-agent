@@ -35,6 +35,7 @@ class Granularity(StrEnum):
     HOURLY = "hourly"
     DAILY = "daily"
     MONTHLY = "monthly"
+    WINDOW = "window"  # revision 窗口聚合（订单域 payments/refunds/net_sales 真实粒度）
 
 
 class AggregateRule(StrEnum):
@@ -63,6 +64,7 @@ _PERIOD_KEY_PATTERNS: dict[Granularity, str] = {
     Granularity.HOURLY: r"\d{4}-\d{2}-\d{2}T\d{2}",   # YYYY-MM-DDTHH
     Granularity.DAILY: r"\d{4}-\d{2}-\d{2}",   # YYYY-MM-DD
     Granularity.MONTHLY: r"\d{4}-\d{2}",        # YYYY-MM
+    Granularity.WINDOW: r"\d{4}-\d{2}-\d{2}",   # 窗口起始日 YYYY-MM-DD（A8 粒度诚实）
 }
 
 

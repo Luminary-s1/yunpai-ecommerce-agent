@@ -94,10 +94,20 @@ class MechanismEvalRunner:
             # 注入 Diagnosis.evidence_facts → _build_facts_snapshot 透传 → 满足 REQUIRED_FACTS
             # → 产出非降级真实方向。信号由场景/调用方注入（引擎不编造，D-034）；
             # 未声明 → 不注入（缺信号 → 显式降级）。
+            # Diagnosis 是 frozen=True（不可变，evidence_facts 是"固化证据"），
+            # 不原地 update，用 model_copy(update=...) 构造新对象保持冻结契约。
             required_signals = input_data.get("required_signals")
             if required_signals:
-                diag.evidence_facts.update(
-                    {k: v for k, v in required_signals.items() if v not in (None, False)}
+                diag = diag.model_copy(
+                    update={
+                        "evidence_facts": {
+                            **diag.evidence_facts,
+                            **{
+                                k: v for k, v in required_signals.items()
+                                if v not in (None, False)
+                            },
+                        }
+                    }
                 )
             produced = {
                 "diagnosis_type": diag.diagnosis_type.value,

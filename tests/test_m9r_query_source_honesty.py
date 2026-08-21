@@ -267,7 +267,7 @@ def test_source_ref_is_source_id_not_manifest_fake(tmp_path) -> None:
 
 
 def _seed_multi_line_order(db: Database) -> None:
-    """种一个多行订单（同一 order_id 两行 line）在 revision 1 窗口内。"""
+    """种一个多行订单（同一 order_id 两行 line，含两个不同 SKU）在 revision 1 窗口内。"""
     with db.connect() as conn:
         conn.execute(
             """
@@ -286,6 +286,8 @@ def _seed_multi_line_order(db: Database) -> None:
                 "2026-08-12T10:00:00+00:00", "2026-08-12T10:00:00+00:00",
             ),
         )
+        # A3（盲点 #6 修复）：多行订单 = 含多个**不同 SKU**（sku-a + sku-b），
+        # 退款无法归 SKU；同 SKU 拆分多行（qty 拆两行）仍可精确归 SKU
         conn.execute(
             """
             INSERT INTO commerce_order_lines(
@@ -300,7 +302,7 @@ def _seed_multi_line_order(db: Database) -> None:
                 id, order_id, external_line_id, sku_id, title, quantity, unit_price
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (f"line-{2}", "ord-multi", f"ext-line-{2}", "sku-a", "测试", 1, "109.00"),
+            (f"line-{2}", "ord-multi", f"ext-line-{2}", "sku-b", "测试", 1, "109.00"),
         )
 
 
@@ -327,17 +329,157 @@ def test_multi_line_order_net_sales_missing_independent_reason(tmp_path) -> None
     assert model.payments.reason is None
 
 
+def test_same_sku_split_lines_refund_attributable(tmp_path) -> None:
+    """A3（盲点 #6 修复）：同 SKU 拆多行（qty 拆分）退款可精确归 SKU，非 multi_line。
+
+    修复前 multi_line 按行数判定（HAVING COUNT(*) > 1），同 SKU 拆两行也误判
+    MISSING。修复后按 SKU 数判定（COUNT(DISTINCT sku_id) > 1），同 SKU 拆分
+    订单 net_sales = gross（可精确归属）。
+    """
+    db = _query_db(tmp_path)
+    # 种同 SKU 拆两行的订单（两行都是 sku-a，qty 1+1）
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO commerce_orders(
+                id, tenant_id, connector_id, store_id, external_order_id, item_id,
+                order_status, payment_status, currency, total_amount, placed_at,
+                buyer_ref_hash, source_id, source_updated_at, payload_hash, version,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "ord-split", "tenant-a", "taobao_official", "store-a", "ext-ord-split",
+                "item-a",
+                "paid", "paid", "CNY", "218.00", "2026-08-13T10:00:00+00:00", None,
+                "src-ord-split", "2026-08-13T10:00:00+00:00", "h" * 64, 1,
+                "2026-08-13T10:00:00+00:00", "2026-08-13T10:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO commerce_order_lines(
+                id, order_id, external_line_id, sku_id, title, quantity, unit_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (f"line-{1}", "ord-split", f"ext-line-{1}", "sku-a", "测试", 1, "109.00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO commerce_order_lines(
+                id, order_id, external_line_id, sku_id, title, quantity, unit_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (f"line-{2}", "ord-split", f"ext-line-{2}", "sku-a", "测试", 1, "109.00"),
+        )
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
+    )
+    # 同 SKU 拆分 → 可精确归属 → net_sales 有值（gross 含 ord-1 + ord-split）
+    assert model.net_sales.evidence_state is not EvidenceState.MISSING
+    assert model.net_sales.reason is None
+    # gross = ord-1(109) + ord-split(218) = 327（无退款 → net_sales=gross）
+    assert model.net_sales.value == 327.0
+
+
 def test_order_source_deterministic_latest(tmp_path) -> None:
     """R2（来源诚实）：同窗口多笔订单 → 来源取全局最新 source_updated_at 一行。
 
     复验阻断项 2c：来源分别 MAX 拼凑会拼出不存在的组合。修复后 connector_id/source_id
     来自 source_updated_at 最新的一行（全局 ORDER BY + LIMIT 1），确定性。
+
+    C1（盲点 #8 修复）：种两个**不同 connector** 的订单——"source_updated_at 最新行"
+    的 connector 不是文本最大——MAX 拼凑实现会取 connector=文本最大 + source=时间最新
+    （拼出不存在组合），测试必须变红；全局 LIMIT 1 取时间最新整行（src-ord-z）。
     """
     db = _query_db(tmp_path)
-    # ord-1 source_updated_at=8/10（窗口内）；ord-3 source_updated_at=8/13（窗口内，最新）
+    # ord-3 connector=taobao_official（文本较大）source_updated_at=8/13
     _seed_order(db, order_id="ord-3", placed_at="2026-08-13T09:00:00+00:00")
+    # ord-z connector=virtual_taobao（文本较小）source_updated_at=8/14（全局最新）
+    _seed_order_for_sku(
+        db, order_id="ord-z", sku_id="sku-a", placed_at="2026-08-14T09:00:00+00:00",
+        connector_id="virtual_taobao",
+    )
     model = ProductReadQuery(db).sku_read_model(
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
     )
-    # 全局最新 source_updated_at = ord-3（8/13）→ 来源应为 src-ord-3
-    assert model.net_sales.import_manifest_id == "src-ord-3"
+    # 全局最新 source_updated_at = ord-z（8/14）→ 来源应为 src-ord-z
+    # （MAX 拼凑会取 connector=taobao_official + source=src-ord-z → 测试变红）
+    assert model.net_sales.import_manifest_id == "src-ord-z"
+    assert model.net_sales.authoritative_service == "commerce_orders"
+
+
+def _seed_order_for_sku(
+    db: Database, *, order_id: str, sku_id: str, placed_at: str,
+    source_updated_at: str | None = None, connector_id: str = "taobao_official",
+) -> None:
+    """种一个指定 sku 的订单（默认 source_updated_at=placed_at，可指定 connector）。"""
+    src_ts = source_updated_at or placed_at
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO commerce_orders(
+                id, tenant_id, connector_id, store_id, external_order_id, item_id,
+                order_status, payment_status, currency, total_amount, placed_at,
+                buyer_ref_hash, source_id, source_updated_at, payload_hash, version,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                order_id, "tenant-a", connector_id, "store-a", f"ext-{order_id}",
+                "item-a",
+                "paid", "paid", "CNY", "109.00", placed_at, None,
+                f"src-{order_id}", src_ts, "e" * 64, 1,
+                src_ts, src_ts,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO commerce_order_lines(
+                id, order_id, external_line_id, sku_id, title, quantity, unit_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (f"line-{order_id}", order_id, f"ext-line-{order_id}", sku_id, "测试", 1, "109.00"),
+        )
+
+
+def test_order_source_not_polluted_by_other_sku(tmp_path) -> None:
+    """P0-1 反例：同 item 其他 sku 的更新订单不得污染来源。
+
+    审查发现：_order_facts 的 latest CTE 原只按 item_id 过滤（无 sku_id），来源可能
+    取自同 item 其他 sku 的订单。修复后 CTE 按 sku_id 过滤（JOIN order_lines），
+    sku-a 的来源应取 sku-a 的订单，不被 sku-b 的更新订单污染。
+    """
+    db = _query_db(tmp_path)
+    # ord-3 是 sku-a（窗口内，8/13）；ord-other 是 sku-b（窗口内，8/14 更新）
+    _seed_order_for_sku(db, order_id="ord-3", sku_id="sku-a", placed_at="2026-08-13T09:00:00+00:00")
+    _seed_order_for_sku(db, order_id="ord-other", sku_id="sku-b", placed_at="2026-08-14T09:00:00+00:00")
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
+    )
+    # 修复前：CTE 无 sku 过滤，来源取 sku-b 的 ord-other（8/14 更新）→ 污染
+    # 修复后：CTE 按 sku 过滤，来源取 sku-a 的 ord-3（8/13）
+    assert model.net_sales.import_manifest_id == "src-ord-3", (
+        f"来源被同 item 其他 sku 污染: {model.net_sales.import_manifest_id}"
+    )
+
+
+def test_order_source_deterministic_on_tie(tmp_path) -> None:
+    """P0-2 反例：同 source_updated_at 平局时来源仍确定（ORDER BY 唯一尾键 id）。"""
+    db = _query_db(tmp_path)
+    # ord-3 和 ord-4 同 source_updated_at（8/13 12:00），不同 id
+    _seed_order_for_sku(
+        db, order_id="ord-3", sku_id="sku-a", placed_at="2026-08-13T09:00:00+00:00",
+        source_updated_at="2026-08-13T12:00:00+00:00",
+    )
+    _seed_order_for_sku(
+        db, order_id="ord-4", sku_id="sku-a", placed_at="2026-08-13T09:30:00+00:00",
+        source_updated_at="2026-08-13T12:00:00+00:00",
+    )
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
+    )
+    # 平局时 ORDER BY id DESC 取 id 更大者（ord-4 > ord-3），来源确定
+    assert model.net_sales.import_manifest_id == "src-ord-4", (
+        f"平局来源不确定: {model.net_sales.import_manifest_id}"
+    )

@@ -152,5 +152,38 @@ def contains_forbidden_token(value: object, forbidden: frozenset[str]) -> bool:
     if isinstance(value, (list, tuple)):
         return any(contains_forbidden_token(item, forbidden) for item in value)
     if isinstance(value, str):
-        return any(token in value for token in forbidden)
+        # B1（盲点 #1 修复）：诚实缺失声明豁免——「缺竞品/无竞品数据/竞品数据缺失/
+        # 暂无对标」等是任务书要求的诚实说明（WP3 L364"缺竞品不假装对标"），必须能
+        # 表达；只有"假装有对标"式的虚假/越权表述才拒。
+        # 豁免判定：禁词（竞品/对标/行业）前后 3 字符窗口内出现缺失修饰词
+        # （缺/无/缺失/暂无/未提供/没有/缺少）→ 视为诚实缺失声明，不拒。
+        for token in forbidden:
+            if token not in ("竞品", "对标", "行业"):
+                if token in value:
+                    return True
+            else:
+                if _is_honest_missing_declaration(value, token):
+                    continue  # 诚实缺失声明，豁免
+                if token in value:
+                    return True
+        return False
     return False
+
+
+# B1：诚实缺失声明修饰词
+_HONEST_MISSING_PREFIXES: tuple[str, ...] = (
+    "缺", "无", "缺失", "暂无", "未提供", "没有", "缺少", "不做", "不",
+)
+
+
+def _is_honest_missing_declaration(text: str, token: str) -> bool:
+    """判断禁词出现处是否构成诚实缺失声明（前后 4 字符窗口内有缺失修饰词）。"""
+    start = 0
+    while True:
+        pos = text.find(token, start)
+        if pos == -1:
+            return False
+        window = text[max(0, pos - 4): pos + len(token) + 4]
+        if any(m in window for m in _HONEST_MISSING_PREFIXES):
+            return True
+        start = pos + len(token)

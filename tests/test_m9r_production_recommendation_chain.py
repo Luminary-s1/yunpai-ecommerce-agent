@@ -152,7 +152,13 @@ def _scan_src(pattern: str) -> list[str]:
 
     复验指出 POSIX 下 subprocess.run(shell=True)+参数列表会让 grep 收不到参数。
     改用 Python 直接遍历 src/，跨平台稳定。
+
+    C2（盲点 #9 修复）：用 ast 解析排除 docstring/注释——逐行子串匹配会命中
+    docstring 里的自述文字（如"recommendation_engine.generate 在生产路径只有
+    一个调用点"），把注释当真实调用点（假绿）。真实调用必须出现在**代码节点**
+    （Attribute/Name 等）里，docstring 是 Expr(Constant) 节点不参与。
     """
+    import ast
     import os
 
     root = Path(__file__).resolve().parents[1] / "src" / "ecommerce_agent"
@@ -162,13 +168,33 @@ def _scan_src(pattern: str) -> list[str]:
             if not fname.endswith(".py"):
                 continue
             fpath = Path(dirpath) / fname
-            for lineno, line in enumerate(
-                fpath.read_text(encoding="utf-8", errors="ignore").splitlines(),
-                start=1,
-            ):
-                if pattern in line:
-                    hits.append(f"{fpath.relative_to(root.parent)}:{lineno}: {line.strip()}")
+            source = fpath.read_text(encoding="utf-8", errors="ignore")
+            try:
+                tree = ast.parse(source)
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                # 只扫真实代码节点（排除 docstring: Expr(Constant str) 和 Module 等无行号节点）
+                if getattr(node, "lineno", None) is None:
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    continue  # docstring / 纯字符串表达式
+                if pattern in ast.unparse(node):
+                    hits.append(
+                        f"{fpath.relative_to(root.parent)}: {node.lineno}: "
+                        f"{ast.unparse(node)[:80]}"
+                    )
     return hits
+
+
+def _node_source(source: str, node: ast.AST) -> str:
+    """ast 节点对应的源码片段（Python < 3.9 无 ast.unparse 的兜底）。"""
+    import ast
+
+    lines = source.splitlines()
+    start = max(0, getattr(node, "lineno", 1) - 1)
+    end = min(len(lines), getattr(node, "end_lineno", start + 1))
+    return "\n".join(lines[start:end])
 
 
 def test_engine_generate_has_production_call_site() -> None:
@@ -216,3 +242,75 @@ def test_generate_route_reachable_and_persists(tmp_path) -> None:
     data = response.json()
     assert data["state"] == "draft"
     assert data["recommendation_id"] == "rec-http-1"
+
+
+def test_generate_marks_older_same_sku_stale(tmp_path) -> None:
+    """B4（盲点 #6 修复）：同 SKU 新建议落库后，旧非终态建议自动标记 stale。
+
+    任务书 WP3 L365"事实更新后旧建议标 stale，不原地改写历史"。修复前 MARK_STALE
+    仅手工 API，生产链不自动触发——旧 approved 建议继续以现行结论展示。
+    修复后 generate_and_persist 落库后把同 SKU 其他非终态建议标 stale。
+    """
+    from datetime import UTC, datetime
+
+    from ecommerce_agent.business.service import OperationsService
+    from ecommerce_agent.database import Database
+    from ecommerce_agent.product_lifecycle.engine import RecommendationEngine
+    from ecommerce_agent.product_lifecycle.schemas import RecommendationState
+    from ecommerce_agent.product_diagnosis.diagnosis import (
+        Diagnosis,
+        DiagnosisType,
+    )
+    from ecommerce_agent.product_read_model.models import (
+        AggregateRule,
+        Granularity,
+        MetricValue,
+        SKUReadModel,
+    )
+
+    db = Database(tmp_path / "auto-stale.sqlite3")
+    db.initialize()
+    ops = OperationsService(db)
+
+    # 直接种一条旧建议（同 SKU，DRAFT 态）
+    _missing = MetricValue.missing(
+        Granularity.DAILY, AggregateRule.SUM, "2026-08-17", "test"
+    )
+    sku = SKUReadModel(
+        tenant_id="tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a",
+        revision=1, impressions=_missing, clicks=_missing, add_to_cart=_missing,
+        orders=_missing, payments=_missing, refunds=_missing, net_sales=_missing,
+        sellable_stock=_missing, in_transit_stock=_missing,
+    )
+    diag_old = Diagnosis(
+        diagnosis_type=DiagnosisType.EVIDENCE_INSUFFICIENT,
+        sku_id="sku-a",
+        reason="old evidence",
+        evidence_facts={
+            "evidence_state": "actual", "freshness": {"usable_as_current": True},
+            "quality_gate": "passed", "quality_gate_issues": [],
+            "exposures": 50.0, "clicks": 5.0, "conversions": 1.0,
+        },
+        degraded=False,
+    )
+    engine = RecommendationEngine()
+    old_rec = engine.generate(
+        tenant_id="tenant-a", diagnosis=diag_old, sku=sku,
+        recommendation_id="rec-old", created_at=datetime(2026, 8, 19, tzinfo=UTC),
+    )
+    created_old = ops.recommendations.create("tenant-a", old_rec, actor="admin")
+    assert created_old["write_status"] == "applied"
+
+    # 生产链 generate（同 SKU，新证据/新结论）→ rec-old 应被自动标 stale
+    r2 = ops.generate_and_persist_recommendation(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a",
+        recommendation_id="rec-2",
+    )
+    assert r2["write_status"] == "applied"
+    # rec-old 已 stale；rec-2 保留非 stale
+    view1 = ops.recommendations.get("tenant-a", "rec-old")
+    view2 = ops.recommendations.get("tenant-a", "rec-2")
+    assert view1["state"] == RecommendationState.STALE.value, (
+        f"旧建议应自动 stale: {view1['state']}"
+    )
+    assert view2["state"] != RecommendationState.STALE.value
