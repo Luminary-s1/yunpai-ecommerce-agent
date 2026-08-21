@@ -53,4 +53,5 @@ F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp2-manual-evidence\
 结果中 `automatic_contract_checks=passed`、`human_observations_passed=true` 和
 `final_status=human_accepted` 同时成立，才表示谢良璇完成 WP2 开发侧人工验收。
 
-这仍不等于整个 M8-R 完成。WP3、WP4 还要开发，最后由未参与开发的缪海南执行 WP5 独立验收。
+这只关闭 WP2 开发侧人工验收，不替代 WP3/WP4 的独立开发证据，也不替代未参与开发的
+缪海南在完整 PR 固定 head 上执行 WP5 独立验收。

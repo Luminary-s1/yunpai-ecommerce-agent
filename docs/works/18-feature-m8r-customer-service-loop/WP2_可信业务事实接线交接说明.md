@@ -146,5 +146,5 @@ source provenance 复用 `source-provenance-v1`：
 - 结果：`F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp2-manual-evidence\谢良璇_WP2人工验收结果_20260820-171701.json`
 - 过程：`F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp2-manual-evidence\谢良璇_WP2人工验收过程_20260820-171701.txt`
 
-本结论只关闭 WP2 开发侧人工验收。完整全量、WP3～WP4、完整 M8-R PR、缪海南 WP5、
-真实渠道/数据、长稳和生产 Gate 仍未完成。
+本结论只关闭 WP2 开发侧人工验收。WP3、WP4 和完整 M8-R PR #25 已形成开发侧候选；
+缪海南 WP5、项目负责人审阅/合入、真实渠道/数据、长稳和生产 Gate 仍未完成。

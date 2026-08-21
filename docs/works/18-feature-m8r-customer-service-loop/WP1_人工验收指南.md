@@ -86,8 +86,8 @@ F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp1-manual-evidence\谢良�
 只有结果中的 `confirmation_mode=human`、`human_observations_passed=true` 和
 `final_status=human_accepted` 同时成立，才说明谢良璇完成了 WP1 开发侧人工验收。
 
-这仍不等于 M8-R 里程碑完成：WP2～WP4 还要按相同流程开发和验收，最后由未参与开发的
-缪海南执行 WP5 未见样本独立复验。
+这仍不等于 M8-R 里程碑完成：WP1～WP4 已组成完整 PR #25，但仍须由未参与开发的缪海南
+针对 PR 页面最新固定 head 执行 WP5 未见样本独立复验；WP5 通过并经负责人审阅后才能合入。
 
 ## 结束环境
 
