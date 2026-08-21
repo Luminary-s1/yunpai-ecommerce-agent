@@ -75,7 +75,12 @@ def test_gate_run_all_gates_passed() -> None:
     })
     assert all_passed is True
     assert all(isinstance(r, GateResult) for r in results)
-    assert len(results) == 3
+    # G5 修复：run_all 从 3 门禁扩到 7 门禁（evidence/freshness/quality_gate + aa/sample/window/control）
+    assert len(results) == 7
+    assert {r.name for r in results} == {
+        "evidence", "freshness", "quality_gate",
+        "aa", "sample_size", "window", "control_variables",
+    }
 
 
 def test_gate_run_all_fails_on_blocked_quality_gate() -> None:
