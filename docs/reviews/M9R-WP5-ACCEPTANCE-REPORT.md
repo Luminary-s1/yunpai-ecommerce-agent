@@ -142,13 +142,14 @@ tests\test_m9r_production_recommendation_chain.py ....                   [100%]
 
 ## 10. 回归归因
 
-全量回归发现 1 项失败，经 Base 对照归因：
+全量回归发现 2 项失败，经 Base 对照归因均为 `7de7bef`（httpx 惰性化）引入的真实回归：
 
 | 失败项 | Head 结果 | Base (454b35c) 结果 | 归因 | 处置 |
 |---|---|---|---|---|
-| `test_intent_routing.py::test_model_disabled_never_makes_an_external_request` | FAIL（`AttributeError: NoneType has no attribute post`） | **PASS** | `7de7bef`（httpx 惰性化）把 `_client` 改为惰性创建，测试直接访问 `gateway._client.post` 崩溃 | 已修复（5a3366e）：先 `_ensure_client()` 再 patch，验证禁用路径不触网 |
+| `test_intent_routing.py::test_model_disabled_never_makes_an_external_request` | FAIL（`AttributeError: NoneType has no attribute post`） | **PASS** | `7de7bef` 把 `_client` 改为惰性创建，测试直接访问 `gateway._client.post` 崩溃 | 已修复（5a3366e）：先 `_ensure_client()` 再 patch |
+| `test_chat_stream.py::test_chat_stream_model_disabled_makes_no_external_request` | FAIL（`AttributeError: None has no attribute post`） | **PASS** | 同因：`monkeypatch.setattr(model._client, 'post', ...)` 时 `_client` 为 None | 已修复：先 `_ensure_client()` 再 patch |
 
-**结论**：该失败是 `7de7bef`（本分支上一提交）引入的真实回归，非既有失败，已修复并验证。
+**结论**：两项失败均为 `7de7bef`（本分支上一提交）引入的真实回归，非既有失败，均已修复并单测验证通过。修复后未重跑全量回归（用户指示，失败点已逐一确认修复）。
 
 ## 11. 签署边界
 
