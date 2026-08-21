@@ -44,11 +44,21 @@ class ModelGateway:
                 "GLM Coding Plan endpoint requires explicit local-test enablement; "
                 "set MODEL_ALLOW_CODING_PLAN=true"
             )
-        self._client = httpx.Client(
-            timeout=settings.model_timeout_seconds,
-            limits=httpx.Limits(max_connections=8, max_keepalive_connections=4),
-            transport=transport,
-        )
+        # P2 提速：惰性建 client——mock 模式/禁用模型永不触网，避免每次 create_app
+        # 建 httpx.Client（Windows 上探测注册表代理 + 加载系统 CA 约 1.5s/个）。
+        # trust_env=False 跳过注册表探测；生产模型启用时首次真实请求才建。
+        self._transport = transport
+        self._client: httpx.Client | None = None
+
+    def _ensure_client(self) -> httpx.Client:
+        if self._client is None:
+            self._client = httpx.Client(
+                timeout=self.settings.model_timeout_seconds,
+                limits=httpx.Limits(max_connections=8, max_keepalive_connections=4),
+                transport=self._transport,
+                trust_env=False,
+            )
+        return self._client
 
     @property
     def _is_coding_plan_test(self) -> bool:
@@ -277,7 +287,7 @@ class ModelGateway:
         last_error: Exception | None = None
         for attempt in range(attempts):
             try:
-                response = self._client.post(
+                response = self._ensure_client().post(
                     f"{self.settings.model_base_url}/chat/completions",
                     headers=self._headers(),
                     json=payload,
@@ -337,7 +347,7 @@ class ModelGateway:
         for attempt in range(attempts):
             emitted = False
             try:
-                with self._client.stream(
+                with self._ensure_client().stream(
                     "POST",
                     f"{self.settings.model_base_url}/chat/completions",
                     headers=self._headers(),
@@ -439,7 +449,8 @@ class ModelGateway:
             return "unknown"
 
     def close(self) -> None:
-        self._client.close()
+        if self._client is not None:
+            self._client.close()
 
     @staticmethod
     def _mock_generate(messages: list[dict[str, str]]) -> str:
