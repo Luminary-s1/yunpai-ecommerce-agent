@@ -115,21 +115,24 @@ def _seed_traffic(db: Database, *, connector_id: str = "taobao_official") -> Non
 
 
 def _seed_inventory(db: Database, *, connector_id: str = "taobao_official") -> None:
-    """种库存：双仓（wh-1 50/10，wh-2 30/5）。"""
+    """种库存：双仓（wh-1 50/10，wh-2 30/5）。item 身份 item-a（R1 严格匹配）。"""
     with db.connect() as conn:
-        for wid, oh, inbound in (("wh-1", "50", "10"), ("wh-2", "30", "5")):
+        for i, (wid, oh, inbound) in enumerate((("wh-1", "50", "10"), ("wh-2", "30", "5"))):
             conn.execute(
                 """
                 INSERT INTO inventory_balances(
-                    id, tenant_id, connector_id, store_id, warehouse_id, sku_id,
+                    id, tenant_id, connector_id, store_id, warehouse_id, sku_id, item_id,
                     on_hand, reserved, inbound, average_daily_sales, source_id,
                     source_updated_at, payload_hash, version, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"inv-{wid}", "tenant-a", connector_id, "store-a", wid, "sku-a",
+                    "item-a",
                     oh, "0", inbound, "2", f"src-{wid}",
-                    "2026-08-10T00:00:00+00:00", "d" * 64, 1,
+                    # R2 来源同源：双仓时间戳不同，最新行明确为 wh-2（source_id=src-wh-2）
+                    "2026-08-10T00:00:00+00:00" if i == 0 else "2026-08-11T00:00:00+00:00",
+                    "d" * 64, 1,
                     "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
                 ),
             )
@@ -142,13 +145,15 @@ def _seed_order(
         conn.execute(
             """
             INSERT INTO commerce_orders(
-                id, tenant_id, connector_id, store_id, external_order_id, order_status,
-                payment_status, currency, total_amount, placed_at, buyer_ref_hash,
-                source_id, source_updated_at, payload_hash, version, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, tenant_id, connector_id, store_id, external_order_id, item_id,
+                order_status, payment_status, currency, total_amount, placed_at,
+                buyer_ref_hash, source_id, source_updated_at, payload_hash, version,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id, "tenant-a", connector_id, "store-a", f"ext-{order_id}",
+                "item-a",
                 "paid", "paid", "CNY", "109.00", placed_at, None,
                 f"src-{order_id}", placed_at, "e" * 64, 1,
                 placed_at, placed_at,
@@ -259,3 +264,80 @@ def test_source_ref_is_source_id_not_manifest_fake(tmp_path) -> None:
     # 订单来源：真实 commerce_orders.source_id（src-ord-1/src-ord-2 最新）
     assert model.net_sales.import_manifest_id in ("src-ord-1", "src-ord-2")
     assert model.net_sales.authoritative_service == "commerce_orders"
+
+
+def _seed_multi_line_order(db: Database) -> None:
+    """种一个多行订单（同一 order_id 两行 line）在 revision 1 窗口内。"""
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO commerce_orders(
+                id, tenant_id, connector_id, store_id, external_order_id, item_id,
+                order_status, payment_status, currency, total_amount, placed_at,
+                buyer_ref_hash, source_id, source_updated_at, payload_hash, version,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "ord-multi", "tenant-a", "taobao_official", "store-a", "ext-ord-multi",
+                "item-a",
+                "paid", "paid", "CNY", "218.00", "2026-08-12T10:00:00+00:00", None,
+                "src-ord-multi", "2026-08-12T10:00:00+00:00", "g" * 64, 1,
+                "2026-08-12T10:00:00+00:00", "2026-08-12T10:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO commerce_order_lines(
+                id, order_id, external_line_id, sku_id, title, quantity, unit_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (f"line-{1}", "ord-multi", f"ext-line-{1}", "sku-a", "测试", 1, "109.00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO commerce_order_lines(
+                id, order_id, external_line_id, sku_id, title, quantity, unit_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (f"line-{2}", "ord-multi", f"ext-line-{2}", "sku-a", "测试", 1, "109.00"),
+        )
+
+
+def test_multi_line_order_net_sales_missing_independent_reason(tmp_path) -> None:
+    """R2（证据诚实）：多行订单退款无法归 SKU → net_sales MISSING + 独立 reason。
+
+    复验阻断项 2a：net_sales 直接返回 gross（用 GMV 冒充净销）。修复后多行订单
+    （退款无法归属 SKU）net_sales 必须 MISSING（任务书 L66），且 net_sales_reason
+    独立，不污染 payments/refunds。
+    """
+    db = _query_db(tmp_path)
+    _seed_multi_line_order(db)
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
+    )
+    # 多行订单 → net_sales MISSING + 独立 reason（不能以 GMV 冒充净销）
+    assert model.net_sales.evidence_state is EvidenceState.MISSING
+    assert (
+        model.net_sales.reason
+        == "net_sales_not_attributable_to_sku_multi_line_order"
+    )
+    # payments 不被污染（仍有值，reason 为 None）
+    assert model.payments.value is not None
+    assert model.payments.reason is None
+
+
+def test_order_source_deterministic_latest(tmp_path) -> None:
+    """R2（来源诚实）：同窗口多笔订单 → 来源取全局最新 source_updated_at 一行。
+
+    复验阻断项 2c：来源分别 MAX 拼凑会拼出不存在的组合。修复后 connector_id/source_id
+    来自 source_updated_at 最新的一行（全局 ORDER BY + LIMIT 1），确定性。
+    """
+    db = _query_db(tmp_path)
+    # ord-1 source_updated_at=8/10（窗口内）；ord-3 source_updated_at=8/13（窗口内，最新）
+    _seed_order(db, order_id="ord-3", placed_at="2026-08-13T09:00:00+00:00")
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
+    )
+    # 全局最新 source_updated_at = ord-3（8/13）→ 来源应为 src-ord-3
+    assert model.net_sales.import_manifest_id == "src-ord-3"

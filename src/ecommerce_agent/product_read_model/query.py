@@ -127,10 +127,12 @@ class ProductReadQuery:
             sku_id=sku_id,
             revision=revision,
             material_code=self._product_material_code(
-                tenant_id, store_id, sku_id
+                tenant_id, store_id, item_id, sku_id
             ),
-            title=self._product_title(tenant_id, store_id, sku_id),
-            merchant_code=self._product_merchant_code(tenant_id, store_id, sku_id),
+            title=self._product_title(tenant_id, store_id, item_id, sku_id),
+            merchant_code=self._product_merchant_code(
+                tenant_id, store_id, item_id, sku_id
+            ),
             impressions=metric_values["impressions"],
             clicks=metric_values["clicks"],
             add_to_cart=metric_values["add_to_cart"],
@@ -146,6 +148,21 @@ class ProductReadQuery:
         )
 
     # ── 内部：各事实源聚合 ──
+
+    def _sku_item_count(
+        self, conn: Any, tenant_id: str, store_id: str, sku_id: str
+    ) -> int:
+        """该 SKU 在 store 下的不同 item 数（R1 方案 B：显式共享语义）。
+
+        判断同 SKU 是否单 item：单 item 时 NULL 共享行可投影（保留真实粒度）；
+        多 item 时 NULL 行不广播（MISSING + reason），避免串数（任务书 L140/L142）。
+        """
+        row = conn.execute(
+            "SELECT COUNT(DISTINCT item_id) AS c FROM listing_revisions "
+            "WHERE tenant_id=? AND store_id=? AND sku_id=? AND item_id IS NOT NULL",
+            (tenant_id, store_id, sku_id),
+        ).fetchone()
+        return int(row["c"]) if row else 0
 
     def _revision_window(
         self, conn: Any, tenant_id: str, store_id: str, item_id: str, sku_id: str,
@@ -238,19 +255,37 @@ class ProductReadQuery:
             )
             if not window:
                 return self._missing_inventory("inventory_revision_not_found")
+            # R1 方案 B（显式共享语义）：单 item 时 NULL 共享行可投影（保留真实粒度，
+            # 任务书 L43）；多 item 时 NULL 行不广播（MISSING，任务书 L140/L142 不串数）。
+            single_item = self._sku_item_count(conn, tenant_id, store_id, sku_id) <= 1
+            item_cond = "(ib.item_id=? OR ib.item_id IS NULL)" if single_item else "ib.item_id=?"
+            cte_item_cond = "(item_id=? OR item_id IS NULL)" if single_item else "item_id=?"
             row = conn.execute(
-                """
+                f"""
+                -- R1/R2 来源同源（确定性）：connector_id/source_id 来自 source_updated_at
+                -- 最新的一行（全局 ORDER BY + LIMIT 1 取整行），禁止分区 rn=1 多行任取、
+                -- 禁止分别 MAX 拼凑（那会产生数据库中不存在的组合）。
+                WITH latest AS (
+                    SELECT connector_id, source_id
+                    FROM inventory_balances
+                    WHERE tenant_id=? AND store_id=? AND sku_id=? AND {cte_item_cond}
+                      AND source_updated_at>=? AND source_updated_at<=?
+                    ORDER BY source_updated_at DESC, version DESC
+                    LIMIT 1
+                )
                 SELECT COALESCE(SUM(CAST(on_hand AS REAL)), 0) AS on_hand_total,
                        COALESCE(SUM(CAST(inbound AS REAL)), 0) AS inbound_total,
                        MAX(source_updated_at) AS latest_updated,
-                       MAX(connector_id) AS connector_id,
-                       MAX(source_id) AS latest_source_id
-                FROM inventory_balances
-                WHERE tenant_id=? AND store_id=? AND sku_id=?
-                  AND (item_id = ? OR item_id IS NULL)
-                  AND source_updated_at>=? AND source_updated_at<=?
+                       (SELECT connector_id FROM latest LIMIT 1) AS connector_id,
+                       (SELECT source_id FROM latest LIMIT 1) AS latest_source_id
+                FROM inventory_balances ib
+                WHERE ib.tenant_id=? AND ib.store_id=? AND ib.sku_id=? AND {item_cond}
+                  AND ib.source_updated_at>=? AND ib.source_updated_at<=?
                 """,
                 (
+                    tenant_id, store_id, sku_id, window["item_id"],
+                    window["active_from"],
+                    window["active_to"] or "9999-12-31T23:59:59+00:00",
                     tenant_id, store_id, sku_id, window["item_id"],
                     window["active_from"],
                     window["active_to"] or "9999-12-31T23:59:59+00:00",
@@ -295,21 +330,39 @@ class ProductReadQuery:
             )
             if not window:
                 return self._missing_orders("order_revision_not_found")
+            # R1 方案 B（显式共享语义）：单 item 时 NULL 共享订单可投影，多 item 不广播。
+            single_item = self._sku_item_count(conn, tenant_id, store_id, sku_id) <= 1
+            item_cond = "(o.item_id=? OR o.item_id IS NULL)" if single_item else "o.item_id=?"
             row = conn.execute(
-                """
+                f"""
+                -- R2 来源同源（确定性）：connector_id/source_id 取自 source_updated_at
+                -- 最新的一行（全局 ORDER BY + LIMIT 1 取整行），禁止分区 rn=1 多行任取、
+                -- 禁止分别 MAX 拼凑（那会产生数据库中不存在的组合）。item 过滤与
+                -- 聚合口径一致：单 item 含共享行，多 item 严格匹配（不广播）。
+                WITH latest AS (
+                    SELECT connector_id, source_id
+                    FROM commerce_orders
+                    WHERE tenant_id=? AND store_id=? AND item_id=?
+                      AND placed_at>=? AND placed_at<=?
+                    ORDER BY source_updated_at DESC, version DESC
+                    LIMIT 1
+                )
                 SELECT COUNT(l.id) AS line_count,
                        COALESCE(SUM(l.quantity), 0) AS order_qty,
                        COALESCE(SUM(CAST(l.unit_price AS REAL) * l.quantity), 0) AS gross,
                        MAX(o.source_updated_at) AS latest_updated,
-                       MAX(o.connector_id) AS connector_id,
-                       MAX(o.source_id) AS latest_source_id
+                       (SELECT connector_id FROM latest LIMIT 1) AS connector_id,
+                       (SELECT source_id FROM latest LIMIT 1) AS latest_source_id
                 FROM commerce_orders o
                 JOIN commerce_order_lines l ON l.order_id=o.id
                 WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
-                  AND (o.item_id = ? OR o.item_id IS NULL)
+                  AND {item_cond}
                   AND o.placed_at>=? AND o.placed_at<=?
                 """,
                 (
+                    tenant_id, store_id, window["item_id"],
+                    window["active_from"],
+                    window["active_to"] or "9999-12-31T23:59:59+00:00",
                     tenant_id, store_id, sku_id, window["item_id"],
                     window["active_from"],
                     window["active_to"] or "9999-12-31T23:59:59+00:00",
@@ -320,14 +373,14 @@ class ProductReadQuery:
             # 多行订单（多 SKU）的退款无法归到 SKU → 标 MISSING（reason 明确阻断），
             # 不 JOIN order_lines 重复累计（那会把整单退款放大 N 倍）。
             multi_line = conn.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS multi
                 FROM commerce_order_lines l
                 WHERE l.order_id IN (
                     SELECT DISTINCT o.id FROM commerce_orders o
                     JOIN commerce_order_lines l2 ON l2.order_id=o.id
                     WHERE o.tenant_id=? AND o.store_id=? AND l2.sku_id=?
-                      AND (o.item_id = ? OR o.item_id IS NULL)
+                      AND {item_cond}
                       AND o.placed_at>=? AND o.placed_at<=?
                 )
                 GROUP BY l.order_id HAVING COUNT(*) > 1
@@ -344,13 +397,13 @@ class ProductReadQuery:
                 refund_reason = "refund_not_attributable_to_sku_multi_line_order"
             else:
                 refund_row = conn.execute(
-                    """
+                    f"""
                     SELECT COALESCE(SUM(CAST(a.approved_amount AS REAL)), 0) AS refund_total
                     FROM commerce_after_sale_cases a
                     JOIN commerce_orders o ON o.id=a.order_id
                     JOIN commerce_order_lines l ON l.order_id=o.id
                     WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
-                      AND (o.item_id = ? OR o.item_id IS NULL)
+                      AND {item_cond}
                       AND a.case_type IN ('refund','return_refund')
                       AND a.status IN ('approved','completed')
                       AND o.placed_at>=? AND o.placed_at<=?
@@ -371,10 +424,26 @@ class ProductReadQuery:
             return self._missing_orders("order_evidence_not_found")
         # 退款：订单级金额，只有单行订单能精确归 SKU；多行订单退款无法归 SKU → MISSING。
         # reason 是字段级：refund 的 reason 独立，不污染 payments/net_sales（它们有值）。
+        gross_value = _to_float(row["gross"])
+        # R2（证据诚实）：net_sales = 收入 - 可归属退款，不能用 GMV 冒充净额。
+        # 三态：单行有退款 → gross - refunds；单行无退款 → gross；
+        # 多行订单退款无法归属 → net_sales MISSING（同 refunds 因，不能以 GMV 冒充，任务书 L66）。
+        if refund_value is not None:
+            net_sales_value = gross_value - refund_value
+            net_sales_reason = None
+        else:
+            # refund 缺失：可能是"无退款"（净额=gross）或"退款无法归属"（净额 MISSING）。
+            # 只有 multi_line 判定为"无法归属"时才 MISSING；无退款记录但单行订单 → 净额=gross。
+            if multi_line is not None:
+                net_sales_value = None
+                net_sales_reason = "net_sales_not_attributable_to_sku_multi_line_order"
+            else:
+                net_sales_value = gross_value
+                net_sales_reason = None
         return {
             "payments": _to_float(row["order_qty"]),
             "refunds": refund_value,
-            "net_sales": _to_float(row["gross"]),
+            "net_sales": net_sales_value,
             # data_as_of 统一源摄入时间（证据审查 #4：与库存口径一致，
             # 补录旧订单不低估新鲜度）；业务窗口过滤仍用 placed_at
             "data_as_of": datetime.fromisoformat(row["latest_updated"])
@@ -383,10 +452,11 @@ class ProductReadQuery:
             "source_ref": row["latest_source_id"],
             "authoritative_service": "commerce_orders",
             "connector_id": row["connector_id"],
-            # 字段级 reason：refund 缺失的 reason 只作用于 refunds；
-            # payments/net_sales 有值时其 reason 应为 None。
+            # 字段级 reason（三路独立）：refund 缺失只作用于 refunds，
+            # net_sales 无法归属只作用于 net_sales；payments 有值时 reason 应为 None。
             "reason": None,
             "refund_reason": refund_reason,
+            "net_sales_reason": net_sales_reason,
             "period_key": (window["active_from"] or "")[:10] or None,
         }
 
@@ -398,6 +468,7 @@ class ProductReadQuery:
             "authoritative_service": "commerce_orders",
             "reason": reason,
             "refund_reason": reason,  # 订单缺失时退款同样缺失，共用同一 reason
+            "net_sales_reason": reason,  # 订单缺失时 net_sales 同样缺失，共用同一 reason
             "period_key": None,
         }
 
@@ -410,9 +481,10 @@ class ProductReadQuery:
     ) -> dict[str, Any]:
         """按字段从对应事实源取投影（确定性）。返回统一 shape 含 value。
 
-        reason 字段级：refunds 用 refund_reason（退款缺失的独立 reason）；
-        其他字段用 reason（订单缺失的 reason，有值时 None）。避免共享 reason
-        污染有值的 payments/net_sales。
+        reason 字段级（三路独立，互不污染）：
+        - refunds 用 refund_reason（退款缺失的独立 reason）；
+        - net_sales 用 net_sales_reason（无法归属多行订单的独立 reason）；
+        - 其余字段（payments/orders）用通用 reason（订单缺失的 reason，有值时 None）。
         """
         if field in ("impressions", "clicks", "add_to_cart", "orders"):
             source = traffic
@@ -423,35 +495,50 @@ class ProductReadQuery:
         # 源 dict 用字段名存值；统一补 value 键给投影用
         result = dict(source)
         result["value"] = source.get(field)
-        # 字段级 reason：refunds 独立，其余字段用通用 reason
+        # 字段级 reason：refunds 用 refund_reason，net_sales 用 net_sales_reason，
+        # 其余字段用通用 reason（有值时 None）
         if field == "refunds":
             result["reason"] = source.get("refund_reason")
+        elif field == "net_sales":
+            result["reason"] = source.get("net_sales_reason")
         return result
 
     # ── 商品域（真实查询：readonly_product_mapping_events + readonly_canonical_products）──
 
     def _product_mapping(
-        self, tenant_id: str, store_id: str, sku_id: str
+        self, tenant_id: str, store_id: str, item_id: str, sku_id: str
     ) -> dict[str, Any] | None:
-        """SKU → canonical 映射（最新 confirmed 事件）。无映射 → None。"""
+        """SKU → canonical 映射（最新事件，按 item 过滤；revoked 使映射失效）。
+
+        R2（证据诚实）：同 SKU 不同 item 可能有各自映射，必须带 item_id 过滤，
+        禁止只按 tenant/store/sku 取全局最新（那会跨 item 串料号）。
+        revoked 语义对齐 M7-R get_latest_mapping：取最新事件（不过滤 event_type），
+        最新事件是 revoked → 无映射（映射被撤销即失效，禁止回落到旧 confirmed 复活）。
+        """
         with self.db.connect() as conn:
             row = conn.execute(
                 """
-                SELECT m.canonical_product_id, m.item_id, m.merchant_code
+                SELECT m.event_type, m.canonical_product_id, m.item_id, m.merchant_code
                 FROM readonly_product_mapping_events m
                 WHERE m.tenant_id=? AND m.store_id=? AND m.sku_id=?
-                  AND m.event_type='confirmed'
-                ORDER BY m.mapping_version DESC LIMIT 1
+                  AND (m.item_id = ? OR m.item_id IS NULL)
+                ORDER BY m.mapping_version DESC, m.event_id DESC LIMIT 1
                 """,
-                (tenant_id, store_id, sku_id),
+                (tenant_id, store_id, sku_id, item_id),
             ).fetchone()
-        return dict(row) if row else None
+        if row is None or row["event_type"] == "revoked":
+            return None
+        return {
+            "canonical_product_id": row["canonical_product_id"],
+            "item_id": row["item_id"],
+            "merchant_code": row["merchant_code"],
+        }
 
     def _product_material_code(
-        self, tenant_id: str, store_id: str, sku_id: str
+        self, tenant_id: str, store_id: str, item_id: str, sku_id: str
     ) -> str | None:
         """料号（internal_part_number）：来自 canonical_products，非 item_id。"""
-        mapping = self._product_mapping(tenant_id, store_id, sku_id)
+        mapping = self._product_mapping(tenant_id, store_id, item_id, sku_id)
         if mapping is None:
             return None
         with self.db.connect() as conn:
@@ -465,17 +552,17 @@ class ProductReadQuery:
         return str(row["internal_part_number"]) if row else None
 
     def _product_merchant_code(
-        self, tenant_id: str, store_id: str, sku_id: str
+        self, tenant_id: str, store_id: str, item_id: str, sku_id: str
     ) -> str | None:
-        mapping = self._product_mapping(tenant_id, store_id, sku_id)
+        mapping = self._product_mapping(tenant_id, store_id, item_id, sku_id)
         if mapping is None:
             return None
         return mapping.get("merchant_code") or None
 
     def _product_title(
-        self, tenant_id: str, store_id: str, sku_id: str
+        self, tenant_id: str, store_id: str, item_id: str, sku_id: str
     ) -> str | None:
-        mapping = self._product_mapping(tenant_id, store_id, sku_id)
+        mapping = self._product_mapping(tenant_id, store_id, item_id, sku_id)
         if mapping is None:
             return None
         with self.db.connect() as conn:

@@ -296,10 +296,23 @@ class RecommendationEngine:
                     if k in _ALLOWED_EVIDENCE_KEYS
                 }
             }
-        # T3.1：其余方向（SELECTION/NEW_LAUNCH/EXPERIMENT/PROMOTION/CLEARANCE）
-        # 需要对应信号域（demand/竞品/活动窗口/库存周转/清仓信号）——V1 无这些
-        # 信号源时返回空 dict，REQUIRED_FACTS 触发显式降级（degraded + missing_evidence），
-        # 不抛 recommendation_type_not_supported。模型/后续 M 扩展信号后自然填充。
+        # R5（C-lite，负责人阻断项 5 修复）：SELECTION/NEW_LAUNCH/CLEARANCE 需要
+        # 对应信号域（demand/竞品/上新就绪/库存就绪/清仓信号）。V1 引擎不编造信号
+        # （D-034 边界：确定性代码不写经营语义），但从 diagnosis.evidence_facts 透传
+        # 同名信号键到 facts_snapshot 顶层——信号由语义层/调用方注入，REQUIRED_FACTS
+        # 满足时产出非降级真实方向，缺时仍显式降级（degraded + missing_evidence）。
+        # REQUIRED_FACTS 键是顶层的（schemas.py validate_recommendation 要求 facts.get(key)），
+        # 所以不能套在 "selection_facts" 等子 dict 里。
+        if rtype in (
+            RecommendationType.SELECTION,
+            RecommendationType.NEW_LAUNCH,
+            RecommendationType.CLEARANCE,
+        ):
+            return {
+                key: diagnosis.evidence_facts.get(key)
+                for key in REQUIRED_FACTS[rtype]
+                if diagnosis.evidence_facts.get(key) not in (None, False)
+            }
         return {}
 
     def _stock_facts(

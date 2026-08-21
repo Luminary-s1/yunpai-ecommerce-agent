@@ -110,6 +110,36 @@ class RecommendationDetailToolInput(BaseModel):
     store_id: str = Field(min_length=1, max_length=128)
 
 
+def _model_unavailable_diagnosis(
+    sku_id: str, facts: DiagnosisFacts
+) -> Diagnosis:
+    """R3（D-034 默认路径）：模型语义不可用时返回占位诊断。
+
+    不给强方向结论（不允许 Ruleset 阈值决定经营语义）。返回
+    EVIDENCE_INSUFFICIENT + reason=model_unavailable + degraded=True，
+    evidence_facts 保留固化证据供下游消费。
+    """
+    from ..product_diagnosis.diagnosis import Diagnosis, DiagnosisType
+
+    return Diagnosis(
+        diagnosis_type=DiagnosisType.EVIDENCE_INSUFFICIENT,
+        sku_id=sku_id,
+        reason="model_unavailable",
+        evidence_facts={
+            "evidence_state": facts.evidence_state,
+            "freshness": facts.freshness,
+            "quality_gate": facts.quality_gate,
+            "quality_gate_issues": list(facts.quality_gate_issues),
+            "exposures": facts.exposures,
+            "clicks": facts.clicks,
+            "conversions": facts.conversions,
+            "stockout": facts.stockout,
+            "pollution": facts.pollution,
+        },
+        degraded=True,
+    )
+
+
 class OperationsService:
     def __init__(
         self,
@@ -118,6 +148,7 @@ class OperationsService:
         traffic_analysis_interpreter: TrafficAnalysisInterpreter | None = None,
         recommendation_interpreter: Any = None,
         diagnosis_interpreter: Any = None,
+        model_semantic_enabled: bool = False,
     ):
         from ..traffic_lab import TrafficAnalysisEngine, TrafficLabIngestionService
 
@@ -176,6 +207,10 @@ class OperationsService:
         self._diagnosis_interpreter: DiagnosisInterpreter = (
             diagnosis_interpreter or RulesetDiagnosisInterpreter()
         )
+        # R3（D-034 默认路径）：模型语义是否可用。False（默认）时 diagnose()
+        # 不给强方向诊断（返回 evidence_insufficient + model_unavailable），
+        # 不允许 Ruleset 阈值直接决定经营语义。True 时才走模型解释器。
+        self._model_semantic_enabled = model_semantic_enabled
         # WP3 闭环补缺：诊断 → 建议 生成引擎（D-034：模型可注入，未注入则
         # Ruleset 降级）。引擎纯能力（不接路由/不自动触发），由工作台/agent 工具
         # 显式调用后走 RecommendationPersistenceService.create 落库。
@@ -233,12 +268,31 @@ class OperationsService:
                 if model.payments.evidence_state.value != "missing" else None,
             },
         )
-        diag = run_interpretation(facts, self._diagnosis_interpreter)
+        # R3（D-034 默认路径）：模型语义不可用时不给强方向诊断。
+        # 不允许 Ruleset 阈值直接决定经营语义（那违反任务书"模型决定语义下一步"）。
+        # 返回 evidence_insufficient + model_unavailable 占位，degraded=True。
+        # 模型可用（model_semantic_enabled=True）时才走模型解释器/ruleset 降级。
+        if not self._model_semantic_enabled:
+            diag = _model_unavailable_diagnosis(sku_id, facts)
+        else:
+            diag = run_interpretation(facts, self._diagnosis_interpreter)
+        # R3（负责人阻断项 3 修复）：顶层 degradation_reasons 结构化暴露降级原因。
+        # reason 保持稳定码 "model_unavailable"（不引越权词），结构化原因列表供前端/
+        # 下游程序化消费：模型不可用 + 门禁 blocked → 双原因。facts.quality_gate 已被
+        # build_diagnosis_facts 归一化为 "passed"/"blocked"/None（diagnosis.py L71）。
+        degradation_reasons: list[str] = []
+        if diag.degraded:
+            degradation_reasons.append("evidence_insufficient")
+        if not self._model_semantic_enabled:
+            degradation_reasons.append("model_unavailable")
+        if facts.quality_gate == "blocked":
+            degradation_reasons.append("quality_gate_blocked")
         return {
             "sku_id": sku_id,
             "diagnosis_type": diag.diagnosis_type.value,
             "reason": diag.reason,
             "degraded": diag.degraded,
+            "degradation_reasons": degradation_reasons,
             "evidence_facts": diag.evidence_facts,
             "gates": {
                 "all_passed": all_passed,

@@ -1,7 +1,7 @@
 # M9-R WP5 独立验收报告（第 4 轮）
 
 > 验收人：闫睿涵（WP5 独立验收）
-> 验收对象：PR #19 head `5a3366e`，base `8de48c35f36a92788df4568f692b86a0edddcbfc`
+> 验收对象：PR #19 head `1d53871`，base `454b35c9000ab279ffdbf115f80afdf3e031ee73`
 > 验收日期：2026-08-21
 > 本轮只做独立验收；未修改 PR 代码、未合并、未 approve。
 
@@ -9,9 +9,9 @@
 
 | 字段 | 值 |
 |---|---|
-| Head | `5a3366e` |
+| Head | `1d53871` |
 | Head tree | `24fcf48d7a509704634d44af970e3e54a6c981ed` |
-| Base | `8de48c35f36a92788df4568f692b86a0edddcbfc` |
+| Base | `454b35c9000ab279ffdbf115f80afdf3e031ee73` |
 | worktree 干净 | 是（detached `D:/m9r-verify`，`git status --short` 无输出） |
 
 ## 2. 验收环境
@@ -29,7 +29,7 @@
 
 ## 4. 已确认通过项
 
-- **编译门禁**：`compileall` EXIT=0；`pytest --collect-only` 1265 tests 无收集错误；`git diff --check` 无空白错误
+- **编译门禁**：`compileall` EXIT=0；`pytest --collect-only` 1266 tests 无收集错误；`git diff --check` 无空白错误
 - **独立反例探针（12 passed，独立 seed 不复用提交内 oracle）**：
   - `test_m9r_item_isolation_overlap.py`（4 PASS）— 重叠 revision 窗口跨 item 隔离
   - `test_m9r_diagnosis_freshness_none.py`（4 PASS）— freshness=None fail-closed
@@ -131,6 +131,7 @@ tests\test_m9r_production_recommendation_chain.py ....                   [100%]
 ## 9. 浏览器证据
 
 **已在 `tests/test_m9r_workbench_browser.py` 验证（4 passed）：**
+> 注明：浏览器门禁依赖本机 Windows Edge / Playwright（`_browser_channel()` 探测）。若复验环境非 Windows 或无 Edge，该测试显式 `pytest.skip`（4 skipped），此时以本报告的本地运行证据为准。
 
 | 检查 | 结果 |
 |---|---|

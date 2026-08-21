@@ -235,3 +235,76 @@ def test_eval_mutation_always_evidence_insufficient_fails() -> None:
     assert len(failed) >= 2, (
         f"mutation 后失败场景应至少含污染类: {failed}"
     )
+
+
+def test_eval_direction_scenes_reachable_non_degraded() -> None:
+    """R5（负责人阻断项 5 修复）：方向场景注入信号 + mock 建议解释器 → 非降级真实方向。
+
+    选品/上新/清仓场景不再锁"保持观察"（假覆盖），而是：mock 建议解释器产出
+    SELECTION/NEW_LAUNCH/CLEARANCE + REQUIRED_FACTS 信号注入 → 引擎产出非降级
+    真实方向（recommendation_degraded=False + missing_evidence=[]），证明"发现
+    真实方向"（任务书 L476），而非只证"降级能力"。
+    """
+    from ecommerce_agent.product_lifecycle.engine import (
+        RecommendationCandidate,
+        RecommendationInterpreter,
+    )
+    from ecommerce_agent.product_lifecycle.schemas import RecommendationType
+    from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES
+
+    # sku_id → 方向建议类型（选品/上新/清仓的 sku_id 来自 FROZEN_SCENES input_data）
+    _DIR_BY_SKU = {
+        "sku-select": RecommendationType.SELECTION,
+        "sku-launch": RecommendationType.NEW_LAUNCH,
+        "sku-clearance": RecommendationType.CLEARANCE,
+    }
+
+    class _DirectionInterpreter(RecommendationInterpreter):
+        def interpret(self, diagnosis):
+            return RecommendationCandidate(
+                type=_DIR_BY_SKU.get(
+                    diagnosis.sku_id, RecommendationType.KEEP_OBSERVE
+                ),
+                rationale="方向信号齐备，建议候选生成（mock 语义层）",
+            )
+
+    runner = MechanismEvalRunner(
+        scenes=DIRECTION_SCENES,
+        recommendation_interpreter=_DirectionInterpreter(),
+    )
+    results = runner.run_all()
+    assert len(results) == 3, f"方向场景应为 3 个: {len(results)}"
+    for r in results:
+        assert r.passed, f"{r.scene_name} 未通过: {r.failures}"
+        assert r.scene_name in ("选品方向", "上新准备", "清仓风险")
+
+
+def test_eval_direction_scenes_mutation_wrong_direction_fails() -> None:
+    """R5 mutation 反证：mock 建议解释器返回 KEEP_OBSERVE → 方向场景必须 FAIL。
+
+    若 oracle 只锁 degraded 不锁方向（自洽假绿），错误方向仍会 PASS——本测试证明
+    方向场景的 oracle 锁真实 recommendation_type（非"保持观察"）。
+    """
+    from ecommerce_agent.product_lifecycle.engine import (
+        RecommendationCandidate,
+        RecommendationInterpreter,
+    )
+    from ecommerce_agent.product_lifecycle.schemas import RecommendationType
+    from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES
+
+    class _WrongDirection(RecommendationInterpreter):
+        def interpret(self, diagnosis):
+            return RecommendationCandidate(
+                type=RecommendationType.KEEP_OBSERVE,
+                rationale="mutation: 错误方向保持观察",
+            )
+
+    runner = MechanismEvalRunner(
+        scenes=DIRECTION_SCENES,
+        recommendation_interpreter=_WrongDirection(),
+    )
+    results = runner.run_all()
+    # 错误方向（保持观察）≠ 期望方向（选品候选等）→ 全部 FAIL
+    assert all(not r.passed for r in results), (
+        f"错误方向不应 PASS: {[r.failures for r in results if r.passed]}"
+    )

@@ -70,13 +70,14 @@ def _seed(db: Database) -> None:
         conn.execute(
             """
             INSERT INTO inventory_balances(
-                id, tenant_id, connector_id, store_id, warehouse_id, sku_id,
+                id, tenant_id, connector_id, store_id, warehouse_id, sku_id, item_id,
                 on_hand, reserved, inbound, average_daily_sales, source_id,
                 source_updated_at, payload_hash, version, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "inv-1", "tenant-a", "virtual_taobao", "store-a", "wh-1", "sku-a",
+                "item-a",
                 "50", "0", "10", "2", "src-inv",
                 "2026-08-10T00:00:00+00:00", "c" * 64, 1,
                 "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
@@ -85,13 +86,15 @@ def _seed(db: Database) -> None:
         conn.execute(
             """
             INSERT INTO commerce_orders(
-                id, tenant_id, connector_id, store_id, external_order_id, order_status,
-                payment_status, currency, total_amount, placed_at, buyer_ref_hash,
-                source_id, source_updated_at, payload_hash, version, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, tenant_id, connector_id, store_id, external_order_id, item_id,
+                order_status, payment_status, currency, total_amount, placed_at,
+                buyer_ref_hash, source_id, source_updated_at, payload_hash, version,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                "ord-1", "tenant-a", "virtual_taobao", "store-a", "ext-1", "paid",
+                "ord-1", "tenant-a", "virtual_taobao", "store-a", "ext-1", "item-a",
+                "paid",
                 "paid", "CNY", "109.00", "2026-08-10T12:00:00+00:00", None,
                 "src-ord", "2026-08-10T12:00:00+00:00", "d" * 64, 1,
                 "2026-08-10T12:00:00+00:00", "2026-08-10T12:00:00+00:00",
@@ -260,3 +263,62 @@ def test_query_refund_closed_loop(tmp_path) -> None:
     )
 
 
+def test_query_revoked_mapping_returns_none(tmp_path) -> None:
+    """R2（证据诚实）：revoked 映射不得复活——最新事件是 revoked → 无映射。
+
+    复验阻断项 2b：商品映射只按 confirmed 取最新，revoked 事件被忽略，回落到旧
+    confirmed → 映射复活。修复后最新事件是 revoked → material_code/title/merchant_code
+    全 None（对齐 M7-R get_latest_mapping 语义）。
+    """
+    db = Database(tmp_path / "query-revoked.sqlite3")
+    db.initialize()
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO readonly_canonical_products(canonical_product_id, tenant_id, store_id, internal_part_number, merchant_code, title, normalized_title, source_kind, source_reference, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("cp-1", "tenant-a", "store-a", "mpn-1", "mc-1", "测试商品标题", "测试商品标题", "actual", "ref-1", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        # confirmed v1（supersedes_event_id 必须 NULL，v1 无前驱）
+        conn.execute(
+            "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ev-1", "tenant-a", "store-a", "taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", None, "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        # revoked v2（最新，supersedes_event_id 引用 v1）
+        conn.execute(
+            "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ev-2", "tenant-a", "store-a", "taobao", "sku-a", 2, 1, "revoked", "cp-1", "item-a", None, "dk-2", "unmatch", "actor", "v1", "ev-1", "b"*64, "2026-08-11T00:00:00+00:00"),
+        )
+    query = ProductReadQuery(db)
+    model = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+    # 最新事件是 revoked → 映射失效，三个字段全 None（不回落旧 confirmed）
+    assert model.material_code is None, f"revoked 后料号不应复活: {model.material_code}"
+    assert model.merchant_code is None, f"revoked 后商家编码不应复活: {model.merchant_code}"
+    assert model.title is None, f"revoked 后标题不应复活: {model.title}"
+
+
+def test_query_mapping_confirmed_after_revoke_restores(tmp_path) -> None:
+    """R2（证据诚实）：revoked 后再 confirmed → 映射恢复（最新事件才是权威）。"""
+    db = Database(tmp_path / "query-reconfirm.sqlite3")
+    db.initialize()
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO readonly_canonical_products(canonical_product_id, tenant_id, store_id, internal_part_number, merchant_code, title, normalized_title, source_kind, source_reference, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("cp-1", "tenant-a", "store-a", "mpn-1", "mc-1", "测试商品标题", "测试商品标题", "actual", "ref-1", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        for i, (ev, ver, etype) in enumerate(
+            (("ev-1", 1, "confirmed"), ("ev-2", 2, "revoked"), ("ev-3", 3, "confirmed"))
+        ):
+            supersedes = None if ver == 1 else f"ev-{ver - 1}"
+            conn.execute(
+                "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (ev, "tenant-a", "store-a", "taobao", "sku-a", ver, ver - 1, etype, "cp-1", "item-a", "mc-1", f"dk-{ver}", "match", "actor", "v1", supersedes, "a"*64, "2026-08-10T00:00:00+00:00"),
+            )
+    query = ProductReadQuery(db)
+    model = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+    # 最新事件是 confirmed v3 → 映射恢复
+    assert model.material_code == "mpn-1"
+    assert model.merchant_code == "mc-1"
+    assert model.title == "测试商品标题"

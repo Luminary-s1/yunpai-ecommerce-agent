@@ -160,6 +160,7 @@ class OrderService:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(tenant_id, connector_id, store_id, external_order_id)
                     DO UPDATE SET
+                        item_id=excluded.item_id,   -- R1: 冲突更新也写 item_id，历史 NULL 可被补齐
                         order_status=excluded.order_status,
                         payment_status=excluded.payment_status,
                         currency=excluded.currency, total_amount=excluded.total_amount,

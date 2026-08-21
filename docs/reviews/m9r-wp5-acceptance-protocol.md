@@ -11,8 +11,8 @@
 
 | 字段 | 值 |
 |---|---|
-| Head | 每轮固定（当前 `ae7d97a`） |
-| Base | `8de48c35` |
+| Head | 每轮固定（当前 `1d53871`） |
+| Base | `454b35c9000ab279ffdbf115f80afdf3e031ee73` |
 | PR | #19 OPEN / head `feature/m9r-read-model` |
 | 工作包 | WP1 读模型 · WP2 证据桥接/门禁 · WP3 生命周期建议 · WP4 工作台/Eval |
 

@@ -100,9 +100,15 @@ def _ops(tmp_path: Path, *, diag_gateway: _MockGateway, rec_gateway: _MockGatewa
     db.initialize()
     _seed(db)
     # 注入模型解释器：诊断模型 + 建议模型都被 mock，断言生产路径调用它们。
+    # R3（D-034 默认路径）：模型语义可用（model_semantic_enabled=True）才走模型。
     diag_interp = DiagnosisModelInterpreter(diag_gateway)
     rec_interp = RecommendationModelInterpreter(rec_gateway)
-    return OperationsService(db, diagnosis_interpreter=diag_interp, recommendation_interpreter=rec_interp)
+    return OperationsService(
+        db,
+        diagnosis_interpreter=diag_interp,
+        recommendation_interpreter=rec_interp,
+        model_semantic_enabled=True,
+    )
 
 
 def test_generate_and_persist_full_chain(tmp_path) -> None:
@@ -141,17 +147,35 @@ def test_generate_and_persist_full_chain(tmp_path) -> None:
     assert audit is not None, f"缺 create 审计落痕"
 
 
+def _scan_src(pattern: str) -> list[str]:
+    """跨平台源码扫描：纯 Python 递归读 .py 文件，替代 grep subprocess（R6 修复）。
+
+    复验指出 POSIX 下 subprocess.run(shell=True)+参数列表会让 grep 收不到参数。
+    改用 Python 直接遍历 src/，跨平台稳定。
+    """
+    import os
+
+    root = Path(__file__).resolve().parents[1] / "src" / "ecommerce_agent"
+    hits: list[str] = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for fname in filenames:
+            if not fname.endswith(".py"):
+                continue
+            fpath = Path(dirpath) / fname
+            for lineno, line in enumerate(
+                fpath.read_text(encoding="utf-8", errors="ignore").splitlines(),
+                start=1,
+            ):
+                if pattern in line:
+                    hits.append(f"{fpath.relative_to(root.parent)}:{lineno}: {line.strip()}")
+    return hits
+
+
 def test_engine_generate_has_production_call_site() -> None:
     """P3 验收：engine.generate 唯一非测试调用点在 business/service.py。"""
-    import subprocess
-
-    out = subprocess.run(
-        ["grep", "-rn", "recommendation_engine.generate",
-         "src/ecommerce_agent/"],
-        capture_output=True, text=True, encoding="utf-8", shell=True,
-    ).stdout
+    # 纯 Python 扫描（R6 跨平台），替代 grep subprocess。
     prod_sites = [
-        line for line in out.splitlines()
+        line for line in _scan_src("recommendation_engine.generate")
         if "test" not in line and "eval.py" not in line
     ]
     # 至少一个生产调用点，且指向 service.py 的 generate_and_persist 路径
@@ -163,16 +187,10 @@ def test_engine_generate_has_production_call_site() -> None:
 def test_engine_generate_not_called_from_client_payload_route(tmp_path) -> None:
     """反证：POST /recommendations（管理员手工提交）不走引擎（旁路）。"""
     # 该路径直接落库客户端 payload（workbench_api create_recommendation），
-    # 不调用 engine.generate——通过断言 service.py 无旁路调用来锁定。
-    # 实际旁路校验在 workbench_api 路由层；此处验证引擎无第二条生产入口。
-    import subprocess
-
-    out = subprocess.run(
-        ["grep", "-rn", "engine.generate",
-         "src/ecommerce_agent/workbench_api.py"],
-        capture_output=True, text=True, encoding="utf-8", shell=True,
-    ).stdout
-    assert out.strip() == "", f"workbench_api 不应直接调引擎: {out}"
+    # 不调用 engine.generate——通过断言 workbench_api 无 engine.generate 来锁定。
+    hits = _scan_src("engine.generate")
+    api_hits = [h for h in hits if "workbench_api.py" in h]
+    assert not api_hits, f"workbench_api 不应直接调引擎: {api_hits}"
 
 
 def test_generate_route_reachable_and_persists(tmp_path) -> None:

@@ -81,6 +81,7 @@ class InventoryService:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(tenant_id, connector_id, store_id, warehouse_id, sku_id)
                 DO UPDATE SET
+                    item_id=excluded.item_id,   -- R1: 冲突更新也写 item_id，历史 NULL 可被补齐
                     on_hand=excluded.on_hand, reserved=excluded.reserved,
                     inbound=excluded.inbound,
                     average_daily_sales=excluded.average_daily_sales,

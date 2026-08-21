@@ -161,19 +161,18 @@ def test_overlap_window_item_a_sees_own_linked_data(tmp_path) -> None:
     assert model.payments.value == 1.0
 
 
-def test_sku_shared_data_visible_to_both_items(tmp_path) -> None:
-    """SKU 共享数据（NULL item_id）对两个 item 都可见（SKU 粒度语义）。
+def test_sku_shared_data_not_broadcast_when_item_unknown(tmp_path) -> None:
+    """R1 修复（复验阻断项 1）：NULL item_id 的历史库存不再广播给任何 item。
 
-    注：inventory_balances 唯一键 (tenant, connector, store, warehouse, sku)
-    不含 item_id，同 SKU 只能有一条库存行（共享 OR 专属，不能并存）——
-    这是"加列不重建表"方案的既有约束。因此本测试用独立 seed：只写
-    NULL item_id 的共享库存，验证 item-a / item-b 都看到该共享值。
+    复验指出"一条 NULL 身份的库存/订单会同时广播给重叠窗口中的 item-a 与
+    item-b；这不是 item 隔离"。修复：查询严格匹配 item_id=?，NULL 行身份不明确
+    → 对 item-a/item-b 都 MISSING（补齐或 MISSING，不能投影给多个 item）。
     """
     db = Database(tmp_path / "overlap-shared.sqlite3")
     db.initialize()
-    _seed(db)  # 先种两 item 的重叠窗口 + item-a 专属数据（供 revision 定位）
+    _seed(db)  # 种两 item 的重叠窗口 + item-a 专属数据（供 revision 定位）
     with db.connect() as conn:
-        # 覆盖为共享库存（item_id=NULL）：唯一键同 key 下 UPDATE 而非再 INSERT
+        # 制造历史 NULL 身份库存（UPDATE 为 NULL，模拟存量未回填）
         conn.execute(
             """
             UPDATE inventory_balances SET item_id=NULL, on_hand='7',
@@ -182,16 +181,17 @@ def test_sku_shared_data_visible_to_both_items(tmp_path) -> None:
             """
         )
     query = ProductReadQuery(db)
-    # item-a 与 item-b 都看到共享库存 7（SKU 粒度共享，不因 item 不同而异）
+    # 严格匹配：NULL 身份行不广播给 item-a（此前会读到 7，现在 MISSING）
     model_a = query.sku_read_model(
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
     )
-    assert model_a.sellable_stock.value == 7.0, (
-        f"item-a 应见共享库存: {model_a.sellable_stock.value}"
+    assert model_a.sellable_stock.evidence_state is EvidenceState.MISSING, (
+        f"item-a 不应读到 NULL 身份共享库存: {model_a.sellable_stock.value}"
     )
+    # 也不广播给 item-b
     model_b = query.sku_read_model(
         "tenant-a", store_id="store-a", item_id="item-b", sku_id="sku-a"
     )
-    assert model_b.sellable_stock.value == 7.0, (
-        f"item-b 应见共享库存: {model_b.sellable_stock.value}"
+    assert model_b.sellable_stock.evidence_state is EvidenceState.MISSING, (
+        f"item-b 不应读到 NULL 身份共享库存: {model_b.sellable_stock.value}"
     )

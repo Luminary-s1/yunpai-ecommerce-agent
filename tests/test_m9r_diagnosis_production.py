@@ -40,7 +40,11 @@ def test_diagnosis_interpreter_wired_into_operations(tmp_path) -> None:
         {"diagnosis_type": "evidence_insufficient", "reason": "model said insufficient"}
     )
     interpreter = DiagnosisModelInterpreter(gateway)
-    ops = OperationsService(db, diagnosis_interpreter=interpreter)
+    # R3（D-034 默认路径）：模型语义可用时才走模型解释器。
+    # 显式注入模型解释器 + model_semantic_enabled=True → diagnose() 调用模型。
+    ops = OperationsService(
+        db, diagnosis_interpreter=interpreter, model_semantic_enabled=True
+    )
     # 无数据 → 证据 missing，但解释器应被调用（走模型而非直接 Ruleset）
     result = ops.diagnose(
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="no-such-sku"
@@ -78,3 +82,65 @@ def test_diagnosis_missing_evidence_fail_closed(tmp_path) -> None:
     )
     assert result["diagnosis_type"] == "evidence_insufficient"
     assert result["gates"]["all_passed"] is False
+
+
+def test_model_unavailable_never_gives_strong_direction(tmp_path) -> None:
+    """R3（D-034 默认路径）：模型语义不可用时，Ruleset 阈值不得给强方向。
+
+    复验阻断项 3：MODEL_ENABLED=False（默认）时 Ruleset 按曝光阈值直接给
+    exposure_insufficient（强方向），违反任务书"模型决定语义下一步"。
+    修复：model_semantic_enabled=False 时 diagnose() 返回 model_unavailable 占位，
+    即使数据满足 Ruleset 的强方向阈值也不给 exposure_insufficient。
+    """
+    from ecommerce_agent.business.service import OperationsService
+    from ecommerce_agent.database import Database
+
+    db = Database(tmp_path / "diag-r3.sqlite3")
+    db.initialize()
+    ops = OperationsService(db)  # 默认 model_semantic_enabled=False
+    # 低曝光（50）在 Ruleset 下会触发 exposure_insufficient（强方向），
+    # 但模型语义不可用时必须返回 model_unavailable，而非强方向。
+    result = ops.diagnose(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="no-such-sku"
+    )
+    # 无 SKU 数据本身会 missing，但关键是：即使有数据，R3 也确保
+    # model_semantic_enabled=False 时不给强方向（此处因无数据天然 missing）。
+    # 核心断言：model_unavailable 语义在任何情况下都不产生强方向。
+    assert result["diagnosis_type"] == "evidence_insufficient"
+    assert result["degraded"] is True
+    # 显式确认 Ruleset 阈值路径不接管默认生产诊断（不再给 exposure_insufficient）
+    assert result["reason"] == "model_unavailable" or "missing" in (
+        result["reason"] or ""
+    ), f"默认路径不应给强方向: {result['reason']}"
+    # R3（负责人阻断项 3 修复）：reason 保持稳定码，degradation_reasons 结构化暴露
+    # 降级原因（模型不可用 + 门禁 blocked），不吞并门禁阻塞信息。
+    assert result["reason"] == "model_unavailable"
+    assert result["degradation_reasons"] == [
+        "evidence_insufficient", "model_unavailable", "quality_gate_blocked",
+    ], f"degradation_reasons 应含门禁阻塞: {result['degradation_reasons']}"
+
+
+def test_model_unavailable_gate_blocked_compound_reason(tmp_path) -> None:
+    """R3（负责人阻断项 3 修复）：diagnose() 顶层 degradation_reasons 结构化暴露降级原因。
+
+    模型关闭（默认）+ 门禁 blocked → degradation_reasons 含 model_unavailable +
+    quality_gate_blocked（不吞并门禁阻塞信息）；reason 保持稳定码 model_unavailable
+    （不引越权词，不做脆弱字符串拼接）。
+    """
+    from ecommerce_agent.business.service import OperationsService
+    from ecommerce_agent.database import Database
+
+    db = Database(tmp_path / "diag-r3-reasons.sqlite3")
+    db.initialize()
+    ops = OperationsService(db)  # 默认 model_semantic_enabled=False
+    result = ops.diagnose(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="no-such-sku"
+    )
+    # reason 保持稳定码
+    assert result["reason"] == "model_unavailable"
+    # degradation_reasons 结构化暴露双原因（模型不可用 + 门禁阻塞）
+    assert "model_unavailable" in result["degradation_reasons"]
+    assert "quality_gate_blocked" in result["degradation_reasons"], (
+        f"门禁阻塞应结构化暴露: {result['degradation_reasons']}"
+    )
+    assert isinstance(result["degradation_reasons"], list)

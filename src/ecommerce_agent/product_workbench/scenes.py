@@ -232,6 +232,72 @@ def find_scene(name: str) -> FrozenScene:
     raise ValueError(f"frozen_scene_not_found:{name}")
 
 
+# ── R5（C-lite，负责人阻断项 5 修复）：方向可达场景集 ──
+# 选品/上新/清仓在 FROZEN_SCENES 里 expected 全锁 EVIDENCE_INSUFFICIENT + 保持观察
+# （场景名通过、能力未证明——假覆盖）。本集补"方向可达但 REQUIRED_FACTS 由信号满足"
+# 的锁定：注入带信号的事实（demand_signal 等）→ 建议引擎产出非降级真实方向。
+# 信号来源：diagnosis.evidence_facts 透传（engine._build_facts_snapshot C-lite 改动），
+# 由调用方（测试 mock 建议解释器 + 构造带信号的 Diagnosis）注入，引擎不编造（D-034）。
+# 独立于 FROZEN_SCENES：默认 Ruleset 解释器产不出 SELECTION/NEW_LAUNCH/CLEARANCE，
+# 放进 FROZEN_SCENES 会让 test_eval_summary_all_pass 假红。
+from ecommerce_agent.product_lifecycle.schemas import RecommendationType
+
+_DIRECTION_EXPECTED: dict[str, dict[str, Any]] = {
+    "选品方向": {
+        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+        "degraded": False,
+        "recommendation_type": RecommendationType.SELECTION.value,  # "选品候选"
+        "recommendation_degraded": False,  # 信号满足 → 非降级真实方向
+        "missing_evidence": [],
+    },
+    "上新准备": {
+        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+        "degraded": False,
+        "recommendation_type": RecommendationType.NEW_LAUNCH.value,  # "上新准备"
+        "recommendation_degraded": False,
+        "missing_evidence": [],
+    },
+    "清仓风险": {
+        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+        "degraded": False,
+        "recommendation_type": RecommendationType.CLEARANCE.value,  # "清仓预警"
+        "recommendation_degraded": False,
+        "missing_evidence": [],
+    },
+}
+
+# 方向场景：复用 FROZEN_SCENES 的 input_data + 追加 REQUIRED_FACTS 信号键
+# （input_data 会经 run_scene → build_diagnosis_facts，但 build_diagnosis_facts 只读
+# evidence_state/freshness/quality_gate/exposures/clicks/conversions，忽略其它键——
+# 所以信号需由测试侧 mock 建议解释器 + 构造带信号的 Diagnosis.evidence_facts 注入，
+# 本集 input_data 只用于确定 SKU 身份与基础事实）。
+_DIRECTION_SIGNALS: dict[str, dict[str, Any]] = {
+    "选品方向": {"demand_signal": True, "competitor_evidence": True},
+    "上新准备": {"item_ready": True, "stock_ready": True},
+    "清仓风险": {"clearance_signal": True, "competitor_evidence": True},
+}
+
+DIRECTION_SCENES: list[FrozenScene] = [
+    FrozenScene(
+        s.name,
+        input_data={
+            **s.input_data,
+            # R5（C-lite）：方向场景显式声明 REQUIRED_FACTS 信号键，
+            # 注入 Diagnosis.evidence_facts → facts_snapshot 透传 → 非降级真实方向。
+            "required_signals": _DIRECTION_SIGNALS[s.name],
+        },
+        expected=_DIRECTION_EXPECTED[s.name],
+    )
+    for s in FROZEN_SCENES
+    if s.name in _DIRECTION_EXPECTED
+]
+
+# 方向场景所需的 REQUIRED_FACTS 信号键（供测试注入 Diagnosis.evidence_facts 用）
+DIRECTION_REQUIRED_SIGNALS: dict[str, tuple[str, ...]] = {
+    name: tuple(keys) for name, keys in _DIRECTION_SIGNALS.items()
+}
+
+
 __all__ = [
     "FROZEN_SCENES",
     "FrozenScene",

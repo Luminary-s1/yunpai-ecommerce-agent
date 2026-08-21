@@ -69,4 +69,3 @@ __all__ = [
     "validate_model_output",
     "validate_recommendation",
 ]
-

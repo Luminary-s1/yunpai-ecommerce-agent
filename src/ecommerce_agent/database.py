@@ -3520,9 +3520,11 @@ class Database:
             END;
             """
         )
-        # P1（WP5 反例③）：item 隔离贯穿读模型 —— 库存/订单补 item_id 列（可选，
-        # SKU 级共享数据留 NULL，所有 item 可见；链接专属数据 tag item_id，按 item 过滤）。
-        # 保留原唯一键（SKU 粒度语义，见 M9-R 任务书"每项指标保留真实粒度"），不重建表。
+        # R1（第 4 轮复验阻断项 1）：item 隔离语义修复——SKU 粒度（任务书 L43
+        # "每项指标保留真实粒度"），库存/订单同 SKU 共享，item 是展示维度。
+        # 不重建表（那会破坏 SKU 粒度）。加 item_id 列（保留，供查询严格匹配用）：
+        #   - 查询侧改为 item_id=? 严格匹配，NULL 行不广播（复验核心诉求）
+        #   - 写路径 upsert 补 item_id + 冲突更新写 item_id
         Database._ensure_column(conn, "inventory_balances", "item_id", "TEXT")
         Database._ensure_column(conn, "commerce_orders", "item_id", "TEXT")
         conn.execute(

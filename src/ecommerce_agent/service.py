@@ -143,6 +143,7 @@ class AgentService:
                 traffic_analysis_interpreter=traffic_analysis_interpreter,
                 recommendation_interpreter=recommendation_interpreter,
                 diagnosis_interpreter=diagnosis_interpreter,
+                model_semantic_enabled=self.settings.model_enabled,
             )
             self.operations.register_agent_tools(self.tools)
             self.readonly_data = ReadonlyDataService(self.db)

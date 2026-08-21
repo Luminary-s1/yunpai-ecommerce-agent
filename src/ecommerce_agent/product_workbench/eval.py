@@ -57,11 +57,16 @@ class MechanismEvalRunner:
         scenes: list[FrozenScene] | None = None,
         interpreter: DiagnosisInterpreter | None = None,
         facts_fn: Callable = build_diagnosis_facts,
+        recommendation_interpreter: Any = None,
     ) -> None:
         self.scenes = scenes or _default_scenes()
         self.interpreter = interpreter or RulesetDiagnosisInterpreter()
         self.facts_fn = facts_fn
-        self.recommendation_engine = RecommendationEngine()
+        # R5（C-lite）：建议解释器可注入（默认 Ruleset），方向场景用 mock 建议
+        # 解释器产出 SELECTION/NEW_LAUNCH/CLEARANCE → REQUIRED_FACTS 满足 → 非降级真实方向。
+        self.recommendation_engine = RecommendationEngine(
+            interpreter=recommendation_interpreter
+        )
 
     def run_scene(self, scene: FrozenScene) -> EvalResult:
         """跑单场景：输入 → 确定性事实 → 解释器 → 建议引擎 → oracle 断言。"""
@@ -85,6 +90,15 @@ class MechanismEvalRunner:
                 pollution=input_data.get("pollution"),
             )
             diag = run_interpretation(facts, self.interpreter)
+            # R5（C-lite）：场景可显式声明 required_signals（REQUIRED_FACTS 信号键），
+            # 注入 Diagnosis.evidence_facts → _build_facts_snapshot 透传 → 满足 REQUIRED_FACTS
+            # → 产出非降级真实方向。信号由场景/调用方注入（引擎不编造，D-034）；
+            # 未声明 → 不注入（缺信号 → 显式降级）。
+            required_signals = input_data.get("required_signals")
+            if required_signals:
+                diag.evidence_facts.update(
+                    {k: v for k, v in required_signals.items() if v not in (None, False)}
+                )
             produced = {
                 "diagnosis_type": diag.diagnosis_type.value,
                 "degraded": diag.degraded,
@@ -127,6 +141,12 @@ class MechanismEvalRunner:
                 created_at=_EVAL_CREATED_AT,
             )
             produced["recommendation_type"] = rec.type.value
+            # R5（C-lite）：追加建议层降级态 + 缺失证据键，供方向场景 oracle 锁
+            # 真实方向（recommendation_type != 保持观察 + recommendation_degraded +
+            # missing_evidence 精确键）。多余键对既有 oracle 无副作用（run_oracle 只遍历
+            # expected 键）。
+            produced["recommendation_degraded"] = rec.degraded
+            produced["missing_evidence"] = list(rec.missing_evidence)
         except Exception as exc:  # noqa: BLE001
             return EvalResult(scene.name, False, [f"eval_error:{exc}"])
         failures = scene.run_oracle(produced)
