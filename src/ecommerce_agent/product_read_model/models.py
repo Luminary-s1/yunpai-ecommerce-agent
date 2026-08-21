@@ -245,6 +245,9 @@ class SKUReadModel(BaseModel):
 
     隔离铁律 3（绝不广播）：店铺级字段物理不出现，注入即 ValidationError；
     本模型含自有粒度流量/交易漏斗字段，缺数据必须是 MISSING，不许用店铺值推导。
+
+    证据域（任务书 WP1）：流量/交易/库存（真实查询）+ 商品/竞品（真实查询）+
+    广告/实验（SKU 级缺来源 → 显式 MISSING）。
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -255,6 +258,8 @@ class SKUReadModel(BaseModel):
     sku_id: str
     revision: int
     material_code: str | None = None
+    title: str | None = None
+    merchant_code: str | None = None
     impressions: MetricValue
     clicks: MetricValue
     add_to_cart: MetricValue
@@ -264,6 +269,15 @@ class SKUReadModel(BaseModel):
     net_sales: MetricValue
     sellable_stock: MetricValue
     in_transit_stock: MetricValue
+    ad_spend: MetricValue = Field(default_factory=lambda: MetricValue.missing(
+        Granularity.DAILY, AggregateRule.SUM, "—", "ad_metric_store_level_only"
+    ))
+    competitor_price: MetricValue = Field(default_factory=lambda: MetricValue.missing(
+        Granularity.DAILY, AggregateRule.NONE, "—", "competitor_evidence_not_found"
+    ))
+    experiment_state: MetricValue = Field(default_factory=lambda: MetricValue.missing(
+        Granularity.DAILY, AggregateRule.NONE, "—", "experiment_state_provided_by_wp2_bridge"
+    ))
 
     def composite_key(self) -> tuple[str, str, str, str, int]:
         """固定结构契约：长度恒为 5，槽位含义固定。

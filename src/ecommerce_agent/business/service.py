@@ -116,6 +116,8 @@ class OperationsService:
         db: Database,
         *,
         traffic_analysis_interpreter: TrafficAnalysisInterpreter | None = None,
+        recommendation_interpreter: Any = None,
+        diagnosis_interpreter: Any = None,
     ):
         from ..traffic_lab import TrafficAnalysisEngine, TrafficLabIngestionService
 
@@ -163,12 +165,78 @@ class OperationsService:
         from ..product_diagnosis.bridge import EvidenceBridge
 
         self.evidence_bridge = EvidenceBridge(self.traffic_lab.domain)
-        # WP3 闭环补缺：诊断 → 建议 生成引擎（D-034：Ruleset 占位 + 模型可注入）。
-        # 引擎纯能力（不接路由/不自动触发），由工作台/agent 工具显式调用后
-        # 走 RecommendationPersistenceService.create 落库。
+        # WP2 诊断语义解释器（D-034：模型可注入，未注入则 Ruleset 降级）。
+        # 生产诊断入口通过 self.diagnose() 调用，模型可用时走 DiagnosisModelInterpreter。
+        from ..product_diagnosis.interpreter import (
+            DiagnosisInterpreter,
+            RulesetDiagnosisInterpreter,
+            run_interpretation,
+        )
+
+        self._diagnosis_interpreter: DiagnosisInterpreter = (
+            diagnosis_interpreter or RulesetDiagnosisInterpreter()
+        )
+        # WP3 闭环补缺：诊断 → 建议 生成引擎（D-034：模型可注入，未注入则
+        # Ruleset 降级）。引擎纯能力（不接路由/不自动触发），由工作台/agent 工具
+        # 显式调用后走 RecommendationPersistenceService.create 落库。
         from ..product_lifecycle.engine import RecommendationEngine
 
-        self.recommendation_engine = RecommendationEngine(self.inventory)
+        self.recommendation_engine = RecommendationEngine(
+            self.inventory, interpreter=recommendation_interpreter
+        )
+
+    def diagnose(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        item_id: str,
+        sku_id: str,
+    ) -> dict[str, Any]:
+        """生产诊断入口（D-034 语义链）：读模型 → 门禁 → 诊断（模型解释器）。
+
+        返回结构化诊断（diagnosis_type/reason/degraded/evidence_facts），
+        不落库、不产生平台写。缺证据/门禁未过 → 显式 missing/blocked，不编造。
+        """
+        from ..product_diagnosis.diagnosis import build_diagnosis_facts
+        from ..product_diagnosis.interpreter import run_interpretation
+
+        model = self.product_read.sku_read_model(
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id
+        )
+        gate_view = self.evidence_bridge.latest_revision_view(
+            tenant_id, store_id=store_id, sku_id=sku_id, item_id=item_id
+        )
+        all_passed, gates = self.evidence_bridge.run_gates(gate_view)
+        facts = build_diagnosis_facts(
+            sku_id,
+            {
+                "evidence_state": gate_view.get("evidence_state"),
+                "freshness": gate_view.get("freshness"),
+                "quality_gate": gate_view.get("quality_gate"),
+                "exposures": model.impressions.value
+                if model.impressions.evidence_state.value != "missing" else None,
+                "clicks": model.clicks.value
+                if model.clicks.evidence_state.value != "missing" else None,
+                "conversions": model.payments.value
+                if model.payments.evidence_state.value != "missing" else None,
+            },
+        )
+        diag = run_interpretation(facts, self._diagnosis_interpreter)
+        return {
+            "sku_id": sku_id,
+            "diagnosis_type": diag.diagnosis_type.value,
+            "reason": diag.reason,
+            "degraded": diag.degraded,
+            "evidence_facts": diag.evidence_facts,
+            "gates": {
+                "all_passed": all_passed,
+                "results": [
+                    {"name": g.name, "passed": g.passed, "reason": g.reason}
+                    for g in gates
+                ],
+            },
+        }
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]

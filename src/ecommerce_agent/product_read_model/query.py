@@ -126,6 +126,11 @@ class ProductReadQuery:
             item_id=item_id,
             sku_id=sku_id,
             revision=revision,
+            material_code=self._product_material_code(
+                tenant_id, store_id, sku_id
+            ),
+            title=self._product_title(tenant_id, store_id, sku_id),
+            merchant_code=self._product_merchant_code(tenant_id, store_id, sku_id),
             impressions=metric_values["impressions"],
             clicks=metric_values["clicks"],
             add_to_cart=metric_values["add_to_cart"],
@@ -135,6 +140,9 @@ class ProductReadQuery:
             net_sales=metric_values["net_sales"],
             sellable_stock=metric_values["sellable_stock"],
             in_transit_stock=metric_values["in_transit_stock"],
+            ad_spend=self._ad_spend_missing(),
+            competitor_price=self._competitor_price(tenant_id, store_id, sku_id),
+            experiment_state=self._experiment_missing(),
         )
 
     # ── 内部：各事实源聚合 ──
@@ -304,11 +312,63 @@ class ProductReadQuery:
                     window["active_to"] or "9999-12-31T23:59:59+00:00",
                 ),
             ).fetchone()
+            # 退款口径（G4）：退款是订单级（commerce_after_sale_cases 挂 order_id，
+            # 无 SKU 维度）。只有当该 SKU 的订单都只有单行（单 SKU）时才能精确归退款；
+            # 多行订单（多 SKU）的退款无法归到 SKU → 标 MISSING（reason 明确阻断），
+            # 不 JOIN order_lines 重复累计（那会把整单退款放大 N 倍）。
+            multi_line = conn.execute(
+                """
+                SELECT COUNT(*) AS multi
+                FROM commerce_order_lines l
+                WHERE l.order_id IN (
+                    SELECT DISTINCT o.id FROM commerce_orders o
+                    JOIN commerce_order_lines l2 ON l2.order_id=o.id
+                    WHERE o.tenant_id=? AND o.store_id=? AND l2.sku_id=?
+                      AND o.placed_at>=? AND o.placed_at<=?
+                )
+                GROUP BY l.order_id HAVING COUNT(*) > 1
+                LIMIT 1
+                """,
+                (
+                    tenant_id, store_id, sku_id,
+                    window["active_from"],
+                    window["active_to"] or "9999-12-31T23:59:59+00:00",
+                ),
+            ).fetchone()
+            if multi_line is not None:
+                refund_value = None
+                refund_reason = "refund_not_attributable_to_sku_multi_line_order"
+            else:
+                refund_row = conn.execute(
+                    """
+                    SELECT COALESCE(SUM(CAST(a.approved_amount AS REAL)), 0) AS refund_total
+                    FROM commerce_after_sale_cases a
+                    JOIN commerce_orders o ON o.id=a.order_id
+                    JOIN commerce_order_lines l ON l.order_id=o.id
+                    WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
+                      AND a.case_type IN ('refund','return_refund')
+                      AND a.status IN ('approved','completed')
+                      AND o.placed_at>=? AND o.placed_at<=?
+                    """,
+                    (
+                        tenant_id, store_id, sku_id,
+                        window["active_from"],
+                        window["active_to"] or "9999-12-31T23:59:59+00:00",
+                    ),
+                ).fetchone()
+                refund_value = (
+                    _to_float(refund_row["refund_total"])
+                    if refund_row and refund_row["refund_total"] not in (None, 0)
+                    else None
+                )
+                refund_reason = None if refund_value is not None else "refund_source_not_available"
         if row is None or (row["line_count"] or 0) == 0:
             return self._missing_orders("order_evidence_not_found")
+        # 退款：订单级金额，只有单行订单能精确归 SKU；多行订单退款无法归 SKU → MISSING。
+        # reason 是字段级：refund 的 reason 独立，不污染 payments/net_sales（它们有值）。
         return {
             "payments": _to_float(row["order_qty"]),
-            "refunds": None,  # 退款口径当前无独立来源，不编造
+            "refunds": refund_value,
             "net_sales": _to_float(row["gross"]),
             # data_as_of 统一源摄入时间（证据审查 #4：与库存口径一致，
             # 补录旧订单不低估新鲜度）；业务窗口过滤仍用 placed_at
@@ -318,7 +378,10 @@ class ProductReadQuery:
             "source_ref": row["latest_source_id"],
             "authoritative_service": "commerce_orders",
             "connector_id": row["connector_id"],
+            # 字段级 reason：refund 缺失的 reason 只作用于 refunds；
+            # payments/net_sales 有值时其 reason 应为 None。
             "reason": None,
+            "refund_reason": refund_reason,
             "period_key": (window["active_from"] or "")[:10] or None,
         }
 
@@ -329,6 +392,7 @@ class ProductReadQuery:
             "granularity": None,
             "authoritative_service": "commerce_orders",
             "reason": reason,
+            "refund_reason": reason,  # 订单缺失时退款同样缺失，共用同一 reason
             "period_key": None,
         }
 
@@ -339,7 +403,12 @@ class ProductReadQuery:
         inventory: dict[str, Any],
         orders: dict[str, Any],
     ) -> dict[str, Any]:
-        """按字段从对应事实源取投影（确定性）。返回统一 shape 含 value。"""
+        """按字段从对应事实源取投影（确定性）。返回统一 shape 含 value。
+
+        reason 字段级：refunds 用 refund_reason（退款缺失的独立 reason）；
+        其他字段用 reason（订单缺失的 reason，有值时 None）。避免共享 reason
+        污染有值的 payments/net_sales。
+        """
         if field in ("impressions", "clicks", "add_to_cart", "orders"):
             source = traffic
         elif field in ("sellable_stock", "in_transit_stock"):
@@ -349,7 +418,131 @@ class ProductReadQuery:
         # 源 dict 用字段名存值；统一补 value 键给投影用
         result = dict(source)
         result["value"] = source.get(field)
+        # 字段级 reason：refunds 独立，其余字段用通用 reason
+        if field == "refunds":
+            result["reason"] = source.get("refund_reason")
         return result
+
+    # ── 商品域（真实查询：readonly_product_mapping_events + readonly_canonical_products）──
+
+    def _product_mapping(
+        self, tenant_id: str, store_id: str, sku_id: str
+    ) -> dict[str, Any] | None:
+        """SKU → canonical 映射（最新 confirmed 事件）。无映射 → None。"""
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT m.canonical_product_id, m.item_id, m.merchant_code
+                FROM readonly_product_mapping_events m
+                WHERE m.tenant_id=? AND m.store_id=? AND m.sku_id=?
+                  AND m.event_type='confirmed'
+                ORDER BY m.mapping_version DESC LIMIT 1
+                """,
+                (tenant_id, store_id, sku_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def _product_material_code(
+        self, tenant_id: str, store_id: str, sku_id: str
+    ) -> str | None:
+        """料号（internal_part_number）：来自 canonical_products，非 item_id。"""
+        mapping = self._product_mapping(tenant_id, store_id, sku_id)
+        if mapping is None:
+            return None
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT internal_part_number FROM readonly_canonical_products
+                WHERE tenant_id=? AND store_id=? AND canonical_product_id=?
+                """,
+                (tenant_id, store_id, mapping["canonical_product_id"]),
+            ).fetchone()
+        return str(row["internal_part_number"]) if row else None
+
+    def _product_merchant_code(
+        self, tenant_id: str, store_id: str, sku_id: str
+    ) -> str | None:
+        mapping = self._product_mapping(tenant_id, store_id, sku_id)
+        if mapping is None:
+            return None
+        return mapping.get("merchant_code") or None
+
+    def _product_title(
+        self, tenant_id: str, store_id: str, sku_id: str
+    ) -> str | None:
+        mapping = self._product_mapping(tenant_id, store_id, sku_id)
+        if mapping is None:
+            return None
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT title FROM readonly_canonical_products
+                WHERE tenant_id=? AND store_id=? AND canonical_product_id=?
+                """,
+                (tenant_id, store_id, mapping["canonical_product_id"]),
+            ).fetchone()
+        return str(row["title"]) if row else None
+
+    # ── 竞品域（真实查询：competitor_observations）──
+
+    def _competitor_price(
+        self, tenant_id: str, store_id: str, sku_id: str
+    ) -> MetricValue:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT competitor_price, observed_at, source_id, connector_id
+                FROM competitor_observations
+                WHERE tenant_id=? AND store_id=? AND subject_sku=?
+                ORDER BY observed_at DESC LIMIT 1
+                """,
+                (tenant_id, store_id, sku_id),
+            ).fetchone()
+        if row is None:
+            return MetricValue.missing(
+                Granularity.DAILY, AggregateRule.NONE, _PERIOD_PLACEHOLDER,
+                reason="competitor_evidence_not_found",
+            )
+        source_type = source_type_from_connector(row["connector_id"])
+        state = evidence_state_from_source_type(source_type)
+        if state is EvidenceState.MISSING:
+            return MetricValue.missing(
+                Granularity.DAILY, AggregateRule.NONE, _PERIOD_PLACEHOLDER,
+                reason="competitor_source_unknown",
+            )
+        return MetricValue.from_value(
+            state=state,
+            granularity=Granularity.DAILY,
+            aggregate_rule=AggregateRule.NONE,
+            period_key=(row["observed_at"] or "")[:10] or _PERIOD_PLACEHOLDER,
+            value=_to_float(row["competitor_price"]),
+            import_manifest_id=row["source_id"],
+            data_as_of=(
+                datetime.fromisoformat(row["observed_at"])
+                if row["observed_at"] else None
+            ),
+            authoritative_service="competitor_observations",
+            data_trust=(
+                DataTrust.DEMO if state is EvidenceState.DEMO
+                else DataTrust.PRODUCTION
+            ),
+        )
+
+    # ── 广告/实验域（SKU 级缺来源 → 显式 MISSING）──
+
+    @staticmethod
+    def _ad_spend_missing() -> MetricValue:
+        return MetricValue.missing(
+            Granularity.DAILY, AggregateRule.SUM, _PERIOD_PLACEHOLDER,
+            reason="ad_metric_store_level_only",
+        )
+
+    @staticmethod
+    def _experiment_missing() -> MetricValue:
+        return MetricValue.missing(
+            Granularity.DAILY, AggregateRule.NONE, _PERIOD_PLACEHOLDER,
+            reason="experiment_state_provided_by_wp2_bridge",
+        )
 
 
 __all__ = [

@@ -160,6 +160,25 @@ def build_workbench_router(
             raise HTTPException(status_code=400, detail=detail) from exc
         return result
 
+    @router.get("/{store_id}/{item_id}/{sku_id}/diagnosis")
+    def sku_diagnosis(
+        store_id: str,
+        item_id: str,
+        sku_id: str,
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """SKU 生产诊断（D-034 语义链：读模型 → 门禁 → 模型诊断）。
+
+        返回结构化诊断（diagnosis_type/reason/degraded/evidence_facts + 门禁结果），
+        不落库、不产生平台写。缺证据/门禁未过 → 显式 missing/blocked，不编造。
+        """
+        return service.operations.diagnose(
+            admin.tenant_id,
+            store_id=store_id,
+            item_id=item_id,
+            sku_id=sku_id,
+        )
+
     @router.get("/{store_id}/{item_id}/{sku_id}/read-model")
     def sku_read_model(
         store_id: str,

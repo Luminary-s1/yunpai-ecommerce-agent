@@ -5,25 +5,28 @@
   sku（SKUReadModel，读模型事实）、recommendation_id、created_at（调用方注入）。
 - 输出：Recommendation（强制 DRAFT）。调用方决定是否落库
   （走 RecommendationPersistenceService.create，不直插 SQL）。
-- 副作用：零——本模块不写库、不调用模型（模型解释器本期不接，接口已预留）、
-  不触发任何平台动作（B4 平台写=0）。
+- 副作用：零——本模块不写库、不触发任何平台动作（B4 平台写=0）；
+  语义（类型/理由）由解释器产出，模型解释器通过注入的 ModelGateway 调模型。
 - 写屏障：只产 DRAFT 建议；不自动 APPROVED（B2）；不自动填供给方字段
   （supplier_ref/promised_delivery_at 由人工在 M10-R 订购单侧补齐——M10-R 契约约束，
   本引擎只填数量类事实）。
 - D-034 分工：确定性代码组装可执行建议候选 + 校验；语义（类型/理由）由解释器
-  产出。本期用 RulesetRecommendationInterpreter 确定性占位；生产可替换为模型
-  解释器（对齐 TrafficAnalysisModelInterpreter 三件套：系统 prompt「无执行权 +
-  按 output_schema 返回」，模型返回经 Pydantic 校验，失败降级为 Ruleset）。
+  产出。`RecommendationModelInterpreter` 为模型生产路径（复用 ModelGateway 三件套：
+  系统 prompt「无执行权 + 按 output_schema 返回」，失败降级 Ruleset）；
+  `RulesetRecommendationInterpreter` 为 fail-safe 降级。
 - 失败暴露：required_facts 缺 → degraded=True + missing_evidence
   （validate_recommendation 强制）；越权词 → validate_full_recommendation 递归拒绝；
   诊断类型不可映射 → 抛 ValueError。
-- 确定性：无时间/随机源；ruleset 映射固定；created_at 由调用方传入。
+- 确定性：无时间/随机源；created_at 由调用方传入。
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
+
+from pydantic import BaseModel, ConfigDict
 
 from ..product_diagnosis.diagnosis import Diagnosis, DiagnosisType
 from ..product_read_model.models import MetricValue, SKUReadModel
@@ -91,11 +94,81 @@ _RATIONALE_BY_TYPE: dict[RecommendationType, str] = {
 }
 
 
-class RulesetRecommendationInterpreter:
-    """确定性占位：按映射表把诊断类型 → 建议类型。
+# 建议模型输出 schema：只允许模型产 type + rationale + degraded，不产事实快照/越权字段。
+_RECOMMENDATION_SYSTEM_PROMPT = """\
+你是商品生命周期建议的语义解释器。确定性代码已经固化诊断事实与证据，你没有执行权，且不得修改、替代或重算 effect、confidence interval、sample size、quality gate 或任何证据引用，也不得把建议变成平台动作。
 
-    注意：占位不等于验收依据——本实现只让「诊断→建议」链路端到端可测；
-    生产语义决策应由模型解释器承担（见 RecommendationInterpreter）。
+只做两件事：
+1. 根据给出的诊断选择唯一建议类型（type）；
+2. 用谨慎语言给出建议理由（rationale），把收益/风险描述为待验证假设，不宣称平台内部权重或因果机制。
+
+可选建议类型（严格取值）：
+- 选品候选 / 上新准备 / 曝光/点击诊断 / 受控实验 / 保持观察 / 定价候选 / 活动候选 / 补货联动 / 清仓预警
+
+缺成本时不得输出"一定提价 N 元"一类的正式利润安全价格；缺竞品时不得假装有行业对标。严格按用户消息中的 output_schema 返回一个 JSON object。\
+"""
+
+
+class _RecommendationModelOutput(BaseModel):
+    """模型建议输出契约（仅类型 + 理由 + 降级标记）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: RecommendationType
+    rationale: str
+    degraded: bool = False
+
+
+class RecommendationModelInterpreter:
+    """模型建议解释器（D-034 生产路径）：复用 ModelGateway 三件套。
+
+    失败/超时/模型禁用 → 降级 RulesetRecommendationInterpreter（fail-safe）。
+    """
+
+    def __init__(self, gateway: Any) -> None:
+        self.gateway = gateway
+        self._fallback = RulesetRecommendationInterpreter()
+
+    def interpret(self, diagnosis: Diagnosis) -> RecommendationCandidate:
+        output_schema = _RecommendationModelOutput.model_json_schema()
+        request = {
+            "facts_authority": "deterministic_code",
+            "diagnosis": {
+                "diagnosis_type": diagnosis.diagnosis_type.value,
+                "reason": diagnosis.reason,
+                "evidence_facts": diagnosis.evidence_facts,
+                "degraded": diagnosis.degraded,
+            },
+            "output_schema": output_schema,
+        }
+        try:
+            raw = self.gateway.generate_json(
+                [
+                    {"role": "system", "content": _RECOMMENDATION_SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": json.dumps(request, ensure_ascii=False, sort_keys=True),
+                    },
+                ],
+                thinking_enabled=False,
+            )
+            # 模型输出经 Pydantic 校验（type 必须合法）；失败降级 Ruleset
+            parsed = _RecommendationModelOutput.model_validate(raw)
+            return RecommendationCandidate(
+                type=parsed.type,
+                rationale=parsed.rationale,
+                rationale_evidence_refs=tuple(diagnosis.evidence_facts.keys()),
+                degraded=parsed.degraded,
+            )
+        except Exception:  # noqa: BLE001 — 模型故障/输出非法 → fail-safe 降级
+            return self._fallback.interpret(diagnosis)
+
+
+class RulesetRecommendationInterpreter:
+    """确定性降级：按映射表把诊断类型 → 建议类型（fail-safe，非生产语义决策）。
+
+    注意：占位不等于验收依据——仅用于模型不可用时的降级；
+    生产语义决策由 RecommendationModelInterpreter 承担。
     """
 
     def interpret(self, diagnosis: Diagnosis) -> RecommendationCandidate:
@@ -285,5 +358,6 @@ __all__ = [
     "RecommendationCandidate",
     "RecommendationEngine",
     "RecommendationInterpreter",
+    "RecommendationModelInterpreter",
     "RulesetRecommendationInterpreter",
 ]

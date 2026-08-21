@@ -158,3 +158,105 @@ def test_operations_wires_product_read(tmp_path) -> None:
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
     )
     assert model.composite_key() == ("tenant-a", "store-a", "item-a", "sku-a", 1)
+
+
+def test_query_item_isolation_no_cross_item(tmp_path) -> None:
+    """G3 反假绿：同 SKU 在 item-a 下，请求 item-b 必须 MISSING（不跨 item 串数）。
+
+    种 item-a 的 sku-a 库存/订单，请求 item-b 的 sku-a → _revision_window 用
+    item_id 过滤找不到 revision → 库存/订单返回 MISSING，不返回 item-a 的数据。
+    """
+    db = Database(tmp_path / "query-item-iso.sqlite3")
+    db.initialize()
+    _seed(db)  # 种 item-a 的 sku-a
+    query = ProductReadQuery(db)
+    # 请求错误的 item-b（sku-a 实际属于 item-a）
+    model = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-b", sku_id="sku-a"
+    )
+    # 库存/订单必须 MISSING（不能把 item-a 的 sku-a 库存串到 item-b）
+    assert model.sellable_stock.evidence_state is EvidenceState.MISSING, (
+        f"item-b 串到 item-a 的库存: {model.sellable_stock.value}"
+    )
+    assert model.in_transit_stock.evidence_state is EvidenceState.MISSING
+    assert model.impressions.evidence_state is EvidenceState.MISSING
+
+
+def test_query_product_and_competitor_domains(tmp_path) -> None:
+    """G2 反假绿：商品/竞品域真实查询，广告/实验域显式 MISSING。
+
+    种 mapping + canonical + competitor 数据，断言商品域返回真实值、
+    竞品域返回真实价；广告/实验域无 SKU 级来源必须 MISSING（非 zero/None 静默）。
+    """
+    db = Database(tmp_path / "query-domains.sqlite3")
+    db.initialize()
+    _seed(db)
+    # 种商品映射 + canonical
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO readonly_canonical_products(canonical_product_id, tenant_id, store_id, internal_part_number, merchant_code, title, normalized_title, source_kind, source_reference, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("cp-1", "tenant-a", "store-a", "mpn-1", "mc-1", "测试商品标题", "测试商品标题", "actual", "ref-1", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ev-1", "tenant-a", "store-a", "taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO competitor_observations(id, tenant_id, connector_id, store_id, subject_sku, competitor_name, competitor_sku, subject_price, competitor_price, currency, source_type, source_ref, is_estimate, observed_at, source_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("comp-1", "tenant-a", "taobao", "store-a", "sku-a", "竞品A", "comp-sku-1", "109.00", "99.00", "CNY", "authorized_api", "ref-comp", 0, "2026-08-10T00:00:00+00:00", "src-comp", "2026-08-10T00:00:00+00:00"),
+        )
+    query = ProductReadQuery(db)
+    model = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+    # 商品域真实查询
+    assert model.title == "测试商品标题"
+    assert model.merchant_code == "mc-1"
+    assert model.material_code == "mpn-1"  # internal_part_number（料号），非 item_id
+    # 竞品域真实查询
+    assert model.competitor_price.value == 99.0
+    assert model.competitor_price.evidence_state is EvidenceState.ACTUAL
+    # 广告/实验域显式 MISSING（非 zero/None）
+    assert model.ad_spend.evidence_state is EvidenceState.MISSING
+    assert model.ad_spend.reason == "ad_metric_store_level_only"
+    assert model.experiment_state.evidence_state is EvidenceState.MISSING
+    assert model.experiment_state.reason == "experiment_state_provided_by_wp2_bridge"
+
+
+def test_query_refund_closed_loop(tmp_path) -> None:
+    """G4 反假绿：退款有 approved 金额才投影真值，rejected 不计入，reason 不污染。
+
+    种单行订单 + approved 退款，断言 refunds 有值、payments/net_sales 的 reason 为 None；
+    再种 rejected 退款，断言 refunds 不被计入。
+    """
+    db = Database(tmp_path / "query-refund.sqlite3")
+    db.initialize()
+    _seed(db)
+    with db.connect() as conn:
+        # 单行订单 ord-1（sku-a 单 SKU）+ approved 退款 20
+        conn.execute(
+            "INSERT INTO commerce_after_sale_cases(id, order_id, external_case_id, case_type, status, requested_amount, approved_amount, reason_code, opened_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            ("case-1", "ord-1", "ext-case-1", "refund", "approved", "20.00", "20.00", None, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+    query = ProductReadQuery(db)
+    model = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+    assert model.refunds.value == 20.0, f"退款应投影 approved 金额: {model.refunds.value}"
+    # 关键：payments/net_sales 有值，reason 不能是退款缺失的 reason
+    assert model.payments.value is not None
+    assert model.payments.reason is None, f"payments 被退款 reason 污染: {model.payments.reason}"
+    # 再种 rejected 退款，应被 status 过滤掉（不改变 refunds）
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO commerce_after_sale_cases(id, order_id, external_case_id, case_type, status, requested_amount, approved_amount, reason_code, opened_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            ("case-2", "ord-1", "ext-case-2", "refund", "rejected", "30.00", "0.00", None, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+    model2 = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+    assert model2.refunds.value == 20.0, (
+        f"rejected 退款不应计入: {model2.refunds.value}"
+    )
+
+

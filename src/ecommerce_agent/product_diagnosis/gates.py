@@ -44,10 +44,51 @@ FORBIDDEN_KEYS: frozenset[str] = frozenset({
 })
 
 
+# M5-R issue 码 → M9-R 显式 gate 权威映射（复用 M5-R 预计算结果，不重算统计）。
+# 枚举变化须同步此处 + 测试锁定（防 M5-R 改 issue 码后 M9-R 门禁误判）。
+_AA_ISSUE_CODES: frozenset[str] = frozenset({
+    "aa_gate_missing", "aa_gate_stale", "aa_gate_failed",
+    "aa_false_positive_detected",
+})
+_SAMPLE_SIZE_ISSUE_CODES: frozenset[str] = frozenset({
+    "assignment_buckets_insufficient", "minimum_exposure_not_met",
+    "normal_approximation_unreliable", "analysis_samples_missing",
+})
+_WINDOW_ISSUE_CODES: frozenset[str] = frozenset({
+    "experiment_windows_missing", "experiment_window_gap", "experiment_window_overlap",
+    "revision_window_gap", "revision_window_overlap", "source_receipt_missing",
+})
+_CONTROL_VARIABLE_ISSUE_CODES: frozenset[str] = frozenset({
+    "control_variable_missing", "control_variable_changed",
+    "treatment_variable_missing", "multiple_treatment_variables_changed",
+    "unplanned_revision_attributes_changed", "stock_not_available",
+    "sale_price_changed",
+})
+
+
+def _quality_gate_issues(view: Mapping[str, Any]) -> tuple[str, ...]:
+    """从证据视图提取 quality_gate.issues（M5-R 权威 issue 列表）。"""
+    gate = view.get("quality_gate")
+    if isinstance(gate, Mapping):
+        return tuple(gate.get("issues") or ())
+    return ()
+
+
+def _quality_gate_present(view: Mapping[str, Any]) -> bool:
+    """quality_gate 是否以 passed 状态存在（子 gate 的前提）。"""
+    gate = view.get("quality_gate")
+    if isinstance(gate, Mapping):
+        return gate.get("status") == "passed"
+    return gate == "passed"
+
+
 class GateEngine:
     """确定性 Gate 组合：全部通过才给强方向结论。
 
     用法：engine.run_all(view) → (all_passed, [GateResult, ...])
+
+    7 个 gate：evidence / freshness / quality_gate（总开关）+ aa / sample_size /
+    window / control_variables（显式枚举，复用 M5-R issue 码反查，不重算统计）。
     """
 
     def __init__(self) -> None:
@@ -100,8 +141,55 @@ class GateEngine:
             return GateResult("quality_gate", False, f"quality_gate_not_passed:{detail}")
         return GateResult("quality_gate", True)
 
+    @staticmethod
+    def check_aa(view: Mapping[str, Any]) -> GateResult:
+        """A/A Gate：M5-R issue 码反查 aa_gate_*，命中即失败。
+
+        quality_gate 缺失/未通过时 → failed（fail-closed，不假装"检查过且通过"）。
+        """
+        if not _quality_gate_present(view):
+            return GateResult("aa", False, "aa_gate_unchecked_quality_gate_missing")
+        issues = _quality_gate_issues(view)
+        hit = [i for i in issues if i in _AA_ISSUE_CODES]
+        if hit:
+            return GateResult("aa", False, f"aa_gate_issue:{','.join(hit)}")
+        return GateResult("aa", True)
+
+    @staticmethod
+    def check_sample_size(view: Mapping[str, Any]) -> GateResult:
+        """样本量 Gate：M5-R issue 码反查样本不足，命中即失败。"""
+        if not _quality_gate_present(view):
+            return GateResult("sample_size", False, "sample_size_unchecked_quality_gate_missing")
+        issues = _quality_gate_issues(view)
+        hit = [i for i in issues if i in _SAMPLE_SIZE_ISSUE_CODES]
+        if hit:
+            return GateResult("sample_size", False, f"sample_size_issue:{','.join(hit)}")
+        return GateResult("sample_size", True)
+
+    @staticmethod
+    def check_window(view: Mapping[str, Any]) -> GateResult:
+        """实际窗口 Gate：M5-R issue 码反查窗口 gap/overlap/缺失，命中即失败。"""
+        if not _quality_gate_present(view):
+            return GateResult("window", False, "window_unchecked_quality_gate_missing")
+        issues = _quality_gate_issues(view)
+        hit = [i for i in issues if i in _WINDOW_ISSUE_CODES]
+        if hit:
+            return GateResult("window", False, f"window_issue:{','.join(hit)}")
+        return GateResult("window", True)
+
+    @staticmethod
+    def check_control_variables(view: Mapping[str, Any]) -> GateResult:
+        """控制变量 Gate：M5-R issue 码反查控制变量缺失/变更，命中即失败。"""
+        if not _quality_gate_present(view):
+            return GateResult("control_variables", False, "control_variables_unchecked_quality_gate_missing")
+        issues = _quality_gate_issues(view)
+        hit = [i for i in issues if i in _CONTROL_VARIABLE_ISSUE_CODES]
+        if hit:
+            return GateResult("control_variables", False, f"control_variable_issue:{','.join(hit)}")
+        return GateResult("control_variables", True)
+
     def run_all(self, view: Mapping[str, Any]) -> tuple[bool, list[GateResult]]:
-        """组合判定（证据三关）：全部通过 → (True, results)；任一失败 → (False, results)。
+        """组合判定（7 gate）：全部通过 → (True, results)；任一失败 → (False, results)。
 
         越权输出检查作用于模型输出（见 EvidenceBridge.run_gates 的 model_output 参数），
         不在此处对证据视图做子串匹配——视图含 quality_gate/effect_estimate 等合法键，
@@ -111,6 +199,10 @@ class GateEngine:
             self.check_evidence(view),
             self.check_freshness(view),
             self.check_quality_gate(view),
+            self.check_aa(view),
+            self.check_sample_size(view),
+            self.check_window(view),
+            self.check_control_variables(view),
         ]
         all_passed = all(result.passed for result in results)
         return all_passed, results
