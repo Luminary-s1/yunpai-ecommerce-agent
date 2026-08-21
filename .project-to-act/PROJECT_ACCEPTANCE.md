@@ -5,6 +5,82 @@
 
 ## 当前验收结论
 
+- 结论：2026-08-21 M8-R WP1～WP4 已在负责人最新 `main` `8de48c3` 基线上完成单 PR 提交前
+  整链门禁，证据 ID 为 E-20260821-003，功能提交为 `f9653a0`。仓库全量回归
+  `1081 passed, 24 warnings`、退出码 0、耗时 2417.05 秒；24 条警告均来自既有 Traffic Lab
+  FastAPI 重复 Operation ID。whitespace、managed ledger 和使用独立 pycache 的 compileall 均
+  通过；第一次直接向 F 盘既有 `__pycache__` 写入被权限阻断，改用隔离缓存后通过，不计为代码
+  失败。该结论允许进入分支推送和完整 M8-R PR 建立，但不表示 M8-R 已完成：PR 尚未创建，
+  固定待验 head 后的缪海南 WP5、PR 审阅/合入、真实渠道、长稳和生产 Gate 仍未完成。
+- 结论：2026-08-21 谢良璇已完成 M8-R WP4 正式前端人工验收并在缺陷修复后复测通过，证据 ID
+  为 E-20260821-002。8 个固定影子场景、输入/Oracle 分离、事实来源/新鲜度/隐私/范围/写屏障、
+  正负反馈治理和隔离 Eval 均由本人操作确认；正式 Eval `8/8 passed`，回答准确、证据覆盖、来源
+  完整和转人工合理均为 100%，幻觉、拒答与敏感输出均为 0%。验收发现并推动修复 390px 下历史
+  表横向溢出及 21 项导航难以操作，修复后页面无横向溢出且全部入口可达。结果 JSON 可解析，
+  `tester=谢良璇`、8/8 observation、`final_status=human_accepted_after_fix`；21 张正式截图、中文报告
+  和结果文件均已归档。该结论关闭 WP4 开发侧人工 Gate，但 M8-R 仍为进行中：仓库完整回归、
+  单一 M8-R PR、固定待验 head 后由缪海南执行的 WP5、真实渠道和生产 Gate 尚未完成。
+- 结论：2026-08-21 M8-R WP4 已形成谢良璇开发侧代码候选，证据 ID 为
+  E-20260821-001。现有 `/admin` 已提供 8 场景影子客服评审、输入/Oracle 分栏、显式场景运行、
+  回答与事实证据审阅、正负反馈、`pending` 治理候选和隔离 Eval；页面浏览、刷新及旧报告查看
+  不隐式运行 Agent。WP4 及关联测试不重复计数 88 项通过（4406.90 秒），compileall、JavaScript、PowerShell
+  5.1/BOM、whitespace 和开发者桌面/390px 浏览器演练均通过；隔离 Eval 为 8/8，六项业务质量
+  指标符合门槛，主库临时会话/消息/人工任务/outbox 零污染。该浏览器结果是开发者演练，未保存
+  正式截图，也不表示谢良璇已完成 8 步人工验收。当前工作树仍未提交/推送；正式 WP4 人工
+  验收、仓库全量、完整 M8-R PR、缪海南 WP5、真实模型/渠道/数据、长稳和生产 Gate 未完成。
+- 结论：2026-08-20 谢良璇已完成 M8-R WP3 开发侧人工黑盒验收，证据 ID 为
+  E-20260820-007。无 `-AutoConfirm` 的隔离验收记录为 `confirmation_mode=human`，8/8
+  observation 全部 `confirmed=true`，`automatic_contract_checks=passed`、
+  `human_observations_passed=true`、`final_status=human_accepted`。正反例覆盖默认/明确询问的
+  库存披露、missing 不补零、stale 日期和流式草稿抑制、售后多轮订单恢复与隐私、错误订单
+  scope、否定/假设/复合语义权及影子零写入。原始结果同时确认未调用外部模型、未执行平台
+  写动作。该结论关闭 WP3 开发侧人工验收；当前工作树仍未提交/推送，WP4、完整全量、完整
+  M8-R PR、缪海南 WP5、真实模型/渠道/数据、长稳和生产 Gate 仍未完成。
+- 结论：2026-08-20 M8-R WP3 人工验收助手已完成 Windows PowerShell 5.1 编码兼容修复，
+  证据 ID 为 E-20260820-006。用户首次直接运行时复现参数列表缺右括号和字符串缺终止符；
+  文件头检查确认原脚本为 UTF-8 无 BOM。补充 UTF-8 BOM 后，使用相同
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ... -AutoConfirm` 完整运行八步并
+  退出 0，中文输出、过程记录和结果 JSON 均正常。本结论只关闭验收工具的 5.1 启动故障，
+  `confirmation_mode=auto`、`final_status=developer_rehearsal_passed` 仍不计作谢良璇人工验收；
+  WP3 正式人工确认及 E-20260820-005 的其余未完成边界保持不变。
+- 结论：2026-08-20 M8-R WP3 已形成谢良璇开发侧代码候选，证据 ID 为 E-20260820-005。
+  WP1 批准内容与 advisory-only signal、WP2 可信销售/售后事实已进入既有 M4 模型规划和生成
+  链；模型继续决定普通语义路线，确定性代码只执行身份范围、工具 schema、来源、新鲜度、
+  客户可见字段、输出后置验证和影子写屏障。建议回复以 `customer-service-suggestion-v1`
+  记录决定、话术、事实、模型、降级和人工任务；流式与非流式共享生成准备，危险流式草稿在
+  输出前被阻断。WP3 自有 17 项及关联拆组测试、compileall、whitespace 和 managed ledger
+  校验均通过；8 步开发者演练结果为 `confirmation_mode=auto`、
+  `final_status=developer_rehearsal_passed`，不计作谢良璇人工验收。当前工作树未提交/推送；
+  WP3 正式人工确认、WP4、完整全量、完整 M8-R PR、缪海南 WP5、真实模型/渠道/数据、长稳和
+  生产 Gate 仍未完成。
+- 结论：2026-08-20 谢良璇已完成 M8-R WP2 开发侧人工黑盒验收，证据 ID 为
+  E-20260820-004。无 `-AutoConfirm` 的隔离验收记录 `confirmation_mode=human`、8/8 observation
+  为 `confirmed=true`、`automatic_contract_checks=passed`、`human_observations_passed=true`、
+  `final_status=human_accepted`。正反例覆盖销售事实/缺失不补零、当前/过期快照、已知/未知来源、
+  正确/错误订单与店铺范围、必要售后事实/隐私排除、current/superseded 和 tenant-a/tenant-b
+  隔离。完整手机号未进入投影，只显示脱敏形式。该结论关闭 WP2 开发侧人工验收，但当前工作树
+  仍未提交/推送；完整全量、WP3～WP4、完整 M8-R PR、缪海南 WP5、真实渠道/数据、长稳和
+  生产 Gate 仍未完成。
+- 结论：2026-08-20 M8-R WP2 已形成谢良璇开发侧代码候选，证据 ID 为 E-20260820-003。
+  新增销售与售后两项只读 Agent 工具，复用 M7-R 商品、库存、订单、manifest、商品身份和
+  readiness 权威服务，统一 tenant/store/order scope、source provenance、freshness、missing
+  和历史/current 语义；字段白名单排除买家 hash、运单号、内部行号/售后号、仓库号、原始
+  source_id、payload hash 和 attributes，自由文本在投影边界再次脱敏。可信订单号 mutation
+  在移除比较后稳定红灯；跨来源商品身份 mutation 在恢复“任一来源确认即可”后错误返回
+  `confirmed` 并稳定红灯，两处恢复后转绿。当前哈希的 WP2/模块登记、M7 直接依赖、商品身份
+  与 Context/WP1 回归按拆组共 `17 + 13 + 17 + 19 = 66 passed`，compileall、whitespace 和
+  8 步自动验收演练通过。
+  自动演练明确记录 `confirmation_mode=auto`、`final_status=developer_rehearsal_passed`，本身不能
+  替代人工确认；后续人工结果由 E-20260820-004 单独固化。当前工作树未提交/推送；仓库完整
+  全量运行在 15 分钟工具上限到达时仍无最终统计，已作废且不计通过。WP3～WP4、完整 M8-R
+  PR、缪海南 WP5、真实渠道/数据、长稳和生产 Gate 仍未完成。
+- 结论：2026-08-20 M8-R 开发分支已同步到负责人仓库最新 `main` `454b35c`，证据 ID 为
+  E-20260820-002。M7-R PR #20 已合入，谢良璇的 Fork `Luminary-s1/yunpai-ecommerce-agent`
+  `main` 与负责人仓库精确一致；本地远端已规范为 `origin=个人 Fork`、`upstream=负责人仓库`。
+  WP1 工作树经 stash 保护后快进并恢复，M7/M8 台账冲突按 F-323 已完成、F-324 进行中合并；
+  WP1/M7 契约、RAG/治理、知识运行时桥和知识灰度四组共 `30 + 12 + 17 + 4 = 63 passed`。
+  本结论只证明基线同步与 WP1 聚焦兼容，不替代仓库全量、WP2～WP4、完整 M8-R PR、缪海南
+  WP5、真实渠道、长稳或生产 Gate。
 - 结论：2026-08-20 M7-R WP1～WP4 已在固定代码对象上通过 WP5 代码级、本机技术 Gate，
   PR #20 已合入 `main`，证据 ID 为 E-20260820-001。WP1 因是 M8-R～M10-R 共用基建而
   先行合入，PR base `48013b1` 已包含 WP1；缪海南独立验收的 WP2～WP4 head 为
@@ -44,6 +120,20 @@
   `1008 passed, 24 warnings`，无 failed/skipped/xfailed。沿用 schema v34，无新依赖、HTTP、
   Agent、语义路由或平台写动作。仓库与会话附件未找到经授权的真实平台受控样本，故只批准
   通用开发候选，不批准淘宝/天猫字段全覆盖、WP3～WP5、正式 WP5、真实经营结论或生产放行。
+- 结论：2026-08-19 M8-R WP1 已由开发负责人谢良璇完成本机隔离环境的 8 步真实 HTTP
+  黑盒验收，并完成提交前关联回归复核，证据 ID 为 E-20260819-002/E-20260819-003。
+  结果文件记录 `confirmation_mode=human`、
+  `automatic_contract_checks=passed`、8 项人工观察全部 `confirmed=true`、
+  `human_observations_passed=true`、`final_status=human_accepted`。验收覆盖服务就绪、受控导入、
+  未批准候选不可见、审核/批准与未来生效门、店铺/SKU/场景/完全匹配边界、关键词
+  `advisory_only`、过期排除与惰性公式追溯、两层退役和店铺兜底。提交前按六组复跑
+  `11 + 23 + 12 + 17 + 24 + 15 = 102 passed`，编译、空白、PowerShell 5.1 语法、
+  新增行宽和 managed ledger 校验均通过。该证据支持 WP1 开发侧功能与人工验收完成；
+  原验收代码基于 main `48013b1`，尚未推送/合入；2026-08-20 已按 E-20260820-002 快进到
+  `454b35c` 并完成 63 项聚焦兼容复验，后续按 D-047 与 WP2～WP4 组成完整 M8-R PR。
+  原全量 961 项运行未取得完整退出码，
+  WP2～WP4、缪海南 WP5、真实文件/店铺/模型、长稳与生产 Gate 仍未完成，因而不得声明
+  F-324 或整个 M8-R 完成。
 - 结论：2026-08-17 M7-R WP1 功能提交 `0b54a24` 与 D-046/v34 集成文档提交 `e127c39` 已从
   `9619383` 快进推送到 `origin/main`，远端回读精确一致，测试树为 `8b962e9b`。隔离 main
   worktree 上 compileall、责任矩阵、project-to-act、whitespace 和全量 `950 passed, 24 warnings`
@@ -496,6 +586,76 @@
 
 ## 证据索引
 
+- E-20260820-007：M8-R WP3 谢良璇人工黑盒验收。2026-08-20 21:50:36 +08:00，谢良璇在
+  F 盘隔离数据目录运行无 `-AutoConfirm` 的 WP3 助手，在每一步阅读回复、建议证据和正反例
+  后亲自确认。结果为 `tester=谢良璇`、`work_package=M8-R-WP3`、
+  `confirmation_mode=human`、8/8 confirmed、`automatic_contract_checks=passed`、
+  `human_observations_passed=true`、`final_status=human_accepted`。确认默认只说有货、明确询问
+  才披露 current 可售 5 件且不泄露在途；missing 草稿“0 件”被拦截；stale 安全回答带
+  2026-08-15，危险流式草稿未发送；第二轮恢复 `ORDER-1` 且无买家 hash、运单号或完整手机号；
+  错误 `ORDER-2` 在工具前阻断；否定/假设/复合请求保留模型 answer/observe；影子退款
+  `write_calls=[]`、handoff/outbox 增量均为 0、`suggestion_not_sent`。结果/过程 SHA-256 分别为
+  `c3b72d52...e101f0a`、`82771eeb...e2f368`，原始文件位于 F 盘 `wp3-manual-evidence`。
+  `external_model_called=false`、`platform_write_performed=false`。本证据只关闭 WP3 开发侧人工
+  验收，不替代 WP4、完整全量、提交/PR/CI、缪海南 WP5、真实渠道或生产 Gate。
+- E-20260820-006：M8-R WP3 人工验收助手 Windows PowerShell 5.1 编码兼容。用户在
+  Windows PowerShell 中运行中文脚本时，解释器报告参数列表缺 `)` 和字符串缺终止符；文件头
+  为 `70 61 72 61...`，确认 UTF-8 无 BOM。将同一脚本机械转换为 UTF-8 with BOM 后，文件头
+  为 `EF BB BF 70 61...`，再以 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File`
+  和 `-AutoConfirm` 完整执行八步，退出 0；结果为 `automatic_contract_checks=passed`、8/8
+  confirmed、`confirmation_mode=auto`、`final_status=developer_rehearsal_passed`。脚本、过程和
+  结果 SHA-256 分别为 `c3b0c69f...c98616de`、`4c076ea2...dbaee21`、
+  `b81fadb5...b042256`，证据位于 F 盘 `wp3-manual-evidence`。本修复不改变 Python 业务逻辑、
+  schema、依赖或平台动作；它取代 E-20260820-005 中修复前验收工具的兼容性证明，但不改变
+  E-005 的核心代码/自动测试结论，也不替代正式人工验收。
+- E-20260820-005：M8-R WP3 销售/售后语义策略与建议回复闭环开发候选。基于
+  `454b35c9000ab279ffdbf115f80afdf3e031ee73 + working tree`，新增
+  `customer_service_loop.py` 与 17 项 WP3 测试，并扩展 ContextBuilder、Prompt、Graph、Schema
+  和 Service。有效测试均有明确退出码 0：WP3 快速契约 `11 passed, 6 deselected`、整链/多轮/
+  流式/影子 `6 passed, 11 deselected`；WP1/WP2 回归 `24 passed`；policy `10 passed`、context
+  `8 passed`、ReAct graph `4 passed`、service stream `4 passed`、HTTP/SSE `11 passed`、intent
+  拆组 `11 + 7 passed`、API `4 passed`、流式修复目标 `4 passed`、陈旧流式反例 `1 passed`。
+  过大组合运行因时限未取得最终统计，明确作废。开发者随后在 F 盘隔离目录运行 8 步
+  `-AutoConfirm` 演练：流式/非流式一致、明确询问才披露当前可售量、missing 不补零、stale
+  带日期且危险草稿不外发、售后多轮恢复订单并排除隐私、错误订单范围阻断、否定/假设/复合
+  语义保留模型决定、影子退款工具调用 0 且 handoff/outbox 增量均为 0；结果为
+  `confirmation_mode=auto`、8/8 confirmed、`final_status=developer_rehearsal_passed`，不替代人工
+  确认。过程/结果 SHA-256 分别为 `c5c1d347...524a589`、`8e04a060...b221573`，位于
+  `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp3-manual-evidence\`。核心 loop/service/test
+  SHA-256 分别为 `46e4c6f7...020b6e9`、`33991cba...51024a`、`1a3b00ca...ffdbda4`。
+  compileall、当时宿主的 PowerShell 语法解析、diff whitespace 和 project-to-act validate 退出 0；
+  Windows PowerShell 5.1 编码兼容由 E-20260820-006 后续复现并修复。无 schema、依赖、WP3
+  前端、外部模型或平台写动作。证据在 WP3 代码/测试/策略或上述哈希变化前有效，
+  仅为开发侧候选，不代表人工验收、WP4、完整 PR、WP5 或生产放行。
+- E-20260820-004：M8-R WP2 谢良璇人工黑盒验收。2026-08-20 17:17:01 +08:00，谢良璇在
+  F 盘隔离数据目录运行无 `-AutoConfirm` 的 8 步助手，逐项核对销售事实、缺失不补零、过期
+  快照、来源 Gate、订单/店铺双绑定、售后事实与隐私、历史/current 和租户隔离，并在每步
+  输入人工确认。正例与反例配对成立：合法范围可读、错误范围阻断；当前快照可用、旧快照
+  stale；已知虚拟来源可追溯、未知来源 facts 为空；版本 2 current、版本 1 superseded；
+  tenant-a 可读自身事实、tenant-b 对同一 SKU 只得 missing。完整手机号未出现，物流文本仅保留
+  `138****8000` 脱敏形式。结果为 `confirmation_mode=human`、8/8 confirmed、
+  `human_observations_passed=true`、`final_status=human_accepted`、`external_model_called=false`。
+  本证据不替代完整全量、提交/PR/CI、WP3～WP5、真实平台或生产 Gate。
+- E-20260820-003：M8-R WP2 商品、订单、库存与履约物流可信上下文接线开发候选。新增
+  `customer-service-facts-v1`、唯一客服字段白名单、销售/售后只读工具、D-015 可信
+  `order_id + shop_id` 双绑定、M7-R manifest/Connector 来源解析、readiness freshness、
+  缺失不补零、全来源确认商品身份、稳定阻断结构和订单历史更正投影。初始缺模块收集退出 2；
+  历史版本位于事件外层的缺陷使 2 项测试失败，修正后 WP2 聚焦 13 项通过。临时移除订单号
+  比较后目标测试因 `DID NOT RAISE` 失败；临时恢复“任一来源确认即可”后跨来源身份测试因
+  错误返回 `confirmed` 失败，两处恢复后通过。模块登记组合 17 passed；M7 直接依赖 13 passed、
+  商品身份 17 passed、ContextBuilder + WP1 19 passed，均退出 0。早期 5 分钟组合、最终
+  15 分钟广覆盖依赖尝试和仓库 15 分钟全量均无最终统计而作废，当前哈希拆组有效结果合计
+  66 passed。自动验收助手
+  在 F 盘隔离目录完成 8 步演练并生成中文
+  证据，但因 `confirmation_mode=auto` 不计人工通过。compileall、diff whitespace 退出 0；
+  schema v35、依赖、HTTP/前端、模型、平台写动作和语义路由均未改变。
+- E-20260820-002：M8-R Fork、远端关系、最新 main 和 WP1 基线兼容同步。GitHub API 确认
+  M7-R PR #20 于 2026-08-20 合入，负责人 `main=454b35c`；谢良璇 Fork 原 main
+  `54664ee` 无独有提交，仅落后 247 个提交，已快进并回读为同一 SHA。共享 worktree 远端
+  调整为 `origin=Luminary-s1`、`upstream=a1024053774`，M8 分支从 `48013b1` 快进到
+  `454b35c` 后恢复全部 WP1 修改，两个台账冲突保留双方有效事实。有效测试为 `30 + 12 +
+  17 + 4 = 63 passed`；首次 30 项运行因 pytest 父目录缺失产生准备错误、21 项组合运行因
+  10 分钟无退出码作废，均在修正目录或拆分后取得全绿退出码。仅证明同步与聚焦兼容。
 - E-20260820-001：M7-R WP5 独立验收归档、PR #20 合入与 merge-tip 复验。WP1 功能提交
   `0b54a247` 和集成提交 `e127c397` 已在 PR base `48013b1` 的祖先链，故 PR #20 只承载
   WP2～WP4 差异但 WP5 验收对象仍是 WP1～WP4 组合态。缪海南原报告 SHA-256 为
@@ -511,6 +671,47 @@
   均通过。原报告、补充报告和三张浏览器证据归档于
   `docs/works/15-feature-m7r-readonly-data/` 与 `docs/screenshots/m7r-wp5-20260819/`。仅关闭
   F-323 代码级本机里程碑，不豁免真实平台字段、真实经营数据、生产放行/写能力或 M8-R～M10-R。
+- E-20260819-003：F-324 / M8-R WP1 提交前关联回归与静态门禁复核。基于 main
+  `48013b1` 的 WP1 工作树，先将 102 项组合运行至 20 分钟上限并因无完整退出码作废，随后按
+  六个独立组复跑，得到 `11 + 23 + 12 + 17 + 24 + 15 = 102 passed`，各组退出码均为 0。
+  `compileall`、worktree/cached whitespace、PowerShell 5.1 两份脚本语法、仅新增 Python 行
+  100 字符上限和 managed ledger 校验均退出 0。pytest 仅报告无法写仓库 `.pytest_cache` 的
+  `WinError 5` 环境警告，不影响用例退出状态。WP1 源码与测试组合 SHA-256 为
+  `4f7d09a9659beaa269dbc4ecf71ba77bb9d1e033defc24fe79190aad67870ebd`。本证据确认 WP1
+  可进入后续工作包；当前交付顺序以 D-047 为准。本证据不替代完整全量、远端 CI/审阅、
+  合入、WP2～WP5、真实渠道或生产 Gate。
+- E-20260819-002：F-324 / M8-R WP1 谢良璇人工黑盒验收。2026-08-19 19:37:17 +08:00，
+  谢良璇在 `http://127.0.0.1:8091` 的 F 盘隔离数据环境运行无 `-AutoConfirm` 的
+  `WP1_人工验收助手.ps1`，通过公开 HTTP 接口逐项查看真实返回并完成 8 次人工 Y/N 确认。
+  自动契约检查全部通过，8 项 observation 均为 `confirmed=true`；结果为
+  `confirmation_mode=human`、`human_observations_passed=true`、`final_status=human_accepted`。
+  结果 JSON SHA-256 为 `b0e7776d073810a2ecdd56d33e3d25157c8ea9fee110a3b8a6661fd7603a7d91`，
+  过程记录 SHA-256 为 `3f9d59b791e810852f9cec00cea05abbc05c67dff0cb9c4d016f2220072e9e12`。
+  本证据把 E-20260819-001 的“人工验收就绪”推进为 WP1 开发侧人工验收完成，不替代未取得
+  完整退出码的仓库全量、提交/推送/合入确认、WP2～WP4、缪海南 WP5、真实渠道或生产 Gate。
+- E-20260819-001：F-324 / M8-R WP1 安全契约补强与人工验收就绪。基于 main
+  `48013b1` 的未提交开发候选，复用 M7-R `ReportFieldPolicy` 清理非白名单/敏感字段值，
+  增加中文批准字段别名、脱敏汇总、敏感必填值拒绝、显式 scenario 快速路径和知识
+  `effective_from` 提前批准门；共享关键词类别常量继续把 signal 排除在通用 RAG 答复候选外。
+  WP1 聚焦正式树恢复后 `11 passed`；M7-R/RAG/知识治理/灰度/运行时桥/Wiki/知识引擎
+  关联 `91 passed`，合计 102 个明确通过；关闭隐私检测、允许无场景直答、允许未来激活、
+  颠倒 SKU 优先级四项 mutation 均失败。compileall、whitespace、行宽和 managed ledger
+  校验通过。全量收集 961 个测试但单进程 30 分钟超时，无完整退出码，不声称全量通过。
+  新增 Windows PowerShell 5.1 兼容的隔离启动、交互验收助手和中文指南；开发侧真实 HTTP
+  8 步演练自动契约全部通过，结果明确为 `developer_dry_run_only`。本证据只说明 WP1 已具备
+  谢良璇人工验收条件；未取得 human 确认、WP2～WP4、缪海南 WP5、真实文件/店铺/模型、
+  长稳或生产 Gate，不得登记 WP1 或 M8-R 完成。
+- E-20260818-001：F-324 / M8-R WP1 商品范围优先级与独立环境复核。基于 main
+  `fbc26dd` 的未提交开发候选，在 F 盘建立 M8-R 专用 Python 3.11 环境；Windows
+  `ZoneInfo('Asia/Shanghai')` 因当前项目依赖清单未声明时区数据而在测试收集阶段失败，
+  仅在本地环境安装 `tzdata==2026.3` 后恢复，未修改项目依赖。补充同一标准问法在
+  SKU 商品层与店铺层同时存在时的优先级契约：指定 SKU 优先商品层，未指定 SKU 不读取
+  商品层。WP1 聚焦 `7 passed`，M7-R 导入契约、RAG 与知识生命周期关联 `34 passed`，
+  compileall、whitespace 和 managed ledger 校验通过。临时去掉 SKU 优先排序后，新增反例
+  以误选店铺通用话术明确失败，恢复后单项通过。该证据只扩展 WP1 开发候选，不声称
+  全量回归、WP1 完成、WP2～WP4、真实文件/模型/浏览器/长稳/生产 Gate 或缪海南 WP5
+  独立签署通过。
+- E-20260817-008：F-324 / M8-R WP1 客服话术与关键词治理开发候选。基于 main `fbc26dd`，新增受控行适配器与管理员导入/上下文/追溯接口，复用 M7-R `readonly_import_manifests` 及既有 knowledge 生命周期，没有新增 schema 或依赖。话术按 tenant/store/SKU/scenario/effective period 过滤；只有人工批准、有效、范围匹配且规范化问题完全相等的不可变版本可获得快速路径资格。关键词记录从通用 RAG 答复候选排除，只返回 `advisory_only` signal；否定、假设和复合请求反例不产生 route/mode。隐藏必填字段隔离，公式、链接和文字指令只作惰性字符串；来源可回查 import ID、物理行号、原始行摘要、受控文件引用、规范化问法和答复。初始红灯因模块不存在收集失败；修复后聚焦 `6 passed`、知识/RAG/M7-R/D-034 关联 `38 passed`，compileall 和 whitespace 通过。临时放宽精确匹配、取消关键词 RAG 隔离、忽略隐藏字段三项 mutation 均使对应测试按预期失败，恢复后关联回归通过。单进程全量分别在 20/30 分钟上限、文件分组首组在 15 分钟上限被终止，均无完整退出码，故本证据不声称全量通过；WP2～WP4、真实文件/模型/浏览器/长稳/生产 Gate 和缪海南 WP5 独立签署仍未完成。交接见 `docs/works/18-feature-m8r-customer-service-loop/WP1_客服话术与关键词治理交接说明.md`。
 - E-20260813-025：F-322 main 合入与 post-merge 复验。PR #14 将 head `298eede` clean merge 为 main `ee5e443`；PR #11 留言固定 v31 并要求后续保留 v31/v32。精确 main detached worktree 的导入路径核对通过，交叉 `51 passed`，全量 `770 passed, 1 xfailed`（282.54 秒），静态与台账门禁通过。首次 cwd 错误运行已作废，不计入证据；不关闭 PR #10 v33 改号或尚未完成的 PR #11 实际集成 Gate。
 - E-20260813-024：v31 占号先行合入与 F-322 v32 合并回归。PR #13（单文件 2+/1-、无 CI、mergeable clean）转 Ready 后以 `60c8052` 合入 origin/main；当前分支以 `76c2c85` 合入该 main，只解析 `CONTRIBUTING.md` 为 v31/v32/v33 顺序，4 个既有未提交文件未进入 merge commit。日历/身份/迁移/灾备 `51 passed`，全量 `770 passed, 1 xfailed`（282.56 秒），compileall、JS、AST migration 唯一性、diff 与台账校验通过。该证据只覆盖 PR #13 的占号通知 + F-322；main 尚无 PR #11 的 `_apply_v31` 代码，也不关闭 PR #10 改号或 E-023 的实际 v31/v32 页面整合待办。
 - E-20260813-023：F-322 远端与 v31/v32 合成核验。HTTP/1.1 fetch 成功刷新两远端及 origin PR refs；最新 `origin/main=dbf2027`，F-322 合并树干净且 v32 在全部 refs 中唯一。发现开放 PR #10 的知识唯一索引与 PR #11 的 workspace 会话表分别使用同名 `_apply_v31`；F-322 不改该既有冲突。PR #11 + F-322 临时合成树保留 v31/v32 后，交叉聚焦 `62 passed`，全量 `805 passed, 1 xfailed, 2 failed`。PR #11 单独可复现其中 workspace 旧 URL 断言失败；另一项是合成后 Forecasting 测试仍访问 `/admin` 而高级控制台已移至 `/admin/advanced`。临时仅对齐两条断言后 `2 passed`；未写回当前分支，故不声称合成全量 Gate 已通过。
@@ -546,10 +747,21 @@
 
 | 证据 ID | 时间 | 方法或命令 | 退出状态 | 版本或文件哈希 | 结果摘要 | 证据位置 | 有效期 |
 |---|---|---|---|---|---|---|---|
+| E-20260821-003 | 2026-08-21 | 获取负责人仓库最新 `main`，确认仅新增后端数据接入指南；用 Git stash 完整保护 WP1～WP4 工作树，将分支从 `454b35c` 快进到 `8de48c3` 后恢复且无冲突；运行 `git diff --check`、project-to-act validate、使用独立 `PYTHONPYCACHEPREFIX` 的 compileall；在唯一隔离 basetemp、禁用 pytest cache 且屏蔽外部代理的环境运行仓库全量；审阅暂存范围并扫描本次提交文件中的私钥/`sk-` 模式 | 同步、恢复、whitespace、ledger、隔离 compileall 和敏感信息扫描均退出 0；全量 `1081 passed, 24 warnings`，退出码 0，耗时 2417.05 秒；24 条均为既有 Traffic Lab FastAPI 重复 Operation ID warning | base `8de48c35f36a92788df4568f692b86a0edddcbfc`；M8-R 功能提交 `f9653a04184515e730f1190224f59c1d79c52892`；schema v35、项目依赖不变；全量 basetemp `C:\Users\94461\Documents\Codex\m8r-pr-pytest-17e4bf473375455c8f6e674b7f478821` | 最新 main 上的 WP1～WP4 组合态通过完整仓库回归；没有 M8 失败、skip 或 xfail。首次 compileall 仅因 F 盘已有 pycache 无写权限失败，改用独立缓存后通过；没有修改代码规避环境问题。当前可进入分支推送和 M8-R 单 PR 建立，但本证据是谢良璇开发侧证据，不替代缪海南 WP5 | 功能提交 `f9653a0`；`.project-to-act/PROJECT_{OVERVIEW,FEATURES,ACCEPTANCE}.md`；WP1～WP4 代码、测试和 `docs/works/18-feature-m8r-customer-service-loop/` | M8-R 功能提交、基线、测试环境或门禁变化前；PR 创建后须记录精确远端 head，WP5 必须针对该 head 从干净状态独立执行；不代表真实渠道、长稳、生产 Gate 或最终合入 |
+| E-20260821-002 | 2026-08-21 | 谢良璇在正式隔离环境逐项操作 WP4 高级管理后台：核对 8 个固定影子场景及运行前输入/Oracle、运行后回答/工具/来源/断言，验证正反馈零候选、受控负反馈仅生成 `pending` 候选，运行正式隔离 Eval，并分别在桌面与 390×844 窄屏检查页面；发现两项窄屏缺陷后复测修复结果；最后解析结果 JSON、清点正式证据并对报告/结果计算 SHA-256 | 人工 8/8 observation 确认；正式 Eval `8/8 passed`、0 failed、0 severe；修复后聚焦测试 `6 passed, 1 warning`，warning 仅为 `.pytest_cache` 无写权限；结果 JSON 解析成功，正式证据含 21 张 PNG、1 份中文报告和 1 份中文结果 | 未提交 WP1～WP4 工作树；run key `xie-wp4-acceptance-20260821-01`；run ID `eval-run-b4e3913dcdb54205a14cf1ca0524d2fe`；数据集 SHA-256 `52044225133cf18f7dc7e717bde95b67ba92a63b3c0229871f61b27383c5931b`；报告 SHA-256 `667e26285cb2994d203de0da930104f04a358e50dda7682304d306ca75c51d7e`；结果 SHA-256 `b3f9c78cf5aa6c110dcc73c2bfb47fb55e24f189d5c3c7ba01234ef4846af5ac`；schema v35 不变 | 8 场景运行、反馈治理、隔离 Eval、主库零污染和输入/Oracle 分离均通过。回答准确、证据覆盖、来源完整、转人工合理为 100%；幻觉、拒答、敏感输出为 0%。验收中发现历史表受全局最小宽度影响产生横向溢出，以及 21 项顶部导航在窄屏需横向滑动；修复为窄屏纵向信息卡和完整页面下拉后，`documentScrollWidth == documentClientWidth` 且可进入客服影子评审。最终 `final_status=human_accepted_after_fix` | `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp4-manual-evidence\20260821-144048\谢良璇_WP4人工验收报告_20260821-162043.md`；同目录 `谢良璇_WP4人工验收结果_20260821-162043.json` 及 21 张中文命名截图 | WP4 代码、冻结输入/Oracle、页面、评测指标、报告/结果哈希或所验工作树变化前；只关闭 WP4 开发侧人工 Gate，不替代仓库全量、提交/PR/CI、固定待验 head 后的缪海南 WP5、真实渠道、长稳或生产 Gate |
+| E-20260821-001 | 2026-08-21 | 实现 WP4 冻结输入/独立 Oracle、影子场景与反馈 API、统一 assertion、结构化 Eval 指标和高级管理后台；运行 WP4、客服评测、相邻评测能力、后台/API 及 WP1～WP3 回归；运行 compileall、页面 JavaScript 解析、PowerShell 5.1 语法/BOM 和 whitespace；在隔离数据目录以固定表驱动模型完成桌面与 390×844 浏览器演练，前后核对主库计数 | 所列自动测试和静态门禁退出 0；不重复计数 `88 passed`（4406.90 秒）；唯一 warning 为 `.pytest_cache` 无写权限，不影响退出码；隔离 Eval `8/8 passed`；开发者浏览器演练通过 | base `454b35c9000ab279ffdbf115f80afdf3e031ee73` 的未提交 WP1～WP4 工作树；workbench `e6e960a8...d7595d48`、API `4d18dd56...258a815e`、input `dd3e5a8b...477cffe`、oracle `b581a686...6de4d91`、WP4 test `f071686d...6bfdeba`；schema v35 不变 | 8 个固定场景，runner 可见 Oracle 字段为 0；销售/售后正反例、隐私、来源、陈旧事实、范围和影子写屏障断言均通过。正反馈不生成候选，负反馈生成 `pending` 候选；六项业务指标为通过率/回答准确/证据覆盖/来源完整/转人工合理 100%，幻觉/拒答/敏感输出 0%。390px 无横向溢出；浏览、刷新和旧报告查看不增加运行，临时会话/消息/人工任务/outbox 不进入主库 | `src/ecommerce_agent/customer_service_{workbench,workbench_api}.py`；`evals/customer_service/m8r_wp4_{inputs,oracle}_v1.json`；`tests/test_m8r_customer_service_workbench.py`；`docs/admin-console.html`；`docs/works/18-feature-m8r-customer-service-loop/WP4_{影子客服工作台与评测交接说明,人工验收指南}.md`；开发者演练目录 `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp4-manual-evidence\20260821-110203` | WP4 代码、冻结集、Oracle、指标、页面、测试或所列哈希变化前；只证明开发候选和开发者演练，不替代谢良璇正式前端人工验收、正式截图、仓库全量、提交/PR/CI、缪海南 WP5、真实渠道、长稳或生产 Gate |
+| E-20260820-007 | 2026-08-20 | 谢良璇运行无 `-AutoConfirm` 的 WP3 人工验收助手；逐步阅读八组回复、建议证据和正反例，经 Codex 解释业务含义后每步亲自输入 Y；回读最终 JSON 并核对测试人、模式、八项观察、自动契约、外部模型/平台写标记和最终状态 | 0；`confirmation_mode=human`，8/8 `confirmed=true`，`automatic_contract_checks=passed`，`human_observations_passed=true`，`final_status=human_accepted` | base `454b35c9000ab279ffdbf115f80afdf3e031ee73` 的未提交 WP1～WP3 工作树；结果 JSON SHA-256 `c3b72d5225567b9be7867af26ff47d36fc25efec9b473c5d68f69350ce101f0a`；过程记录 SHA-256 `82771eebab4007fcf62d8427762fdd102a05a63a3082a667190686cff9e2f368`；schema v35 不变 | 当前/精确/缺失/陈旧库存、流式安全、售后多轮/隐私、订单 scope、D-034 语义反例与影子零写入均由谢良璇实际确认；外部模型未调用，平台写动作未执行 | `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp3-manual-evidence\谢良璇_WP3人工验收结果_20260820-215036.json`；同目录 `谢良璇_WP3人工验收过程_20260820-205842.txt`；`docs/works/18-feature-m8r-customer-service-loop/WP3_{人工验收指南,销售售后建议回复闭环交接说明}.md` | WP3 代码/策略/验收助手、结果文件哈希或隔离环境变化前；只关闭 WP3 开发侧人工验收，不替代 WP4、完整全量、提交/PR/CI、缪海南 WP5、真实渠道、长稳或生产 Gate |
+| E-20260820-006 | 2026-08-20 | 用户以 Windows PowerShell 直接运行 WP3 中文验收助手并复现解析错误；检查文件头确认 UTF-8 无 BOM；机械补充 UTF-8 BOM 后检查 `EF BB BF`；用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ... -AutoConfirm` 完整执行八步 | 首次解析非 0；修复后完整助手退出 0，`automatic_contract_checks=passed`、8/8 confirmed、`confirmation_mode=auto`、`final_status=developer_rehearsal_passed` | base `454b35c9000ab279ffdbf115f80afdf3e031ee73` + 未提交 WP1～WP3 工作树；脚本 `c3b0c69f...c98616de`；过程 `4c076ea2...dbaee21`；结果 `b81fadb5...b042256`；schema v35 不变 | Windows PowerShell 5.1 可正确解析中文参数、提示与路径，八步链路、中文过程记录和 JSON 均正常生成。只修复脚本编码；E-005 的修复前工具兼容性证据由本条取代，自动演练仍不计人工通过 | `docs/works/18-feature-m8r-customer-service-loop/WP3_人工验收助手.ps1`；`F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp3-manual-evidence\谢良璇_WP3人工验收过程_20260820-205152.txt`；同目录 `谢良璇_WP3人工验收结果_20260820-205223.json` | WP3 验收助手内容/编码、PowerShell 运行方式或所列哈希变化前；只关闭 Windows PowerShell 5.1 启动故障，不替代正式人工验收、WP4、完整 PR、WP5 或生产 Gate |
+| E-20260820-005 | 2026-08-20 | 实现 WP3 上下文/Prompt/事实 Gate/建议证据/流式共享链路与影子写屏障；按小组运行 WP3、WP1/WP2、policy、context、graph、service、HTTP/SSE、intent、API 和陈旧流式反例；运行 compileall、当时宿主的 PowerShell 语法解析、whitespace、project-to-act validate；在 F 盘隔离目录以 `-AutoConfirm` 演练 8 步人工助手。Windows PowerShell 5.1 编码兼容后由 E-20260820-006 复现并修复 | 所有列出的有效测试组及静态/台账门禁退出 0；过大组合运行达到时限且无最终统计，作废不计；自动助手退出 0，`confirmation_mode=auto`、`final_status=developer_rehearsal_passed` | base `454b35c9000ab279ffdbf115f80afdf3e031ee73` + 未提交 WP1～WP3 工作树；loop `46e4c6f7...020b6e9`、service `33991cba...51024a`、WP3 test `1a3b00ca...ffdbda4`；过程/结果 `c5c1d347...524a589` / `8e04a060...b221573`；schema v35 不变 | WP3 自有 `11 + 6` 项；关联拆组均通过。批准内容与可信事实进入既有模型链；D-034 普通语义决定保留；流式危险草稿先验证后抑制；库存披露、missing/stale、售后多轮/隐私、订单范围、语义反例和影子写屏障八步演练成立。自动演练不计人工通过，外部模型和平台写动作均为 false | `src/ecommerce_agent/customer_service_loop.py`；`src/ecommerce_agent/{context_builder,graph,prompts,schemas,service}.py`；`tests/test_m8r_customer_service_loop.py`；`docs/works/18-feature-m8r-customer-service-loop/WP3_*`；`F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp3-manual-evidence\` | WP3 代码/测试/策略、所列哈希或隔离验收工具变化前；仅开发侧候选，不替代谢良璇人工验收、WP4、完整全量、提交/PR/CI、缪海南 WP5、真实渠道或生产 Gate |
+| E-20260820-004 | 2026-08-20 | 谢良璇运行无 `-AutoConfirm` 的 WP2 人工验收助手；逐步阅读八组公开工具结果，在每一步由 Codex 解释业务含义、正例和反例后亲自输入 Y；回读最终 JSON 并核对 tester、模式、八项 observation、自动契约和最终状态 | 0；`confirmation_mode=human`，8/8 `confirmed=true`，`automatic_contract_checks=passed`，`human_observations_passed=true`，`final_status=human_accepted` | base `454b35c9000ab279ffdbf115f80afdf3e031ee73` 的未提交 WP1+WP2 工作树；结果 JSON SHA-256 `2f26e516e1466ba2e4a869bc2745ae668834a1c9bf62f95a4c62febc227e0af2`；过程记录 SHA-256 `b09be7c6e38ce54004397e2b96e6cb4bae75b12de9bd55c493eb0e2e7aecdbde`；schema v35 不变 | 销售/缺失、当前/过期、已知/未知来源、正确/错误范围、必要事实/隐私排除、current/superseded、tenant-a/tenant-b 正反例均由谢良璇实际确认。完整手机号不进入投影，物流文本只保留脱敏形式；外部模型未调用 | `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp2-manual-evidence\谢良璇_WP2人工验收结果_20260820-171701.json`；同目录 `谢良璇_WP2人工验收过程_20260820-171701.txt`；`docs/works/18-feature-m8r-customer-service-loop/WP2_{人工验收指南,可信业务事实接线交接说明}.md` | WP2 代码/工具契约/验收助手、结果文件哈希或隔离环境变化前；只关闭 WP2 开发侧人工验收，不替代完整全量、提交/合入、WP3～WP5、真实渠道、长稳或生产 Gate |
+| E-20260820-003 | 2026-08-20 | 读取 M8-R WP2、M7-R WP2～WP4、D-015/D-023/D-034/D-035；先运行缺实现测试；实现销售/售后最小只读投影、可信范围/来源/新鲜度/缺失/历史 Gate 和工具登记；修复历史事件版本位于快照外层、重复只读服务实例和阻断结构；临时移除订单号比较及恢复“任一来源确认即可”执行两项 mutation；拆组运行 WP2、模块登记、M7 直接依赖、商品身份、ContextBuilder/WP1 回归；演练 8 步人工助手；运行 compileall、whitespace 和 project-to-act validate | 初始缺模块收集退出 2；历史投影中间态 `2 failed, 8 passed`；订单 scope mutation 与跨来源身份 mutation 均稳定失败，恢复后目标用例及聚焦组通过；当前哈希有效测试组全部退出 0；5 分钟组合、15 分钟广覆盖依赖和 15 分钟仓库全量无最终统计，作废不计；自动助手退出 0 | base `454b35c9000ab279ffdbf115f80afdf3e031ee73`，未提交 WP1+WP2 工作树；WP2 源码 SHA-256 `e527b5fc58f3f0288fe3d9a208868e91135615d64420b26b67841df3c34bb200`，测试 `a6ffb27c4730fa31b9da89ed39f3a40e150835084e7dc7594a30dbe27bffd854`；schema v35 不变 | 销售/售后工具只返回客服白名单字段；tenant/store/order 冲突在工具执行前阻断；actual/manual/demo/unknown 来源可区分，unknown 清空 facts；过期/未来快照不可作为 current；缺失保持 null；旧订单版本可读但 superseded；所有参与来源共同确认后才返回 canonical ID；手机号再次脱敏。拆组 `17 + 13 + 17 + 19 = 66 passed`。自动演练 8/8 仅为 developer rehearsal，人工验收仍待谢良璇执行 | `src/ecommerce_agent/customer_service_facts.py`；`tests/test_m8r_customer_service_facts.py`；`src/ecommerce_agent/{service.py,business/registry.py}`；`docs/works/18-feature-m8r-customer-service-loop/WP2_*`；自动结果 `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp2-manual-evidence\谢良璇_WP2人工验收结果_20260820-135735.json` SHA-256 `9492a9f5063bfb0cf899c9338180a5b73278462df18e02218c540d5b3f870f77` | WP2 源码/测试/白名单/M7 服务契约或文件哈希变化前；仅开发侧候选，不替代谢良璇人工验收、完整全量、提交/PR/CI、WP3～WP5、真实平台或生产 Gate |
+| E-20260820-002 | 2026-08-20 | 通过 GitHub API 核对负责人 main、PR #20、谢良璇 Fork 和分支差异；fetch 最新 main；将个人 Fork main 快进到负责人 main；规范 origin/upstream；stash 保护 WP1 后快进本地 M8 分支并恢复、合并台账；分组运行 WP1/M7 契约、RAG/治理、知识运行时桥和知识灰度测试 | GitHub 查询、fetch、push、快进、恢复、台账合并和四组有效测试退出 0；首次 30 项因 basetemp 父目录缺失产生 22 个 setup error，修正后原样 30 passed；21 项组合运行 10 分钟超时作废，拆分后 17+4 passed | owner/fork/main/local M8 base 均为 `454b35c9000ab279ffdbf115f80afdf3e031ee73`；M7 PR #20 merge `f6bb47c`；WP1 仍为未提交工作树；schema v35 不变 | 个人 Fork 无需删除重建，main 已由 `54664ee` 快进到 `454b35c`，旧 `feature/m5-report-comparison` 分支保留。M8 分支不再落后 upstream；WP1 修改完整恢复且暂存区为空；有效聚焦合计 `63 passed`，无代码失败 | GitHub `a1024053774/yunpai-ecommerce-agent`、`Luminary-s1/yunpai-ecommerce-agent`；本地 `feature/m8r-customer-service-loop`；`tests/test_{m8r_customer_service_content,readonly_data_contract,rag,governance,governance_api_errors,knowledge_runtime_bridge,knowledge_rollout}.py`；`.project-to-act/PROJECT_{OVERVIEW,FEATURES,ACCEPTANCE}.md` | owner/fork main、M7 公开服务、WP1 代码/测试或远端关系变化前；只证明同步与聚焦兼容，不替代全量、WP2～WP5、PR/CI、真实渠道、长稳或生产 Gate |
 | E-20260819-002 | 2026-08-19 | 读取用户转交的 WP4 独立复验报告，保留其聚焦/全量及 47/47 门禁外探针为外部报告证据；由开发方在原候选上新增六个 GET 共用的空白 `store_id` 回归，先运行单例复现，再以单一 `Annotated` Query 契约修复；重跑同一单例、WP4 聚焦、WP1～WP4 关联集、隔离代理环境下仓库全量、compileall、后台 JS syntax、whitespace 和 project-to-act validate | 修复前单例稳定 `1 failed`，实际为 readiness 返回 200；修复后单例、聚焦、关联、全量和静态门禁均退出 0。独立报告的探针由用户转交，不冒充开发方运行；报告注明未重复浏览器实测 | base `9670aa1`；修复候选 `fe828a0`；schema v35、`readonly-readiness-v1`、Demo fixture 和页面不变 | 六个带 `store_id` 的 readonly-data GET 现在共用同一约束，纯空白请求均返回 422，不泄露数据且不产生写入。聚焦 `10 passed`、关联 `109 passed`、全量 `1035 passed, 24 warnings`（335.51 秒），无 failed/skipped/xfailed；24 条均为既有 Traffic Lab 重复 Operation ID warning。无 schema、依赖、Agent/模型、Demo、页面或平台动作变化；E-20260819-001 浏览器证据仍对应未变页面 | `fe828a0`；`src/ecommerce_agent/readonly_data_api.py`；`tests/test_m7r_wp4_readiness.py`；`docs/tasks/M7R_WP4_READINESS_HANDOFF.md`；用户在本会话转交的独立复验摘要 | 上述查询契约、WP4 代码/测试、基准提交或独立报告来源变化前；只关闭开发候选 nit，不替代合入 main、缪海南正式 WP5、真实平台样本、真实经营结论、M7-R/生产 Gate |
 | E-20260819-001 | 2026-08-19 | 读取 M7-R WP4 验收标准及 WP1～WP3/F-310 契约；先运行缺实现测试；实现单点准备度策略、八域只读投影、管理员下钻 API、后台 view 和固定脱敏 Demo；以同数据时点冲突、缺 Demo 写审计、撤销后旧确认误标 active 建立先红后绿反例；运行聚焦、WP1～WP4 关联集、compileall、后台 JS syntax、whitespace 和隔离代理环境下仓库全量；使用本机浏览器对空页面、显式装载、重放、桌面和 390px 窄屏做实际核验 | 初始缺实现收集退出 2；fixture 同时点触发预期外 D-014 冲突；缺审计与历史 active 反例均稳定 `1 failed`；修复后聚焦、关联、静态、浏览器和全量均退出 0 | base `1936a2f`；代码候选 `7d8bf47`；schema v35；readiness policy `readonly-readiness-v1`；Demo `m7r-readonly-demo-v1` | operational 默认排除 Demo；actual/manual/demo/missing 保持可区分，缺失不转零。每个域状态和数值保留 manifest ID，四项缺口保留 field evidence/import，映射保留 run/source import。顺序及线程并发重放只有 8 manifest、1 product、1 mapping、1 reconciliation；管理员 Demo POST 逐次审计，所有 GET 零事实变更。浏览器首次打开前后事实计数均 0；显式 Demo 后 8 manifest、66 evidence、1 product、1 mapping、1 run、3 reconciliation rows，重放不变；1280×720 无页面横向溢出，390×844 仅 panel 内表格滚动，console 0 error/warning。聚焦 `9 passed`、关联 `108 passed`、全量 `1034 passed, 24 warnings`（687.63 秒），无 failed/skipped/xfailed；24 条均为既有 Traffic Lab 重复 Operation ID warning | `src/ecommerce_agent/readonly_readiness/`；`src/ecommerce_agent/readonly_data_api.py`；`src/ecommerce_agent/product_identity/service.py`；`docs/admin-console.html`；`tests/test_m7r_wp4_readiness.py`；`docs/tasks/M7R_WP4_READINESS_HANDOFF.md` | WP4 代码/测试、WP1～WP3 来源/映射契约、准备度策略、Demo fixture、后台页面或基准提交变化前；仅开发者本机候选，不替代合入 main、真实平台样本、缪海南正式 WP5、真实经营结论、M7-R/生产 Gate |
 | E-20260818-002 | 2026-08-18 | 读取 M7-R WP3 验收标准、WP1/WP2 契约和 catalog/inventory/order 公开服务；先运行缺实现契约测试；实现 v35 四张只追加表、canonical 商品、映射裁决/撤销/历史和逐行对账；为 `expected_version`、逐行 `evidence_keys` 与 Demo 领域来源混入分别建立红测后修复；运行聚焦、WP1～WP3、关联领域/迁移/灾备、compileall、迁移唯一性、whitespace 和仓库全量 pytest | 初始缺实现收集退出 2；审计列补强 `3 failed, 12 passed`；Demo 来源反证退出 1；修复后所有聚焦、关联、静态和干净环境全量均退出 0。首次全量因桌面会话畸形 `NO_PROXY` 触发 `httpx.InvalidURL`，中止后隔离 proxy/bypass 环境变量复跑通过 | base `0815cf8`；本地 main v35 预留 `d35bfe1`；代码候选 `6f0b116`；schema v35；policy `product-identity-v1` | tenant/store/internal part 稳定唯一；平台 SKU 映射确认、显式改判和撤销只追加，完整载荷幂等且旧 `expected_version` 不能覆盖新裁决。标题/商家编码/唯一候选只给证据，不自动绑定；每个输入行恰为 matched/ambiguous/unmapped/rejected，旧 run/history 在新映射后仍可读。WP2 source ID 经 WP1 manifest 隔离 operational/demo，未知 readonly 来源 fail closed。聚焦 `17 passed`、WP1～WP3 `93 passed`、关联 `184 passed`、最终全量 `1025 passed, 24 warnings`（391.62 秒），无 failed/skipped/xfailed；24 条为既有 FastAPI Operation ID warning | `src/ecommerce_agent/product_identity/`；`src/ecommerce_agent/database.py`；`src/ecommerce_agent/readonly_data/{__init__,ingestion}.py`；`tests/test_product_identity.py`；`docs/tasks/M7R_WP3_PRODUCT_IDENTITY_HANDOFF.md` | WP3 代码/测试、schema v35、映射/对账策略、WP1/WP2 来源契约或基准提交变化前；仅开发者本机候选，不替代合入 main、真实平台样本、WP4、缪海南正式 WP5、M7-R/生产 Gate |
 | E-20260818-001 | 2026-08-18 | 读取 M7-R 工作台/WP1 契约和六个既有领域公开服务；先运行缺实现契约测试；实现权威适配器注册表、严格 UTF-8 CSV/受控 XLSX 解析、逐行隔离、批次部分成功、来源 preflight 和公开领域写入；按每适配器六场景矩阵复验；为订单子事实覆盖、Excel 日期序列和 Demo 导入回执分别建立红测后修复；运行 WP1+WP2 聚焦、关联领域回归、compileall、whitespace 与最终仓库全量 pytest | 初始缺实现收集退出 2；三项缺陷定点各退出 1；修复后聚焦、关联、静态和全量均退出 0 | base `fbc26dd`；代码候选 `a5d02ed`；schema v34；`generic-cn-v1` | 八类报表唯一注册并复用同一 WP1 policy；每类正常/缺字段/非法类型/重复/乱序/跨店均覆盖。CSV/XLSX 不执行公式/宏/外链，显式记录粒度/单位/时区；同戳冲突在领域写前拒绝；订单快照不再清空独立物流/售后；Demo 显式回执完整但默认 operational 查询为空。聚焦 `77 passed`；最终全量 `1008 passed, 24 warnings`（392.76 秒），无 failed/skipped/xfailed；24 条为既有 FastAPI Operation ID warning。仓库及会话附件无经授权真实平台导出，故不声称平台全覆盖 | `src/ecommerce_agent/readonly_data/{adapters,file_parser,ingestion,service}.py`；`src/ecommerce_agent/business/orders.py`；`tests/test_readonly_data_{contract,ingestion}.py`；`docs/tasks/M7R_WP2_REPORT_ADAPTER_HANDOFF.md` | WP2 代码/测试、`generic-cn-v1`、WP1 契约、领域公开服务或样本边界变化前；仅开发者本机候选，不替代真实平台 mapping、WP3～WP5、缪海南正式 WP5、真实数据或生产 Gate |
+| E-20260819-003 | 2026-08-19 | 在 F 盘隔离临时目录按六组运行 WP1、M7-R/RAG、知识治理/灰度、运行时桥、知识引擎和 Wiki API 关联测试；运行 compileall、worktree/cached diff check、PowerShell 5.1 AST 解析、新增 Python 行宽和 project-to-act validate | 六组及全部静态门禁退出 0；先前 102 项单进程组合运行 20 分钟超时，作废且不计通过 | base `48013b1d3b29a810288c32f73df028c69070064c`；WP1 源码与测试组合 SHA-256 `4f7d09a9659beaa269dbc4ecf71ba77bb9d1e033defc24fe79190aad67870ebd`；schema v34 不变 | 分组 `11 + 23 + 12 + 17 + 24 + 15 = 102 passed`；编译、空白、两份验收脚本语法、新增行宽和 managed ledger 均通过。pytest 的 `.pytest_cache` WinError 5 只影响缓存写入，不影响退出码 | `tests/test_m8r_customer_service_content.py`、`tests/test_{readonly_data_contract,rag,governance,governance_api_errors,knowledge_rollout,knowledge_runtime_bridge,knowledge_engine,wiki_api}.py`；`docs/works/18-feature-m8r-customer-service-loop/`；`.project-to-act/` | WP1 源码/测试/验收脚本或 base/hash 变化前；支持进入后续工作包，当前交付顺序以 D-047 为准；不替代完整全量、远端 CI/审阅、合入、WP2～WP5、真实渠道、长稳或生产放行 |
+| E-20260819-002 | 2026-08-19 | 谢良璇在 F 盘隔离环境启动本机服务，以未开启 `-AutoConfirm` 的 `WP1_人工验收助手.ps1` 调用公开 HTTP 接口，逐项阅读导入、批准、范围、有效期、关键词、追溯和退役返回，并对 8 项观察输入 Y | 0；`automatic_contract_checks=passed`，8/8 人工观察确认 | base `48013b1d3b29a810288c32f73df028c69070064c` 的未提交 WP1 候选；结果 JSON SHA-256 `b0e7776d073810a2ecdd56d33e3d25157c8ea9fee110a3b8a6661fd7603a7d91`；过程记录 SHA-256 `3f9d59b791e810852f9cec00cea05abbc05c67dff0cb9c4d016f2220072e9e12`；schema v34 不变 | `confirmation_mode=human`、`human_observations_passed=true`、`final_status=human_accepted`。受控导入 8 行得到 6 接受/1 隔离/1 拒绝；未批准内容不可直答；未来内容提前批准返回 409；SKU/店铺优先级、跨店/缺场景/相似问法边界、关键词 advisory-only、过期排除、惰性公式追溯和两层退役均由谢良璇亲自确认 | `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\wp1-manual-evidence\谢良璇_WP1人工验收结果_20260819-185053.json`；同目录 `谢良璇_WP1人工验收过程_20260819-185053.txt`；`docs/works/18-feature-m8r-customer-service-loop/WP1_人工验收指南.md` | WP1 代码/接口/验收脚本、结果文件哈希或隔离环境变化前；只证明 WP1 开发侧人工验收，不替代未完成的全量、提交/合入、WP2～WP4、缪海南 WP5、真实渠道、长稳或生产放行 |
 | E-20260817-007 | 2026-08-17 | 从刷新后的 `origin/main` `9619383` 创建干净 detached worktree，以 `--ff-only` 接入 WP1 功能提交 `0b54a24`；完成 D-046、M10-R WORKBENCH、schema v34 main 登记和 PR #11 四迁移合并提示后，运行 compileall、责任矩阵结构校验、迁移唯一性、project-to-act validate、whitespace 与仓库全量 pytest；提交 `e127c39` 后再次 fetch，验证远端祖先关系，快进推送并回读 `HEAD == origin/main` | 0 | base `961938321d6ac4fb3314756e8ca061bb4484dd09`；WP1 `0b54a24`；首轮 main 集成 `e127c397f7e291248990b0006ca4876d7e20a075`；测试树 `8b962e9be36961b439478892898e9c25e29dc559`；schema v34 | 全量 `950 passed, 24 warnings`（524.53 秒），无 failed/skipped/xfailed；24 条均为既有 FastAPI 重复 Operation ID warning。责任矩阵确认四个里程碑共 20 个工作包，M10-R WP1～WP4 全归缪海南且 WP5 胡磊不参与开发；v32/v33/v34 迁移各自唯一定义，v34 已登记 main，下一空闲 v35。`origin/main` 首轮回读精确为 `e127c39`。本条证据提交仅追加账本，不改变已测试运行树 | `0b54a24`；`e127c39`；`src/ecommerce_agent/readonly_data/`；`src/ecommerce_agent/{database,storage_refs}.py`；`tests/test_readonly_data_contract.py`；`docs/tasks/{ECOMMERCE_CLOSED_LOOP_ROADMAP,M10R_OPERATING_DECISION_WORKBENCH}.md`；`CONTRIBUTING.md`；E-20260817-003～006 | WP1 代码/测试、schema v34、责任矩阵、集成树、远端 main 或测试环境变化前；只证明开发候选已合入和全绿代码基线，不替代正式 WP5、真实数据、M7-R/生产 Gate |
 | E-20260817-006 | 2026-08-17 | 按项目负责人最新要求复核总路线、M10-R WORKBENCH、D-046 与项目台账；结构化解析四份 WORKBENCH 的 WP1～WP5、负责人和 WP5 互斥关系；扫描现行口径中的 M10-R 双负责人残留；运行 `git diff --check` 与 project-to-act validate | 0 | base/功能提交 `0b54a24` + docs-only D-046 责任调整；无 schema、依赖或运行代码变化 | 四个里程碑均恰有 WP1～WP5。M10-R WP1～WP4 全部由缪海南开发，WP5 由胡磊独立验收；胡磊不参与 M10-R 开发。M7-R、M8-R、M9-R 分工未变，现行口径不再保留 M10-R 双开发负责人。D-044/D-045 历史记录保留，但其中 M10-R 人员派工由 D-046 取代。本证据不验收功能实现 | `docs/tasks/ECOMMERCE_CLOSED_LOOP_ROADMAP.md`；`docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；`.project-to-act/PROJECT_{OVERVIEW,PROGRESS,FEATURES,ACCEPTANCE}.md` | 人员、工作包、验收独立性、D-046 或上述文档变化前；不得用于证明 M10-R 开发开始、功能实现、里程碑通过或生产放行 |
 | E-20260817-005 | 2026-08-17 | 对 E-20260817-003/004 已隔离的七项既有 M4/知识库失败逐项复现和归因；修复会话错误码、消息历史元数据与 `(created_at,id)` URL-safe/legacy 游标兼容；把知识热更新测试改为真实内容变更和显式全局管理作用域；handoff 出仓时验证权威生成脚本而非 skip；将无实时模型的意图留出集 xfail 改为显式负向能力边界。重跑原七项、skip/xfail 相关集合、关联回归和仓库全量；无文件故障注入强制关闭知识更新以证明测试可捕获退化；运行 compileall、whitespace、`CONTRIBUTING.md` 零改动与 project-to-act validate | 修复前原七项 1（`7 failed`）；故障注入 1（预期 `1 failed`）；还原后所有定点、集合、关联、全量和静态检查 0 | base `961938321d6ac4fb3314756e8ca061bb4484dd09`；本轮四文件组合 SHA-256 `3f313b3fade39bfe3964d102c8a39d8994a549ba00a6f5bf80f8427a6a6a50e9`；schema v34 不变 | 原七项 `7 passed`；skip/xfail 相关集合 `59 passed`；关联回归 `108 passed`；全量 `950 passed, 24 warnings`（566.70 秒），无 failed/skipped/xfailed。热更新故障注入稳定得到 `updated == 0` 对 `1` 的断言失败，还原后通过。24 条为既有 FastAPI 重复 Operation ID warning。租户不得修改全局知识的权限保持，D-034 语义权威不变，无 schema、依赖、API 或生产动作扩张 | `src/ecommerce_agent/database.py`；`tests/test_{memory_api,single_source,m4_acceptance}.py`；E-20260817-003/004 | 上述会话/游标、知识更新、单一事实源或无模型能力边界变化前；只关闭既有测试欠账并提供全绿开发基线，不证明 WP2～WP5、正式 WP5、真实平台接入、M7-R Gate 或生产放行 |

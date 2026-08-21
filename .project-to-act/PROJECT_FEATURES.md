@@ -81,13 +81,65 @@
 | F-321 M6-R Forecast Eval | P0 | 已完成 | F-317 至 F-320、D-035、D-039 | 十类 synthetic demand 与 WP3 库存决策场景经真实 forecast/plan service 运行；独立 oracle 在生产调用后评分，数值 Gate 覆盖 rolling-origin 未来不变性、候选/champion/fallback、WAPE 可比性、signed Bias、P80/P95 覆盖与库存公式；报告审计实际生产字段和 oracle overlap；独立对抗补强零宽区间反证、计划脏证据类型化错误与同戳 policy 稳定决胜 | `evals/forecasting/forecast_eval_v1.json`、`scripts/{forecast_eval_runtime,run_forecast_eval}.py`、`tests/test_forecasting_eval.py`、`docs/works/14-feature-m6r-forecast-eval/{README,GROK_INDEPENDENT_REVIEW}.md`、E-20260813-001/002/003/004；Grok 4.6 xhigh 明确批准后，`03d3b85` 已快进合入并推送 main；不代表服务器 v30、真实数据、长稳或生产放行 |
 | F-322 Traffic Lab 店铺业务日历与 metric 三元身份 | P0 | 已完成 | F-312、F-315、D-037、D-040、schema v32 | 版本化 `(tenant, store)` 业务日历，实验固化 IANA timezone/version，缺配置或 legacy 缺证据 fail closed；Traffic accepted/quarantine 身份为 `(tenant, connector, source_id)`，历史缺 connector 进入 `legacy_unscoped` 且禁止分析；revision-only 与显式身份使用同一 canonical hash，出窗隔离复用 revision 身份；v30 可迁移、旧 hash 可重放、双态冲突拒绝、备份 manifest 精确版本策略保持。Forecast/business 包导出按需加载，避免 eval CLI 循环导入 | `src/ecommerce_agent/business_calendar.py`、`traffic_source_identity.py`、`traffic_lab/{service,analysis,freshness}.py`、`database.py`、`simulation.py`、`forecasting/__init__.py`、`business/__init__.py`、`tests/test_traffic_{lab_business_calendar,metric_identity_v32}.py`、E-20260813-019/020/021/022/023/024/025；已通过 PR #14 合入 main `ee5e443` 并在精确 merge tip 通过全量；开放 PR #10 改号与 PR #11 实际代码集成仍须分别闭合，不代表真实数据/长稳/生产放行 |
 | F-323 M7-R 只读经营数据与 Demo 事实底座 | P0 | 已完成 | F-202、F-208、F-303、F-305 至 F-309、D-041 | 订单/商品/库存/履约物流快照/经营指标/推广/退款/收入报表经字段白名单、脱敏、版本 manifest、逐行隔离和公开领域服务可重放导入；平台 SKU、商家编码和料号可解释映射；字段证据状态为 `actual/manual/demo/missing`，实际来源类型仅为 `actual/manual/demo`，`missing` 不生成导入记录；缺失不转零，默认经营视图不混入 Demo | WP1 公共基建已随 `0b54a24` / `e127c39` 先行合入 `main`；WP2～WP4 经 PR #20 固定 head `ece61e1` 完成独立 WP5，并合入为 merge tip `f6bb47c`。原验收报告、实施方补充报告、第二轮独立 double-check、mutation 红→绿、桌面/390px 证据及 merge-tip 聚焦 `104 passed` / 全量 `1035 passed, 24 warnings` 见 E-20260820-001、G-M7R-WP5-001、G-M7R-ALL-001 和 `docs/works/15-feature-m7r-readonly-data/README.md`。本状态只关闭代码级、本机技术里程碑；仓库仍无经授权真实平台导出，不声称真实平台字段全覆盖、真实经营结论、生产发布/权限/写能力或 M8-R～M10-R 已完成 |
-| F-324 M8-R 销售与售后客服闭环 | P0 | 已规划 | F-104、F-117、F-124 至 F-126、F-306、F-323、D-034、D-041 | 复用 M4 在只读影子模式跑通销售与售后多轮建议回复；批准话术、商品/订单/库存及履约物流快照、来源和新鲜度可追溯，回复只描述截至导出时间的状态，不冒充实时轨迹；缺事实追问/转人工；零平台发送、退款、赔付或订单写动作；独立客服 Eval 通过 | `docs/tasks/M8R_CUSTOMER_SERVICE_LOOP_WORKBENCH.md`；主动营销与真实渠道留待后续 Gate |
+| F-324 M8-R 销售与售后客服闭环 | P0 | 进行中 | F-104、F-117、F-121、F-122、F-124 至 F-126、F-306、F-310、F-323、D-034、D-041、D-047 | WP1～WP3 已形成批准内容、可信销售/售后事实和模型建议闭环，并由谢良璇分别完成 8 步人工黑盒验收。WP4 的 8 个固定影子场景、输入/Oracle 分离、正负反馈治理、隔离 Eval、桌面和 390px 窄屏已由谢良璇完成正式前端人工验收；验收中发现的历史表横向溢出和 21 项导航在窄屏难以操作两项问题已修复，复测确认页面无横向溢出、全部入口可达。正式 Eval 为 `8/8 passed`，回答准确、证据覆盖、来源完整、转人工合理均为 100%，幻觉、拒答和敏感输出均为 0%，21 张截图、中文报告和结果 JSON 已归档。分支已同步负责人最新 `main` `8de48c3`，M8-R 功能提交为 `f9653a0`；隔离全量回归 `1081 passed, 24 warnings`，compileall、whitespace 和 managed ledger 门禁通过。当前尚未推送或创建完整 M8-R PR；固定待验 head 后的缪海南 WP5、PR 审阅/合入和生产 Gate 未完成 | `src/ecommerce_agent/customer_service_{contracts,content,facts,loop,workbench,workbench_api}.py`、`src/ecommerce_agent/{context_builder,evaluation,graph,prompts,schemas,service}.py`、`evals/customer_service/m8r_wp4_{inputs,oracle}_v1.json`、`tests/test_m8r_customer_service_{content,facts,loop,workbench}.py`、`docs/admin-console.html`、`docs/works/18-feature-m8r-customer-service-loop/`、E-20260819-002/E-20260819-003/E-20260820-003～E-20260820-007/E-20260821-001～E-20260821-003；无新 schema/项目依赖，不含真实平台、自动发送或生产放行 |
 | F-325 M9-R 商品流量与生命周期经营 | P0 | 已规划 | F-304、F-312 至 F-316、F-323、D-037 至 D-041 | 建立保留原始粒度的 Listing/SKU 经营读模型；当前真实导出只展示 SKU 交易/库存、店铺级流量背景和准备度，禁止把店铺流量拆成 SKU；隔离 Demo 以模拟 SKU 流量、revision 和窗口跑通 M5-R 诊断及生命周期建议；存量标题/主图默认保持，建议人工确认且无商品/价格/广告/活动写动作 | `docs/tasks/M9R_PRODUCT_TRAFFIC_LIFECYCLE_WORKBENCH.md`；当前仅规划，Demo 不代表真实店铺流量、平台权重或真实因果 |
 | F-326 M10-R 预测补货与订购单闭环 | P0 | 已规划 | F-303、F-317 至 F-323、D-039、D-041、D-042 | 分层接入预测目标、候选信号、库存/供货约束和料号主数据，复用 M6-R 产生可追溯 forecast/plan；缺供货参数时降级；按料号生成订购单 draft，人工确认并收集/跟踪供应商交期，零采购、付款、ERP、库存或生产工单写动作 | `docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；当前仅规划，演示参数不得冒充真实供货事实 |
 | F-327 M10-R 利润准备度与经营决策台 | P0 | 已规划 | F-307 至 F-309、F-323、F-325、F-326、D-041、D-042 | 按签收确认收入，版本化 canonical ledger 和财务政策覆盖采购、包装/分拣、平台扣点、运费险、坑位/服务、佣金、赠品/公益、广告、物流、退款/入库/整备等域；共用底账分销售利润、经营利润、财务最终净利润，缺必需费用时对应正式层级不可用，Demo 只显示试算标签；财务最终净利润仅授权视图可见，决策台无自动经营动作 | `docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；财务政策仍待实现与验收 |
 
 ## 功能变更历史
 
+- 2026-08-21：F-324 / M8-R WP1～WP4 完成单 PR 提交前整链门禁。分支经完整 stash 保护从
+  `454b35c` 快进到负责人最新 `main` `8de48c3`，恢复改动无冲突；功能提交为 `f9653a0`。
+  使用隔离 pytest 临时目录和代理屏蔽运行仓库全量，结果 `1081 passed, 24 warnings`、退出码 0、
+  耗时 2417.05 秒；24 条均为既有 Traffic Lab FastAPI 重复 Operation ID warning。compileall
+  在独立 pycache 目录通过，whitespace 和 managed ledger 校验通过。该证据允许进入推送和
+  M8-R 单 PR 建立，不替代固定待验 head 后的缪海南 WP5、PR 审阅/合入、真实渠道或生产 Gate。
+  见 E-20260821-003。
+- 2026-08-21：谢良璇完成 F-324 / M8-R WP4 正式前端人工验收。8 个固定销售/售后影子场景、
+  输入与独立 Oracle 分离、事实来源/新鲜度/隐私/范围/写屏障、正负反馈治理和隔离 Eval 均逐项
+  确认；正式 Eval `8/8 passed`。验收中发现历史表在 390px 横向溢出及 21 项顶部导航难以操作，
+  修复为窄屏纵向信息卡和完整页面下拉入口后复测通过；最终 21 张截图、中文报告和结果 JSON
+  已归档，`final_status=human_accepted_after_fix`。该结论只关闭 WP4 开发侧人工 Gate，仓库全量、
+  完整 M8-R PR、固定待验 head 后的缪海南 WP5、真实渠道和生产 Gate 仍未完成。见 E-20260821-002。
+- 2026-08-21：F-324 / M8-R WP4 形成谢良璇开发侧候选。现有高级管理后台新增客服影子
+  评审，冻结输入与独立 Oracle 物理分离；8 个销售/售后正反例只有显式点击才运行 shadow
+  Agent，浏览、刷新和旧报告均只读。反馈复用治理链，负反馈只生成 `pending` 候选；隔离 Eval
+  增加回答准确、幻觉、拒答、转人工合理、敏感输出和来源完整性指标，临时会话、消息、人工
+  任务和 outbox 不污染主库。WP4 及关联不重复计数 88 项、静态门禁、桌面/390px 开发者演练
+  通过；未保存正式截图，谢良璇正式 8 步前端人工验收、仓库全量、完整 PR 和缪海南 WP5 仍
+  未完成。见 E-20260821-001。
+- 2026-08-20：谢良璇完成 F-324 / M8-R WP3 的 8 步人工黑盒验收。当前/精确/缺失/陈旧
+  库存、流式危险草稿抑制、售后多轮与隐私、错误订单 scope、否定/假设/复合语义反例和影子
+  写屏障均由正反例逐项核对；`confirmation_mode=human`、8/8 confirmed、
+  `automatic_contract_checks=passed`、`final_status=human_accepted`，未调用外部模型或执行平台
+  写动作。只关闭 WP3 开发侧人工 Gate，F-324 保持进行中；见 E-20260820-007。
+- 2026-08-20：修复 F-324 / M8-R WP3 人工验收助手的 Windows PowerShell 5.1 编码兼容。
+  原 UTF-8 无 BOM 文件在 5.1 中被按旧编码读取，中文字符串导致参数列表和引号解析错误；补充
+  UTF-8 BOM 后，以相同 `powershell.exe -File ... -AutoConfirm` 完整运行八步并退出 0，中文
+  输出、过程记录和结果 JSON 均正常。只改变脚本编码，不改变 WP3 业务逻辑、schema 或依赖；
+  自动演练仍不替代谢良璇人工验收。见 E-20260820-006。
+- 2026-08-20：F-324 / M8-R WP3 形成谢良璇开发侧候选。批准话术、advisory-only signal
+  与可信销售/售后事实进入既有 M4 模型链；新增建议证据契约、事实/范围/新鲜度/披露 Gate、
+  影子写屏障和流式输出验证，修复未验证流式草稿可能先于安全降级文案发出的漂移。WP3 自有
+  `11 + 6` 项、WP1/WP2 回归及 policy/context/graph/service/HTTP/intent/API 拆组均取得明确
+  退出码 0；8 步 `-AutoConfirm` 演练为 `developer_rehearsal_passed`，不能替代谢良璇正式
+  人工验收。无 schema、依赖、外部模型、真实平台动作或 WP3 前端；见 E-20260820-005。
+- 2026-08-20：谢良璇完成 F-324 / M8-R WP2 的 8 步人工黑盒验收。销售、缺失、新鲜度、
+  来源、订单/店铺范围、售后事实与隐私、历史/current 和租户隔离均由正反例配对核对；
+  `confirmation_mode=human`、8/8 observation 确认、`human_observations_passed=true`、
+  `final_status=human_accepted`。完整手机号未进入投影，只保留脱敏形式。F-324 仍为进行中，
+  不替代完整全量、WP3～WP4、完整 PR、缪海南 WP5 或生产 Gate。见 E-20260820-004。
+- 2026-08-20：F-324 / M8-R WP2 形成谢良璇开发侧候选。新增销售与售后两项客服只读工具，
+  通过既有公开服务投影商品、价格、库存、订单、物流和退款事实；统一可信 tenant/store/order、
+  来源、新鲜度、缺失、全来源商品身份、字段白名单和历史/current Gate。初始缺实现、历史版本
+  外层结构、订单 scope 与跨来源身份 mutation 均先红后绿；当前哈希拆组 66 passed，
+  compileall/whitespace、PowerShell 5.1 兼容和 8 步自动验收演练通过。自动演练不替代谢良璇
+  人工确认，F-324 保持进行中；无 schema、依赖、前端、模型、平台写动作或语义路由变化。
+  见 E-20260820-003。
+- 2026-08-20：负责人仓库 `main` 已完成 M7-R PR #20 合入及 WP5 收口，谢良璇 Fork 的
+  `main` 由 `54664ee` 快进到 `454b35c`，本地远端规范为个人 `origin` 与负责人 `upstream`。
+  M8-R 分支经 stash 保护后同步同一 base 并恢复 WP1；F-323 使用合入后的“已完成”，F-324
+  保持“进行中”。WP1/M7 契约、RAG/治理和知识链路聚焦 `63 passed`，见 E-20260820-002。
 - 2026-08-20：关闭 F-323 的代码级、本机技术里程碑。WP1 因是 M7-R 与 M8-R～M10-R
   共用基建而先行合入；WP2～WP4 经 PR #20 head `ece61e1` 完成独立 WP5，并合入 `main`
   为 `f6bb47c`。缪海南原报告保持原文归档，实施方补充报告只补齐固定对象、WP1～WP4
@@ -121,6 +173,16 @@
   乱序和跨店。初始缺实现收集退出 2，订单子事实覆盖、Excel 日期和 Demo 回执三项先红后绿；
   聚焦 `77 passed`、全量 `1008 passed, 24 warnings`。无 schema、依赖、HTTP、Agent 或平台
   写动作变化；真实平台样本、WP3～WP5 和正式 WP5 不在本结论内。见 E-20260818-001。
+- 2026-08-20：项目负责人最新要求将 M8-R 交付改为完整里程碑单 PR。谢良璇继续在当前分支
+  完成 WP1～WP4，开发侧全链自测完成后向负责人仓库 `main` 提交一个 PR；合入并确认版本后
+  的旧表述已纠正为：PR 建立并固定待验 head 后通知缪海南执行 WP5 独立复验，通过后再合入。
+  2026-08-19 的“一个 WP 一个 PR”临时口径由 D-047 取代。
+- 2026-08-19：F-324 / M8-R WP1 由谢良璇在 F 盘隔离环境完成 8 步真实 HTTP 黑盒验收；
+  自动契约检查全部通过，8/8 人工观察确认，结果为 `confirmation_mode=human`、
+  `human_observations_passed=true`、`final_status=human_accepted`。同日提交前分组复跑 102 项
+  关联测试并通过全部静态门禁。当日“一个 WP 一个 PR”临时口径已于 2026-08-20 被 D-047
+  取代；代码尚未推送/合入，WP2～WP4、完整全量回归、缪海南 WP5、真实渠道和生产 Gate 均未完成。见
+  E-20260819-002/E-20260819-003。
 - 2026-08-17：M7-R WP1 功能提交 `0b54a24` 与 D-046/v34 文档提交 `e127c39` 已快进推送
   `origin/main`。隔离 main worktree 全量 `950 passed`，compileall、责任矩阵、迁移唯一性、
   whitespace 和账本校验通过；WP1 仍是开发候选，不替代正式 WP5、真实数据或生产 Gate。
