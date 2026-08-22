@@ -18,7 +18,6 @@ from ecommerce_agent.product_lifecycle.schemas import (
 )
 from ecommerce_agent.product_lifecycle.validation import (
     validate_full_recommendation,
-    validate_model_output,
 )
 
 NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
@@ -70,16 +69,20 @@ def test_alternatives_required() -> None:
         validate_full_recommendation(rec)
 
 def test_model_output_forbidden_key_rejected() -> None:
-    """模型输出含 effect/平台权重 → 整体拒绝（含嵌套/自然语言）。"""
-    rec = _rec(facts={"cost_ready": True})
+    """建议内容含 effect/平台权重 → 整体拒绝（含嵌套/自然语言）。"""
+    rec = _rec(facts={"cost_ready": True, "effect": 0.5})
     with pytest.raises(ValueError, match="forbidden_output_key"):
-        validate_model_output(rec, {"effect": 0.5})
+        validate_full_recommendation(rec)
     # 嵌套键
+    rec = _rec(facts={"cost_ready": True, "details": {"effect": 0.5}})
     with pytest.raises(ValueError, match="forbidden_output_key"):
-        validate_model_output(rec, {"details": {"effect": 0.5}})
+        validate_full_recommendation(rec)
     # 自然语言越权
+    rec = _rec(facts={"cost_ready": True}).model_copy(
+        update={"rationale": "平台权重提升20%"}
+    )
     with pytest.raises(ValueError, match="forbidden_output_key"):
-        validate_model_output(rec, {"notes": ["平台权重提升20%"]})
+        validate_full_recommendation(rec)
 
 
 def test_m10_contract_wraps() -> None:

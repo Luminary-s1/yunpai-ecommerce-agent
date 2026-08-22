@@ -123,6 +123,23 @@ FROZEN_SCENES: list[FrozenScene] = [
         },
     ),
     FrozenScene(
+        "活动候选",
+        input_data={
+            "sku_id": "sku-promotion",
+            "evidence_state": "actual",
+            "exposures": 2500,
+            "clicks": 180,
+            "conversions": 20,
+            "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
+        },
+        expected={
+            "degraded": False,
+            "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+            "recommendation_type": "保持观察",
+        },
+    ),
+    FrozenScene(
         "缺货污染",
         input_data={
             "sku_id": "sku-a",
@@ -224,14 +241,6 @@ FROZEN_SCENES: list[FrozenScene] = [
 ]
 
 
-def find_scene(name: str) -> FrozenScene:
-    """按名称找场景；不存在 → 抛（不静默）。"""
-    for scene in FROZEN_SCENES:
-        if scene.name == name:
-            return scene
-    raise ValueError(f"frozen_scene_not_found:{name}")
-
-
 # ── R5（C-lite，负责人阻断项 5 修复）：方向可达场景集 ──
 # 选品/上新/清仓在 FROZEN_SCENES 里 expected 全锁 EVIDENCE_INSUFFICIENT + 保持观察
 # （场景名通过、能力未证明——假覆盖）。本集补"方向可达但 REQUIRED_FACTS 由信号满足"
@@ -264,6 +273,20 @@ _DIRECTION_EXPECTED: dict[str, dict[str, Any]] = {
         "recommendation_degraded": False,
         "missing_evidence": [],
     },
+    "受控优化": {
+        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+        "degraded": False,
+        "recommendation_type": RecommendationType.EXPERIMENT.value,  # "受控实验"
+        "recommendation_degraded": False,
+        "missing_evidence": [],
+    },
+    "活动候选": {
+        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+        "degraded": False,
+        "recommendation_type": RecommendationType.PROMOTION.value,  # "活动候选"
+        "recommendation_degraded": False,
+        "missing_evidence": [],
+    },
 }
 
 # 方向场景：复用 FROZEN_SCENES 的 input_data + 追加 REQUIRED_FACTS 信号键
@@ -271,10 +294,23 @@ _DIRECTION_EXPECTED: dict[str, dict[str, Any]] = {
 # evidence_state/freshness/quality_gate/exposures/clicks/conversions，忽略其它键——
 # 所以信号需由测试侧 mock 建议解释器 + 构造带信号的 Diagnosis.evidence_facts 注入，
 # 本集 input_data 只用于确定 SKU 身份与基础事实）。
+# 每个方向场景显式覆盖 sku_id 与 FixedTableEvalRecommendationInterpreter 表桩键对齐
+# （选品/上新/清仓/实验/活动），使默认 Eval 也能到达真实方向。
 _DIRECTION_SIGNALS: dict[str, dict[str, Any]] = {
     "选品方向": {"demand_signal": True, "competitor_evidence": True},
     "上新准备": {"item_ready": True, "stock_ready": True},
     "清仓风险": {"clearance_signal": True, "competitor_evidence": True},
+    # 受控优化 → EXPERIMENT：需 revision 证据；活动候选 → PROMOTION：需活动窗口。
+    "受控优化": {"revision_evidence": True},
+    "活动候选": {"campaign_window": True},
+}
+
+_DIRECTION_SKUS: dict[str, str] = {
+    "选品方向": "sku-select",
+    "上新准备": "sku-launch",
+    "清仓风险": "sku-clearance",
+    "受控优化": "sku-experiment",
+    "活动候选": "sku-promotion",
 }
 
 DIRECTION_SCENES: list[FrozenScene] = [
@@ -282,6 +318,9 @@ DIRECTION_SCENES: list[FrozenScene] = [
         s.name,
         input_data={
             **s.input_data,
+            # 方向场景 SKU 固定为表桩键，使默认 FixedTableEvalRecommendationInterpreter
+            # 能命中并产出对应建议类型。
+            "sku_id": _DIRECTION_SKUS[s.name],
             # R5（C-lite）：方向场景显式声明 REQUIRED_FACTS 信号键，
             # 注入 Diagnosis.evidence_facts → facts_snapshot 透传 → 非降级真实方向。
             "required_signals": _DIRECTION_SIGNALS[s.name],
@@ -294,7 +333,7 @@ DIRECTION_SCENES: list[FrozenScene] = [
 
 
 __all__ = [
+    "DIRECTION_SCENES",
     "FROZEN_SCENES",
     "FrozenScene",
-    "find_scene",
 ]

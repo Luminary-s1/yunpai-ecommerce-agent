@@ -1682,18 +1682,23 @@
       const base = `/v1/products/${encodeURIComponent(storeId)}/${encodeURIComponent(itemId)}/${encodeURIComponent(skuId)}`;
       // R4 下钻：workbench + recommendations + read-model(revision) + insights + diagnosis
       const [view, recs, readModel, insights, diag] = await Promise.all([
-        api(`${base}/workbench`),
+        api(`${base}/workbench?revision=${encodeURIComponent(revision)}`),
         api('/v1/products/recommendations?store_id=' + encodeURIComponent(storeId)),
         api(`${base}/read-model?revision=${encodeURIComponent(revision)}`).catch(() => null),
-        api(`${base}/insights`).catch(() => null),
-        api(`${base}/diagnosis`).catch(() => null),
+        api(`${base}/analysis-runs?revision=${encodeURIComponent(revision)}`).catch(() => null),
+        api(`${base}/diagnosis?revision=${encodeURIComponent(revision)}`).catch(() => null),
       ]);
       // R4 下钻：revision 读模型替换指标表数据（read-model 带 revision 参数）
-      const metricEntries = Object.entries((readModel && Object.keys(readModel).length ? readModel : view).metrics || {});
+      const selectedRead = readModel && Object.keys(readModel).length ? readModel : view;
+      const metricEntries = Object.entries(selectedRead.metrics || {});
+      const identity = selectedRead.identity || {};
+      const revisionEvidence = selectedRead.revision || view.revision || {};
       const actualCount = metricEntries.filter(([, m]) => m.evidence_state === 'actual').length;
       const missingCount = metricEntries.filter(([, m]) => m.evidence_state === 'missing').length;
       $('m9rKpis').innerHTML = [
         ['SKU', skuId, `${storeId} / ${itemId} · rev ${revision}`],
+        ['料号', identity.material_code || '—', identity.evidence?.run_id || '无 matched 对账证据'],
+        ['Revision', revisionEvidence.revision_no || revision, revisionEvidence.revision_id || '未找到 revision'],
         ['指标数', metricEntries.length, `${actualCount} 真实 · ${missingCount} 缺失`],
         ['门禁', view.evidence_gates?.all_passed ? '全部通过' : '未全过', view.evidence_gates?.evidence_state || '-'],
         ['建议', recs.length, '当前草稿/流转中']
@@ -1701,18 +1706,25 @@
       // 读模型指标表：四态徽标 + 来源 + 时间
       const badgeLabels = { actual: '真实数据', manual: '人工录入', demo: '试算', missing: '缺失' };
       const badgeClasses = { actual: 'ok', manual: 'info', demo: 'warn', missing: 'bad' };
-      $('m9rMetricRows').innerHTML = metricEntries.length ? metricEntries.map(([name, m]) => `<tr><td class="mono"><strong>${escapeHtml(name)}</strong></td><td><span class="status ${badgeClasses[m.evidence_state] || 'info'}">${badgeLabels[m.evidence_state] || escapeHtml(m.evidence_state)}</span></td><td>${m.value ?? '-'}</td><td>${escapeHtml(m.reason || m.data_trust || '-')}</td><td>${formatTime(m.data_as_of)}</td></tr>`).join('') : '<tr><td colspan="5"><div class="empty">暂无指标</div></td></tr>';
+      $('m9rMetricRows').innerHTML = metricEntries.length ? metricEntries.map(([name, m]) => `<tr><td class="mono"><strong>${escapeHtml(name)}</strong></td><td><span class="status ${badgeClasses[m.evidence_state] || 'info'}">${badgeLabels[m.evidence_state] || escapeHtml(m.evidence_state)}</span></td><td>${m.value ?? '-'}</td><td>${escapeHtml(m.authoritative_service || m.reason || '-')}${m.import_manifest_id ? `<div class="muted mono">${escapeHtml(m.import_manifest_id)}</div>` : ''}</td><td>${formatTime(m.data_as_of)}</td></tr>`).join('') : '<tr><td colspan="5"><div class="empty">暂无指标</div></td></tr>';
       // 证据门禁
       const gates = view.evidence_gates?.gates || [];
-      $('m9rGateState').textContent = `证据状态 ${escapeHtml(view.evidence_gates?.evidence_state || '-')}`;
+      $('m9rGateState').textContent = `rev ${escapeHtml(view.evidence_gates?.revision_id || revisionEvidence.revision_id || '-')} · 证据状态 ${escapeHtml(view.evidence_gates?.evidence_state || '-')}`;
       $('m9rGates').innerHTML = gates.length ? gates.map((g) => `<div class="notice"><strong><span class="status ${g.passed ? 'ok' : 'bad'}">${g.passed ? '通过' : '未过'}</span> ${escapeHtml(g.name)}</strong><div class="muted">${escapeHtml(g.reason || '')}</div></div>`).join('') : '<div class="empty">无门禁信息（缺数据 fail-closed）</div>';
       // 为什么暂不能建议
       const why = view.why_not_recommended || [];
       $('m9rWhyNot').innerHTML = why.length ? `<strong>暂不能建议：</strong>${why.map((w) => escapeHtml(w)).join('；')}` : '<strong>当前证据可通过门禁，可进入建议链路。</strong>';
       $('m9rWhyNot').classList.toggle('notice', why.length > 0);
       // R4 下钻：insights（流量证据）
-      if (insights && insights.length) {
-        $('m9rInsights').innerHTML = insights.map((it) => `<div class="notice"><strong>${escapeHtml(it.analysis_run_id || it.experiment_id || 'analysis')}</strong><div class="muted">effect=${escapeHtml(it.statistical_facts?.effect_estimate ?? '-')} · sample=${escapeHtml(it.statistical_facts?.sample_size ?? '-')} · state=${escapeHtml(it.evidence_state || '-')}</div></div>`).join('');
+      const insightRows = (insights?.experiments || []).flatMap((entry) =>
+        (entry.analysis_runs || []).map((analysis) => ({
+          experiment: entry.experiment,
+          analysis,
+          freshness: analysis.freshness,
+        }))
+      );
+      if (insightRows.length) {
+        $('m9rInsights').innerHTML = insightRows.map((it) => `<div class="notice"><strong>${escapeHtml(it.analysis?.analysis_run_id || it.experiment?.experiment_id || 'analysis')}</strong><div class="muted">effect=${escapeHtml(JSON.stringify(it.analysis?.effect_estimate ?? '-'))} · sample=${escapeHtml(JSON.stringify(it.analysis?.sample_size ?? '-'))} · state=${escapeHtml(it.freshness?.status || '-')}</div></div>`).join('');
       } else {
         $('m9rInsights').innerHTML = '<div class="empty">暂无流量证据（无合格实验/缺数据）</div>';
       }
@@ -1725,7 +1737,7 @@
       }
       // 生命周期建议
       $('m9rRecMeta').textContent = `${recs.length} 条建议（只读展示，不自动批准）`;
-      $('m9rRecRows').innerHTML = recs.length ? recs.map((r) => `<tr><td class="mono">${escapeHtml(r.recommendation_id)}</td><td>${escapeHtml(r.type)}</td><td><span class="status ${r.state === 'approved' ? 'ok' : r.state === 'closed' || r.state === 'stale' ? 'muted' : 'info'}">${escapeHtml(r.state)}</span></td><td>${r.degraded ? '<span class="status warn">降级</span>' : '否'}</td><td>${escapeHtml(r.rationale)}</td><td>${formatTime(r.created_at)}</td><td>${r.state === 'draft' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','submit')">提交</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : r.state === 'awaiting_review' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','approve')">批准</button> <button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','reject')">拒绝</button>` : `<button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>`}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">暂无生命周期建议</div></td></tr>';
+      $('m9rRecRows').innerHTML = recs.length ? recs.map((r) => `<tr><td class="mono">${escapeHtml(r.recommendation_id)}</td><td>${escapeHtml(r.type)}</td><td><span class="status ${r.state === 'approved' ? 'ok' : r.state === 'closed' || r.state === 'stale' ? 'muted' : 'info'}">${escapeHtml(r.state)}</span></td><td>${r.degraded ? '<span class="status warn">降级</span>' : '否'}</td><td>${escapeHtml(r.rationale)}</td><td>${formatTime(r.created_at)}</td><td>${r.state === 'draft' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','submit')">提交</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : r.state === 'awaiting_review' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','approve')">批准</button> <button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','reject')">拒绝</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : `<button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>`}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">暂无生命周期建议</div></td></tr>';
     }
 
     // R4：审核流转（submit/approve/reject 显式点击 → POST transition）
@@ -1736,7 +1748,7 @@
           method: 'POST',
           body: JSON.stringify({ action })
         });
-        $('m9rRecActionMsg').innerHTML = `<span class="status ok">${escapeHtml(action)} 成功</span> → 状态 <strong>${escapeHtml(result.state || result.rec?.state || '')}</strong>`;
+        $('m9rRecActionMsg').innerHTML = `<span class="status ok">${escapeHtml(action)} 成功</span> → 状态 <strong>${escapeHtml(result.recommendation?.state || result.state || '')}</strong>`;
         loadM9rWorkbench();
       } catch (err) {
         $('m9rRecActionMsg').innerHTML = `<span class="status bad">${escapeHtml(action)} 失败</span> ${escapeHtml(String(err))}`;
@@ -1745,8 +1757,9 @@
 
     // R4：建议审计链（GET recommendations/{id}/audit）
     async function m9rShowAudit(recId) {
+      const storeId = $('m9rStore').value.trim() || 'store-a';
       try {
-        const rows = await api(`/v1/products/recommendations/${encodeURIComponent(recId)}/audit`);
+        const rows = await api(`/v1/products/recommendations/${encodeURIComponent(recId)}/audit?store_id=${encodeURIComponent(storeId)}`);
         const items = Array.isArray(rows) ? rows : (rows?.audit || []);
         $('m9rRecActionMsg').innerHTML = `<strong>审计链 ${escapeHtml(recId)}</strong> · ${items.length ? items.map((a) => `${escapeHtml(a.action)} ${escapeHtml(a.from_state || '')}→${escapeHtml(a.to_state || '')} @${escapeHtml(a.actor || '')} ${formatTime(a.occurred_at)}`).join(' ；') : '（无审计记录）'}`;
       } catch (err) {
@@ -1764,7 +1777,7 @@
       try {
         const result = await api(`${base}/recommendation/generate`, {
           method: 'POST',
-          body: JSON.stringify({ recommendation_id: recId })
+          body: JSON.stringify({ recommendation_id: recId, revision: Number($('m9rRevision')?.value || 1) })
         });
         $('m9rRecActionMsg').innerHTML = `<span class="status ok">已生成</span> <strong class="mono">${escapeHtml(result.recommendation_id)}</strong> · ${escapeHtml(result.type)} · 状态 <strong>${escapeHtml(result.state)}</strong> · <span class="muted">${result.degraded ? '降级' : '正常'}</span>`;
         loadM9rWorkbench();

@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from ecommerce_agent.product_diagnosis.gates import FORBIDDEN_KEYS, GateEngine
-from ecommerce_agent.product_lifecycle.validation import validate_model_output
+from ecommerce_agent.product_lifecycle.validation import validate_full_recommendation
 from ecommerce_agent.text_utils import contains_forbidden_token
 
 
@@ -51,7 +51,7 @@ def test_lifecycle_validate_rejects_nested_effect() -> None:
         recommendation_id="r1",
         type=RecommendationType.KEEP_OBSERVE,
         target=TargetObject(store_id="s1"),
-        facts_snapshot={},
+        facts_snapshot={"stats": {"effect": 0.5}},
         rationale="x",
         alternatives=[RecommendationType.EXPERIMENT],
         state=RecommendationState.DRAFT,
@@ -59,7 +59,7 @@ def test_lifecycle_validate_rejects_nested_effect() -> None:
         updated_at=datetime(2026, 8, 18, tzinfo=UTC),
     )
     with pytest.raises(ValueError, match="forbidden_output_key"):
-        validate_model_output(rec, {"stats": {"effect": 0.5}})
+        validate_full_recommendation(rec)
 
 
 def test_lifecycle_validate_rejects_natural_language() -> None:
@@ -77,11 +77,11 @@ def test_lifecycle_validate_rejects_natural_language() -> None:
         type=RecommendationType.KEEP_OBSERVE,
         target=TargetObject(store_id="s1"),
         facts_snapshot={},
-        rationale="x",
+        rationale="平台权重提升 20%",
         alternatives=[RecommendationType.EXPERIMENT],
         state=RecommendationState.DRAFT,
         created_at=datetime(2026, 8, 18, tzinfo=UTC),
         updated_at=datetime(2026, 8, 18, tzinfo=UTC),
     )
     with pytest.raises(ValueError, match="forbidden_output_key"):
-        validate_model_output(rec, {"rationale": "平台权重提升 20%"})
+        validate_full_recommendation(rec)

@@ -136,10 +136,12 @@ def test_m9r_workbench_view_renders(_server) -> None:
             ) is True, "商品经营视图未激活"
             # 关键：真实渲染的 metric 行非空（loadM9rWorkbench 从 API 拉数）
             metric_rows = page.locator("#m9rMetricRows tr").count()
-            assert metric_rows > 0, "读模型指标表为空（workbench API 未渲染）"
+            assert metric_rows >= 12, f"读模型指标未完整渲染: {metric_rows}"
+            assert "暂无指标" not in page.locator("#m9rMetricRows").inner_text()
             # KPI 出现
             kpi_text = page.locator("#m9rKpis").inner_text()
             assert "SKU" in kpi_text, "KPI 未渲染"
+            assert "指标数\n0" not in kpi_text, f"KPI 仍报告零指标: {kpi_text}"
         finally:
             browser.close()
 
@@ -173,6 +175,22 @@ def test_m9r_workbench_generate_recommendation(_server) -> None:
                 "#m9rRecRows tr:has-text('rec-browser-1')"
             ).inner_text()
             assert "draft" in row_text, f"建议未落为 draft: {row_text}"
+            row = page.locator("#m9rRecRows tr:has-text('rec-browser-1')")
+            row.get_by_role("button", name="提交").click()
+            page.wait_for_function(
+                "document.getElementById('m9rRecActionMsg').innerText.includes('submit 成功')"
+            )
+            page.wait_for_function(
+                "document.getElementById('m9rRecRows').innerText.includes('awaiting_review')"
+            )
+            row = page.locator("#m9rRecRows tr:has-text('rec-browser-1')")
+            row.get_by_role("button", name="审计").click()
+            page.wait_for_function(
+                "document.getElementById('m9rRecActionMsg').innerText.includes('审计链 rec-browser-1')"
+            )
+            audit_text = page.locator("#m9rRecActionMsg").inner_text()
+            assert "审计链 rec-browser-1" in audit_text
+            assert "submit" in audit_text
         finally:
             browser.close()
 

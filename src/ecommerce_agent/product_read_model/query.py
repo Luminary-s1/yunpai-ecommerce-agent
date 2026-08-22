@@ -35,7 +35,9 @@ from .models import (
     AggregateRule,
     DataTrust,
     Granularity,
+    ListingRevisionEvidence,
     MetricValue,
+    ProductIdentityEvidence,
     SKUReadModel,
 )
 
@@ -74,6 +76,12 @@ class ProductReadQuery:
             tenant_id, store_id, item_id, sku_id, revision
         )
         orders = self._order_facts(tenant_id, store_id, item_id, sku_id, revision)
+        identity = self._product_identity(
+            tenant_id, store_id, item_id, sku_id
+        )
+        listing_revision = self._listing_revision_evidence(
+            tenant_id, store_id, item_id, sku_id, revision
+        )
 
         # SKU 层 9 个指标字段（对齐 METRIC_SPECS；源粒度可覆盖）
         metric_values: dict[str, MetricValue] = {}
@@ -126,13 +134,13 @@ class ProductReadQuery:
             item_id=item_id,
             sku_id=sku_id,
             revision=revision,
-            material_code=self._product_material_code(
-                tenant_id, store_id, item_id, sku_id
+            listing_revision=listing_revision,
+            material_code=identity["material_code"] if identity else None,
+            product_identity_evidence=(
+                identity["evidence"] if identity else None
             ),
-            title=self._product_title(tenant_id, store_id, item_id, sku_id),
-            merchant_code=self._product_merchant_code(
-                tenant_id, store_id, item_id, sku_id
-            ),
+            title=identity["title"] if identity else None,
+            merchant_code=identity["merchant_code"] if identity else None,
             impressions=metric_values["impressions"],
             clicks=metric_values["clicks"],
             add_to_cart=metric_values["add_to_cart"],
@@ -175,7 +183,8 @@ class ProductReadQuery:
         """
         row = conn.execute(
             """
-            SELECT active_from, active_to, connector_id, id
+            SELECT active_from, active_to, connector_id, id, revision_no,
+                   source_updated_at
             FROM listing_revisions
             WHERE tenant_id=? AND store_id=? AND item_id=? AND sku_id=? AND revision_no=?
             -- A4（盲点 #4 修复）：listing_revisions UNIQUE 含 connector_id——同
@@ -193,8 +202,38 @@ class ProductReadQuery:
             "active_to": row["active_to"],
             "connector_id": row["connector_id"],
             "revision_id": row["id"],
+            "revision_no": row["revision_no"],
+            "source_updated_at": row["source_updated_at"],
             "item_id": item_id,  # P1: 窗口消费侧透传 item_id，聚合按链接过滤
         }
+
+    def _listing_revision_evidence(
+        self,
+        tenant_id: str,
+        store_id: str,
+        item_id: str,
+        sku_id: str,
+        revision: int,
+    ) -> ListingRevisionEvidence | None:
+        with self.db.connect() as conn:
+            window = self._revision_window(
+                conn, tenant_id, store_id, item_id, sku_id, revision
+            )
+        if not window:
+            return None
+        return ListingRevisionEvidence(
+            revision_id=str(window["revision_id"]),
+            revision_no=int(window["revision_no"]),
+            connector_id=str(window["connector_id"]),
+            active_from=datetime.fromisoformat(str(window["active_from"])),
+            active_to=(
+                datetime.fromisoformat(str(window["active_to"]))
+                if window["active_to"] is not None else None
+            ),
+            source_updated_at=datetime.fromisoformat(
+                str(window["source_updated_at"])
+            ),
+        )
 
     def _traffic_facts(
         self, tenant_id: str, store_id: str, item_id: str, sku_id: str, revision: int
@@ -206,25 +245,43 @@ class ProductReadQuery:
             )
             if not window:
                 return self._missing_traffic("traffic_revision_not_found")
-            row = conn.execute(
+            rows = conn.execute(
                 """
                 SELECT b.impressions, b.clicks, b.cart_adds, b.orders,
                        b.data_as_of, b.source_id, b.connector_id,
                        b.metric_start, b.metric_end, b.bucket_granularity
                 FROM traffic_metric_buckets b
                 WHERE b.tenant_id=? AND b.listing_revision_id=?
-                -- A2（盲点 #16 修复）：保持"取最新一天 bucket"语义（任务书 L142 粒度不足
-                -- 时展示可用事实），加 id 唯一尾键保证同 metric_start 多行（不同
-                -- traffic_source）时确定取一行
-                ORDER BY b.metric_start DESC, b.id DESC LIMIT 1
+                  AND b.metric_start=(
+                      SELECT MAX(latest.metric_start)
+                      FROM traffic_metric_buckets latest
+                      WHERE latest.tenant_id=b.tenant_id
+                        AND latest.listing_revision_id=b.listing_revision_id
+                  )
+                ORDER BY b.id
                 """,
                 (tenant_id, window["revision_id"]),
-            ).fetchone()
-        if row is None:
+            ).fetchall()
+        if not rows:
             return self._missing_traffic("traffic_metric_evidence_not_found")
-        # 粒度诚实：按 bucket 自身粒度标注（hour→HOURLY，day→DAILY），不强行标 DAILY
+        if len(rows) != 1:
+            # M5-R has not frozen traffic-source aggregation semantics. Summing can
+            # double count an overall row plus channel rows; choosing one understates
+            # the SKU. Fail closed until an authoritative breakdown contract exists.
+            return self._missing_traffic(
+                "traffic_source_breakdown_requires_explicit_aggregation"
+            )
+        row = rows[0]
+        # 粒度诚实：按 bucket 自身粒度标注（hour→HOURLY，day→DAILY）。
+        # 未知粒度（非 hour/day）→ 显式 MISSING + reason，不回落默认 DAILY 冒充
+        # 日粒度——对齐任务书「不同粒度不得静默相加/标错」（当前表结构 CHECK 只允许
+        # hour/day，未知粒度仅来自迁移或手工插库，属防御纵深）。
         bucket_granularity = row["bucket_granularity"]
-        granularity = Granularity.HOURLY if bucket_granularity == "hour" else None
+        if bucket_granularity not in ("hour", "day"):
+            return self._missing_traffic("traffic_granularity_unsupported")
+        granularity = (
+            Granularity.HOURLY if bucket_granularity == "hour" else Granularity.DAILY
+        )
         return {
             "impressions": _to_float(row["impressions"]),
             "clicks": _to_float(row["clicks"]),
@@ -239,7 +296,7 @@ class ProductReadQuery:
             "reason": None,
             "period_key": (
                 row["metric_start"] or row["data_as_of"]
-            )[:13 if granularity is not None else 10]
+            )[:13 if bucket_granularity == "hour" else 10]
             if (row["metric_start"] or row["data_as_of"]) else None,
         }
 
@@ -580,7 +637,9 @@ class ProductReadQuery:
                 return None
             row = conn.execute(
                 """
-                SELECT m.event_type, m.canonical_product_id, m.item_id, m.merchant_code
+                SELECT m.event_id, m.event_type, m.mapping_version,
+                       m.canonical_product_id, m.item_id, m.merchant_code,
+                       m.created_at
                 FROM readonly_product_mapping_events m
                 WHERE m.tenant_id=? AND m.store_id=? AND m.connector_id=?
                   AND m.sku_id=?
@@ -599,48 +658,87 @@ class ProductReadQuery:
             "canonical_product_id": row["canonical_product_id"],
             "item_id": row["item_id"],
             "merchant_code": row["merchant_code"],
+            "connector_id": connector_id,
+            "event_id": row["event_id"],
+            "mapping_version": row["mapping_version"],
+            "created_at": row["created_at"],
         }
 
-    def _product_material_code(
+    def _product_identity(
         self, tenant_id: str, store_id: str, item_id: str, sku_id: str
-    ) -> str | None:
-        """料号（internal_part_number）：来自 canonical_products，非 item_id。"""
+    ) -> dict[str, Any] | None:
+        """Consume the latest operational M7-R matched reconciliation row.
+
+        A confirmed mapping alone is intentionally insufficient. The M7-R handoff
+        requires downstream modules to consume the immutable matched row and keep
+        its run, policy and mapping snapshot references. A newer ambiguous,
+        unmapped or rejected reconciliation therefore suppresses the material code.
+        """
         mapping = self._product_mapping(tenant_id, store_id, item_id, sku_id)
         if mapping is None:
             return None
         with self.db.connect() as conn:
             row = conn.execute(
                 """
-                SELECT internal_part_number FROM readonly_canonical_products
-                WHERE tenant_id=? AND store_id=? AND canonical_product_id=?
+                WITH latest_run AS (
+                    SELECT run_id, policy_version, mapping_snapshot_digest, created_at
+                    FROM readonly_product_reconciliation_runs
+                    WHERE tenant_id=? AND store_id=? AND data_scope='operational'
+                    ORDER BY created_at DESC, run_id DESC
+                    LIMIT 1
+                )
+                SELECT rr.row_id, rr.run_id, rr.canonical_product_id,
+                       rr.internal_part_number, rr.connector_id, rr.source_domain,
+                       rr.source_reference, lr.policy_version,
+                       lr.mapping_snapshot_digest, lr.created_at,
+                       p.title, p.merchant_code
+                FROM latest_run lr
+                JOIN readonly_product_reconciliation_rows rr
+                  ON rr.tenant_id=? AND rr.store_id=? AND rr.run_id=lr.run_id
+                JOIN readonly_canonical_products p
+                  ON p.tenant_id=rr.tenant_id AND p.store_id=rr.store_id
+                 AND p.canonical_product_id=rr.canonical_product_id
+                WHERE rr.terminal_status='matched'
+                  AND rr.connector_id=? AND rr.sku_id=?
+                  AND (rr.item_id=? OR rr.item_id IS NULL)
+                  AND rr.canonical_product_id=?
+                  AND lr.created_at>=?
+                ORDER BY CASE WHEN rr.item_id=? THEN 0 ELSE 1 END,
+                         rr.row_number, rr.row_id
+                LIMIT 1
                 """,
-                (tenant_id, store_id, mapping["canonical_product_id"]),
+                (
+                    tenant_id, store_id, tenant_id, store_id,
+                    mapping["connector_id"], sku_id, item_id,
+                    mapping["canonical_product_id"], mapping["created_at"], item_id,
+                ),
             ).fetchone()
-        return str(row["internal_part_number"]) if row else None
-
-    def _product_merchant_code(
-        self, tenant_id: str, store_id: str, item_id: str, sku_id: str
-    ) -> str | None:
-        mapping = self._product_mapping(tenant_id, store_id, item_id, sku_id)
-        if mapping is None:
+        if row is None:
             return None
-        return mapping.get("merchant_code") or None
-
-    def _product_title(
-        self, tenant_id: str, store_id: str, item_id: str, sku_id: str
-    ) -> str | None:
-        mapping = self._product_mapping(tenant_id, store_id, item_id, sku_id)
-        if mapping is None:
-            return None
-        with self.db.connect() as conn:
-            row = conn.execute(
-                """
-                SELECT title FROM readonly_canonical_products
-                WHERE tenant_id=? AND store_id=? AND canonical_product_id=?
-                """,
-                (tenant_id, store_id, mapping["canonical_product_id"]),
-            ).fetchone()
-        return str(row["title"]) if row else None
+        evidence = ProductIdentityEvidence(
+            canonical_product_id=str(row["canonical_product_id"]),
+            internal_part_number=str(row["internal_part_number"]),
+            run_id=str(row["run_id"]),
+            row_id=str(row["row_id"]),
+            policy_version=str(row["policy_version"]),
+            mapping_snapshot_digest=str(row["mapping_snapshot_digest"]),
+            connector_id=str(row["connector_id"]),
+            source_domain=str(row["source_domain"]),
+            source_reference=(
+                str(row["source_reference"])
+                if row["source_reference"] is not None else None
+            ),
+            reconciled_at=datetime.fromisoformat(str(row["created_at"])),
+        )
+        return {
+            "material_code": evidence.internal_part_number,
+            "title": str(row["title"]),
+            "merchant_code": (
+                str(row["merchant_code"])
+                if row["merchant_code"] is not None else None
+            ),
+            "evidence": evidence,
+        }
 
     # ── 竞品域（真实查询：competitor_observations）──
 
@@ -650,12 +748,23 @@ class ProductReadQuery:
         with self.db.connect() as conn:
             row = conn.execute(
                 """
-                SELECT competitor_price, observed_at, source_id, connector_id
-                FROM competitor_observations
-                WHERE tenant_id=? AND store_id=? AND subject_sku=?
+                SELECT o.competitor_price, o.observed_at, o.source_id,
+                       o.connector_id
+                FROM competitor_observations o
+                JOIN competitive_entity_matches m
+                  ON m.id=o.entity_match_id
+                 AND m.tenant_id=o.tenant_id
+                 AND m.connector_id=o.connector_id
+                 AND m.store_id=o.store_id
+                 AND m.subject_sku=o.subject_sku
+                 AND m.competitor_name=o.competitor_name
+                 AND m.competitor_sku=o.competitor_sku
+                WHERE o.tenant_id=? AND o.store_id=? AND o.subject_sku=?
+                  AND m.status='approved'
                 -- A6（盲点 #15 修复）：同 observed_at 多行（多竞品/多 connector）时
                 -- 加唯一尾键确定（connector_id + competitor_sku + id），避免任取
-                ORDER BY observed_at DESC, connector_id, competitor_sku, id DESC
+                ORDER BY o.observed_at DESC, o.connector_id,
+                         o.competitor_sku, o.id DESC
                 LIMIT 1
                 """,
                 (tenant_id, store_id, sku_id),
@@ -663,7 +772,7 @@ class ProductReadQuery:
         if row is None:
             return MetricValue.missing(
                 Granularity.DAILY, AggregateRule.NONE, _PERIOD_PLACEHOLDER,
-                reason="competitor_evidence_not_found",
+                reason="competitor_approved_evidence_not_found",
             )
         source_type = source_type_from_connector(row["connector_id"])
         state = evidence_state_from_source_type(source_type)

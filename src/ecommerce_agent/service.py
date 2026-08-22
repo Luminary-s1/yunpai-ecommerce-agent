@@ -127,7 +127,7 @@ class AgentService:
                 if self.settings.model_enabled
                 else None
             )
-            # D-034：M9-R 诊断→建议语义链接模型（模型可用时走模型，否则 Ruleset 降级）。
+            # D-034：M9-R 诊断→建议语义链接模型；模型关闭时只产保守占位建议。
             recommendation_interpreter = (
                 RecommendationModelInterpreter(self.model)
                 if self.settings.model_enabled

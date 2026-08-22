@@ -40,16 +40,19 @@ def build_evaluation_router(
 
         runner = MechanismEvalRunner()
         results = runner.run_all()
-        passed, total = runner.summary()
+        total = len(results)
+        passed = sum(1 for result in results if result.passed)
         return {
             "passed": passed,
             "total": total,
             "all_passed": passed == total,
+            "evidence_level": "fixed_table_mock",
             "scenes": [
                 {
                     "name": r.scene_name,
                     "passed": r.passed,
                     "failures": r.failures,
+                    "produced": r.produced,
                 }
                 for r in results
             ],

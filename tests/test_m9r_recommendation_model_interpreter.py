@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from ecommerce_agent.product_diagnosis.diagnosis import Diagnosis, DiagnosisType
 from ecommerce_agent.product_lifecycle.engine import (
@@ -18,6 +19,9 @@ class _MockGateway:
         self._return = return_value or {}
         self._raise = raise_exc
         self.calls = 0
+        self.settings = SimpleNamespace(
+            model_provider="test-provider", model_name="test-model"
+        )
 
     def generate_json(self, messages, **kwargs):
         self.calls += 1
@@ -46,24 +50,31 @@ def test_recommendation_model_interpreter_called() -> None:
     assert gateway.calls == 1, "模型未被调用"
     assert candidate.type == RecommendationType.RESTOCK
     assert candidate.rationale == "model suggested restock"
+    assert candidate.semantic_provenance == {
+        "decision_source": "model",
+        "model_provider": "test-provider",
+        "model_name": "test-model",
+        "prompt_version": "m9r-recommendation-v1",
+    }
 
 
 def test_recommendation_model_interpreter_fallback_on_error() -> None:
-    """模型抛异常 → 降级 Ruleset（不崩溃）。"""
+    """模型抛异常 → 保持观察，不允许规则选择补货等经营语义。"""
     gateway = _MockGateway(raise_exc=True)
     interpreter = RecommendationModelInterpreter(gateway)
     candidate = interpreter.interpret(_diagnosis())
-    # Ruleset 降级：STOCKOUT_POLLUTION → RESTOCK
-    assert candidate.type == RecommendationType.RESTOCK
+    assert candidate.type == RecommendationType.KEEP_OBSERVE
+    assert candidate.degraded is True
+    assert candidate.rationale == "model_unavailable"
 
 
 def test_recommendation_model_interpreter_invalid_type_falls_back() -> None:
-    """模型返回非法 type → Pydantic 校验失败 → 降级 Ruleset。"""
+    """模型返回非法 type → 保持观察，不启用规则映射。"""
     gateway = _MockGateway(return_value={"type": "非法类型", "rationale": "bad"})
     interpreter = RecommendationModelInterpreter(gateway)
     candidate = interpreter.interpret(_diagnosis())
-    # 非法 type 经 _RecommendationModelOutput 校验失败 → 降级
-    assert candidate.type == RecommendationType.RESTOCK
+    assert candidate.type == RecommendationType.KEEP_OBSERVE
+    assert candidate.degraded is True
 
 
 def test_recommendation_model_interpreter_evidence_insufficient() -> None:

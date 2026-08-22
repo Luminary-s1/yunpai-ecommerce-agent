@@ -258,3 +258,97 @@ def test_gates_consume_quality_gate(tmp_path) -> None:
     passed, results = engine.run_all(blocked_view)
     assert passed is False
     assert any(r.name == "quality_gate" and not r.passed for r in results)
+
+
+def test_bucket_before_window_lower_bound_is_stale(tmp_path) -> None:
+    """revision 窗口开始之前的旧 bucket → freshness stale（下界检查，防御纵深）。
+
+    正常写入路径（upsert_metric_bucket）已拦截窗口外 bucket（service.py metric_outside_
+    revision_window）；本测试模拟历史遗留/迁移数据绕过写入校验直接进库的场景——
+    bridge 仍须把窗口前 bucket 判为 out-of-window，不误判 current。对齐任务书
+    WP2 验收①「只有满足 freshness Gate 的实验才给强方向结论」。
+    """
+    db = Database(tmp_path / "bridge-lower.sqlite3")
+    db.initialize()
+    service = TrafficLabService(db)
+    service.business_calendars.upsert_calendar(
+        "tenant-a",
+        StoreBusinessCalendarUpsert(
+            store_id="store-001",
+            timezone="Asia/Shanghai",
+            effective_from=BASE_TIME - timedelta(days=1),
+            changed_by="traffic-test-fixture",
+        ),
+    )
+    created_asset = service.register_asset("tenant-a", _asset())
+    # 窗口 active_from=BASE_TIME，active_to=BASE_TIME+4h
+    created = service.create_revision(
+        "tenant-a", _revision(created_asset["asset_id"], revision_no=1)
+    )
+    revision_id = created["id"]
+    # 直接在库里插一个窗口开始之前 1 小时的 bucket（绕过 upsert 写入校验，
+    # 模拟迁移/历史数据）。revision 的 connector 是 virtual_taobao → demo 来源。
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO traffic_metric_buckets(
+                id, tenant_id, connector_id, listing_revision_id, metric_start,
+                metric_end, bucket_granularity, traffic_source, impressions, clicks,
+                visitors, favorites, cart_adds, orders, sales_amount, ad_spend,
+                search_impressions, recommend_impressions, data_as_of, source_id,
+                payload_hash, quality_flags_json, version, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "bucket-before-window", "tenant-a", "virtual_taobao", revision_id,
+                (BASE_TIME - timedelta(hours=1)).isoformat(),
+                BASE_TIME.isoformat(),
+                "hour", "recommend", 100, 8, 7, 1, 0, 0, "0.00", "0",
+                10, 90, (BASE_TIME - timedelta(minutes=1)).isoformat(),
+                "metric-before-window", "legacy-hash", "[]", 1,
+                (BASE_TIME - timedelta(hours=2)).isoformat(),
+                (BASE_TIME - timedelta(hours=2)).isoformat(),
+            ),
+        )
+    bridge = EvidenceBridge(service)
+    view = bridge.get_revision_view("tenant-a", revision_id)
+    assert view["freshness"]["usable_as_current"] is False
+    assert view["freshness"]["status"] == "stale"
+    assert any(
+        "metric_bucket_out_of_window" in code
+        for code in view["freshness"]["reason_codes"]
+    )
+
+
+def test_bucket_within_window_is_current(tmp_path) -> None:
+    """revision 窗口内的 bucket → freshness current（上下界均满足）。"""
+    db = Database(tmp_path / "bridge-inside.sqlite3")
+    db.initialize()
+    service = TrafficLabService(db)
+    service.business_calendars.upsert_calendar(
+        "tenant-a",
+        StoreBusinessCalendarUpsert(
+            store_id="store-001",
+            timezone="Asia/Shanghai",
+            effective_from=BASE_TIME - timedelta(days=1),
+            changed_by="traffic-test-fixture",
+        ),
+    )
+    created_asset = service.register_asset("tenant-a", _asset())
+    created = service.create_revision(
+        "tenant-a", _revision(created_asset["asset_id"], revision_no=1)
+    )
+    # bucket 在窗口内（BASE_TIME+1h ~ +2h，窗口为 BASE_TIME ~ +4h）
+    service.upsert_metric_bucket(
+        "tenant-a",
+        _bucket(
+            created["id"],
+            metric_start=BASE_TIME + timedelta(hours=1),
+            metric_end=BASE_TIME + timedelta(hours=2),
+            source_id="metric-inside-window",
+        ),
+    )
+    bridge = EvidenceBridge(service)
+    view = bridge.get_revision_view("tenant-a", created["id"])
+    assert view["freshness"]["usable_as_current"] is True
+    assert view["freshness"]["status"] == "current"

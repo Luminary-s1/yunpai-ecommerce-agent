@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from ecommerce_agent.product_diagnosis.diagnosis import (
     DiagnosisType,
     build_diagnosis_facts,
@@ -22,6 +24,9 @@ class _MockGateway:
         self._return = return_value or {}
         self._raise = raise_exc
         self.calls = 0
+        self.settings = SimpleNamespace(
+            model_provider="test-provider", model_name="test-model"
+        )
 
     def generate_json(self, messages, **kwargs):
         self.calls += 1
@@ -55,35 +60,46 @@ def test_diagnosis_model_interpreter_called() -> None:
     produced = interpreter.interpret(facts)
     assert gateway.calls == 1, "模型未被调用"
     assert produced["diagnosis_type"] == "stockout_pollution"
+    assert produced["semantic_provenance"] == {
+        "decision_source": "model",
+        "model_provider": "test-provider",
+        "model_name": "test-model",
+        "prompt_version": "m9r-diagnosis-v1",
+    }
+    diagnosis = run_interpretation(facts, interpreter)
+    assert diagnosis.evidence_facts["semantic_provenance"]["prompt_version"] == (
+        "m9r-diagnosis-v1"
+    )
 
 
 def test_diagnosis_model_interpreter_fallback_on_error() -> None:
-    """模型抛异常 → 降级 Ruleset（不崩溃）。"""
+    """模型抛异常 → 明确模型不可用，不允许规则选择经营语义。"""
     gateway = _MockGateway(raise_exc=True)
     interpreter = DiagnosisModelInterpreter(gateway)
     facts = _facts(stockout=True)
     produced = interpreter.interpret(facts)
-    # Ruleset 降级：stockout → STOCKOUT_POLLUTION
-    assert produced["diagnosis_type"] == "stockout_pollution"
+    assert produced["diagnosis_type"] == "evidence_insufficient"
+    assert produced["reason"] == "model_unavailable"
+    assert produced["semantic_provenance"]["decision_source"] == "model_unavailable"
 
 
 def test_diagnosis_model_interpreter_invalid_type_falls_back() -> None:
-    """模型产出非法类型 → Pydantic 校验失败 → 降级 Ruleset（不抛、不静默透传）。"""
+    """模型产出非法类型 → 明确模型输出不可用，不启用规则语义树。"""
     gateway = _MockGateway(
         return_value={"diagnosis_type": "not_a_real_type", "reason": "bad"}
     )
     interpreter = DiagnosisModelInterpreter(gateway)
     facts = _facts(stockout=True)
     produced = interpreter.interpret(facts)
-    # 非法类型经 _DiagnosisModelOutput.model_validate 失败 → 降级 Ruleset
-    # stockout → STOCKOUT_POLLUTION（合法类型，非非法值透传）
-    assert produced["diagnosis_type"] == "stockout_pollution"
+    assert produced["diagnosis_type"] == "evidence_insufficient"
+    assert produced["reason"] == "model_unavailable"
 
 
 def test_diagnosis_model_interpreter_missing_type_falls_back() -> None:
-    """模型返回缺 diagnosis_type → 降级 Ruleset。"""
+    """模型返回缺 diagnosis_type → 明确模型输出不可用。"""
     gateway = _MockGateway(return_value={"reason": "no type"})
     interpreter = DiagnosisModelInterpreter(gateway)
     facts = _facts(stockout=True)
     produced = interpreter.interpret(facts)
-    assert produced["diagnosis_type"] == "stockout_pollution"
+    assert produced["diagnosis_type"] == "evidence_insufficient"
+    assert produced["reason"] == "model_unavailable"

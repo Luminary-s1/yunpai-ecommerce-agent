@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
+import tempfile
 
 from pydantic import ValidationError
 
@@ -45,11 +47,7 @@ def check(cid: str, desc: str, expected: str, fn) -> None:
         actual = f"FAIL: {e}"
     except Exception as e:  # noqa: BLE001
         actual = f"ERROR: {type(e).__name__}: {e}"
-    if expected == "✅":
-        ok = actual == "PASS"
-    else:
-        ok = True
-        actual = f"SKIP({expected} 依赖项，不验证)"
+    ok = actual == "PASS"
     RESULTS.append((cid, desc, expected, ok, actual))
 
 
@@ -144,6 +142,32 @@ def test_05_missing_projection() -> None:
         raise AssertionError("MISSING 读取应抛 DataUnavailableError")
     except DataUnavailableError:
         pass
+
+
+def _run_query_acceptance(test_name: str) -> None:
+    """Run a public-service-backed query test in a workspace-local temp dir."""
+    from test_product_read_query import (
+        test_query_product_and_competitor_domains,
+        test_query_refund_closed_loop,
+    )
+
+    tests = {
+        "product_and_competitor": test_query_product_and_competitor_domains,
+        "refund": test_query_refund_closed_loop,
+    }
+    with tempfile.TemporaryDirectory(
+        prefix=".tmp_wp1_accept_", dir=Path.cwd()
+    ) as temp_dir:
+        tests[test_name](Path(temp_dir))
+
+
+def test_06_competitor_and_refund_domains() -> None:
+    _run_query_acceptance("product_and_competitor")
+    _run_query_acceptance("refund")
+
+
+def test_11_material_code_reconciliation_evidence() -> None:
+    _run_query_acceptance("product_and_competitor")
 
 
 def test_07_trace_import() -> None:
@@ -304,12 +328,12 @@ check("②", "日/月、店铺/商品、支付/退款不同粒度不静默相加
 check("③", "店铺级曝光/点击/广告不广播成 SKU 指标", "✅", test_03_no_broadcast)
 check("④", "跨粒度/跨店/跨SKU/跨revision/缺失确定性检查", "✅", test_04_deterministic_check)
 check("⑤", "缺字段→显示基础事实+阻断依赖结论", "✅", test_05_missing_projection)
-check("⑥", "竞品/退款数据域真实覆盖", "⚠️", lambda: None)
+check("⑥", "竞品/退款数据域真实覆盖", "✅", test_06_competitor_and_refund_domains)
 check("⑦", "每个值回溯到 import manifest 和 data_as_of", "✅", test_07_trace_import)
 check("⑧", "每个值回溯到权威服务", "✅", test_08_authoritative_service)
 check("⑨", "保留字段原始粒度", "✅", test_09_granularity_preserved)
 check("⑩", "来源追溯（source_system/import_manifest_id）", "✅", test_10_source_trace)
-check("⑪", "料号引用 material_code", "🔒", lambda: None)
+check("⑪", "料号引用 material_code", "✅", test_11_material_code_reconciliation_evidence)
 check("⑫", "数据准备度、漏斗可用性、缺失阻断语义", "✅", test_12_readiness)
 check("⑬", "复用现有领域事实表，不复制第二套真相", "✅", test_13_reuse_contract)
 check("⑭", "四态证据状态贯穿", "✅", test_14_four_states)
@@ -326,7 +350,7 @@ for cid, desc, exp, ok, actual in RESULTS:
         all_ok = False
     print(f"{cid:<6}{desc:<34}{exp:<5}{('PASS' if ok else '**FAIL**'):<8}{actual}")
 print("-" * 92)
-print(f"结论: {'✅ 全部 ✅ 项通过' if all_ok else '❌ 有 FAIL 项，需修复'}")
+print(f"结论: {'✅ 全部验收项通过' if all_ok else '❌ 有 FAIL 项，需修复'}")
 # FAIL 时返回非零退出码（防 CI/人工只看退出状态误判）。
 import sys
 if not all_ok:

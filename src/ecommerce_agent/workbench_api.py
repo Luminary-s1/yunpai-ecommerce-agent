@@ -19,50 +19,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from ecommerce_agent.auth import AdminPrincipal
-from ecommerce_agent.product_lifecycle.schemas import (
-    Recommendation,
-    RecommendationState,
-    RecommendationType,
-    TargetObject,
-)
+from ecommerce_agent.product_lifecycle.schemas import RecommendationState
 from ecommerce_agent.product_lifecycle.state_machine import TransitionAction
+from ecommerce_agent.product_workbench.pages import WorkbenchPages
 from ecommerce_agent.service import AgentService
-
-
-def _redact_json(value: Any) -> Any:
-    """递归脱敏任意 JSON 值（dict/list/str/scalar），PII 不入自由文本/嵌套字段。
-
-    入口唯一集中处：HTTP create 对所有持久化自由字段统一调用，保证
-    rationale、facts_snapshot（含嵌套）、missing_evidence 一致脱敏。
-    """
-    from ecommerce_agent.text_utils import redact_sensitive
-
-    if isinstance(value, dict):
-        return {k: _redact_json(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_redact_json(v) for v in value]
-    if isinstance(value, str):
-        redacted, _ = redact_sensitive(value)
-        return redacted
-    return value
-
-
-class CreateRecommendationRequest(BaseModel):
-    """POST 创建建议的请求（created_at/updated_at 服务端生成，强制 DRAFT）。
-
-    安全审查 #8：字段有界（防超长 payload DoS 与脏数据）。
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    recommendation_id: str = Field(min_length=1, max_length=128)
-    type: RecommendationType
-    target: TargetObject
-    facts_snapshot: dict[str, Any] = Field(default_factory=dict)
-    rationale: str = Field(min_length=1, max_length=4000)
-    missing_evidence: list[str] = Field(default_factory=list, max_length=100)
-    alternatives: list[RecommendationType] = Field(default_factory=list, max_length=20)
-    degraded: bool = False
 
 
 class RecommendationGenerateRequest(BaseModel):
@@ -75,6 +35,7 @@ class RecommendationGenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     recommendation_id: str = Field(min_length=1, max_length=128)
+    revision: int = Field(default=1, ge=1)
 
 
 class TransitionRequest(BaseModel):
@@ -92,42 +53,16 @@ def build_workbench_router(
     router = APIRouter(prefix="/v1/products", tags=["workbench"])
     recommendations = service.operations.recommendations
     product_read = service.operations.product_read
+    pages = WorkbenchPages(recommendation_store=recommendations)
 
     @router.post("/recommendations")
     def create_recommendation(
-        payload: CreateRecommendationRequest,
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
-        """创建生命周期建议（强制 DRAFT，B3 alternatives 校验，写审计）。
-
-        安全 #9：rationale / facts_snapshot（含嵌套字段）/ missing_evidence
-        统一脱敏后落库（模型幻觉 PII 不入库，任何自由文本/嵌套 JSON 字段都不例外）。
-        """
-        from ecommerce_agent.text_utils import redact_sensitive
-
-        now = datetime.now(UTC)
-        rationale, _ = redact_sensitive(payload.rationale)
-        facts_snapshot = _redact_json(payload.facts_snapshot)
-        missing_evidence = _redact_json(payload.missing_evidence)
-        rec = Recommendation(
-            recommendation_id=payload.recommendation_id,
-            type=payload.type,
-            target=payload.target,
-            facts_snapshot=facts_snapshot,
-            rationale=rationale,
-            missing_evidence=missing_evidence,
-            alternatives=payload.alternatives,
-            degraded=payload.degraded,
-            created_at=now,
-            updated_at=now,
+        """拒绝客户端提供语义建议；建议只能走服务端模型生成入口。"""
+        raise HTTPException(
+            status_code=409, detail="manual_recommendation_creation_not_allowed"
         )
-        try:
-            result = recommendations.create(
-                admin.tenant_id, rec, actor=admin.admin_id
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        return result
 
     @router.post("/recommendations/{recommendation_id}/transition")
     def recommendation_transition(
@@ -171,6 +106,7 @@ def build_workbench_router(
         store_id: str,
         item_id: str,
         sku_id: str,
+        revision: int = Query(default=1, ge=1),
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
         """SKU 生产诊断（D-034 语义链：读模型 → 门禁 → 模型诊断）。
@@ -183,6 +119,7 @@ def build_workbench_router(
             store_id=store_id,
             item_id=item_id,
             sku_id=sku_id,
+            revision=revision,
         )
 
     @router.post("/{store_id}/{item_id}/{sku_id}/recommendation/generate")
@@ -196,7 +133,7 @@ def build_workbench_router(
         """生产语义链闭环（P3 修复，阻断3）：诊断 → 引擎建议 → 校验 → 落库。
 
         任务书"基于固化事实和流量诊断，由模型产生语义建议，经代码校验后固化"
-        的唯一生产入口。POST /recommendations（管理员手工提交）是旁路，不走模型链。
+        的唯一生产入口。POST /recommendations 固定拒绝手工语义建议。
         返回 DRAFT 建议 + 审计落痕。零平台写动作（B4）。
         """
         return service.operations.generate_and_persist_recommendation(
@@ -205,6 +142,7 @@ def build_workbench_router(
             item_id=item_id,
             sku_id=sku_id,
             recommendation_id=payload.recommendation_id,
+            revision=payload.revision,
             actor=admin.admin_id,
         )
 
@@ -221,17 +159,12 @@ def build_workbench_router(
             admin.tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id,
             revision=revision,
         )
+        metrics = _model_metrics(model)
         return {
             "composite_key": model.composite_key(),
-            "impressions": _metric(model.impressions),
-            "clicks": _metric(model.clicks),
-            "add_to_cart": _metric(model.add_to_cart),
-            "orders": _metric(model.orders),
-            "payments": _metric(model.payments),
-            "refunds": _metric(model.refunds),
-            "net_sales": _metric(model.net_sales),
-            "sellable_stock": _metric(model.sellable_stock),
-            "in_transit_stock": _metric(model.in_transit_stock),
+            "identity": _model_identity(model),
+            "revision": _listing_revision(model),
+            "metrics": metrics,
         }
 
     @router.get("/{store_id}/{item_id}/{sku_id}/workbench")
@@ -239,6 +172,7 @@ def build_workbench_router(
         store_id: str,
         item_id: str,
         sku_id: str,
+        revision: int = Query(default=1, ge=1),
         admin: AdminPrincipal = Depends(require_admin),
     ) -> dict[str, Any]:
         """商品经营工作台 JSON view（D1：含四态徽标 + "为什么暂不能建议"）。
@@ -246,10 +180,26 @@ def build_workbench_router(
         组装读模型 + 门禁报告 + 最新建议，前端可直接渲染。纯只读。
         """
         model = product_read.sku_read_model(
-            admin.tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id
+            admin.tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id,
+            revision=revision,
         )
-        gate_view = service.operations.evidence_bridge.latest_revision_view(
-            admin.tenant_id, store_id=store_id, sku_id=sku_id, item_id=item_id
+        page = pages.product_detail(
+            store_id=store_id,
+            item_id=item_id,
+            sku_id=sku_id,
+            metrics=_model_metrics(model),
+        )
+        gate_view = (
+            service.operations.evidence_bridge.get_revision_view(
+                admin.tenant_id, model.listing_revision.revision_id
+            )
+            if model.listing_revision is not None
+            else {
+                "evidence_state": "missing",
+                "reason": "traffic_revision_not_found",
+                "freshness": None,
+                "quality_gate": None,
+            }
         )
         all_passed, gates = service.operations.evidence_bridge.run_gates(gate_view)
         # D4：由门禁/证据推导"为什么暂不能建议"
@@ -262,20 +212,17 @@ def build_workbench_router(
             if not g.passed:
                 not_recommended.append(f"{g.name} 门禁未过（{g.reason}）")
         return {
+            **page,
             "composite_key": model.composite_key(),
-            "metrics": {
-                "impressions": _metric(model.impressions),
-                "clicks": _metric(model.clicks),
-                "add_to_cart": _metric(model.add_to_cart),
-                "orders": _metric(model.orders),
-                "payments": _metric(model.payments),
-                "refunds": _metric(model.refunds),
-                "net_sales": _metric(model.net_sales),
-                "sellable_stock": _metric(model.sellable_stock),
-                "in_transit_stock": _metric(model.in_transit_stock),
-            },
+            "identity": _model_identity(model),
+            "revision": _listing_revision(model),
             "evidence_gates": {
+                "revision_id": gate_view.get("revision_id"),
                 "evidence_state": gate_view.get("evidence_state"),
+                "data_as_of": gate_view.get("data_as_of"),
+                "freshness": gate_view.get("freshness"),
+                "source_provenance": gate_view.get("source_provenance"),
+                "quality_gate": gate_view.get("quality_gate"),
                 "all_passed": all_passed,
                 "gates": [
                     {"name": g.name, "passed": g.passed, "reason": g.reason}
@@ -283,6 +230,57 @@ def build_workbench_router(
                 ],
             },
             "why_not_recommended": not_recommended,
+        }
+
+    @router.get("/{store_id}/{item_id}/{sku_id}/analysis-runs")
+    def analysis_runs(
+        store_id: str,
+        item_id: str,
+        sku_id: str,
+        revision: int = Query(default=1, ge=1),
+        limit: int = Query(default=20, ge=1, le=100),
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """Analysis-run drill-down for the exact revision selected by the user."""
+        model = product_read.sku_read_model(
+            admin.tenant_id,
+            store_id=store_id,
+            item_id=item_id,
+            sku_id=sku_id,
+            revision=revision,
+        )
+        selected = model.listing_revision
+        if selected is None:
+            return {
+                "revision": None,
+                "experiments": [],
+                "reason": "traffic_revision_not_found",
+            }
+        experiments = service.operations.traffic_lab.domain.list_experiments(
+            admin.tenant_id, store_id=store_id, sku_id=sku_id, limit=limit
+        )
+        result: list[dict[str, Any]] = []
+        for experiment in experiments:
+            if selected.revision_id not in {
+                str(experiment.get("control_revision_id")),
+                str(experiment.get("treatment_revision_id")),
+            }:
+                continue
+            experiment_id = str(experiment["experiment_id"])
+            result.append(
+                {
+                    "experiment": experiment,
+                    "analysis_runs": (
+                        service.operations.evidence_bridge.list_analysis_runs_view(
+                            admin.tenant_id, experiment_id, limit=limit
+                        )
+                    ),
+                }
+            )
+        return {
+            "revision": selected.model_dump(mode="json"),
+            "experiments": result,
+            "reason": None,
         }
 
     @router.get("/{store_id}/{item_id}/{sku_id}/insights")
@@ -367,8 +365,8 @@ def build_workbench_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         if rec["target"]["store_id"] != store_id:
             raise HTTPException(status_code=409, detail="store_scope_mismatch")
-        rec["audit_trail"] = recommendations.audit_trail(
-            admin.tenant_id, recommendation_id
+        rec["audit_trail"] = pages.recommendation_audit_trail(
+            tenant_id=admin.tenant_id, recommendation_id=recommendation_id
         )
         # D4：由建议状态/降级/缺失证据推导"为什么暂不能建议"
         not_recommended: list[str] = []
@@ -398,7 +396,9 @@ def build_workbench_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         if rec["target"]["store_id"] != store_id:
             raise HTTPException(status_code=409, detail="store_scope_mismatch")
-        return recommendations.audit_trail(admin.tenant_id, recommendation_id)
+        return pages.recommendation_audit_trail(
+            tenant_id=admin.tenant_id, recommendation_id=recommendation_id
+        )
 
     return router
 
@@ -413,8 +413,42 @@ def _metric(value: Any) -> dict[str, Any]:
         "value": value.value,
         "data_as_of": value.data_as_of.isoformat() if value.data_as_of else None,
         "data_trust": value.data_trust.value,
+        "import_manifest_id": value.import_manifest_id,
+        "authoritative_service": value.authoritative_service,
         "reason": value.reason,
     }
+
+
+def _model_metrics(model: Any) -> dict[str, dict[str, Any]]:
+    return {
+        "impressions": _metric(model.impressions),
+        "clicks": _metric(model.clicks),
+        "add_to_cart": _metric(model.add_to_cart),
+        "orders": _metric(model.orders),
+        "payments": _metric(model.payments),
+        "refunds": _metric(model.refunds),
+        "net_sales": _metric(model.net_sales),
+        "sellable_stock": _metric(model.sellable_stock),
+        "in_transit_stock": _metric(model.in_transit_stock),
+        "ad_spend": _metric(model.ad_spend),
+        "competitor_price": _metric(model.competitor_price),
+        "experiment_state": _metric(model.experiment_state),
+    }
+
+
+def _model_identity(model: Any) -> dict[str, Any]:
+    evidence = model.product_identity_evidence
+    return {
+        "material_code": model.material_code,
+        "title": model.title,
+        "merchant_code": model.merchant_code,
+        "evidence": evidence.model_dump(mode="json") if evidence else None,
+    }
+
+
+def _listing_revision(model: Any) -> dict[str, Any] | None:
+    evidence = model.listing_revision
+    return evidence.model_dump(mode="json") if evidence else None
 
 
 __all__ = [

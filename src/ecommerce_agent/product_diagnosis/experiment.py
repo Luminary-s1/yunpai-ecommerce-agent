@@ -3,7 +3,7 @@
 边界声明：
 - Demo 路径：run_demo_experiment(...) 走 VirtualStoreSimulation（隔离虚拟数据）。
 - 真实路径：create_real_experiment(...) 走 TrafficLabService（**本阶段预留 + blocked**）。
-- 入口强制显式声明路径（路径参数为必填枚举），不自动选择。
+- 两个公开方法分别代表 Demo 与真实路径，不自动选择。
 - 副作用：Demo 路径内部会运行 VirtualStoreSimulation（隔离），真实路径当前不写库。
 - 失败暴露：Demo 未用 confirm_virtual → 构造即抛；真实路径未开通 → 抛明确错误。
 
@@ -13,15 +13,9 @@
 """
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Any
 
 from ecommerce_agent.simulation import VirtualStoreSimulation
-
-
-class ExperimentPath(StrEnum):
-    DEMO = "demo"    # 走 VirtualStoreSimulation（隔离）
-    REAL = "real"    # 走 TrafficLabService（预留 + blocked，本阶段不开通）
 
 
 class ExperimentNotAvailableError(RuntimeError):
@@ -76,5 +70,4 @@ class ExperimentGateway:
 __all__ = [
     "ExperimentGateway",
     "ExperimentNotAvailableError",
-    "ExperimentPath",
 ]

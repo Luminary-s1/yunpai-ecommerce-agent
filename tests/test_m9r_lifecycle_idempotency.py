@@ -146,4 +146,59 @@ def test_content_idempotency_different_id_returns_existing(tmp_path) -> None:
             "SELECT COUNT(*) AS c FROM product_recommendations "
             "WHERE tenant_id='t1' AND sku_id='sku-1'"
         ).fetchone()
+        audit_subjects = conn.execute(
+            "SELECT subject_id FROM audit_log "
+            "WHERE tenant_id='t1' AND event_type='recommendation.create'"
+        ).fetchall()
     assert int(rows["c"]) == 1, f"同证据不应重复创建: {rows['c']}"
+    assert {str(row["subject_id"]) for row in audit_subjects} == {"rec-a"}
+
+
+def test_content_idempotency_item_level_null_sku(tmp_path) -> None:
+    """item 级建议（sku_id=None）内容幂等：`sku_id IS ?` 使 NULL 也参与幂等。
+
+    修复前内容级兜底用 `sku_id=?`，SQLite 对 NULL 永不匹配——item 级建议（sku_id
+    为 NULL）同证据重放会重复创建，违反任务书 WP3 L365「同一证据重放不重复创建」。
+    修复后 `sku_id IS ?` 覆盖 NULL，item 级同证据第二条返回已有建议。
+    """
+    from ecommerce_agent.database import Database
+    from ecommerce_agent.product_lifecycle.schemas import (
+        Recommendation,
+        RecommendationState,
+        RecommendationType,
+        TargetObject,
+    )
+    from ecommerce_agent.product_lifecycle.service import (
+        RecommendationPersistenceService,
+    )
+
+    db = Database(tmp_path / "content-idem-nullsku.sqlite3")
+    db.initialize()
+    service = RecommendationPersistenceService(db)
+
+    def _make_rec(rec_id: str) -> Recommendation:
+        return Recommendation(
+            recommendation_id=rec_id,
+            type=RecommendationType.KEEP_OBSERVE,
+            target=TargetObject(store_id="store-1"),  # item_id/sku_id 均为 None
+            facts_snapshot={"traffic_facts": {"impressions": 100}},
+            rationale="observe current state",
+            alternatives=[RecommendationType.EXPERIMENT],
+            state=RecommendationState.DRAFT,
+            degraded=False,
+            created_at=datetime(2026, 8, 20, tzinfo=UTC),
+            updated_at=datetime(2026, 8, 20, tzinfo=UTC),
+        )
+
+    r1 = service.create("t1", _make_rec("rec-1"))
+    assert r1["write_status"] == "applied"
+    # 同证据不同 ID（rec-2）→ 内容级幂等命中 NULL sku，返回已有建议
+    r2 = service.create("t1", _make_rec("rec-2"))
+    assert r2["write_status"] == "idempotent", f"item 级同证据应幂等: {r2['write_status']}"
+    assert r2["recommendation_id"] == "rec-1"
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT COUNT(*) AS c FROM product_recommendations "
+            "WHERE tenant_id='t1'"
+        ).fetchone()
+    assert int(rows["c"]) == 1, f"item 级同证据不应重复创建: {rows['c']}"

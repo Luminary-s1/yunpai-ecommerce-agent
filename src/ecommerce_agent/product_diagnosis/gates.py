@@ -91,10 +91,6 @@ class GateEngine:
     window / control_variables（显式枚举，复用 M5-R issue 码反查，不重算统计）。
     """
 
-    def __init__(self) -> None:
-        # 确定性：无状态，纯函数组合
-        pass
-
     @staticmethod
     def check_evidence(view: Mapping[str, Any]) -> GateResult:
         """证据 Gate：evidence_state 必须非 missing。"""

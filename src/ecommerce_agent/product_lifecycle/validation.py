@@ -13,7 +13,7 @@
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
 from ecommerce_agent.text_utils import contains_forbidden_token
 
@@ -55,15 +55,6 @@ class WriteBarrier:
     def assert_write_allowed(self, write_action: str) -> None:
         if write_action not in ALLOWED_INTERNAL_WRITES:
             raise ValueError(f"write_not_allowlisted:{write_action}")
-
-
-def validate_model_output(recommendation: Recommendation, output: Mapping[str, Any]) -> None:
-    """模型输出校验：越权键命中 → 抛；否则通过。
-
-    失败暴露：禁止键（effect/平台权重等）出现在模型输出（含嵌套/自然语言）→ 整体拒绝。
-    """
-    if contains_forbidden_token(output, FORBIDDEN_OUTPUT_KEYS):
-        raise ValueError("forbidden_output_key_recursive")
 
 
 def validate_full_recommendation(recommendation: Recommendation) -> None:
@@ -121,5 +112,4 @@ __all__ = [
     "FORBIDDEN_OUTPUT_KEYS",
     "WriteBarrier",
     "validate_full_recommendation",
-    "validate_model_output",
 ]

@@ -252,11 +252,13 @@ def test_eval_direction_scenes_reachable_non_degraded() -> None:
     from ecommerce_agent.product_lifecycle.schemas import RecommendationType
     from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES
 
-    # sku_id → 方向建议类型（选品/上新/清仓的 sku_id 来自 FROZEN_SCENES input_data）
+    # sku_id → 方向建议类型（选品/上新/清仓/实验/活动的 sku_id 来自 DIRECTION_SCENES）
     _DIR_BY_SKU = {
         "sku-select": RecommendationType.SELECTION,
         "sku-launch": RecommendationType.NEW_LAUNCH,
         "sku-clearance": RecommendationType.CLEARANCE,
+        "sku-experiment": RecommendationType.EXPERIMENT,
+        "sku-promotion": RecommendationType.PROMOTION,
     }
 
     class _DirectionInterpreter(RecommendationInterpreter):
@@ -273,10 +275,12 @@ def test_eval_direction_scenes_reachable_non_degraded() -> None:
         recommendation_interpreter=_DirectionInterpreter(),
     )
     results = runner.run_all()
-    assert len(results) == 3, f"方向场景应为 3 个: {len(results)}"
+    assert len(results) == 5, f"方向场景应为 5 个: {len(results)}"
     for r in results:
         assert r.passed, f"{r.scene_name} 未通过: {r.failures}"
-        assert r.scene_name in ("选品方向", "上新准备", "清仓风险")
+        assert r.scene_name in (
+            "选品方向", "上新准备", "清仓风险", "受控优化", "活动候选",
+        )
 
 
 def test_eval_direction_scenes_mutation_wrong_direction_fails() -> None:

@@ -5,11 +5,9 @@
 - `DiagnosisModelInterpreter`：模型解释器（生产路径）——复用 ModelGateway +
   M5-R 三件套模式（system prompt 约束"无执行权 + 只产 diagnosis_type/reason +
   按 output_schema 返回 JSON"），输出经 validate_diagnosis_output 校验。
-- `RulesetDiagnosisInterpreter`：确定性降级（fail-safe）——模型不可用/失败时
-  退回固定规则，保证链路不因模型故障中断；但这不等于 D-034 达标（达标 = 模型
-  可用时确实走模型）。
-- 失败暴露：模型抛异常 → 降级 Ruleset（不崩溃）；模型产出非法类型/越权词 →
-  validate_diagnosis_output 抛 ValueError（不静默）。
+- `RulesetDiagnosisInterpreter`：仅供固定测试桩或显式注入，不作为模型失败回退。
+- 失败暴露：模型抛异常或输出非法 → `evidence_insufficient/model_unavailable`，
+  不由规则替模型重做经营语义。
 """
 from __future__ import annotations
 
@@ -18,6 +16,8 @@ from dataclasses import asdict
 from typing import Any, Mapping, Protocol
 
 from pydantic import BaseModel, ConfigDict
+
+from ecommerce_agent.product_semantics import semantic_provenance
 
 from .diagnosis import Diagnosis, DiagnosisFacts, DiagnosisType, validate_diagnosis_output
 
@@ -40,6 +40,7 @@ _DIAGNOSIS_SYSTEM_PROMPT = """\
 
 严格按用户消息中的 output_schema 返回一个 JSON object，不要添加数值字段、统计字段或模型元数据。\
 """
+DIAGNOSIS_PROMPT_VERSION = "m9r-diagnosis-v1"
 
 
 class _DiagnosisModelOutput(BaseModel):
@@ -60,18 +61,18 @@ class DiagnosisInterpreter(Protocol):
 class DiagnosisModelInterpreter:
     """模型诊断解释器（D-034 生产路径）：复用 ModelGateway 三件套。
 
-    失败/超时/模型禁用 → 降级 RulesetDiagnosisInterpreter（fail-safe）。
+    失败/超时/模型禁用 → 明确返回 model_unavailable，不启用规则语义树。
     """
 
     def __init__(self, gateway: Any) -> None:
         self.gateway = gateway
-        self._fallback = RulesetDiagnosisInterpreter()
 
     def interpret(self, facts: DiagnosisFacts) -> dict[str, Any]:
         output_schema = _DiagnosisModelOutput.model_json_schema()
         request = {
             "facts_authority": "deterministic_code",
             "facts": asdict(facts),
+            "prompt_version": DIAGNOSIS_PROMPT_VERSION,
             "output_schema": output_schema,
         }
         try:
@@ -86,18 +87,34 @@ class DiagnosisModelInterpreter:
                 thinking_enabled=False,
             )
             # 模型输出经 Pydantic 校验（diagnosis_type 必须合法，extra=forbid 拒绝
-            # 越权字段）；非法 → 抛异常 → 降级 Ruleset（不让非法值透传下游）。
+            # 越权字段）；非法 → 明确模型不可用（不让非法值透传下游）。
             parsed = _DiagnosisModelOutput.model_validate(raw)
-        except Exception:  # noqa: BLE001 — 模型故障/输出非法 → fail-safe 降级
-            return self._fallback.interpret(facts)
-        return {"diagnosis_type": parsed.diagnosis_type.value, "reason": parsed.reason}
+        except Exception:  # noqa: BLE001 — 模型故障/输出非法 → 明确安全降级
+            return {
+                "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
+                "reason": "model_unavailable",
+                "semantic_provenance": semantic_provenance(
+                    self.gateway,
+                    decision_source="model_unavailable",
+                    prompt_version=DIAGNOSIS_PROMPT_VERSION,
+                ),
+            }
+        return {
+            "diagnosis_type": parsed.diagnosis_type.value,
+            "reason": parsed.reason,
+            "semantic_provenance": semantic_provenance(
+                self.gateway,
+                decision_source="model",
+                prompt_version=DIAGNOSIS_PROMPT_VERSION,
+            ),
+        }
 
 
 class RulesetDiagnosisInterpreter:
-    """确定性降级：按固定规则选语义类型（fail-safe，非生产语义决策）。
+    """固定表测试解释器：按规则选语义类型，不用于模型失败回退。
 
-    注意：固定规则把「语义下一步」写在确定性代码里，违反 D-034——
-    仅用于模型不可用时的降级，生产语义决策由 DiagnosisModelInterpreter 承担。
+    固定规则把「语义下一步」写在确定性代码里，因此只能用于隔离测试/Eval；
+    生产语义决策由 DiagnosisModelInterpreter 承担。
     """
 
     def interpret(self, facts: DiagnosisFacts) -> dict[str, Any]:
@@ -123,10 +140,22 @@ class RulesetDiagnosisInterpreter:
 def run_interpretation(facts: DiagnosisFacts, interpreter: DiagnosisInterpreter) -> Diagnosis:
     """跑解释器并校验（确定性代码锁住语义边界）。"""
     produced = interpreter.interpret(facts)
-    return validate_diagnosis_output(facts, produced)
+    diagnosis = validate_diagnosis_output(facts, produced)
+    provenance = produced.get("semantic_provenance")
+    if isinstance(provenance, Mapping):
+        diagnosis = diagnosis.model_copy(
+            update={
+                "evidence_facts": {
+                    **diagnosis.evidence_facts,
+                    "semantic_provenance": dict(provenance),
+                }
+            }
+        )
+    return diagnosis
 
 
 __all__ = [
+    "DIAGNOSIS_PROMPT_VERSION",
     "DiagnosisInterpreter",
     "DiagnosisModelInterpreter",
     "RulesetDiagnosisInterpreter",

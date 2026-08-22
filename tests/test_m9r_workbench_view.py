@@ -61,6 +61,11 @@ def test_mechanism_eval_endpoint(tmp_path) -> None:
     assert data["total"] >= 7
     assert data["all_passed"] is True
     assert all("name" in s and "passed" in s for s in data["scenes"])
+    by_name = {scene["name"]: scene for scene in data["scenes"]}
+    assert by_name["选品方向"]["produced"]["recommendation_type"] == "选品候选"
+    assert by_name["上新准备"]["produced"]["recommendation_type"] == "上新准备"
+    assert by_name["清仓风险"]["produced"]["recommendation_type"] == "清仓预警"
+    assert data["evidence_level"] == "fixed_table_mock"
 
 
 def test_workbench_view_endpoint(tmp_path) -> None:

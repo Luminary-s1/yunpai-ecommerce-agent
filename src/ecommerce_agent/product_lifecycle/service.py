@@ -1,10 +1,9 @@
 """M9-R WP3 建议持久化读写服务：Recommendation / AuditRecord 落库到 v36 两张表。
 
 边界声明：
-- 薄 service：业务逻辑（状态机/校验/B3）在内存模块，本服务只做序列化 + 落库
-  （仿 TrafficLabService._create_analysis_run「引擎算好结果 → service 持久化」）。
-- 写路径：create（强制 DRAFT + validate_full_recommendation，复用 validation.py
-  写屏障语义）、record_transition（同事务 UPDATE state + INSERT audit）。
+- 持久化边界：状态机/校验在领域模块，本服务负责序列化、事务和审计落库。
+- 写路径：create（强制 DRAFT，可在同事务失效旧建议）、record_transition
+  （同事务 UPDATE state + INSERT audit）。
 - 幂等：create 同键同内容 -> idempotent 复用；同键异内容 -> recommendation_conflict
   （不静默覆盖）。record_transition 同 (action, actor, occurred_at) 重放 -> idempotent。
 - 失败暴露：缺失/非法转换/时区/冲突 -> 抛 RecommendationError / ValueError。
@@ -21,7 +20,7 @@ from ecommerce_agent.database import Database
 
 from .schemas import Recommendation, RecommendationState, RecommendationType, TargetObject
 from .state_machine import AuditRecord, StateMachine, TransitionAction
-from .validation import validate_full_recommendation
+from .validation import WriteBarrier, validate_full_recommendation
 
 
 class RecommendationError(ValueError):
@@ -38,6 +37,28 @@ def _json_dump(value: Any) -> str:
 
 def _json_load(value: Any) -> Any:
     return json.loads(str(value))
+
+
+def _redact_json(value: Any) -> Any:
+    from ecommerce_agent.text_utils import redact_sensitive
+
+    if isinstance(value, dict):
+        return {key: _redact_json(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_json(item) for item in value]
+    if isinstance(value, str):
+        return redact_sensitive(value)[0]
+    return value
+
+
+def _redacted_recommendation(recommendation: Recommendation) -> Recommendation:
+    return recommendation.model_copy(
+        update={
+            "facts_snapshot": _redact_json(recommendation.facts_snapshot),
+            "rationale": _redact_json(recommendation.rationale),
+            "missing_evidence": _redact_json(recommendation.missing_evidence),
+        }
+    )
 
 
 def _tenant_id(value: str) -> str:
@@ -88,10 +109,11 @@ def _audit_content_payload(
 
 
 class RecommendationPersistenceService:
-    """v36 生命周期建议落库服务（thin，无业务逻辑）。"""
+    """v36 生命周期建议事务与持久化服务。"""
 
     def __init__(self, db: Database) -> None:
         self.db = db
+        self.write_barrier = WriteBarrier()
 
     # ---- 写 ----
 
@@ -101,14 +123,26 @@ class RecommendationPersistenceService:
         recommendation: Recommendation,
         *,
         actor: str = "system",
+        mark_older_stale: bool = False,
     ) -> dict[str, Any]:
+        self.write_barrier.assert_write_allowed("recommendation.create")
+        if mark_older_stale:
+            self.write_barrier.assert_write_allowed(
+                "recommendation.state_transition"
+            )
         tenant_id = _tenant_id(tenant_id)
         if recommendation.state is not RecommendationState.DRAFT:
             raise RecommendationError("recommendation_create_state_not_draft")
+        # 校验先于脱敏：越权扫描/required_facts 作用于**原始输入**（防未来脱敏词表
+        # 扩展后覆盖 FORBIDDEN_OUTPUT_KEYS 语义词而绕过扫描）。
         validate_full_recommendation(recommendation)  # B3 + required_facts 写屏障语义
+        # 脱敏 → hash 基于落库内容（读侧重算一致）；hash 在脱敏后算，保证
+        # _verify_recommendation_hash 重算的 payload_hash 与库中一致。
+        recommendation = _redacted_recommendation(recommendation)
         payload_hash = payload_digest(_recommendation_content_payload(recommendation))
         write_status = "applied"
         existing_rec_id: str | None = None  # B3：内容级幂等命中的已有建议 ID
+        stale_audits: list[dict[str, Any]] = []
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             existing = conn.execute(
@@ -127,7 +161,7 @@ class RecommendationPersistenceService:
                 # "同一证据重放不重复创建建议"）。
                 existing_content = conn.execute(
                     "SELECT recommendation_id FROM product_recommendations "
-                    "WHERE tenant_id=? AND sku_id=? AND payload_hash=? "
+                    "WHERE tenant_id=? AND sku_id IS ? AND payload_hash=? "
                     "LIMIT 1",
                     (
                         tenant_id,
@@ -166,37 +200,139 @@ class RecommendationPersistenceService:
                         canonical_source_time(recommendation.updated_at),
                     ),
                 )
-        # C6/E7：create 初始审计（走通用 audit_log，product_recommendation_audit.action
-        # CHECK 不含 create，避免 v38 迁移占号）
-        self.db.audit(
-            "recommendation.create",
-            actor,
-            recommendation.recommendation_id,
-            {
-                "write_status": write_status,
-                "type": recommendation.type.value,
-                "store_id": recommendation.target.store_id,
-                "sku_id": recommendation.target.sku_id,
-            },
-            tenant_id,
-        )
+            # 内容幂等可能返回已有 ID；审计和 stale 排除都必须使用实际结果 ID。
+            result_id = (
+                existing_rec_id
+                if write_status == "idempotent" and existing_rec_id
+                else recommendation.recommendation_id
+            )
+            if mark_older_stale:
+                stale_audits = self._mark_older_stale_in_transaction(
+                    conn,
+                    tenant_id=tenant_id,
+                    recommendation=recommendation,
+                    keep_recommendation_id=result_id,
+                    actor=actor,
+                )
+            # 通用 audit_log 与领域写共用事务；任一审计失败时整体回滚。
+            self.db.audit(
+                "recommendation.create",
+                actor,
+                result_id,
+                {
+                    "write_status": write_status,
+                    "requested_recommendation_id": recommendation.recommendation_id,
+                    "type": recommendation.type.value,
+                    "store_id": recommendation.target.store_id,
+                    "sku_id": recommendation.target.sku_id,
+                },
+                tenant_id,
+                connection=conn,
+            )
+            for audit in stale_audits:
+                self.db.audit(
+                    "recommendation.state_transition",
+                    actor,
+                    audit["recommendation_id"],
+                    {
+                        "action": audit["action"],
+                        "from_state": audit["from_state"],
+                        "to_state": audit["to_state"],
+                        "write_status": "applied",
+                    },
+                    tenant_id,
+                    connection=conn,
+                )
         # B3（盲点 #5 修复）：内容级幂等命中时返回**已有建议**（新 ID 未落库）
-        result_id = existing_rec_id if write_status == "idempotent" and existing_rec_id else recommendation.recommendation_id
         result = self.get(tenant_id, result_id)
         result["write_status"] = write_status
         return result
 
-    def _find_existing_by_content(
-        self, tenant_id: str, sku_id: str, payload_hash: str
-    ) -> str | None:
-        """B3：内容级幂等查找——同 SKU 同 payload_hash 的已有建议 ID（无则 None）。"""
-        with self.db.connect() as conn:
-            row = conn.execute(
-                "SELECT recommendation_id FROM product_recommendations "
-                "WHERE tenant_id=? AND sku_id=? AND payload_hash=? LIMIT 1",
-                (tenant_id, sku_id, payload_hash),
-            ).fetchone()
-        return str(row["recommendation_id"]) if row else None
+    def _mark_older_stale_in_transaction(
+        self,
+        conn: Any,
+        *,
+        tenant_id: str,
+        recommendation: Recommendation,
+        keep_recommendation_id: str,
+        actor: str,
+    ) -> list[dict[str, Any]]:
+        """在 create 事务内失效同一目标的旧建议并追加领域审计。"""
+        terminal_states = {
+            RecommendationState.STALE.value,
+            RecommendationState.CLOSED.value,
+        }
+        active_states = [
+            state.value
+            for state in RecommendationState
+            if state.value not in terminal_states
+        ]
+        rows = conn.execute(
+            f"""
+            SELECT recommendation_id, state
+            FROM product_recommendations
+            WHERE tenant_id=? AND store_id=? AND item_id IS ? AND sku_id IS ?
+              AND state IN ({','.join('?' for _ in active_states)})
+            """,
+            (
+                tenant_id,
+                recommendation.target.store_id,
+                recommendation.target.item_id,
+                recommendation.target.sku_id,
+                *active_states,
+            ),
+        ).fetchall()
+        audit_views: list[dict[str, Any]] = []
+        for row in rows:
+            old_id = str(row["recommendation_id"])
+            if old_id == keep_recommendation_id:
+                continue
+            new_state, audit = StateMachine(
+                RecommendationState(str(row["state"]))
+            ).apply(
+                TransitionAction.MARK_STALE,
+                actor=actor,
+                at=recommendation.updated_at,
+                target=old_id,
+            )
+            audit_hash = payload_digest(_audit_content_payload(old_id, audit))
+            conn.execute(
+                "UPDATE product_recommendations SET state=?, updated_at=? "
+                "WHERE tenant_id=? AND recommendation_id=?",
+                (
+                    new_state.value,
+                    canonical_source_time(audit.at),
+                    tenant_id,
+                    old_id,
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO product_recommendation_audit(
+                    tenant_id, recommendation_id, action, from_state, to_state,
+                    actor, occurred_at, payload_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    tenant_id,
+                    old_id,
+                    audit.action.value,
+                    audit.from_state.value,
+                    audit.to_state.value,
+                    audit.actor,
+                    canonical_source_time(audit.at),
+                    audit_hash,
+                ),
+            )
+            audit_views.append(
+                {
+                    "recommendation_id": old_id,
+                    "action": audit.action.value,
+                    "from_state": audit.from_state.value,
+                    "to_state": audit.to_state.value,
+                }
+            )
+        return audit_views
 
     def record_transition(
         self,
@@ -207,6 +343,7 @@ class RecommendationPersistenceService:
         actor: str,
         at: datetime,
     ) -> dict[str, Any]:
+        self.write_barrier.assert_write_allowed("recommendation.state_transition")
         tenant_id = _tenant_id(tenant_id)
         at_text = canonical_source_time(at)
         write_status = "applied"
@@ -274,19 +411,19 @@ class RecommendationPersistenceService:
                     "occurred_at": canonical_source_time(audit.at),
                     "payload_hash": audit_hash,
                 }
-        # C6：状态流转系统审计（成功走 recommendation.state_transition）
-        self.db.audit(
-            "recommendation.state_transition",
-            actor,
-            recommendation_id,
-            {
-                "action": action.value,
-                "from_state": audit_view["from_state"],
-                "to_state": audit_view["to_state"],
-                "write_status": write_status,
-            },
-            tenant_id,
-        )
+            self.db.audit(
+                "recommendation.state_transition",
+                actor,
+                recommendation_id,
+                {
+                    "action": action.value,
+                    "from_state": audit_view["from_state"],
+                    "to_state": audit_view["to_state"],
+                    "write_status": write_status,
+                },
+                tenant_id,
+                connection=conn,
+            )
         return {
             "recommendation": self.get(tenant_id, recommendation_id),
             "audit": audit_view,

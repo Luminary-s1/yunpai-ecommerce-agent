@@ -56,7 +56,123 @@ def test_read_model_endpoint_returns_200(tmp_path) -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["composite_key"] == ["tenant-test", "store-a", "item-a", "sku-a", 1]
-    assert data["impressions"]["evidence_state"] == "missing"
+    assert data["metrics"]["impressions"]["evidence_state"] == "missing"
+    assert "authoritative_service" in data["metrics"]["impressions"]
+    assert "import_manifest_id" in data["metrics"]["impressions"]
+    assert data["identity"] == {
+        "material_code": None,
+        "title": None,
+        "merchant_code": None,
+        "evidence": None,
+    }
+    assert data["revision"] is None
+
+
+def test_workbench_uses_one_explicit_revision_for_metrics_and_gates(tmp_path) -> None:
+    """The page must not combine revision-N metrics with latest-revision gates."""
+    settings = make_settings(tmp_path)
+    from ecommerce_agent.service import AgentService
+
+    svc = AgentService(settings)
+    with svc.db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO creative_assets(
+                asset_id, tenant_id, sha256, mime_type, width, height,
+                storage_ref, source_ref, feature_schema_version, payload_hash,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "asset-m9r", "tenant-test", "e" * 64, "image/png", 1200, 1200,
+                "objects/m9r.png", "fixture://m9r", "image-v1", "f" * 64,
+                "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
+            ),
+        )
+        for revision, revision_id, impressions, day in (
+            (1, "rev-m9r-1", 101, "10"),
+            (2, "rev-m9r-2", 202, "11"),
+        ):
+            source_time = f"2026-08-{day}T00:00:00+00:00"
+            conn.execute(
+                """
+                INSERT INTO listing_revisions(
+                    id, tenant_id, connector_id, store_id, item_id, sku_id,
+                    revision_no, title, main_image_asset_id, sale_price,
+                    attributes_json, active_from, active_to, source_updated_at,
+                    payload_hash, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    revision_id, "tenant-test", "virtual_taobao", "store-a",
+                    "item-a", "sku-a", revision, f"商品 rev {revision}",
+                    "asset-m9r", "109.00", "{}", source_time,
+                    f"2026-08-{day}T23:59:59+00:00", source_time,
+                    str(revision) * 64, source_time, source_time,
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO traffic_metric_buckets(
+                    id, tenant_id, listing_revision_id, metric_start, metric_end,
+                    bucket_granularity, traffic_source, impressions, clicks,
+                    visitors, favorites, cart_adds, orders, sales_amount,
+                    ad_spend, search_impressions, recommend_impressions,
+                    data_as_of, source_id, payload_hash, quality_flags_json,
+                    version, created_at, updated_at, connector_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"bucket-m9r-{revision}", "tenant-test", revision_id,
+                    source_time, f"2026-08-{day}T23:59:59+00:00", "day",
+                    "recommend", impressions, 10, 10, 0, 1, 1, "100", "0",
+                    10, impressions - 10, source_time, f"source-m9r-{revision}",
+                    "a" * 64, "[]", 1, source_time, source_time,
+                    "virtual_taobao",
+                ),
+            )
+    svc.close()
+
+    app = create_app(settings)
+    with TestClient(app) as client:
+        revision_1 = client.get(
+            "/v1/products/store-a/item-a/sku-a/workbench?revision=1",
+            headers=ADMIN_HEADERS,
+        ).json()
+        revision_2 = client.get(
+            "/v1/products/store-a/item-a/sku-a/workbench?revision=2",
+            headers=ADMIN_HEADERS,
+        ).json()
+        analysis_runs = client.get(
+            "/v1/products/store-a/item-a/sku-a/analysis-runs?revision=1",
+            headers=ADMIN_HEADERS,
+        ).json()
+        diagnosis = client.get(
+            "/v1/products/store-a/item-a/sku-a/diagnosis?revision=2",
+            headers=ADMIN_HEADERS,
+        ).json()
+        generated = client.post(
+            "/v1/products/store-a/item-a/sku-a/recommendation/generate",
+            headers=ADMIN_HEADERS,
+            json={"recommendation_id": "rec-revision-2", "revision": 2},
+        )
+
+    assert revision_1["metrics"]["impressions"]["value"] == 101
+    assert revision_1["revision"]["revision_id"] == "rev-m9r-1"
+    assert revision_1["evidence_gates"]["revision_id"] == "rev-m9r-1"
+    assert revision_2["metrics"]["impressions"]["value"] == 202
+    assert revision_2["revision"]["revision_id"] == "rev-m9r-2"
+    assert revision_2["evidence_gates"]["revision_id"] == "rev-m9r-2"
+    assert analysis_runs["revision"]["revision_id"] == "rev-m9r-1"
+    assert analysis_runs["experiments"] == []
+    assert analysis_runs["reason"] is None
+    assert diagnosis["revision"]["revision_id"] == "rev-m9r-2"
+    assert generated.status_code == 200, generated.text
+    assert (
+        generated.json()["facts_snapshot"]["evidence_references"]
+        ["listing_revision"]["revision_id"]
+        == "rev-m9r-2"
+    )
 
 
 def test_recommendations_list_endpoint_returns_200(tmp_path) -> None:
@@ -147,7 +263,7 @@ def test_recommendations_list_state_invalid_returns_400(tmp_path) -> None:
 
 
 def test_create_recommendation_endpoint(tmp_path) -> None:
-    """POST 创建建议（C1 生产入口）：强制 DRAFT + 落库。"""
+    """客户端不得绕过模型语义链直接提交建议类型和事实。"""
     settings = make_settings(tmp_path)
     from ecommerce_agent.service import AgentService
     svc = AgentService(settings)
@@ -167,51 +283,33 @@ def test_create_recommendation_endpoint(tmp_path) -> None:
                 "alternatives": ["受控实验"],
             },
         )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["recommendation_id"] == "rec-new"
-    assert data["state"] == RecommendationState.DRAFT.value
-    assert data["write_status"] == "applied"
+    assert response.status_code == 409
+    assert response.json()["detail"] == "manual_recommendation_creation_not_allowed"
 
 
-def test_create_recommendation_pii_redacted_all_fields(tmp_path) -> None:
-    """P1-2 反例：rationale / facts_snapshot（含嵌套）/ missing_evidence 统一脱敏。
-
-    手机号出现在任意持久化自由字段都必须被掩码后落库，读回不得含原文。
-    """
+def test_persistence_service_redacts_pii_for_all_callers(tmp_path) -> None:
+    """脱敏必须位于持久化边界，不能只保护已关闭的手工 HTTP 旁路。"""
     settings = make_settings(tmp_path)
     from ecommerce_agent.service import AgentService
     svc = AgentService(settings)
-    svc.close()
-
-    app = create_app(settings)
-    with TestClient(app) as client:
-        response = client.post(
-            "/v1/products/recommendations",
-            headers=ADMIN_HEADERS,
-            json={
-                "recommendation_id": "rec-pii",
-                "type": "保持观察",
-                "target": {"store_id": "store-a"},
-                "facts_snapshot": {
-                    "contact": {"phone": "13800138000", "name": "张三"},
-                    "note": "客户电话 13800138000",
-                },
-                "rationale": "联系客户 13800138000",
-                "missing_evidence": ["缺 13800138000 的确认"],
-                "alternatives": ["受控实验"],
-            },
-        )
-    assert response.status_code == 200, response.text
-    # 读回详情：三个字段均不得含明文手机号
-    detail = client.get(
-        "/v1/products/recommendations/rec-pii?store_id=store-a",
-        headers=ADMIN_HEADERS,
+    rec = Recommendation(
+        recommendation_id="rec-pii",
+        type=RecommendationType.KEEP_OBSERVE,
+        target=TargetObject(store_id="store-a"),
+        facts_snapshot={"contact": {"phone": "13800138000"}},
+        rationale="联系客户 13800138000",
+        missing_evidence=["缺 13800138000 的确认"],
+        alternatives=[RecommendationType.EXPERIMENT],
+        created_at=datetime(2026, 8, 18, tzinfo=UTC),
+        updated_at=datetime(2026, 8, 18, tzinfo=UTC),
     )
-    assert detail.status_code == 200, detail.text
-    body = detail.text
-    assert "13800138000" not in body, "持久化字段含明文手机号（PII 未脱敏）"
-    assert "138****8000" in body, "掩码后落库格式不符"
+    persisted = svc.operations.recommendations.create(
+        "tenant-test", rec, actor="admin-test"
+    )
+    svc.close()
+    body = str(persisted)
+    assert "13800138000" not in body
+    assert "138****8000" in body
 
 
 def test_recommendation_transition_endpoint(tmp_path) -> None:

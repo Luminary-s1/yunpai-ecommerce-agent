@@ -12,8 +12,8 @@
   本引擎只填数量类事实）。
 - D-034 分工：确定性代码组装可执行建议候选 + 校验；语义（类型/理由）由解释器
   产出。`RecommendationModelInterpreter` 为模型生产路径（复用 ModelGateway 三件套：
-  系统 prompt「无执行权 + 按 output_schema 返回」，失败降级 Ruleset）；
-  `RulesetRecommendationInterpreter` 为 fail-safe 降级。
+  系统 prompt「无执行权 + 按 output_schema 返回」；模型失败时只返回明确的
+  `KEEP_OBSERVE/model_unavailable`，不由规则替模型重做语义决策。
 - 失败暴露：required_facts 缺 → degraded=True + missing_evidence
   （validate_recommendation 强制）；越权词 → validate_full_recommendation 递归拒绝；
   诊断类型不可映射 → 抛 ValueError。
@@ -22,12 +22,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Mapping, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
+from ..product_semantics import semantic_provenance
 from ..product_diagnosis.diagnosis import Diagnosis, DiagnosisType
 from ..product_read_model.models import MetricValue, SKUReadModel
 from ..readonly_data.contracts import EvidenceState
@@ -47,8 +48,8 @@ if TYPE_CHECKING:
 class RecommendationInterpreter(Protocol):
     """语义解释器：输入诊断，产出建议候选（类型 + 理由）。
 
-    生产替换为模型解释器（对齐 TrafficAnalysisModelInterpreter：确定性事实 →
-    模型 → Pydantic 校验 → 失败降级）。本期仅 Ruleset 实现。
+    生产使用模型解释器（确定性事实 → 模型 → Pydantic 校验 → 失败降级）；
+    Ruleset 只服务隔离测试、Eval 和模型关闭时的保守占位。
     """
 
     def interpret(self, diagnosis: Diagnosis) -> "RecommendationCandidate": ...
@@ -65,6 +66,7 @@ class RecommendationCandidate:
     rationale: str
     rationale_evidence_refs: tuple[str, ...] = ()
     degraded: bool = False
+    semantic_provenance: Mapping[str, str] = field(default_factory=dict)
 
 
 # 诊断类型 → 建议类型 权威映射（Ruleset 占位，确定性；枚举变化须同步此处 + 测试）
@@ -107,6 +109,7 @@ _RECOMMENDATION_SYSTEM_PROMPT = """\
 
 缺成本时不得输出"一定提价 N 元"一类的正式利润安全价格；缺少参照证据时不得虚构对标价格或参照结论，如实说明缺少哪些参照数据即可。严格按用户消息中的 output_schema 返回一个 JSON object。\
 """
+RECOMMENDATION_PROMPT_VERSION = "m9r-recommendation-v1"
 
 
 class _RecommendationModelOutput(BaseModel):
@@ -122,12 +125,11 @@ class _RecommendationModelOutput(BaseModel):
 class RecommendationModelInterpreter:
     """模型建议解释器（D-034 生产路径）：复用 ModelGateway 三件套。
 
-    失败/超时/模型禁用 → 降级 RulesetRecommendationInterpreter（fail-safe）。
+    失败/超时/非法输出 → 明确降级为 KEEP_OBSERVE/model_unavailable。
     """
 
     def __init__(self, gateway: Any) -> None:
         self.gateway = gateway
-        self._fallback = RulesetRecommendationInterpreter()
 
     def interpret(self, diagnosis: Diagnosis) -> RecommendationCandidate:
         output_schema = _RecommendationModelOutput.model_json_schema()
@@ -139,6 +141,7 @@ class RecommendationModelInterpreter:
                 "evidence_facts": diagnosis.evidence_facts,
                 "degraded": diagnosis.degraded,
             },
+            "prompt_version": RECOMMENDATION_PROMPT_VERSION,
             "output_schema": output_schema,
         }
         try:
@@ -152,23 +155,38 @@ class RecommendationModelInterpreter:
                 ],
                 thinking_enabled=False,
             )
-            # 模型输出经 Pydantic 校验（type 必须合法）；失败降级 Ruleset
+            # 模型输出经 Pydantic 校验（type 必须合法）。
             parsed = _RecommendationModelOutput.model_validate(raw)
             return RecommendationCandidate(
                 type=parsed.type,
                 rationale=parsed.rationale,
                 rationale_evidence_refs=tuple(diagnosis.evidence_facts.keys()),
                 degraded=parsed.degraded,
+                semantic_provenance=semantic_provenance(
+                    self.gateway,
+                    decision_source="model",
+                    prompt_version=RECOMMENDATION_PROMPT_VERSION,
+                ),
             )
-        except Exception:  # noqa: BLE001 — 模型故障/输出非法 → fail-safe 降级
-            return self._fallback.interpret(diagnosis)
+        except Exception:  # noqa: BLE001 — 模型故障/输出非法 → 明确安全降级
+            return RecommendationCandidate(
+                type=RecommendationType.KEEP_OBSERVE,
+                rationale="model_unavailable",
+                rationale_evidence_refs=tuple(diagnosis.evidence_facts.keys()),
+                degraded=True,
+                semantic_provenance=semantic_provenance(
+                    self.gateway,
+                    decision_source="model_unavailable",
+                    prompt_version=RECOMMENDATION_PROMPT_VERSION,
+                ),
+            )
 
 
 class RulesetRecommendationInterpreter:
-    """确定性降级：按映射表把诊断类型 → 建议类型（fail-safe，非生产语义决策）。
+    """固定表测试解释器：按映射表把诊断类型转为建议类型。
 
-    注意：占位不等于验收依据——仅用于模型不可用时的降级；
-    生产语义决策由 RecommendationModelInterpreter 承担。
+    仅用于隔离测试/Eval 或模型明确禁用的保守占位；模型失败时
+    RecommendationModelInterpreter 自身返回 KEEP_OBSERVE，不调用本解释器。
     """
 
     def interpret(self, diagnosis: Diagnosis) -> RecommendationCandidate:
@@ -188,6 +206,7 @@ class RulesetRecommendationInterpreter:
             rationale=_RATIONALE_BY_TYPE[rtype],
             rationale_evidence_refs=tuple(diagnosis.evidence_facts.keys()),
             degraded=degraded,
+            semantic_provenance={"decision_source": "fixed_ruleset"},
         )
 
 
@@ -232,6 +251,35 @@ class RecommendationEngine:
         candidate = self.interpreter.interpret(diagnosis)
         rtype = candidate.type
         facts_snapshot = self._build_facts_snapshot(tenant_id, diagnosis, sku, rtype)
+        evidence_references: dict[str, Any] = {}
+        if sku.listing_revision is not None:
+            listing_evidence = sku.listing_revision.model_dump(mode="json")
+            evidence_references["listing_revision"] = listing_evidence
+            if rtype is RecommendationType.EXPERIMENT:
+                facts_snapshot = {
+                    **facts_snapshot,
+                    "revision_evidence": listing_evidence,
+                }
+        if sku.product_identity_evidence is not None:
+            evidence_references["product_identity"] = (
+                sku.product_identity_evidence.model_dump(mode="json")
+            )
+        if evidence_references:
+            facts_snapshot = {
+                **facts_snapshot,
+                "evidence_references": evidence_references,
+            }
+        semantic_sources: dict[str, Any] = {}
+        diagnosis_source = diagnosis.evidence_facts.get("semantic_provenance")
+        if isinstance(diagnosis_source, Mapping):
+            semantic_sources["diagnosis"] = dict(diagnosis_source)
+        if candidate.semantic_provenance:
+            semantic_sources["recommendation"] = dict(candidate.semantic_provenance)
+        if semantic_sources:
+            facts_snapshot = {
+                **facts_snapshot,
+                "semantic_provenance": semantic_sources,
+            }
         missing = [
             key
             for key in REQUIRED_FACTS[rtype]
@@ -306,7 +354,8 @@ class RecommendationEngine:
         # ⚠️ V1 生产边界（诚实标注）：生产诊断链（diagnose/validate_diagnosis_output）
         # 的 evidence_facts 只含固定 9 键（evidence_state/freshness/quality_gate/exposures
         # 等），不含 demand_signal/competitor_evidence 等信号键——因此 SELECTION/
-        # NEW_LAUNCH/CLEARANCE 在生产恒走降级路径（missing_evidence 列明缺键）。
+        # NEW_LAUNCH/CLEARANCE/EXPERIMENT/PROMOTION 在生产恒走降级路径（missing_evidence
+        # 列明缺键）。
         # 非降级真实方向仅在信号被注入时可达（Eval 场景注入 required_signals 验证引擎
         # 能力），生产可达需后续扩展信号源（如 M 期接入 demand/竞品数据）。不得在
         # 无信号源时把裸布尔当证据满足（无来源/引用校验）——这正是透传的边界。
@@ -314,6 +363,8 @@ class RecommendationEngine:
             RecommendationType.SELECTION,
             RecommendationType.NEW_LAUNCH,
             RecommendationType.CLEARANCE,
+            RecommendationType.EXPERIMENT,
+            RecommendationType.PROMOTION,
         ):
             return {
                 key: diagnosis.evidence_facts.get(key)

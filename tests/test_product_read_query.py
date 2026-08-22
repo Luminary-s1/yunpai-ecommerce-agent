@@ -9,10 +9,131 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from ecommerce_agent.business.competitive import (
+    CompetitiveEntityMatchCreate,
+    CompetitiveIntelligenceService,
+    CompetitiveMatchTransition,
+    CompetitiveProductIdentity,
+    CompetitorObservationCreate,
+)
 from ecommerce_agent.business.service import OperationsService
 from ecommerce_agent.database import Database
+from ecommerce_agent.product_identity import (
+    CanonicalProductCreate,
+    MappingDecisionInput,
+    ProductIdentityObservation,
+    ProductIdentityService,
+    ProductReconciliationRequest,
+)
 from ecommerce_agent.product_read_model.models import DataTrust, EvidenceState
 from ecommerce_agent.product_read_model.query import ProductReadQuery
+from ecommerce_agent.readonly_data import SourceKind
+
+
+def _seed_reconciled_identity(db: Database) -> dict[str, object]:
+    service = ProductIdentityService(db)
+    product = service.register_product(
+        "tenant-a",
+        CanonicalProductCreate(
+            store_id="store-a",
+            internal_part_number="mpn-1",
+            merchant_code="mc-1",
+            title="测试商品标题",
+            source_kind=SourceKind.ACTUAL,
+            source_reference="catalog:item-a",
+        ),
+    )
+    service.confirm_mapping(
+        "tenant-a",
+        MappingDecisionInput(
+            store_id="store-a",
+            connector_id="virtual_taobao",
+            sku_id="sku-a",
+            item_id="item-a",
+            merchant_code="mc-1",
+            canonical_product_id=str(product["canonical_product_id"]),
+            expected_version=0,
+            decision_key="m9r:identity:sku-a:v1",
+            reason="identity_verified",
+            actor_ref="operator:test",
+        ),
+    )
+    return service.reconcile(
+        "tenant-a",
+        ProductReconciliationRequest(
+            store_id="store-a",
+            observations=(
+                ProductIdentityObservation(
+                    source_domain="catalog",
+                    source_reference="catalog:item-a",
+                    store_id="store-a",
+                    connector_id="virtual_taobao",
+                    sku_id="sku-a",
+                    item_id="item-a",
+                    merchant_code="mc-1",
+                    title="测试商品标题",
+                ),
+            ),
+        ),
+    )
+
+
+def _seed_competitor(
+    db: Database, *, approve: bool, source_id: str = "match-src-1"
+) -> dict[str, object]:
+    service = CompetitiveIntelligenceService(db)
+    identity = CompetitiveProductIdentity(
+        title="同款测试商品", brand="品牌A", model="M1",
+        category="测试类目", gtin="12345678",
+    )
+    match = service.record_entity_match(
+        "tenant-a",
+        CompetitiveEntityMatchCreate(
+            connector_id="taobao",
+            store_id="store-a",
+            subject_sku="sku-a",
+            competitor_name="竞品A",
+            competitor_sku="comp-sku-1",
+            subject_identity=identity,
+            competitor_identity=identity,
+            source_type="authorized_api",
+            source_ref="api://competitive/match/1",
+            source_id=source_id,
+            is_estimate=False,
+            observed_at=datetime(2026, 8, 10, tzinfo=UTC),
+        ),
+    )
+    if approve:
+        match = service.transition_entity_match(
+            "tenant-a",
+            str(match["id"]),
+            CompetitiveMatchTransition(
+                target_status="approved",
+                expected_record_version=int(match["record_version"]),
+                note="人工确认是同款商品",
+            ),
+            actor="reviewer:test",
+        )
+    observation = service.record(
+        "tenant-a",
+        CompetitorObservationCreate(
+            connector_id="taobao",
+            store_id="store-a",
+            subject_sku="sku-a",
+            competitor_name="竞品A",
+            competitor_sku="comp-sku-1",
+            subject_price="109.00",
+            competitor_price="99.00",
+            currency="CNY",
+            source_type="authorized_api",
+            source_ref="api://competitive/price/1",
+            is_estimate=False,
+            observed_at=datetime(2026, 8, 10, tzinfo=UTC),
+            source_id=f"observation-{source_id}",
+            entity_match_id=str(match["id"]),
+        ),
+    )
+    return {"match": match, "observation": observation}
 
 
 def _seed(db: Database) -> None:
@@ -194,20 +315,8 @@ def test_query_product_and_competitor_domains(tmp_path) -> None:
     db = Database(tmp_path / "query-domains.sqlite3")
     db.initialize()
     _seed(db)
-    # 种商品映射 + canonical
-    with db.connect() as conn:
-        conn.execute(
-            "INSERT INTO readonly_canonical_products(canonical_product_id, tenant_id, store_id, internal_part_number, merchant_code, title, normalized_title, source_kind, source_reference, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("cp-1", "tenant-a", "store-a", "mpn-1", "mc-1", "测试商品标题", "测试商品标题", "actual", "ref-1", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
-        )
-        conn.execute(
-            "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("ev-1", "tenant-a", "store-a", "virtual_taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
-        )
-        conn.execute(
-            "INSERT INTO competitor_observations(id, tenant_id, connector_id, store_id, subject_sku, competitor_name, competitor_sku, subject_price, competitor_price, currency, source_type, source_ref, is_estimate, observed_at, source_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("comp-1", "tenant-a", "taobao", "store-a", "sku-a", "竞品A", "comp-sku-1", "109.00", "99.00", "CNY", "authorized_api", "ref-comp", 0, "2026-08-10T00:00:00+00:00", "src-comp", "2026-08-10T00:00:00+00:00"),
-        )
+    reconciliation = _seed_reconciled_identity(db)
+    _seed_competitor(db, approve=True)
     query = ProductReadQuery(db)
     model = query.sku_read_model(
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
@@ -216,6 +325,13 @@ def test_query_product_and_competitor_domains(tmp_path) -> None:
     assert model.title == "测试商品标题"
     assert model.merchant_code == "mc-1"
     assert model.material_code == "mpn-1"  # internal_part_number（料号），非 item_id
+    assert model.product_identity_evidence is not None
+    assert model.product_identity_evidence.run_id == reconciliation["run_id"]
+    assert model.product_identity_evidence.policy_version == reconciliation["policy_version"]
+    assert (
+        model.product_identity_evidence.mapping_snapshot_digest
+        == reconciliation["mapping_snapshot_digest"]
+    )
     # 竞品域真实查询
     assert model.competitor_price.value == 99.0
     assert model.competitor_price.evidence_state is EvidenceState.ACTUAL
@@ -224,6 +340,92 @@ def test_query_product_and_competitor_domains(tmp_path) -> None:
     assert model.ad_spend.reason == "ad_metric_store_level_only"
     assert model.experiment_state.evidence_state is EvidenceState.MISSING
     assert model.experiment_state.reason == "experiment_state_provided_by_wp2_bridge"
+
+
+def test_query_unapproved_competitor_is_missing(tmp_path) -> None:
+    db = Database(tmp_path / "query-unapproved-competitor.sqlite3")
+    db.initialize()
+    _seed(db)
+    _seed_competitor(db, approve=False, source_id="match-src-pending")
+
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+
+    assert model.competitor_price.evidence_state is EvidenceState.MISSING
+    assert model.competitor_price.reason == "competitor_approved_evidence_not_found"
+
+
+def test_query_does_not_choose_or_sum_multiple_traffic_sources(tmp_path) -> None:
+    """Multiple sources in one window are blocked until M5 defines aggregation."""
+    db = Database(tmp_path / "query-traffic-sources.sqlite3")
+    db.initialize()
+    _seed(db)
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO traffic_metric_buckets(
+                id, tenant_id, listing_revision_id, metric_start, metric_end,
+                bucket_granularity, traffic_source, impressions, clicks, visitors,
+                favorites, cart_adds, orders, sales_amount, ad_spend,
+                search_impressions, recommend_impressions, data_as_of, source_id,
+                payload_hash, quality_flags_json, version, created_at, updated_at,
+                connector_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "bucket-2", "tenant-a", "rev-1",
+                "2026-08-10T00:00:00+00:00", "2026-08-10T23:59:59+00:00",
+                "day", "search", 500, 40, 38, 4, 3, 1, "109.00", "0",
+                500, 0, "2026-08-10T12:00:00+00:00", "src-2", "c" * 64,
+                "[]", 1, "2026-08-10T00:00:00+00:00",
+                "2026-08-10T00:00:00+00:00", "virtual_taobao",
+            ),
+        )
+
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+
+    assert model.impressions.evidence_state is EvidenceState.MISSING
+    assert (
+        model.impressions.reason
+        == "traffic_source_breakdown_requires_explicit_aggregation"
+    )
+
+
+def test_query_latest_ambiguous_reconciliation_suppresses_material_code(tmp_path) -> None:
+    db = Database(tmp_path / "query-ambiguous-identity.sqlite3")
+    db.initialize()
+    _seed(db)
+    _seed_reconciled_identity(db)
+    identity = ProductIdentityService(db)
+    latest = identity.reconcile(
+        "tenant-a",
+        ProductReconciliationRequest(
+            store_id="store-a",
+            observations=(
+                ProductIdentityObservation(
+                    source_domain="catalog",
+                    source_reference="catalog:item-a:conflict",
+                    store_id="store-a",
+                    connector_id="virtual_taobao",
+                    sku_id="sku-a",
+                    item_id="item-other",
+                    merchant_code="other-code",
+                    title="冲突商品标题",
+                ),
+            ),
+        ),
+    )
+    assert latest["rows"][0]["terminal_status"] == "ambiguous"
+
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+
+    assert model.material_code is None
+    assert model.product_identity_evidence is None
 
 
 def test_query_refund_closed_loop(tmp_path) -> None:
@@ -307,8 +509,8 @@ def test_query_revoked_mapping_returns_none(tmp_path) -> None:
     assert model.title is None, f"revoked 后标题不应复活: {model.title}"
 
 
-def test_query_mapping_confirmed_after_revoke_restores(tmp_path) -> None:
-    """R2（证据诚实）：revoked 后再 confirmed → 映射恢复（最新事件才是权威）。"""
+def test_query_reconfirmed_mapping_requires_new_reconciliation(tmp_path) -> None:
+    """Re-confirming a mapping does not revive a material code from an old run."""
     db = Database(tmp_path / "query-reconfirm.sqlite3")
     db.initialize()
     with db.connect() as conn:
@@ -338,10 +540,14 @@ def test_query_mapping_confirmed_after_revoke_restores(tmp_path) -> None:
     model = query.sku_read_model(
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
     )
-    # 最新事件是 confirmed v3 → 映射恢复
-    assert model.material_code == "mpn-1"
-    assert model.merchant_code == "mc-1"
-    assert model.title == "测试商品标题"
+    mapping = query._product_mapping(  # noqa: SLF001 - verifies M9/M7 boundary
+        "tenant-a", "store-a", "item-a", "sku-a"
+    )
+    assert mapping is not None and mapping["event_id"] == "ev-3"
+    assert model.material_code is None
+    assert model.product_identity_evidence is None
+    assert model.merchant_code is None
+    assert model.title is None
 
 
 def test_query_mapping_not_hidden_by_other_connector_version(tmp_path) -> None:
@@ -385,11 +591,11 @@ def test_query_mapping_not_hidden_by_other_connector_version(tmp_path) -> None:
             ("ev-ta2", "tenant-a", "store-a", "taobao", "sku-a", 2, 1, "revoked", "cp-1", "item-a", None, "dk-2", "unmatch", "actor", "v1", "ev-vt1", "b"*64, "2026-08-11T00:00:00+00:00"),
         )
     query = ProductReadQuery(db)
-    model = query.sku_read_model(
-        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    mapping = query._product_mapping(  # noqa: SLF001 - exact connector contract
+        "tenant-a", "store-a", "item-a", "sku-a"
     )
     # 修复前：跨 connector 取 mapping_version 最大 → taobao v2 revoked → 映射为 None（掩盖）
     # 修复后：按权威 connector virtual_taobao 过滤 → v1 confirmed → 映射保留
-    assert model.material_code == "mpn-1", (
-        f"权威 connector 的映射被跨 connector 高 version 掩盖: {model.material_code}"
-    )
+    assert mapping is not None
+    assert mapping["event_id"] == "ev-vt1"
+    assert mapping["connector_id"] == "virtual_taobao"

@@ -5,7 +5,7 @@
 - 门控：GateEngine / GateResult / FORBIDDEN_KEYS（确定性判定）
 - 诊断：DiagnosisFacts / build_diagnosis_facts / validate_diagnosis_output（D-034：确定性事实 + 模型语义校验）
 - 解释器：DiagnosisInterpreter / RulesetDiagnosisInterpreter（语义角色占位）
-- 实验：ExperimentGateway / ExperimentNotAvailableError / ExperimentPath（双路径）
+- 实验：ExperimentGateway / ExperimentNotAvailableError（显式双方法路径）
 """
 from .bridge import EvidenceBridge
 from .diagnosis import (
@@ -19,7 +19,6 @@ from .diagnosis import (
 from .experiment import (
     ExperimentGateway,
     ExperimentNotAvailableError,
-    ExperimentPath,
 )
 from .gates import FORBIDDEN_KEYS, GateEngine, GateResult
 from .interpreter import (
@@ -37,7 +36,6 @@ __all__ = [
     "EvidenceBridge",
     "ExperimentGateway",
     "ExperimentNotAvailableError",
-    "ExperimentPath",
     "FORBIDDEN_KEYS",
     "GateEngine",
     "GateResult",

@@ -111,6 +111,59 @@ def test_record_transition_updates_state_and_writes_audit(service) -> None:
     assert trail[0]["to_state"] == RecommendationState.AWAITING_REVIEW.value
 
 
+def test_create_rolls_back_when_system_audit_fails(service) -> None:
+    """通用审计失败时，建议创建不能先提交成无审计状态。"""
+    with service.db.connect() as conn:
+        conn.execute(
+            """
+            CREATE TRIGGER fail_m9r_create_system_audit
+            BEFORE INSERT ON audit_log
+            WHEN NEW.event_type='recommendation.create'
+            BEGIN
+                SELECT RAISE(ABORT, 'create_system_audit_failed');
+            END
+            """
+        )
+
+    with pytest.raises(Exception, match="create_system_audit_failed"):
+        service.create("tenant-a", _rec())
+
+    with service.db.connect() as conn:
+        stored = conn.execute(
+            "SELECT 1 FROM product_recommendations "
+            "WHERE tenant_id='tenant-a' AND recommendation_id='rec-1'"
+        ).fetchone()
+    assert stored is None
+
+
+def test_transition_rolls_back_when_system_audit_fails(service) -> None:
+    """通用审计失败时，状态更新和领域审计必须一起回滚。"""
+    service.create("tenant-a", _rec())
+    with service.db.connect() as conn:
+        conn.execute(
+            """
+            CREATE TRIGGER fail_m9r_transition_system_audit
+            BEFORE INSERT ON audit_log
+            WHEN NEW.event_type='recommendation.state_transition'
+            BEGIN
+                SELECT RAISE(ABORT, 'transition_system_audit_failed');
+            END
+            """
+        )
+
+    with pytest.raises(Exception, match="transition_system_audit_failed"):
+        service.record_transition(
+            "tenant-a",
+            "rec-1",
+            action=TransitionAction.SUBMIT,
+            actor="ops-1",
+            at=NOW,
+        )
+
+    assert service.get("tenant-a", "rec-1")["state"] == RecommendationState.DRAFT.value
+    assert service.audit_trail("tenant-a", "rec-1") == []
+
+
 def test_record_transition_replay_is_idempotent(service) -> None:
     """同 (action, actor, at) 重放 → idempotent，audit 不重复。"""
     service.create("tenant-a", _rec())
@@ -148,8 +201,10 @@ def test_record_transition_missing_recommendation(service) -> None:
 
 def test_list_filters_and_tenant_isolation(service) -> None:
     """list 按 store/state 过滤；租户隔离；limit 校验。"""
-    service.create("tenant-a", _rec(recommendation_id="a1"))
-    service.create("tenant-a", _rec(recommendation_id="a2"))
+    # a1/a2 用不同 rationale 使内容不同——同 SKU 同内容的第二条会被内容级幂等
+    # 吞掉（B3 任务书 L365「同一证据重放不重复创建」），不在此测试的意图范围内。
+    service.create("tenant-a", _rec(recommendation_id="a1", rationale="observe a1"))
+    service.create("tenant-a", _rec(recommendation_id="a2", rationale="observe a2"))
     service.create("tenant-b", _rec(recommendation_id="b1"))
     assert {r["recommendation_id"] for r in service.list("tenant-a")} == {"a1", "a2"}
     assert {r["recommendation_id"] for r in service.list("tenant-a", store_id="store-a")} == {"a1", "a2"}

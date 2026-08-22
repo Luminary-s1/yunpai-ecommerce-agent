@@ -8,7 +8,7 @@ from __future__ import annotations
 from ecommerce_agent.product_workbench.boundaries import BOUNDARY_NOTES, DEMO_LABEL
 from ecommerce_agent.product_workbench.eval import MechanismEvalRunner
 from ecommerce_agent.product_workbench.pages import WorkbenchPages
-from ecommerce_agent.product_workbench.scenes import FROZEN_SCENES
+from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES, FROZEN_SCENES
 
 RESULTS: list[tuple[str, str, str, bool, str]] = []
 
@@ -58,20 +58,36 @@ def t03() -> None:
 def t04() -> None:
     """条目 4：机制 Eval 发现真实方向 + 拒绝污染方向。"""
     runner = MechanismEvalRunner()
-    passed, total = runner.summary()
-    assert passed == total and total >= 2
+    results = runner.run_all()
+    assert results and all(result.passed for result in results)
+    by_name = {result.scene_name: result.produced for result in results}
+    assert by_name["选品方向"]["recommendation_type"] == "选品候选"
+    assert by_name["上新准备"]["recommendation_type"] == "上新准备"
+    assert by_name["清仓风险"]["recommendation_type"] == "清仓预警"
+    assert by_name["缺货污染"]["recommendation_type"] == "补货联动"
 
 
 def t05() -> None:
-    """条目 5：浏览器桌面 + 窄屏可读（页面结构支持）。"""
+    """条目 5：浏览器门禁由正式 Playwright 测试负责，不以结构检查冒充。"""
     pages = WorkbenchPages()
-    data = pages.product_detail(store_id="s1", item_id="i1", sku_id="sku1")
-    assert "metrics" in data  # 页面数据完整可渲染
+    data = pages.product_detail(
+        store_id="s1", item_id="i1", sku_id="sku1",
+        metrics={"impressions": {
+            "evidence_state": "actual",
+            "authoritative_service": "ProductReadQuery",
+            "import_manifest_id": "manifest-1",
+        }},
+    )
+    metric = data["metrics"]["impressions"]
+    assert metric["authoritative_service"] == "ProductReadQuery"
+    assert metric["import_manifest_id"] == "manifest-1"
 
 
 def t06() -> None:
     """条目 6：真实/模拟场景隔离，全链标注。"""
     assert len(FROZEN_SCENES) >= 2
+    direction_names = {scene.name for scene in DIRECTION_SCENES}
+    assert {"选品方向", "上新准备", "清仓风险"} <= direction_names
     pages = WorkbenchPages()
     data = pages.product_detail(
         store_id="s1", item_id="i1", sku_id="sku1",

@@ -3,7 +3,7 @@
 公开 API 边界：
 - 类型注册表：RecommendationType / RecommendationState / TargetObject / Recommendation
 - 状态机：StateMachine / TransitionAction / AuditRecord
-- 校验：WriteBarrier / validate_full_recommendation / validate_model_output
+- 校验：WriteBarrier / validate_full_recommendation
 - M10-R 契约：RecommendationOutput / to_m10_contract / M10_CONTRACT_VERSION
 - 持久化：RecommendationPersistenceService / RecommendationError
 """
@@ -37,7 +37,6 @@ from .validation import (
     FORBIDDEN_OUTPUT_KEYS,
     WriteBarrier,
     validate_full_recommendation,
-    validate_model_output,
 )
 
 __all__ = [
@@ -66,6 +65,5 @@ __all__ = [
     "m10_type_from_recommendation",
     "to_m10_contract",
     "validate_full_recommendation",
-    "validate_model_output",
     "validate_recommendation",
 ]

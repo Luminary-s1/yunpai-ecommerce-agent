@@ -242,6 +242,36 @@ class ItemReadModel(BaseModel):
         return (self.tenant_id, self.store_id, self.item_id)
 
 
+class ProductIdentityEvidence(BaseModel):
+    """M7-R matched reconciliation evidence consumed by the SKU read model."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    canonical_product_id: str
+    internal_part_number: str
+    run_id: str
+    row_id: str
+    policy_version: str
+    mapping_snapshot_digest: str = Field(min_length=64, max_length=64)
+    connector_id: str
+    source_domain: str
+    source_reference: str | None = None
+    reconciled_at: datetime
+
+
+class ListingRevisionEvidence(BaseModel):
+    """Exact M5-R listing revision selected for this read-model projection."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    revision_id: str
+    revision_no: int = Field(ge=1)
+    connector_id: str
+    active_from: datetime
+    active_to: datetime | None = None
+    source_updated_at: datetime
+
+
 class SKUReadModel(BaseModel):
     """SKU 层读模型。
 
@@ -259,7 +289,9 @@ class SKUReadModel(BaseModel):
     item_id: str
     sku_id: str
     revision: int
+    listing_revision: ListingRevisionEvidence | None = None
     material_code: str | None = None
+    product_identity_evidence: ProductIdentityEvidence | None = None
     title: str | None = None
     merchant_code: str | None = None
     impressions: MetricValue
@@ -281,6 +313,24 @@ class SKUReadModel(BaseModel):
         Granularity.DAILY, AggregateRule.NONE, "—", "experiment_state_provided_by_wp2_bridge"
     ))
 
+    @model_validator(mode="after")
+    def _validate_product_identity_evidence(self) -> Self:
+        if (
+            self.listing_revision is not None
+            and self.listing_revision.revision_no != self.revision
+        ):
+            raise ValueError("listing_revision_number_mismatch")
+        evidence = self.product_identity_evidence
+        if self.material_code is None:
+            if evidence is not None:
+                raise ValueError("identity_evidence_without_material_code")
+            return self
+        if evidence is None:
+            raise ValueError("material_code_requires_matched_reconciliation")
+        if self.material_code != evidence.internal_part_number:
+            raise ValueError("material_code_reconciliation_mismatch")
+        return self
+
     def composite_key(self) -> tuple[str, str, str, str, int]:
         """固定结构契约：长度恒为 5，槽位含义固定。
 
@@ -295,7 +345,9 @@ __all__ = [
     "DataTrust",
     "Granularity",
     "ItemReadModel",
+    "ListingRevisionEvidence",
     "MetricValue",
+    "ProductIdentityEvidence",
     "SKUReadModel",
     "StoreReadModel",
 ]

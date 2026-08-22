@@ -137,6 +137,11 @@ def test_generate_and_persist_full_chain(tmp_path) -> None:
     assert result["write_status"] == "applied"
     assert result["state"] == "draft"
     assert result["type"] == "保持观察"
+    provenance = result["facts_snapshot"]["semantic_provenance"]
+    assert provenance["diagnosis"]["prompt_version"] == "m9r-diagnosis-v1"
+    assert provenance["recommendation"]["prompt_version"] == (
+        "m9r-recommendation-v1"
+    )
     # 审计落痕（create 走 db.audit 的 audit_log，非 product_recommendation_audit）
     with ops.db.connect() as conn:
         audit = conn.execute(
@@ -255,8 +260,14 @@ def test_generate_marks_older_same_sku_stale(tmp_path) -> None:
 
     from ecommerce_agent.business.service import OperationsService
     from ecommerce_agent.database import Database
-    from ecommerce_agent.product_lifecycle.engine import RecommendationEngine
-    from ecommerce_agent.product_lifecycle.schemas import RecommendationState
+    from ecommerce_agent.product_lifecycle.engine import (
+        RecommendationCandidate,
+        RecommendationEngine,
+    )
+    from ecommerce_agent.product_lifecycle.schemas import (
+        RecommendationState,
+        RecommendationType,
+    )
     from ecommerce_agent.product_diagnosis.diagnosis import (
         Diagnosis,
         DiagnosisType,
@@ -314,3 +325,48 @@ def test_generate_marks_older_same_sku_stale(tmp_path) -> None:
         f"旧建议应自动 stale: {view1['state']}"
     )
     assert view2["state"] != RecommendationState.STALE.value
+
+    # 故障注入：stale 的领域审计写入失败时，新建议和旧建议状态必须一起回滚。
+    with ops.db.connect() as conn:
+        conn.execute(
+            "UPDATE product_recommendations SET state='draft' "
+            "WHERE tenant_id='tenant-a' AND recommendation_id='rec-old'"
+        )
+        conn.execute(
+            """
+            CREATE TRIGGER fail_m9r_stale_audit
+            BEFORE INSERT ON product_recommendation_audit
+            WHEN NEW.action='mark_stale'
+            BEGIN
+                SELECT RAISE(ABORT, 'stale_transition_failed');
+            END
+            """
+        )
+
+    class _UniqueRecommendationInterpreter:
+        def interpret(self, diagnosis):
+            return RecommendationCandidate(
+                type=RecommendationType.KEEP_OBSERVE,
+                rationale="atomic rollback candidate",
+                degraded=True,
+            )
+
+    ops.recommendation_engine = RecommendationEngine(
+        interpreter=_UniqueRecommendationInterpreter()
+    )
+    with pytest.raises(Exception, match="stale_transition_failed"):
+        ops.generate_and_persist_recommendation(
+            "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a",
+            recommendation_id="rec-3",
+        )
+    with ops.db.connect() as conn:
+        rec3 = conn.execute(
+            "SELECT state FROM product_recommendations "
+            "WHERE tenant_id='tenant-a' AND recommendation_id='rec-3'"
+        ).fetchone()
+        rec_old_state = conn.execute(
+            "SELECT state FROM product_recommendations "
+            "WHERE tenant_id='tenant-a' AND recommendation_id='rec-old'"
+        ).fetchone()
+    assert rec3 is None, "stale 失败时新建议必须回滚"
+    assert rec_old_state["state"] == RecommendationState.DRAFT.value

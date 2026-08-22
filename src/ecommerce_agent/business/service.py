@@ -196,8 +196,8 @@ class OperationsService:
         from ..product_diagnosis.bridge import EvidenceBridge
 
         self.evidence_bridge = EvidenceBridge(self.traffic_lab.domain)
-        # WP2 诊断语义解释器（D-034：模型可注入，未注入则 Ruleset 降级）。
-        # 生产诊断入口通过 self.diagnose() 调用，模型可用时走 DiagnosisModelInterpreter。
+        # WP2 诊断语义解释器：模型可用时走 DiagnosisModelInterpreter；
+        # 模型关闭时 diagnose() 返回保守的 model_unavailable 占位。
         from ..product_diagnosis.interpreter import (
             DiagnosisInterpreter,
             RulesetDiagnosisInterpreter,
@@ -211,9 +211,8 @@ class OperationsService:
         # 不给强方向诊断（返回 evidence_insufficient + model_unavailable），
         # 不允许 Ruleset 阈值直接决定经营语义。True 时才走模型解释器。
         self._model_semantic_enabled = model_semantic_enabled
-        # WP3 闭环补缺：诊断 → 建议 生成引擎（D-034：模型可注入，未注入则
-        # Ruleset 降级）。引擎纯能力（不接路由/不自动触发），由工作台/agent 工具
-        # 显式调用后走 RecommendationPersistenceService.create 落库。
+        # WP3 闭环补缺：诊断 → 建议生成引擎。生产模型由 AgentService 显式注入；
+        # 无模型时只会基于 model_unavailable 占位生成 KEEP_OBSERVE。
         from ..product_lifecycle.engine import RecommendationEngine
 
         self.recommendation_engine = RecommendationEngine(
@@ -227,6 +226,7 @@ class OperationsService:
         store_id: str,
         item_id: str,
         sku_id: str,
+        revision: int = 1,
     ) -> dict[str, Any]:
         """生产诊断入口（D-034 语义链）：读模型 → 门禁 → 诊断（模型解释器）。
 
@@ -237,10 +237,20 @@ class OperationsService:
         from ..product_diagnosis.interpreter import run_interpretation
 
         model = self.product_read.sku_read_model(
-            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id,
+            revision=revision,
         )
-        gate_view = self.evidence_bridge.latest_revision_view(
-            tenant_id, store_id=store_id, sku_id=sku_id, item_id=item_id
+        gate_view = (
+            self.evidence_bridge.get_revision_view(
+                tenant_id, model.listing_revision.revision_id
+            )
+            if model.listing_revision is not None
+            else {
+                "evidence_state": "missing",
+                "reason": "traffic_revision_not_found",
+                "freshness": None,
+                "quality_gate": None,
+            }
         )
         all_passed, gates = self.evidence_bridge.run_gates(gate_view)
         # T2.3（P3 修复）：gate 结论必须成为诊断输入，而非响应附件。
@@ -271,7 +281,7 @@ class OperationsService:
         # R3（D-034 默认路径）：模型语义不可用时不给强方向诊断。
         # 不允许 Ruleset 阈值直接决定经营语义（那违反任务书"模型决定语义下一步"）。
         # 返回 evidence_insufficient + model_unavailable 占位，degraded=True。
-        # 模型可用（model_semantic_enabled=True）时才走模型解释器/ruleset 降级。
+        # 模型可用（model_semantic_enabled=True）时才走模型解释器；失败明确降级。
         if not self._model_semantic_enabled:
             diag = _model_unavailable_diagnosis(sku_id, facts)
         else:
@@ -289,6 +299,10 @@ class OperationsService:
             degradation_reasons.append("quality_gate_blocked")
         return {
             "sku_id": sku_id,
+            "revision": (
+                model.listing_revision.model_dump(mode="json")
+                if model.listing_revision is not None else None
+            ),
             "diagnosis_type": diag.diagnosis_type.value,
             "reason": diag.reason,
             "degraded": diag.degraded,
@@ -311,16 +325,18 @@ class OperationsService:
         item_id: str,
         sku_id: str,
         recommendation_id: str,
+        revision: int = 1,
         actor: str = "admin",
     ) -> dict[str, Any]:
         """生产语义链闭环（P3 修复，阻断3）：诊断 → 引擎建议 → 校验 → 落库。
 
         任务书要求"基于固化事实和流量诊断，由模型产生语义建议，经代码校验后固化"——
         这是唯一生产入口。recommendation_engine.generate 在生产路径只有一个调用点（此处），
-        workbench_api 的 POST /recommendations 是管理员手工提交旁路，不走模型语义链。
+        workbench_api 的 POST /recommendations 已固定拒绝，不能旁路模型语义链。
 
         流程：diagnose()（读模型→门禁→诊断）→ engine.generate()（解释器→facts→校验）
-        → recommendations.create()（落库 DRAFT + 审计）。零平台写动作（B4）。
+        → recommendations.create()（同事务落库 DRAFT、旧建议 stale + 审计）。
+        零平台写动作（B4）。
         """
         from datetime import UTC, datetime
 
@@ -329,9 +345,10 @@ class OperationsService:
 
         # 1. 诊断（复用生产 diagnose 门禁链）
         diagnosis_result = self.diagnose(
-            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id,
+            revision=revision,
         )
-        # 2. 引擎产出建议候选（模型解释器或 Ruleset 降级）。
+        # 2. 引擎产出建议候选（模型解释器或模型关闭时的保守占位）。
         #    从 diagnose() 输出构造冻结 Diagnosis（evidence_facts 已固化证据）。
         diag = Diagnosis(
             diagnosis_type=DiagnosisType(diagnosis_result["diagnosis_type"]),
@@ -341,7 +358,8 @@ class OperationsService:
             degraded=diagnosis_result["degraded"],
         )
         model = self.product_read.sku_read_model(
-            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id,
+            revision=revision,
         )
         engine: RecommendationEngine = self.recommendation_engine
         recommendation = engine.generate(
@@ -352,74 +370,12 @@ class OperationsService:
             created_at=datetime.now(UTC),
         )
         # 3. 落库（create 内部校验 + 幂等）
-        created = self.recommendations.create(
-            tenant_id, recommendation, actor=actor
-        )
-        # B4（盲点 #6 修复）：同 SKU 旧建议自动 stale——事实更新后旧建议作废，
-        # 不原地改写历史（任务书 WP3 L365"事实更新后旧建议标 stale"）。
-        # 新落库的建议除外，其余同 SKU 非终态建议标记 stale。
-        self._mark_older_recommendations_stale(
+        return self.recommendations.create(
             tenant_id,
-            store_id=store_id,
-            sku_id=sku_id,
-            keep_recommendation_id=str(created.get("recommendation_id") or recommendation_id),
+            recommendation,
             actor=actor,
+            mark_older_stale=True,
         )
-        return created
-
-    def _mark_older_recommendations_stale(
-        self,
-        tenant_id: str,
-        *,
-        store_id: str,
-        sku_id: str,
-        keep_recommendation_id: str,
-        actor: str,
-    ) -> None:
-        """B4：把同 SKU 其他非终态建议标记 stale（新建议保留）。
-
-        终态（STALE/CLOSED）不动；只对 DRAFT/AWAITING_REVIEW/APPROVED/REJECTED/
-        OBSERVED 等非终态旧建议标记 stale，使工作台展示的总是最新结论。
-        """
-        from datetime import UTC, datetime
-
-        from ..product_lifecycle.schemas import RecommendationState
-        from ..product_lifecycle.service import RecommendationPersistenceService
-        from ..product_lifecycle.state_machine import TransitionAction
-
-        stale_states = (
-            RecommendationState.STALE,
-            RecommendationState.CLOSED,
-        )
-        active_states = [
-            s.value
-            for s in RecommendationState
-            if s not in stale_states
-        ]
-        with self.db.connect() as conn:
-            rows = conn.execute(
-                f"""
-                SELECT recommendation_id FROM product_recommendations
-                WHERE tenant_id=? AND store_id=? AND sku_id=?
-                  AND state IN ({",".join("?" for _ in active_states)})
-                """,
-                (tenant_id, store_id, sku_id, *active_states),
-            ).fetchall()
-        if isinstance(self.recommendations, RecommendationPersistenceService):
-            for row in rows:
-                old_id = str(row["recommendation_id"])
-                if old_id == keep_recommendation_id:
-                    continue
-                try:
-                    self.recommendations.record_transition(
-                        tenant_id,
-                        old_id,
-                        action=TransitionAction.MARK_STALE,
-                        actor=actor,
-                        at=datetime.now(UTC),
-                    )
-                except Exception:  # noqa: BLE001 — 旧建议标记 stale 失败不阻断主流程
-                    pass
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]

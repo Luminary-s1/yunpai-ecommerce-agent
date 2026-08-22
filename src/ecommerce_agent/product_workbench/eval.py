@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Callable
+from typing import Any, Callable
 
 from ecommerce_agent.product_diagnosis.diagnosis import (
     DiagnosisFacts,
@@ -27,7 +27,12 @@ from ecommerce_agent.product_diagnosis.interpreter import (
     RulesetDiagnosisInterpreter,
     run_interpretation,
 )
-from ecommerce_agent.product_lifecycle.engine import RecommendationEngine
+from ecommerce_agent.product_lifecycle.engine import (
+    RecommendationCandidate,
+    RecommendationEngine,
+    RulesetRecommendationInterpreter,
+)
+from ecommerce_agent.product_lifecycle.schemas import RecommendationType
 
 from .scenes import FrozenScene
 
@@ -42,6 +47,50 @@ class EvalResult:
     scene_name: str
     passed: bool
     failures: list[str] = field(default_factory=list)
+    produced: dict[str, Any] = field(default_factory=dict)
+
+
+class FixedTableEvalRecommendationInterpreter:
+    """机制 Eval 专用固定表桩；不复刻生产语义路由。"""
+
+    _ENTRY_BY_SKU = {
+        "sku-select": (
+            RecommendationType.SELECTION,
+            ("demand_signal", "competitor_evidence"),
+        ),
+        "sku-launch": (
+            RecommendationType.NEW_LAUNCH,
+            ("item_ready", "stock_ready"),
+        ),
+        "sku-clearance": (
+            RecommendationType.CLEARANCE,
+            ("clearance_signal", "competitor_evidence"),
+        ),
+        "sku-experiment": (
+            RecommendationType.EXPERIMENT,
+            ("revision_evidence",),
+        ),
+        "sku-promotion": (
+            RecommendationType.PROMOTION,
+            ("campaign_window",),
+        ),
+    }
+
+    def __init__(self) -> None:
+        self._default = RulesetRecommendationInterpreter()
+
+    def interpret(self, diagnosis):
+        entry = self._ENTRY_BY_SKU.get(diagnosis.sku_id)
+        if entry is None:
+            return self._default.interpret(diagnosis)
+        recommendation_type, required_signals = entry
+        if not all(diagnosis.evidence_facts.get(key) for key in required_signals):
+            return self._default.interpret(diagnosis)
+        return RecommendationCandidate(
+            type=recommendation_type,
+            rationale="fixed_table_eval_candidate",
+            rationale_evidence_refs=tuple(diagnosis.evidence_facts.keys()),
+        )
 
 
 class MechanismEvalRunner:
@@ -62,10 +111,13 @@ class MechanismEvalRunner:
         self.scenes = scenes or _default_scenes()
         self.interpreter = interpreter or RulesetDiagnosisInterpreter()
         self.facts_fn = facts_fn
-        # R5（C-lite）：建议解释器可注入（默认 Ruleset），方向场景用 mock 建议
-        # 解释器产出 SELECTION/NEW_LAUNCH/CLEARANCE → REQUIRED_FACTS 满足 → 非降级真实方向。
+        # 默认仅在 Eval 中使用固定表桩，证明确切场景可到达真实方向。
         self.recommendation_engine = RecommendationEngine(
-            interpreter=recommendation_interpreter
+            interpreter=(
+                recommendation_interpreter
+                if recommendation_interpreter is not None
+                else FixedTableEvalRecommendationInterpreter()
+            )
         )
 
     def run_scene(self, scene: FrozenScene) -> EvalResult:
@@ -160,7 +212,7 @@ class MechanismEvalRunner:
         except Exception as exc:  # noqa: BLE001
             return EvalResult(scene.name, False, [f"eval_error:{exc}"])
         failures = scene.run_oracle(produced)
-        return EvalResult(scene.name, not failures, failures)
+        return EvalResult(scene.name, not failures, failures, produced)
 
     def run_all(self) -> list[EvalResult]:
         """跑全部冻结场景。空场景集 → 返回空（调用方应确保非空）。"""
@@ -174,11 +226,16 @@ class MechanismEvalRunner:
 
 
 def _default_scenes() -> list[FrozenScene]:
-    from .scenes import FROZEN_SCENES
-    return FROZEN_SCENES
+    from .scenes import DIRECTION_SCENES, FROZEN_SCENES
+
+    direction_names = {scene.name for scene in DIRECTION_SCENES}
+    return [
+        scene for scene in FROZEN_SCENES if scene.name not in direction_names
+    ] + list(DIRECTION_SCENES)
 
 
 __all__ = [
     "EvalResult",
+    "FixedTableEvalRecommendationInterpreter",
     "MechanismEvalRunner",
 ]

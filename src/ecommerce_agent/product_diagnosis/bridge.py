@@ -268,6 +268,9 @@ def _bucket_freshness(
     """确定性 freshness：bucket 在 revision 窗口内且至少 1 桶 → current，否则 stale。
 
     不依赖墙钟：窗口由 revision 的 active_from/active_to 决定。
+    上下界都检查：metric_start 必须落在 [active_from, active_to] 内——窗口开始
+    之前的旧 bucket 同样视为 out-of-window（对齐任务书 WP2 验收①「只有满足
+    freshness Gate 的实验才给强方向结论」，不得基于窗口外旧数据给强方向）。
     """
     active_from = revision.get("active_from")
     active_to = revision.get("active_to")
@@ -282,7 +285,9 @@ def _bucket_freshness(
         start = bucket.get("metric_start")
         if start is None:
             out_of_window.append(bucket.get("id") or "?")
-        elif active_to is not None and start > active_to:
+        elif start < active_from or (
+            active_to is not None and start > active_to
+        ):
             out_of_window.append(bucket.get("id") or "?")
     if out_of_window:
         return {"status": "stale", "usable_as_current": False,

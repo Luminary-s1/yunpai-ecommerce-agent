@@ -62,11 +62,9 @@ class WorkbenchPages:
             evidence_state = metric.get("evidence_state")
             badge = state_badge(evidence_state)  # 未知状态抛（防漏标注）
             metric_views[field] = {
+                **dict(metric),
                 "evidence_state": evidence_state,
                 "badge": badge,
-                "source": metric.get("source"),
-                "data_as_of": metric.get("data_as_of"),
-                "value": metric.get("value"),
                 # demo 数据必须显式标注「试算」（对齐显示原则）
                 "display_label": DEMO_LABEL if evidence_state == "demo" else None,
             }

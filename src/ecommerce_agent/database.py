@@ -4112,9 +4112,12 @@ class Database:
         subject_id: str | None,
         detail: dict[str, Any],
         tenant_id: str | None = None,
+        *,
+        connection: sqlite3.Connection | None = None,
     ) -> str:
         event_id = f"audit-{uuid.uuid4().hex}"
-        with self._write_lock, self.connect() as conn:
+
+        def insert(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 INSERT INTO audit_log(
@@ -4131,6 +4134,12 @@ class Database:
                     tenant_id,
                 ),
             )
+
+        if connection is not None:
+            insert(connection)
+        else:
+            with self._write_lock, self.connect() as conn:
+                insert(conn)
         return event_id
 
     def recent_assistant_route_reasons(
