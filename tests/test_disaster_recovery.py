@@ -680,11 +680,11 @@ def test_header_and_manifest_validation_rejects_each_trust_boundary() -> None:
             _validate_manifest(invalid, header)
 
 
-def test_v36_manifest_rejects_pre_v36_backup_schema() -> None:
-    """T7：v36 升级后，灾备 manifest 用 != 精确比对拒绝 v34 及更早备份。
+def test_current_manifest_rejects_pre_v39_backup_schema() -> None:
+    """v39 升级后，灾备 manifest 用精确比对拒绝 v36 及更早备份。
 
-    schema_version == Database.SCHEMA_VERSION（现为 36）通过；
-    schema_version=34（v36 前）拒绝——本次迁移作废全部历史备份。
+    升级前用旧程序完成停机备份；升级后恢复写入前生成并验证新的 v39 全量
+    备份。旧归档只可由匹配其 schema 的旧程序在隔离环境恢复。
     """
     archive_id = "00000000-0000-4000-8000-000000000036"
     created_at = "2026-08-18T00:00:00+00:00"
@@ -723,10 +723,10 @@ def test_v36_manifest_rejects_pre_v36_backup_schema() -> None:
         ],
     }
     assert _validate_manifest(manifest, header)["archive_id"] == archive_id
-    pre_v36_manifest = deepcopy(manifest)
-    pre_v36_manifest["schema_version"] = 34
+    pre_v39_manifest = deepcopy(manifest)
+    pre_v39_manifest["schema_version"] = 36
     with pytest.raises(
         DisasterRecoveryError,
         match="backup schema is not supported by this application",
     ):
-        _validate_manifest(pre_v36_manifest, header)
+        _validate_manifest(pre_v39_manifest, header)

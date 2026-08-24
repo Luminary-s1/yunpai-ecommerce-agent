@@ -5,6 +5,27 @@
 
 ## 当前验收结论
 
+- 结论：2026-08-24 对 PR #19 的本地未提交候选完成负责人式开发侧预验收，证据 ID 为
+  E-20260824-001。候选基于 Head `753ff15`，tracked diff 对象哈希
+  `39c18615d09c9a8b71fdb1e50ee1b9671506b2656d81b7cf935f994516fb05c4`；新增关键测试
+  `tests/test_m9r_order_item_attribution.py` 的 SHA-256 为
+  `a2b3c775af860b7725b44bfe5308ab76c7081a52ed71ef0298097e6d0b4634d6`。它不是可复现的已提交 PR Head。
+  v39 不再重建 `commerce_orders`，v36→v39 迁移保留订单头、订单行、物流、售后和事件，
+  并把 item 归属下沉到订单行；同一外部订单保持单一聚合根，M9 读侧按行归属过滤，旧行
+  仅在身份无歧义时兼容投影。新增阻断测试修复前 `3 failed`，修复后聚焦 `29 passed`；
+  将读侧故意退回订单头过滤时 mutation `1 failed`，还原后 `4 passed`。关联回归
+  `300 passed`；WP1～WP4 脚本全部退出 0，其中 WP4 脚本直接执行真实 Playwright 桌面和
+  390px 门禁且拒绝 skip；最终全仓 `1298 passed`（1468.77 秒），无
+  failed/skipped/xfailed。compileall、diff check 与 project-to-act validate 退出 0。
+  首轮全仓曾在 Base 同源的异步发布测试得到 `1 failed, 1296 passed`；确认 webhook ACK 与
+  worker 存在合法抢占后，将测试改为有界等待真实终态，发布文件 `11 passed`，最终全仓
+  在同等负载下通过。v39 已由负责人通过 PR #26 正式合入 `main@1ee68cb` 的
+  `CONTRIBUTING.md` 权威表，明确订单头仍按外部订单四字段唯一且下一空闲号为 40；本地
+  实现尚未提交到 PR #19。上传前复核在上述 tracked diff 哈希上得到迁移/item/读模型/
+  灾备/发布关联 `64 passed`，WP1～WP4 四脚本、compileall、diff check 与台账校验均退出 0；
+  PR 当前仍因尚未同步 `main@1ee68cb` 的 v39 权威占号表而显示 `CONFLICTING`。该结论仅是
+  开发侧预验收，不替代干净已提交 Head 上的独立 WP5、
+  真实模型 benchmark、真实平台数据、长稳或生产放行 Gate。
 - 结论：2026-08-23 M9-R 完成跨模型、AgentOps 多维交叉审查后的逐项修复与第二轮
   开发者自验收，证据 ID 为 E-20260823-001。WP1 已补齐竞品 approved-match 与 M7-R
   matched reconciliation 两条原缺失证据链，18 项验收不再含 SKIP；读模型、工作台、
@@ -516,6 +537,25 @@
 
 ## 证据索引
 
+- E-20260824-001：PR #19 第六轮开发侧负责人式预验收。固定基线为
+  `454b35c9000ab279ffdbf115f80afdf3e031ee73`，已提交 Head 为
+  `753ff15ea1b642d37bbd2ba7424512fc650ad62a`，本地 tracked diff 哈希为
+  `39c18615d09c9a8b71fdb1e50ee1b9671506b2656d81b7cf935f994516fb05c4`（相对固定 Base、
+  排除 `.project-to-act/**` 的 binary diff SHA-256）；尚未纳入 Git 的关键测试文件
+  `tests/test_m9r_order_item_attribution.py` SHA-256 为
+  `a2b3c775af860b7725b44bfe5308ab76c7081a52ed71ef0298097e6d0b4634d6`。迁移保全、订单自然键和混合 item 行归属
+  三项先红 `3 failed`；修复后订单/迁移/发布聚焦 `29 passed`，行过滤 mutation 先红
+  `1 failed`、还原后 `4 passed`；M9、迁移、灾备、订单、预测和客服订单关联集合
+  `300 passed`。最终命令为项目解释器 `python -m pytest tests -q` 加隔离 basetemp，结果
+  `1298 passed, 1 pytest-cache warning in 1468.77s`，warning 仅为仓库 `.pytest_cache`
+  无写权限；实际 basetemp 可写。WP1～WP4 脚本、4 条 Playwright 浏览器测试、compileall、
+  `git diff --check` 与 project-to-act validate 均通过。备份 manifest 继续精确匹配 schema：
+  v36 备份由 v39 应用拒绝，升级前需用旧程序停机备份，升级后恢复写入前生成并验证 v39
+  全量备份。证据位置为本条、`tests/test_m9r_order_item_attribution.py`、
+  `tests/test_m9r_item_isolation_overlap.py`、`tests/test_disaster_recovery.py` 和
+  `tests/verify_wp4_acceptance.py`。v39 占号已由负责人通过 PR #26 合入 `main@1ee68cb`；
+  上传前又复核关联 `64 passed`、WP1～WP4 四脚本与静态门禁；本地实现仍未提交到 PR #19，
+  且 PR 在同步该 main 前保持冲突，不把脏工作树或开发者复验写成独立 WP5。
 - E-20260820-001：M7-R WP5 独立验收归档、PR #20 合入与 merge-tip 复验。WP1 功能提交
   `0b54a247` 和集成提交 `e127c397` 已在 PR base `48013b1` 的祖先链，故 PR #20 只承载
   WP2～WP4 差异但 WP5 验收对象仍是 WP1～WP4 组合态。缪海南原报告 SHA-256 为

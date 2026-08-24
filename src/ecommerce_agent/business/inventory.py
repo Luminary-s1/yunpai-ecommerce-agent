@@ -18,7 +18,7 @@ class InventoryBalanceUpsert(BaseModel):
     store_id: str = Field(min_length=1, max_length=128)
     warehouse_id: str = Field(min_length=1, max_length=128)
     sku_id: str = Field(min_length=1, max_length=128)
-    item_id: str | None = Field(default=None, max_length=128)  # P1: 链接展示维度（SKU 共享数据留 NULL）
+    item_id: str | None = Field(default=None, min_length=1, max_length=128)
     on_hand: Decimal = Field(ge=0)
     reserved: Decimal = Field(default=Decimal("0"), ge=0)
     inbound: Decimal = Field(default=Decimal("0"), ge=0)
@@ -50,7 +50,7 @@ class InventoryService:
                 """
                 SELECT id, version, source_updated_at, payload_hash FROM inventory_balances
                 WHERE tenant_id=? AND connector_id=? AND store_id=?
-                  AND warehouse_id=? AND sku_id=?
+                  AND warehouse_id=? AND sku_id=? AND item_id IS ?
                 """,
                 (
                     tenant_id,
@@ -58,6 +58,7 @@ class InventoryService:
                     value.store_id,
                     value.warehouse_id,
                     value.sku_id,
+                    value.item_id,
                 ),
             ).fetchone()
             if existing is not None:
@@ -72,45 +73,45 @@ class InventoryService:
             balance_id = str(existing["id"]) if existing else f"inventory-{uuid.uuid4().hex}"
             if write_status == "applied":
                 version = int(existing["version"]) + 1 if existing else 1
-                conn.execute(
-                """
-                INSERT INTO inventory_balances(
-                    id, tenant_id, connector_id, store_id, warehouse_id, sku_id,
-                    item_id, on_hand, reserved, inbound, average_daily_sales, source_id,
-                    source_updated_at, payload_hash, version, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(tenant_id, connector_id, store_id, warehouse_id, sku_id)
-                DO UPDATE SET
-                    item_id=excluded.item_id,   -- R1: 冲突更新也写 item_id，历史 NULL 可被补齐
-                    on_hand=excluded.on_hand, reserved=excluded.reserved,
-                    inbound=excluded.inbound,
-                    average_daily_sales=excluded.average_daily_sales,
-                    source_id=excluded.source_id,
-                    source_updated_at=excluded.source_updated_at,
-                    payload_hash=excluded.payload_hash,
-                    version=excluded.version,
-                    updated_at=excluded.updated_at
-                """,
-                    (
-                    balance_id,
-                    tenant_id,
-                    value.connector_id,
-                    value.store_id,
-                    value.warehouse_id,
-                    value.sku_id,
-                    value.item_id,
-                    str(value.on_hand),
-                    str(value.reserved),
-                    str(value.inbound),
-                    str(value.average_daily_sales),
-                    value.source_id,
-                    source_time,
-                    payload_hash,
-                    version,
-                    now,
-                    now,
-                    ),
-                )
+                if existing is not None:
+                    # UPDATE 分支：命中已有行（item 专属或共享）——不同 item 因查重
+                    # 含 item_id 互不命中，天然隔离；共享行（NULL）按原键命中。
+                    conn.execute(
+                        """
+                        UPDATE inventory_balances SET
+                            item_id=?,
+                            on_hand=?, reserved=?, inbound=?, average_daily_sales=?,
+                            source_id=?, source_updated_at=?, payload_hash=?,
+                            version=?, updated_at=?
+                        WHERE id=?
+                        """,
+                        (
+                            value.item_id,
+                            str(value.on_hand), str(value.reserved), str(value.inbound),
+                            str(value.average_daily_sales), value.source_id, source_time,
+                            payload_hash, version, now, balance_id,
+                        ),
+                    )
+                else:
+                    # INSERT 分支：全新行。部分唯一索引保证 item 专属行（含 item_id）
+                    # 与共享行（NULL）各自幂等、互不覆盖。
+                    conn.execute(
+                        """
+                        INSERT INTO inventory_balances(
+                            id, tenant_id, connector_id, store_id, warehouse_id, sku_id,
+                            item_id, on_hand, reserved, inbound, average_daily_sales,
+                            source_id, source_updated_at, payload_hash, version,
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            balance_id, tenant_id, value.connector_id, value.store_id,
+                            value.warehouse_id, value.sku_id, value.item_id,
+                            str(value.on_hand), str(value.reserved), str(value.inbound),
+                            str(value.average_daily_sales), value.source_id, source_time,
+                            payload_hash, version, now, now,
+                        ),
+                    )
         result = self._row_by_id(balance_id)
         result["write_status"] = write_status
         return result
@@ -221,6 +222,7 @@ class InventoryService:
                 "store_id",
                 "warehouse_id",
                 "sku_id",
+                "item_id",
                 "on_hand",
                 "reserved",
                 "inbound",

@@ -1699,6 +1699,7 @@
         ['SKU', skuId, `${storeId} / ${itemId} · rev ${revision}`],
         ['料号', identity.material_code || '—', identity.evidence?.run_id || '无 matched 对账证据'],
         ['Revision', revisionEvidence.revision_no || revision, revisionEvidence.revision_id || '未找到 revision'],
+        ['窗口', revisionEvidence.active_from ? `${formatTime(revisionEvidence.active_from)} → ${revisionEvidence.active_to ? formatTime(revisionEvidence.active_to) : '—'}` : '—', revisionEvidence.connector_id || '无 revision 窗口'],
         ['指标数', metricEntries.length, `${actualCount} 真实 · ${missingCount} 缺失`],
         ['门禁', view.evidence_gates?.all_passed ? '全部通过' : '未全过', view.evidence_gates?.evidence_state || '-'],
         ['建议', recs.length, '当前草稿/流转中']
@@ -1724,7 +1725,17 @@
         }))
       );
       if (insightRows.length) {
-        $('m9rInsights').innerHTML = insightRows.map((it) => `<div class="notice"><strong>${escapeHtml(it.analysis?.analysis_run_id || it.experiment?.experiment_id || 'analysis')}</strong><div class="muted">effect=${escapeHtml(JSON.stringify(it.analysis?.effect_estimate ?? '-'))} · sample=${escapeHtml(JSON.stringify(it.analysis?.sample_size ?? '-'))} · state=${escapeHtml(it.freshness?.status || '-')}</div></div>`).join('');
+        $('m9rInsights').innerHTML = insightRows.map((it) => {
+          const exp = it.experiment || {};
+          const an = it.analysis || {};
+          const fs = it.freshness || {};
+          const prov = an.source_provenance || {};
+          const windowText = exp.started_at ? `${formatTime(exp.started_at)} → ${exp.ended_at ? formatTime(exp.ended_at) : '—'}` : (fs.data_as_of ? `数据 ${formatTime(fs.data_as_of)}` : '—');
+          return `<div class="notice"><strong>${escapeHtml(an.analysis_run_id || exp.experiment_id || 'analysis')}</strong>
+            <div class="muted">effect=${escapeHtml(JSON.stringify(an.effect_estimate ?? '-'))} · sample=${escapeHtml(JSON.stringify(an.sample_size ?? '-'))} · state=${escapeHtml(fs.status || '-')}</div>
+            <div class="muted">control=${escapeHtml(exp.control_revision_id || '-')} · treatment=${escapeHtml(exp.treatment_revision_id || '-')} · 窗口=${escapeHtml(windowText)}</div>
+            <div class="muted">来源=${escapeHtml(prov.source_type || '-')} · 连接器=${escapeHtml((prov.connectors || []).map((c) => c.connector_id).join(',') || '-')}</div></div>`;
+        }).join('');
       } else {
         $('m9rInsights').innerHTML = '<div class="empty">暂无流量证据（无合格实验/缺数据）</div>';
       }
@@ -1737,7 +1748,19 @@
       }
       // 生命周期建议
       $('m9rRecMeta').textContent = `${recs.length} 条建议（只读展示，不自动批准）`;
-      $('m9rRecRows').innerHTML = recs.length ? recs.map((r) => `<tr><td class="mono">${escapeHtml(r.recommendation_id)}</td><td>${escapeHtml(r.type)}</td><td><span class="status ${r.state === 'approved' ? 'ok' : r.state === 'closed' || r.state === 'stale' ? 'muted' : 'info'}">${escapeHtml(r.state)}</span></td><td>${r.degraded ? '<span class="status warn">降级</span>' : '否'}</td><td>${escapeHtml(r.rationale)}</td><td>${formatTime(r.created_at)}</td><td>${r.state === 'draft' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','submit')">提交</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : r.state === 'awaiting_review' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','approve')">批准</button> <button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','reject')">拒绝</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : `<button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>`}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">暂无生命周期建议</div></td></tr>';
+      $('m9rRecRows').innerHTML = recs.length ? recs.map((r) => {
+        const snapshotKeys = Object.keys(r.facts_snapshot || {});
+        const snapshotSummary = snapshotKeys.length
+          ? snapshotKeys.map((k) => `<span class="muted mono">${escapeHtml(k)}</span>`).join(' ')
+          : '';
+        const missing = (r.missing_evidence || []).length
+          ? `<div class="muted">缺：${(r.missing_evidence || []).map(escapeHtml).join('、')}</div>`
+          : '';
+        const prov = r.facts_snapshot?.semantic_provenance
+          ? `<div class="muted">语义来源：${escapeHtml(JSON.stringify(r.facts_snapshot.semantic_provenance))}</div>`
+          : '';
+        return `<tr><td class="mono">${escapeHtml(r.recommendation_id)}</td><td>${escapeHtml(r.type)}</td><td><span class="status ${r.state === 'approved' ? 'ok' : r.state === 'closed' || r.state === 'stale' ? 'muted' : 'info'}">${escapeHtml(r.state)}</span></td><td>${r.degraded ? '<span class="status warn">降级</span>' : '否'}</td><td><div>${escapeHtml(r.rationale)}</div>${missing}${prov}${snapshotSummary ? `<div class="muted">依据：${snapshotSummary}</div>` : ''}</td><td>${formatTime(r.created_at)}</td><td>${r.state === 'draft' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','submit')">提交</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : r.state === 'awaiting_review' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','approve')">批准</button> <button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','reject')">拒绝</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : `<button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>`}</td></tr>`;
+      }).join('') : '<tr><td colspan="7"><div class="empty">暂无生命周期建议</div></td></tr>';
     }
 
     // R4：审核流转（submit/approve/reject 显式点击 → POST transition）

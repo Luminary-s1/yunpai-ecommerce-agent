@@ -292,10 +292,10 @@ _DIRECTION_EXPECTED: dict[str, dict[str, Any]] = {
 # 方向场景：复用 FROZEN_SCENES 的 input_data + 追加 REQUIRED_FACTS 信号键
 # （input_data 会经 run_scene → build_diagnosis_facts，但 build_diagnosis_facts 只读
 # evidence_state/freshness/quality_gate/exposures/clicks/conversions，忽略其它键——
-# 所以信号需由测试侧 mock 建议解释器 + 构造带信号的 Diagnosis.evidence_facts 注入，
-# 本集 input_data 只用于确定 SKU 身份与基础事实）。
-# 每个方向场景显式覆盖 sku_id 与 FixedTableEvalRecommendationInterpreter 表桩键对齐
-# （选品/上新/清仓/实验/活动），使默认 Eval 也能到达真实方向。
+# 所以信号需由测试侧构造带信号的 Diagnosis.evidence_facts 注入）。
+# 负责人复验阻断项 6：方向场景 SKU 用**盲名**（非语义标签）——期望方向不通过 SKU 名
+# 编码进输入，由 FixedTableEvalRecommendationInterpreter 按 evidence_facts 信号键值
+# 决定方向（ground truth 与 production input 分离，任务书 L476）。SKU 名无关方向。
 _DIRECTION_SIGNALS: dict[str, dict[str, Any]] = {
     "选品方向": {"demand_signal": True, "competitor_evidence": True},
     "上新准备": {"item_ready": True, "stock_ready": True},
@@ -305,12 +305,14 @@ _DIRECTION_SIGNALS: dict[str, dict[str, Any]] = {
     "活动候选": {"campaign_window": True},
 }
 
+# 盲 SKU 名：方向与 SKU 名无关（防答案编码）。若 Eval 按 SKU 名映射方向，
+# 重命名这里任一个盲名会让对应场景变红。
 _DIRECTION_SKUS: dict[str, str] = {
-    "选品方向": "sku-select",
-    "上新准备": "sku-launch",
-    "清仓风险": "sku-clearance",
-    "受控优化": "sku-experiment",
-    "活动候选": "sku-promotion",
+    "选品方向": "sku-blind-1",
+    "上新准备": "sku-blind-2",
+    "清仓风险": "sku-blind-3",
+    "受控优化": "sku-blind-4",
+    "活动候选": "sku-blind-5",
 }
 
 DIRECTION_SCENES: list[FrozenScene] = [
@@ -318,8 +320,7 @@ DIRECTION_SCENES: list[FrozenScene] = [
         s.name,
         input_data={
             **s.input_data,
-            # 方向场景 SKU 固定为表桩键，使默认 FixedTableEvalRecommendationInterpreter
-            # 能命中并产出对应建议类型。
+            # 方向场景 SKU 用盲名（非语义标签），方向由信号事实决定。
             "sku_id": _DIRECTION_SKUS[s.name],
             # R5（C-lite）：方向场景显式声明 REQUIRED_FACTS 信号键，
             # 注入 Diagnosis.evidence_facts → facts_snapshot 透传 → 非降级真实方向。

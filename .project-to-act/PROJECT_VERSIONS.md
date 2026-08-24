@@ -11,8 +11,16 @@
   当前运行时版本。生产放行继续阻塞。
 - 兼容性说明（0.30.0 运行时 + main 未升包增量）：schema v28 additive 新增 Traffic Lab 六类核心表、一张 metric 隔离表、索引、复合租户外键和 revision 不可变触发器；v27 可前向迁移。WP2 不改 schema 或依赖；虚拟 Connector capability 1.2 additive 增加 `listing_revision` / `traffic_metrics`，通用 sync 响应 additive 增加幂等、隔离计数和回执。WP3 沿用 v28、无新依赖/HTTP API，additive 导出 `TrafficFeatureEngine` 与版本化特征契约；`image-v1` 保留读侧与旧算法，`image-v2` 为当前版本，同一 asset 可显式选择版本重算且不更新资产。WP4 沿用 v28；Python 包不再公开任意统计载荷 `TrafficAnalysisRunCreate`，调用方改用只接收实验 ID 的 `TrafficAnalysisEngine`；当前新分析显式要求 `traffic-analysis-v2`，历史 v1 run 保持可读；黑盒 runner 报告 additive 增加 `ground_truth_boundary`，保留原 `analysis_imported_ground_truth` 字段但改由运行轨迹审计派生。WP5 沿用 v28、无新依赖或迁移，additive 增加管理员限定的 `/v1/traffic-lab/*` 工作流、`traffic_lab` available 模块与模型可见的只读 `get_listing_traffic_insights`；既有 API 响应契约、LangGraph 拓扑和语义路由不变，控制台只在管理员显式点击后运行分析，未加入自动发布、改标题/换图或投放动作。M6-R WP1–WP2 以 schema v29 固化 demand fact 与 forecast engine；WP3 以 schema v30 additive 增加 planning policy/plan、quantity/quality/risk evidence 和不可变边界，v29 可前向迁移且不重建既有表；WP4 沿用 v30，无依赖或迁移变化，additive 增加 `/v1/forecasting/*`、两个只读工具、D20 与显式运行后台，既有 API/路由/拓扑不变；WP5 仍沿用 v30，新增纯 Python Eval fixture/runner/report 与 D-039 oracle 边界，不改变依赖、持久 schema、API 或生产路由。F-322 未单独升版，使用 schema **v32**；**v31 已被 origin PR #11 占用**，合并时须保留两段迁移。v32 新增版本化 `(tenant,store)` IANA 业务日历和 nullable experiment 固化证据，并将 Traffic accepted/quarantine 重建为 `(tenant,connector,source_id)`；v30（或合并后的实际前序版本）可前向迁移，accepted 从不可变 revision 回填 connector，quarantine 仅从冻结 payload 读取，缺失写 `legacy_unscoped`。历史实验可读但缺日历证据时分析 blocked。灾备 manifest 继续精确匹配当前 schema：升级前以旧程序完成停机备份，升级后恢复写入前以 v32 程序生成并验证新全量备份；旧归档与匹配程序保留到隔离恢复演练通过。
 - M7-R 兼容性：WP1 以 schema v34 增加只读导入 manifest/隔离/字段证据；WP2 沿用 v34；WP3 以 schema v35 additive 增加商品身份与对账表；WP4 沿用 v35，additive 增加管理员 `/v1/readonly-data/*`、只读工作台、统一准备度投影和显式隔离 Demo，并统一带店铺 GET 的空白 ID 拒绝契约。WP1～WP4 已通过 E-20260820-001 的 WP5 代码级本机 Gate 并合入 `main`，未单独提升应用版，也未增加第三方依赖、Agent/LangGraph 语义、模型调用或平台写动作。
+- M9-R PR #19 本地候选以 schema v39 修复 item 写入隔离：库存表安全重建为 item 专属/未知
+  身份两组部分唯一索引；订单保持 `(tenant,connector,store,external_order_id)` 单一聚合根，
+  `commerce_order_lines.item_id` 从旧订单头回填并承担行级归属。v36→v39 迁移保留订单头、
+  行、物流、售后和事件，重复初始化幂等，schema 自检同时核对列、索引和订单自然键。
+  灾备 manifest 精确匹配 v39：升级前用 v36 程序停机备份，升级后恢复写入前生成并验证 v39
+  全量备份；v36 归档只可由匹配旧 schema 的程序在隔离环境恢复。v39 已由负责人通过
+  PR #26 合入 `main@1ee68cb` 的唯一权威 `CONTRIBUTING.md` 表；M9-R v39 运行实现仍未
+  提交到 PR #19，因此不得视为已发布 schema 或正式独立验收通过；见 E-20260824-001。
 - 占号状态：PR #10 已合入 main `1906365`，schema **v33** 在 `main`（knowledge_key 唯一索引 + retrieval_logs）。F-322 **v32** 已在 main。PR #11 的 `_apply_v31`（workspace 会话表）仍未进入 `main`。M7-R WP1 的 **v34** 与 WP3 的 **v35** 均已在 `main`；M9-R WP3 的 **v36** 仅完成占号，运行迁移未合并。schema 迁移占号以 `CONTRIBUTING.md` 第 9 节“Schema 版本号占用登记”为唯一权威来源，本文不复制“下一空闲号”。
-- 最后更新：2026-08-20
+- 最后更新：2026-08-24
 
 ## M7-R WP5 独立验收与整链合入（未单独升应用版）
 

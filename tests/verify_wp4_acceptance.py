@@ -5,6 +5,11 @@
 """
 from __future__ import annotations
 
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
 from ecommerce_agent.product_workbench.boundaries import BOUNDARY_NOTES, DEMO_LABEL
 from ecommerce_agent.product_workbench.eval import MechanismEvalRunner
 from ecommerce_agent.product_workbench.pages import WorkbenchPages
@@ -68,19 +73,30 @@ def t04() -> None:
 
 
 def t05() -> None:
-    """条目 5：浏览器门禁由正式 Playwright 测试负责，不以结构检查冒充。"""
-    pages = WorkbenchPages()
-    data = pages.product_detail(
-        store_id="s1", item_id="i1", sku_id="sku1",
-        metrics={"impressions": {
-            "evidence_state": "actual",
-            "authoritative_service": "ProductReadQuery",
-            "import_manifest_id": "manifest-1",
-        }},
-    )
-    metric = data["metrics"]["impressions"]
-    assert metric["authoritative_service"] == "ProductReadQuery"
-    assert metric["import_manifest_id"] == "manifest-1"
+    """条目 5：直接运行桌面/窄屏 Playwright 门禁，skip 不能算通过。"""
+    repo = Path(__file__).resolve().parent.parent
+    browser_tests = repo / "tests" / "test_m9r_workbench_browser.py"
+    with tempfile.TemporaryDirectory(prefix=".tmp_wp4_browser_", dir=repo) as temp_dir:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                f"{browser_tests}::test_m9r_workbench_desktop_no_overflow",
+                f"{browser_tests}::test_m9r_workbench_narrow_no_overflow",
+                "-q",
+                f"--basetemp={Path(temp_dir) / 'pytest'}",
+            ],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "skipped" not in output.lower(), output
 
 
 def t06() -> None:

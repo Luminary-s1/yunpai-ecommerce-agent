@@ -51,46 +51,37 @@ class EvalResult:
 
 
 class FixedTableEvalRecommendationInterpreter:
-    """机制 Eval 专用固定表桩；不复刻生产语义路由。"""
+    """机制 Eval 专用固定表桩：基于输入事实信号决定方向，不按 SKU 身份编码答案。
 
-    _ENTRY_BY_SKU = {
-        "sku-select": (
-            RecommendationType.SELECTION,
-            ("demand_signal", "competitor_evidence"),
-        ),
-        "sku-launch": (
-            RecommendationType.NEW_LAUNCH,
-            ("item_ready", "stock_ready"),
-        ),
-        "sku-clearance": (
-            RecommendationType.CLEARANCE,
-            ("clearance_signal", "competitor_evidence"),
-        ),
-        "sku-experiment": (
-            RecommendationType.EXPERIMENT,
-            ("revision_evidence",),
-        ),
-        "sku-promotion": (
-            RecommendationType.PROMOTION,
-            ("campaign_window",),
-        ),
-    }
+    负责人复验阻断项 6：修复前按 `diagnosis.sku_id` 查表映射方向——期望方向编码
+    在 SKU 名里，盲测只重命名 SKU 就变"保持观察"（答案编码，非发现方向）。
+    修复后按 `evidence_facts` 里的信号键值决定方向：给定这些固化信号事实，无论
+    SKU 叫什么，都产出对应方向。ground truth（期望方向）不通过身份标签进入输入，
+    对齐任务书 L476「ground truth 与 production input 分离」。
+    """
+
+    # 信号键 → 建议类型（确定性映射，仅 Eval 表桩使用；生产语义由模型解释器承担）
+    _SIGNAL_BY_TYPE: tuple[tuple[RecommendationType, tuple[str, ...]], ...] = (
+        (RecommendationType.EXPERIMENT, ("revision_evidence",)),
+        (RecommendationType.PROMOTION, ("campaign_window",)),
+        (RecommendationType.SELECTION, ("demand_signal", "competitor_evidence")),
+        (RecommendationType.NEW_LAUNCH, ("item_ready", "stock_ready")),
+        (RecommendationType.CLEARANCE, ("clearance_signal", "competitor_evidence")),
+    )
 
     def __init__(self) -> None:
         self._default = RulesetRecommendationInterpreter()
 
     def interpret(self, diagnosis):
-        entry = self._ENTRY_BY_SKU.get(diagnosis.sku_id)
-        if entry is None:
-            return self._default.interpret(diagnosis)
-        recommendation_type, required_signals = entry
-        if not all(diagnosis.evidence_facts.get(key) for key in required_signals):
-            return self._default.interpret(diagnosis)
-        return RecommendationCandidate(
-            type=recommendation_type,
-            rationale="fixed_table_eval_candidate",
-            rationale_evidence_refs=tuple(diagnosis.evidence_facts.keys()),
-        )
+        facts = diagnosis.evidence_facts
+        for recommendation_type, required_signals in self._SIGNAL_BY_TYPE:
+            if all(facts.get(key) for key in required_signals):
+                return RecommendationCandidate(
+                    type=recommendation_type,
+                    rationale="fixed_table_eval_candidate",
+                    rationale_evidence_refs=tuple(facts.keys()),
+                )
+        return self._default.interpret(diagnosis)
 
 
 class MechanismEvalRunner:

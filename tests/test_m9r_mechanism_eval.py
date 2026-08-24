@@ -10,7 +10,7 @@ from ecommerce_agent.product_workbench.eval import (
     MechanismEvalRunner,
     _EVAL_CREATED_AT,
 )
-from ecommerce_agent.product_workbench.scenes import FROZEN_SCENES
+from ecommerce_agent.product_workbench.scenes import FROZEN_SCENES, FrozenScene
 
 
 def test_frozen_scenes_non_empty() -> None:
@@ -58,6 +58,44 @@ def test_eval_rejects_pollution_marker_without_pollution() -> None:
         assert False, "should reject pollution marker without pollution"
     except ValueError:
         pass
+
+
+def test_eval_rejects_stockout_as_ad_price_pollution() -> None:
+    """负责人复验阻断项 5：缺货证据不得被解释成广告/价格污染。
+
+    修复前污染校验只查 `stockout OR pollution` 任一存在——facts 只有缺货（stockout）
+    时 `ad_price_pollution` 仍被接受，下游固定映射会导向"定价候选"而非"补货联动"
+    （错误的安全方向）。修复后污染子类型分别锁定。
+    """
+    from ecommerce_agent.product_diagnosis.diagnosis import (
+        build_diagnosis_facts,
+        validate_diagnosis_output,
+    )
+
+    facts = build_diagnosis_facts(
+        "sku-x",
+        {
+            "evidence_state": "actual",
+            "exposures": 1000,
+            "clicks": 100,
+            "quality_gate": {"status": "passed", "issues": []},
+        },
+        stockout=True,  # 只有缺货证据，无广告/价格变化
+    )
+    try:
+        validate_diagnosis_output(
+            facts,
+            {"diagnosis_type": "ad_price_pollution", "reason": "fake"},
+        )
+        assert False, "缺货证据不应通过 ad_price_pollution 校验"
+    except ValueError:
+        pass
+    # 反向：缺货证据 → stockout_pollution 正常通过
+    diag = validate_diagnosis_output(
+        facts,
+        {"diagnosis_type": "stockout_pollution", "reason": "stockout_observed"},
+    )
+    assert diag.diagnosis_type.value == "stockout_pollution"
 
 
 def test_eval_summary_all_pass() -> None:
@@ -252,22 +290,29 @@ def test_eval_direction_scenes_reachable_non_degraded() -> None:
     from ecommerce_agent.product_lifecycle.schemas import RecommendationType
     from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES
 
-    # sku_id → 方向建议类型（选品/上新/清仓/实验/活动的 sku_id 来自 DIRECTION_SCENES）
-    _DIR_BY_SKU = {
-        "sku-select": RecommendationType.SELECTION,
-        "sku-launch": RecommendationType.NEW_LAUNCH,
-        "sku-clearance": RecommendationType.CLEARANCE,
-        "sku-experiment": RecommendationType.EXPERIMENT,
-        "sku-promotion": RecommendationType.PROMOTION,
-    }
+    # 方向建议解释器：基于 evidence_facts 信号键值决定方向（与生产模型一致——
+    # 输入事实决定语义方向，SKU 身份无关）。盲测：即使把场景 SKU 改成任意盲名，
+    # 只要信号键值不变，方向就不变（ground truth 不通过身份标签进入输入，L476）。
+    _SIGNAL_BY_TYPE = (
+        (RecommendationType.EXPERIMENT, ("revision_evidence",)),
+        (RecommendationType.PROMOTION, ("campaign_window",)),
+        (RecommendationType.SELECTION, ("demand_signal", "competitor_evidence")),
+        (RecommendationType.NEW_LAUNCH, ("item_ready", "stock_ready")),
+        (RecommendationType.CLEARANCE, ("clearance_signal", "competitor_evidence")),
+    )
 
     class _DirectionInterpreter(RecommendationInterpreter):
         def interpret(self, diagnosis):
+            facts = diagnosis.evidence_facts
+            for recommendation_type, required_signals in _SIGNAL_BY_TYPE:
+                if all(facts.get(key) for key in required_signals):
+                    return RecommendationCandidate(
+                        type=recommendation_type,
+                        rationale="方向信号齐备，建议候选生成（mock 语义层）",
+                    )
             return RecommendationCandidate(
-                type=_DIR_BY_SKU.get(
-                    diagnosis.sku_id, RecommendationType.KEEP_OBSERVE
-                ),
-                rationale="方向信号齐备，建议候选生成（mock 语义层）",
+                type=RecommendationType.KEEP_OBSERVE,
+                rationale="信号不足，保持观察（mock 语义层）",
             )
 
     runner = MechanismEvalRunner(
@@ -281,6 +326,25 @@ def test_eval_direction_scenes_reachable_non_degraded() -> None:
         assert r.scene_name in (
             "选品方向", "上新准备", "清仓风险", "受控优化", "活动候选",
         )
+    # 盲测：把方向场景 SKU 全部重命名为随机盲名后，方向仍由信号决定，全部 PASS。
+    # 若 Eval 依赖 SKU 名标签（答案编码），重命名会让对应场景变红（负责人阻断项 6）。
+    renamed = [
+        FrozenScene(
+            s.name,
+            input_data={**s.input_data, "sku_id": f"renamed-{s.name}"},
+            expected=s.expected,
+        )
+        for s in DIRECTION_SCENES
+    ]
+    blind_runner = MechanismEvalRunner(
+        scenes=renamed,
+        recommendation_interpreter=_DirectionInterpreter(),
+    )
+    blind_results = blind_runner.run_all()
+    assert all(r.passed for r in blind_results), (
+        f"SKU 重命名后方向不应改变（答案编码?）: "
+        f"{[r.failures for r in blind_results if not r.passed]}"
+    )
 
 
 def test_eval_direction_scenes_mutation_wrong_direction_fails() -> None:

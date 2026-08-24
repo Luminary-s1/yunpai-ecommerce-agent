@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -670,12 +671,20 @@ def test_qimen_automatic_release_sends_only_after_gate(tmp_path, monkeypatch) ->
             headers={"content-type": "application/x-www-form-urlencoded"},
         )
         assert response.status_code == 200
+        deadline = time.monotonic() + 5
+        while not sends and time.monotonic() < deadline:
+            time.sleep(0.01)
         assert len(sends) == 1
         assert sends[0]["allow_bot"] is True
         assert sends[0]["actor"] == "agent"
-        observations = service.releases.list_observations(
-            "tenant-test", active["id"]
-        )
+        observations = []
+        deadline = time.monotonic() + 5
+        while not observations and time.monotonic() < deadline:
+            observations = service.releases.list_observations(
+                "tenant-test", active["id"]
+            )
+            if not observations:
+                time.sleep(0.01)
         assert observations[0]["action"] == "send"
         assert observations[0]["violations"] == []
         assert service.releases.get_policy("tenant-test", active["id"])["status"] == "active"

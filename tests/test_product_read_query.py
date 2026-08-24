@@ -599,3 +599,57 @@ def test_query_mapping_not_hidden_by_other_connector_version(tmp_path) -> None:
     assert mapping is not None
     assert mapping["event_id"] == "ev-vt1"
     assert mapping["connector_id"] == "virtual_taobao"
+
+
+def test_query_mapping_not_resurrected_when_latest_moved_to_other_item(tmp_path) -> None:
+    """负责人复验阻断项 4：最新映射已改到 item-b，查询 item-a 不得复活旧 v1。
+
+    修复前 _product_mapping 先用 item 过滤事件再排序——最新事件 v2=item-b 被过滤
+    掉后，查询 item-a 回落到 item-a 的旧 v1（映射复活）。修复后先解析该 SKU 流的
+    最新事件，再判断它是否仍归属查询 item：最新是 v2=item-b → item-a 无映射。
+    """
+    db = Database(tmp_path / "query-mapping-rehome.sqlite3")
+    db.initialize()
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO creative_assets(asset_id, tenant_id, sha256, mime_type, width, height, storage_ref, source_ref, feature_schema_version, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("asset-1", "tenant-a", "e" * 64, "image/png", 1200, 1200, "objects/a.png", "fixture://a", "image-v1", "f" * 64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO listing_revisions(id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no, title, main_image_asset_id, sale_price, attributes_json, active_from, active_to, source_updated_at, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rev-1", "tenant-a", "virtual_taobao", "store-a", "item-a", "sku-a", 1, "测试商品", "asset-1", "109.00", '{}', "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00", "2026-08-10T00:00:00+00:00", "a"*64, "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00"),
+        )
+        # item-a 也有 revision（否则权威 connector 取不到）
+        conn.execute(
+            "INSERT INTO listing_revisions(id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no, title, main_image_asset_id, sale_price, attributes_json, active_from, active_to, source_updated_at, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rev-itema", "tenant-a", "virtual_taobao", "store-a", "item-a", "sku-a", 2, "测试商品A", "asset-1", "109.00", '{}', "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00", "2026-08-11T00:00:00+00:00", "b"*64, "2026-08-11T00:00:00+00:00", "2026-08-11T00:00:00+00:00"),
+        )
+        # item-b 也种 revision（供权威 connector 判定）
+        conn.execute(
+            "INSERT INTO listing_revisions(id, tenant_id, connector_id, store_id, item_id, sku_id, revision_no, title, main_image_asset_id, sale_price, attributes_json, active_from, active_to, source_updated_at, payload_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rev-itemb", "tenant-a", "virtual_taobao", "store-a", "item-b", "sku-a", 1, "测试商品B", "asset-1", "109.00", '{}', "2026-08-01T00:00:00+00:00", "2026-08-30T00:00:00+00:00", "2026-08-12T00:00:00+00:00", "c"*64, "2026-08-12T00:00:00+00:00", "2026-08-12T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO readonly_canonical_products(canonical_product_id, tenant_id, store_id, internal_part_number, merchant_code, title, normalized_title, source_kind, source_reference, policy_version, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("cp-1", "tenant-a", "store-a", "mpn-1", "mc-1", "测试商品标题", "测试商品标题", "actual", "ref-1", "v1", "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        # v1 归属 item-a（confirmed）
+        conn.execute(
+            "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ev-1", "tenant-a", "store-a", "virtual_taobao", "sku-a", 1, 0, "confirmed", "cp-1", "item-a", "mc-1", "dk-1", "match", "actor", "v1", None, "a"*64, "2026-08-10T00:00:00+00:00"),
+        )
+        # v2 最新事件改归 item-b（confirmed，supersedes v1）
+        conn.execute(
+            "INSERT INTO readonly_product_mapping_events(event_id, tenant_id, store_id, connector_id, sku_id, mapping_version, expected_version, event_type, canonical_product_id, item_id, merchant_code, decision_key, reason, actor_ref, policy_version, supersedes_event_id, payload_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ev-2", "tenant-a", "store-a", "virtual_taobao", "sku-a", 2, 1, "confirmed", "cp-1", "item-b", "mc-2", "dk-2", "rehome", "actor", "v1", "ev-1", "b"*64, "2026-08-12T00:00:00+00:00"),
+        )
+    query = ProductReadQuery(db)
+    # 最新事件 v2 已归 item-b → item-a 不再有映射（不得复活 v1）
+    mapping_a = query._product_mapping("tenant-a", "store-a", "item-a", "sku-a")
+    assert mapping_a is None, (
+        f"最新映射已移到 item-b，item-a 不应复活旧 v1: {mapping_a}"
+    )
+    # item-b 正常拿到最新 v2
+    mapping_b = query._product_mapping("tenant-a", "store-a", "item-b", "sku-a")
+    assert mapping_b is not None
+    assert mapping_b["event_id"] == "ev-2"

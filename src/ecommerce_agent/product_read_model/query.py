@@ -389,12 +389,9 @@ class ProductReadQuery:
         粒度诚实：只聚合 revision 窗口内的订单（placed_at 落在 active_from/active_to），
         period_key 用窗口起始，而非"全生命周期 SUM 标 DAILY"。
 
-        A7（盲点 #12 边界声明）：item 隔离是**订单级**归属——commerce_orders.item_id
-        决定订单归属哪个 item（commerce_order_lines 无 item_id 列，行级无法独立归属）。
-        同一订单内若含其他 item 成交的 sku 行（订单级归属与行级不一致），V1 按订单级
-        归属处理（行级 item 隔离需 schema 扩展，非 V1 范围）。查询 item-b 的 sku-x
-        不会拿到 item-a 订单（订单级 item 过滤有效）；反向把含其他 item 行的订单
-        算入订单归属 item 是订单级语义的已知边界。
+        item 隔离按 commerce_order_lines.item_id 执行；旧行可回退到历史订单头
+        commerce_orders.item_id。两处都缺失时，只有该 SKU 在 revision 中唯一对应一个
+        item 才能兼容投影；存在多个候选 item 时 fail closed，不广播未知归属订单。
         """
         with self.db.connect() as conn:
             window = self._revision_window(
@@ -402,23 +399,27 @@ class ProductReadQuery:
             )
             if not window:
                 return self._missing_orders("order_revision_not_found")
-            # R1 方案 B（显式共享语义）：单 item 时 NULL 共享订单可投影，多 item 不广播。
             single_item = self._sku_item_count(conn, tenant_id, store_id, sku_id) <= 1
-            item_cond = "(o.item_id=? OR o.item_id IS NULL)" if single_item else "o.item_id=?"
-            cte_item_cond = "(o.item_id=? OR o.item_id IS NULL)" if single_item else "o.item_id=?"
+            legacy_line = (
+                " OR (l.item_id IS NULL AND o.item_id IS NULL)" if single_item else ""
+            )
+            line_item_cond = f"(COALESCE(l.item_id,o.item_id)=?{legacy_line})"
+            legacy_line2 = (
+                " OR (l2.item_id IS NULL AND o.item_id IS NULL)" if single_item else ""
+            )
+            line2_item_cond = f"(COALESCE(l2.item_id,o.item_id)=?{legacy_line2})"
             row = conn.execute(
                 f"""
                 -- R2 来源同源（确定性）：connector_id/source_id 取自 source_updated_at
                 -- 最新的一行（全局 ORDER BY + 唯一尾键 + LIMIT 1 取整行），禁止分区 rn=1
                 -- 多行任取、禁止分别 MAX 拼凑（那会产生数据库中不存在的组合）。
-                -- 作用域与主聚合一致：按 sku_id 过滤（JOIN order_lines），item 条件
-                -- 用 cte_item_cond（单 item 含 NULL 共享行，多 item 严格匹配不广播）。
+                -- 作用域与主聚合一致：按 sku_id + 订单行 item 身份过滤。
                 WITH latest AS (
                     SELECT o.connector_id, o.source_id, o.id
                     FROM commerce_orders o
                     JOIN commerce_order_lines l ON l.order_id=o.id
                     WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
-                      AND {cte_item_cond}
+                      AND {line_item_cond}
                       AND o.placed_at>=? AND o.placed_at<=?
                       -- A1（盲点 #7 修复）：来源行与聚合行同口径——只统计有效支付状态
                       -- 订单（canceled/unpaid 不计入 payments/gross/net_sales，任务书 L60/L66）
@@ -436,7 +437,7 @@ class ProductReadQuery:
                 FROM commerce_orders o
                 JOIN commerce_order_lines l ON l.order_id=o.id
                 WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
-                  AND {item_cond}
+                  AND {line_item_cond}
                   AND o.placed_at>=? AND o.placed_at<=?
                   -- A1（盲点 #7 修复）：只统计有效支付状态订单
                   AND o.order_status IN ('paid','fulfilling','shipped','delivered')
@@ -459,20 +460,23 @@ class ProductReadQuery:
                 f"""
                 SELECT COUNT(*) AS multi
                 FROM commerce_order_lines l
+                JOIN commerce_orders parent ON parent.id=l.order_id
                 WHERE l.order_id IN (
                     SELECT DISTINCT o.id FROM commerce_orders o
                     JOIN commerce_order_lines l2 ON l2.order_id=o.id
                     WHERE o.tenant_id=? AND o.store_id=? AND l2.sku_id=?
-                      AND {item_cond}
+                      AND {line2_item_cond}
                       AND o.placed_at>=? AND o.placed_at<=?
                       -- A1：multi_line 判定同口径——只统计有效支付状态订单
                       AND o.order_status IN ('paid','fulfilling','shipped','delivered')
                       AND o.payment_status IN ('paid','partially_refunded')
                 )
-                -- A3（盲点 #6 修复）：按 SKU 数判定多行（COUNT(DISTINCT sku_id) > 1），
-                -- 而非行数——同 SKU 拆多行（qty 拆分）仍可精确归 SKU，只有含多个
-                -- 不同 SKU 的订单退款才无法归属
-                GROUP BY l.order_id HAVING COUNT(DISTINCT l.sku_id) > 1
+                -- 订单级退款只有在整单都属于同一 SKU + item 时才可归属。
+                GROUP BY l.order_id
+                HAVING COUNT(DISTINCT l.sku_id) > 1
+                    OR COUNT(DISTINCT COALESCE(l.item_id,parent.item_id)) > 1
+                    OR SUM(CASE WHEN COALESCE(l.item_id,parent.item_id) IS NULL
+                                THEN 1 ELSE 0 END) > 0
                 LIMIT 1
                 """,
                 (
@@ -490,9 +494,15 @@ class ProductReadQuery:
                     SELECT COALESCE(SUM(CAST(a.approved_amount AS REAL)), 0) AS refund_total
                     FROM commerce_after_sale_cases a
                     JOIN commerce_orders o ON o.id=a.order_id
-                    JOIN commerce_order_lines l ON l.order_id=o.id
-                    WHERE o.tenant_id=? AND o.store_id=? AND l.sku_id=?
-                      AND {item_cond}
+                    WHERE o.tenant_id=? AND o.store_id=?
+                      -- 退款是订单级（无 SKU 维度）：用 EXISTS 判断订单含该 SKU 的行，
+                      -- 不 JOIN order_lines（那会把整单退款按 SKU 行数放大 N 倍——
+                      -- 同 SKU 拆两行时一条退款 50 会被算成 100，负责人复验阻断项 3）
+                      AND EXISTS (
+                          SELECT 1 FROM commerce_order_lines l
+                          WHERE l.order_id=o.id AND l.sku_id=?
+                            AND {line_item_cond}
+                      )
                       AND a.case_type IN ('refund','return_refund')
                       AND a.status IN ('approved','completed')
                       AND o.placed_at>=? AND o.placed_at<=?
@@ -637,22 +647,25 @@ class ProductReadQuery:
                 return None
             row = conn.execute(
                 """
+                -- 负责人复验阻断项 4：先解析该 SKU 流的最新事件（不过滤 item），
+                -- 再判断它是否仍归属所查询 item。修复前先用 item 过滤再排序——
+                -- 最新事件已到 item-b 时查询 item-a 会回落到 item-a 的旧 v1（映射复活）。
+                -- 最新事件是 v2=item-b → item-a 不再是最新归属 → 返回 None，不复活旧映射。
                 SELECT m.event_id, m.event_type, m.mapping_version,
                        m.canonical_product_id, m.item_id, m.merchant_code,
                        m.created_at
                 FROM readonly_product_mapping_events m
                 WHERE m.tenant_id=? AND m.store_id=? AND m.connector_id=?
                   AND m.sku_id=?
-                  AND (m.item_id = ? OR m.item_id IS NULL)
-                -- A5（盲点 #14 连带）：item 优先匹配——同 connector 下若存在本 item 的
-                -- 映射事件则取它，NULL 共享事件仅作回退（避免取到其他 item 的映射）
-                ORDER BY CASE WHEN m.item_id = ? THEN 0 ELSE 1 END,
-                         m.mapping_version DESC, m.event_id DESC
+                ORDER BY m.mapping_version DESC, m.event_id DESC
                 LIMIT 1
                 """,
-                (tenant_id, store_id, connector_id, sku_id, item_id, item_id),
+                (tenant_id, store_id, connector_id, sku_id),
             ).fetchone()
+        # 最新事件不在查询 item（NULL 共享事件视为非专属归属）→ 不复活旧映射
         if row is None or row["event_type"] == "revoked":
+            return None
+        if row["item_id"] not in (item_id, None):
             return None
         return {
             "canonical_product_id": row["canonical_product_id"],

@@ -382,6 +382,60 @@ def test_same_sku_split_lines_refund_attributable(tmp_path) -> None:
     assert model.net_sales.value == 327.0
 
 
+def test_same_sku_split_lines_refund_not_amplified(tmp_path) -> None:
+    """负责人复验阻断项 3：同 SKU 拆两行 + 一笔退款 → 退款不被 JOIN 放大。
+
+    修复前退款 JOIN order_lines 会把整单退款按行数放大：同 SKU 拆两行的订单，
+    一笔 approved 退款 50 会被算成 100（每条行都 JOIN 到同一条退款）。
+    修复后用 EXISTS 判定订单含该 SKU（不 JOIN 行），退款精确为 50。
+    """
+    db = _query_db(tmp_path)
+    # 种同 SKU 拆两行的订单（两行都是 sku-a，qty 1+1，gross=218）+ approved 退款 50
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO commerce_orders(
+                id, tenant_id, connector_id, store_id, external_order_id, item_id,
+                order_status, payment_status, currency, total_amount, placed_at,
+                buyer_ref_hash, source_id, source_updated_at, payload_hash, version,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "ord-split-r", "tenant-a", "taobao_official", "store-a", "ext-split-r",
+                "item-a",
+                "paid", "partially_refunded", "CNY", "218.00", "2026-08-13T10:00:00+00:00", None,
+                "src-split-r", "2026-08-13T10:00:00+00:00", "i" * 64, 1,
+                "2026-08-13T10:00:00+00:00", "2026-08-13T10:00:00+00:00",
+            ),
+        )
+        for line_id in ("line-r1", "line-r2"):
+            conn.execute(
+                """
+                INSERT INTO commerce_order_lines(
+                    id, order_id, external_line_id, sku_id, title, quantity, unit_price
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (line_id, "ord-split-r", f"ext-{line_id}", "sku-a", "测试", 1, "109.00"),
+            )
+        conn.execute(
+            "INSERT INTO commerce_after_sale_cases(id, order_id, external_case_id, case_type, status, requested_amount, approved_amount, reason_code, opened_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            ("case-split-r", "ord-split-r", "ext-case-split-r", "refund", "approved",
+             "50.00", "50.00", None, "2026-08-13T11:00:00+00:00", "2026-08-13T11:00:00+00:00"),
+        )
+    model = ProductReadQuery(db).sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
+    )
+    # 退款精确 50，不按行数放大成 100
+    assert model.refunds.value == 50.0, (
+        f"同 SKU 拆行退款被 JOIN 放大: {model.refunds.value}"
+    )
+    # net_sales = gross - 退款 = 218 - 50 = 168（含 _seed_common 的 ord-1 会在下方单独验证，
+    # 此处只对 ord-split-r 的净额语义做归属断言）
+    assert model.net_sales.evidence_state is not EvidenceState.MISSING
+
+
 def test_order_source_deterministic_latest(tmp_path) -> None:
     """R2（来源诚实）：同窗口多笔订单 → 来源取全局最新 source_updated_at 一行。
 

@@ -161,6 +161,42 @@ def test_overlap_window_item_a_sees_own_linked_data(tmp_path) -> None:
     assert model.payments.value == 1.0
 
 
+def test_mixed_item_order_aggregates_only_matching_lines(tmp_path) -> None:
+    """一个平台订单含两个 item 时，成交按行归属且订单头不得决定归属。"""
+    db = Database(tmp_path / "overlap-mixed-order.sqlite3")
+    db.initialize()
+    _seed(db)
+    with db.connect() as conn:
+        conn.execute("UPDATE commerce_orders SET item_id=NULL WHERE id='ord-a'")
+        conn.execute(
+            "UPDATE commerce_order_lines SET item_id='item-a' WHERE id='line-1'"
+        )
+        conn.execute(
+            """
+            INSERT INTO commerce_order_lines(
+                id, order_id, external_line_id, sku_id, item_id,
+                title, quantity, unit_price
+            ) VALUES ('line-2','ord-a','ext-line-2','sku-a','item-b',
+                      '商品B',2,'99.00')
+            """
+        )
+
+    query = ProductReadQuery(db)
+    model_a = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a"
+    )
+    model_b = query.sku_read_model(
+        "tenant-a", store_id="store-a", item_id="item-b", sku_id="sku-a"
+    )
+
+    assert model_a.payments.value == 1.0
+    assert model_b.payments.value == 2.0
+    # 退款事实挂在订单头；一个订单跨两个 item 时无法把整单退款准确分摊，
+    # 因此 net_sales 继续 fail closed，而不是把整单净额广播到两个 item。
+    assert model_a.net_sales.evidence_state is EvidenceState.MISSING
+    assert model_b.net_sales.evidence_state is EvidenceState.MISSING
+
+
 def test_sku_shared_data_not_broadcast_when_item_unknown(tmp_path) -> None:
     """R1 修复（复验阻断项 1）：NULL item_id 的历史库存不再广播给任何 item。
 
@@ -195,3 +231,56 @@ def test_sku_shared_data_not_broadcast_when_item_unknown(tmp_path) -> None:
     assert model_b.sellable_stock.evidence_state is EvidenceState.MISSING, (
         f"item-b 不应读到 NULL 身份共享库存: {model_b.sellable_stock.value}"
     )
+
+
+def test_inventory_service_upsert_keeps_two_items_separate(tmp_path) -> None:
+    """负责人复验阻断项 2：公开写路径必须让同 SKU 不同 item 的库存共存。
+
+    修复前 inventory_balances UNIQUE 不含 item_id，InventoryService.upsert 的
+    ON CONFLICT 按 (tenant,connector,store,warehouse,sku) 覆盖——先写 item-a=5
+    再写 item-b=9，库内只剩 item-b 一行（item-a 被覆盖）。v39 重建表 UNIQUE 纳入
+    item_id 后，两个 item 各自一行共存。现有重叠窗口测试用直接 SQL 预放两条合法行，
+    绕过了生产 upsert，未覆盖此身份断裂。
+    """
+    from decimal import Decimal
+    from datetime import UTC, datetime
+
+    from ecommerce_agent.business.inventory import (
+        InventoryBalanceUpsert,
+        InventoryService,
+    )
+
+    db = Database(tmp_path / "overlap-upsert.sqlite3")
+    db.initialize()
+    inventory = InventoryService(db)
+    base = {
+        "connector_id": "virtual_taobao",
+        "store_id": "store-a",
+        "warehouse_id": "wh-1",
+        "sku_id": "sku-a",
+        "on_hand": Decimal("5"),
+        "reserved": Decimal("0"),
+        "inbound": Decimal("0"),
+        "average_daily_sales": Decimal("0"),
+        "source_updated_at": datetime(2026, 8, 10, 12, tzinfo=UTC),
+        "source_id": "src-a",
+    }
+    # 先写 item-a=5
+    inventory.upsert(
+        "tenant-a",
+        InventoryBalanceUpsert(**{**base, "item_id": "item-a", "source_id": "src-a"}),
+    )
+    # 再写 item-b=9（同 SKU 同仓，不同 item）——不得覆盖 item-a
+    inventory.upsert(
+        "tenant-a",
+        InventoryBalanceUpsert(**{**base, "item_id": "item-b", "on_hand": Decimal("9"), "source_id": "src-b"}),
+    )
+    rows = inventory.list_balances("tenant-a", store_id="store-a", sku_id="sku-a")
+    by_item = {row["item_id"]: row for row in rows}
+    assert set(by_item) == {"item-a", "item-b"}, (
+        f"双 item 库存应共存，实际: {sorted(by_item)}"
+    )
+    assert by_item["item-a"]["on_hand"] == "5", (
+        f"item-a 库存被 item-b 覆盖: {by_item['item-a']['on_hand']}"
+    )
+    assert by_item["item-b"]["on_hand"] == "9"

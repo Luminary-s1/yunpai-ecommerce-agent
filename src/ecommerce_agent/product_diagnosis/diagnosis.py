@@ -183,15 +183,22 @@ def validate_diagnosis_output(
         DiagnosisType.CONVERSION_INSUFFICIENT,
     }
     # 污染标记（degraded 降级）不是「强方向结论」，且必须与 facts 的污染旗标一致
+    # 负责人复验阻断项 5：污染子类型必须分别锁定——STOCKOUT_POLLUTION 只能由缺货
+    # 证据（stockout）触发，AD_PRICE_POLLUTION 只能由广告/价格变化（pollution）触发。
+    # 修复前只查"任一污染存在"，模型可把缺货证据解释成广告/价格污染，下游固定映射
+    # 会把它导向"定价候选"而非"补货联动"（错误的安全方向）。
     pollution_types = {
         DiagnosisType.STOCKOUT_POLLUTION,
         DiagnosisType.AD_PRICE_POLLUTION,
     }
     if diagnosis_type in strong_types and not facts.conclusion_allowed():
         raise ValueError("diagnosis_conclusion_not_allowed")
-    if diagnosis_type in pollution_types:
-        if not (facts.stockout or facts.pollution is not None):
-            raise ValueError("diagnosis_pollution_marker_without_pollution")
+    if diagnosis_type is DiagnosisType.STOCKOUT_POLLUTION:
+        if not facts.stockout:
+            raise ValueError("diagnosis_pollution_marker_without_stockout")
+    elif diagnosis_type is DiagnosisType.AD_PRICE_POLLUTION:
+        if facts.pollution is None:
+            raise ValueError("diagnosis_pollution_marker_without_ad_price_pollution")
     return Diagnosis(
         diagnosis_type=diagnosis_type,
         sku_id=facts.sku_id,
