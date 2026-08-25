@@ -191,3 +191,89 @@ def test_v36_order_replay_stays_idempotent_after_v39(tmp_path) -> None:
         OrderService(db).upsert(
             "tenant-a", value.model_copy(update={"total_amount": Decimal("110")})
         )
+
+
+def test_v36_order_with_header_item_replay_stays_idempotent_after_v39(
+    tmp_path,
+) -> None:
+    """Replay the v36 shape exposed by 753ff15's public OrderService.
+
+    That version stored ``OrderUpsert.item_id`` on the order header while its
+    ``OrderLineInput`` schema had no item field.  V39 must accept the additive
+    line field as the same event without weakening genuine payload conflicts.
+    """
+    db = _database_at_v36(tmp_path / "legacy-order-header-item.sqlite3")
+    value = _order_value(item_id="item-a")
+    legacy_payload = value.model_dump(mode="json")
+    legacy_payload["source_updated_at"] = SOURCE_TIME.isoformat()
+    for line in legacy_payload["lines"]:
+        line.pop("item_id", None)
+    legacy_hash = payload_digest(legacy_payload)
+    snapshot = json.dumps(legacy_payload, ensure_ascii=False, sort_keys=True)
+
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO commerce_orders(
+                id, tenant_id, connector_id, store_id, external_order_id, item_id,
+                order_status, payment_status, currency, total_amount, placed_at,
+                buyer_ref_hash, source_id, source_updated_at, payload_hash, version,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "order-legacy-header-item", "tenant-a", value.connector_id,
+                value.store_id, value.order_id, "item-a", value.order_status,
+                value.payment_status, value.currency, str(value.total_amount),
+                SOURCE_TIME.isoformat(), None, value.source_id,
+                SOURCE_TIME.isoformat(), legacy_hash, 1, SOURCE_TIME.isoformat(),
+                SOURCE_TIME.isoformat(),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO commerce_order_lines(
+                id, order_id, external_line_id, sku_id, title, quantity, unit_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "line-legacy-header-item", "order-legacy-header-item", "line-a",
+                "sku-a", "legacy item", 1, "109",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO commerce_order_events(
+                id, order_id, version, source_updated_at, payload_hash,
+                snapshot_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "event-legacy-header-item", "order-legacy-header-item", 1,
+                SOURCE_TIME.isoformat(), legacy_hash, snapshot,
+                SOURCE_TIME.isoformat(),
+            ),
+        )
+
+    db.initialize()
+
+    replayed = OrderService(db).upsert("tenant-a", value)
+    assert replayed["write_status"] == "idempotent"
+    assert replayed["version"] == 1
+
+    with db.connect() as conn:
+        stored = conn.execute(
+            "SELECT item_id, payload_hash FROM commerce_orders "
+            "WHERE id='order-legacy-header-item'"
+        ).fetchone()
+        stored_line_item = conn.execute(
+            "SELECT item_id FROM commerce_order_lines "
+            "WHERE id='line-legacy-header-item'"
+        ).fetchone()[0]
+    assert tuple(stored) == ("item-a", legacy_hash)
+    assert stored_line_item == "item-a"
+
+    with pytest.raises(ValueError, match="source_version_conflict"):
+        OrderService(db).upsert(
+            "tenant-a", value.model_copy(update={"total_amount": Decimal("110")})
+        )
