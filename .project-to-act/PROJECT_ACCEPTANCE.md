@@ -6,6 +6,16 @@
 ## 当前验收结论
 
 - 结论：2026-08-25 PR #19 已在实现提交
+  `f23dba31de755ee7df5dbc0cde894d41c06b47ad` 上修复负责人针对 `8e7ede3` 的唯一剩余阻断，
+  证据 ID 为 E-20260825-002。新增回归先稳定复现“订单头 item 非空、旧订单行无 item 字段”的
+  `753ff15` 公开 v36 形态升 v39 后同水位重放误报冲突；修复仅对缺省的新增订单行 item 字段
+  生成受控旧 hash 候选，保留订单头 item、新写入完整 hash、历史 hash/事件和真实载荷冲突边界。
+  新增反例修复前 `1 failed`、修复后文件 `3 passed`；真实 `753ff15` 服务跨版本探针得到
+  schema 36→39、原事件 `idempotent`、version 1、订单行 item 回填，金额变化仍 conflict。
+  M9-R `252 passed`、WP1～WP4 四脚本、5 项浏览器和全仓 `1316 passed in 1204.75s` 均通过；
+  compileall、diff check 与台账校验退出 0。本结论仍只是开发侧重验候选，不替代闫睿涵从
+  推送后的干净远端最终 Head 执行和签署 WP5，也不放行真实平台、生产、长稳或灾备。
+- 结论：2026-08-25 PR #19 已在实现提交
   `2e7fa58e8bf1b169454a537813f74edff1b62111` 上形成新的 M9-R 开发侧重验候选，证据 ID
   为 E-20260825-001。负责人在 `cf31613` 上提出的旧 v36→v39 重放、退款/净销语义、
   answer-coded Eval、页面具体证据值和报告可复现性 5 项阻断均已闭环；另补模型连续无效输出
@@ -552,6 +562,20 @@
 
 ## 证据索引
 
+- E-20260825-002：PR #19 对 `8e7ede34225e080f8343138c7060aa216832009f` 最新独立复验
+  单一阻断的修复与负责人式开发侧复核。实现提交为
+  `f23dba31de755ee7df5dbc0cde894d41c06b47ad`，tree 为
+  `434181ad4e4030b1a9a51e7323e4fa561c351fff`，固定 Base 仍为
+  `1ee68cb686fd4f3c86c22c51b6f57c84042d6d45`。新增测试先红 `1 failed`，修复后旧重放文件
+  `3 passed`；使用 `git archive 753ff15` 的原始源码和公开 `OrderService` 真实写入 v36 后，
+  当前代码升级到 v39 并重放同一事件得到 `idempotent`、version 1、订单行 item 正确回填，
+  金额变化仍为 `source_version_conflict`。M9-R `252 passed in 74.56s`；WP1/2/3/4 分别
+  18/12/8/10 项 PASS；全仓 `1316 passed in 1204.75s`，无 failed/skipped/xfailed；
+  compileall、diff check、project-to-act validate 均退出 0。一次 208 项关联集合中的既有异步
+  发布观察测试在并发负载下短暂失败，隔离复跑通过且同项在最终全仓通过；未修改发布代码。
+  证据位置为 `src/ecommerce_agent/business/orders.py`、`tests/test_m9r_v39_legacy_replay.py`、
+  `docs/reviews/M9R-WP5-ACCEPTANCE-REPORT.md` 和本条；代码、任务书或固定提交变化前有效。
+  本证据不替代独立 WP5 或生产 Gate。
 - E-20260825-001：PR #19 最新阻断修复与负责人式开发侧重验。固定 Base 为
   `1ee68cb686fd4f3c86c22c51b6f57c84042d6d45`，负责人最新不通过 Head 为 `cf31613`，
   已验证实现提交为 `2e7fa58e8bf1b169454a537813f74edff1b62111`，tree 为

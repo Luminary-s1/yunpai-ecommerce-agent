@@ -9,9 +9,9 @@
 | 字段 | 值 |
 |---|---|
 | Base | `1ee68cb686fd4f3c86c22c51b6f57c84042d6d45` |
-| 负责人最新不通过 Head | `cf316133bb5e536d0e6b5e401e71056e00b60b16` |
-| 本轮实现提交 | `2e7fa58e8bf1b169454a537813f74edff1b62111` |
-| 实现提交 tree | `09160724ca256f4775ea004c7cbf5bf4d552edad` |
+| 负责人最新不通过 Head | `8e7ede34225e080f8343138c7060aa216832009f` |
+| 本轮实现提交 | `f23dba31de755ee7df5dbc0cde894d41c06b47ad` |
+| 实现提交 tree | `434181ad4e4030b1a9a51e7323e4fa561c351fff` |
 | schema | v36 与 v39 属于 M9-R；v37 与 v38 不在本提交 |
 
 负责人已说明此前本地 `main ahead 36` 是临时合并旧 Head 造成，已恢复到
@@ -20,12 +20,13 @@ Base 为准。
 
 本报告与项目账本位于实现提交之后的证据提交中。Git 提交不能在自身文件内容里保存
 自身 SHA，故远端最终 Head 以推送后的 `gh pr view 19` 回读为准；最终 Head 必须是
-`2e7fa58` 的直接后代，且除证据文档外不再改变已测试代码树。
+`f23dba3` 的直接后代，且除证据文档外不再改变已测试代码树。
 
 ## 2. 结论
 
-负责人在 `cf31613` 上提出的 5 项阻断均已修复，并额外修复了模型重复返回无效输出时
-第三次结果被放行的问题。开发侧从负责人验收思路执行了迁移、D-014、证据诚实、
+负责人确认 `8e7ede3` 已闭环此前 5 项阻断，本轮又修复其唯一剩余项：PR 历史
+`753ff15` 可公开写出的“订单头 item 非空、订单行无 item 字段”v36 事实升 v39 后，
+同水位正常重放误报冲突。开发侧从负责人验收思路执行了真实历史版本链、迁移、D-014、证据诚实、
 D-034、oracle 隔离、真实模型、浏览器、反证和全量回归检查，当前未发现新的 M9-R
 P0/P1 阻断。
 
@@ -36,7 +37,7 @@ P0/P1 阻断。
 
 | # | 负责人阻断 | 修复 | 独立可复核证据 |
 |---|---|---|---|
-| 1 | 旧 v36 升 v39 后，同水位正常重放误报 D-014 冲突 | 库存和订单仅在新增 `item_id` 全为空时计算受控旧 payload hash 候选；不同真实载荷仍冲突 | `tests/test_m9r_v39_legacy_replay.py` |
+| 1 | 旧 v36 升 v39 后，同水位正常重放误报 D-014 冲突，包括订单头 item 非空、旧订单行无 item 字段的 `753ff15` 公开形态 | 只对缺省的新增 item 字段计算受控旧 payload hash 候选；保留订单头 item，不改历史 hash；不同真实载荷仍冲突 | `tests/test_m9r_v39_legacy_replay.py`；`753ff15` 真实服务跨版本探针 |
 | 2 | `refunds=MISSING` 时 `net_sales` 仍以 gross/ACTUAL 冒充净销 | 退款来源不可用或无法归属时，`refunds` 与 `net_sales` 同步 MISSING；payments 保持可用且可追溯 | `tests/test_m9r_query_source_honesty.py` |
 | 3 | Eval 从 SKU 编码改成 `required_signals` 编码，仍未发现方向 | 删除 `required_signals` 和固定信号映射；生产形态原始指标进入诊断/建议模型；oracle 预检只读场景名与 input；真实方向由独立禁 mock live gate 证明 | `evals/product_lifecycle/run_m9r_direction_eval.py`、`tests/test_m9r_direction_live_gate.py` |
 | 4 | 页面只显示 evidence key，不显示具体引用值 | 递归展开 `evidence_references` 的路径和值，并用真实浏览器 fixture 锁 revision/source/mapping 引用 | `docs/admin-console.html`、`tests/test_m9r_workbench_browser.py` |
@@ -67,9 +68,9 @@ P0/P1 阻断。
 
 | Gate | 结果 |
 |---|---|
-| 全仓收集 | `1315 tests collected`，exit 0 |
-| 全仓串行回归 | `1315 passed in 1331.41s`，0 failed / 0 skipped / 0 xfailed |
-| M9-R 专项 | `251 passed in 74.22s` |
+| 全仓收集 | `1316 tests collected`，exit 0 |
+| 全仓串行回归 | `1316 passed in 1204.75s`，0 failed / 0 skipped / 0 xfailed |
+| M9-R 专项 | `252 passed in 74.56s` |
 | WP1 | 18 项全部 PASS，脚本 exit 0 |
 | WP2 | 12 项全部 PASS，脚本 exit 0 |
 | WP3 | 8 项全部 PASS，脚本 exit 0 |
@@ -94,6 +95,8 @@ token、密码、Cookie 或原始顾客数据。
 
 | 反证 | 破坏后 | 恢复后 |
 |---|---|---|
+| 恢复旧限制、拒绝订单头 item 非空的 v36 候选 | `source_version_conflict`，新增回归 `1 failed` | 新增回归及整个文件 `3 passed` |
+| `753ff15` 公开服务写 v36 后由当前代码升 v39 | 修复前负责人稳定复现 conflict | 原事件 `idempotent`、version 1、订单行回填 item；金额变化仍 conflict |
 | 移除模型重试耗尽安全收口 | 2 项失败：缺 revision 的实验被放行；禁用理由未 degraded | 2 passed |
 | 旧 v36 同水位载荷改变 | `source_version_conflict` | 正常原事件 replay 为 idempotent |
 | 方向输入注入建议值或 oracle key | oracle preflight 抛错 | 5 个原始业务场景通过 preflight |
@@ -133,7 +136,8 @@ git diff --check
 - v39 初始化：保留订单头、订单行、物流、售后和事件；库存迁移为 item 专属/未知身份两组部分唯一索引。
 - 升级后恢复写入前：由 v39 程序生成并验证新的全量备份。
 - 灾备 manifest 精确匹配当前 schema；v36 归档不得直接由 v39 程序恢复，只能在匹配旧 schema 的隔离环境恢复或先走受控升级。
-- D-014 兼容只接受新增 `item_id=None` 的旧 payload hash；任何其它同水位载荷差异仍冲突。
+- D-014 兼容只接受新增字段缺省的旧 payload hash：最早形态可同时缺订单头/订单行 item，
+  `753ff15` 形态可保留订单头 item、缺订单行 item；任何其它同水位载荷差异仍冲突。
 
 ## 9. 未放行事项
 
@@ -145,7 +149,8 @@ git diff --check
 ## 10. 正式 WP5 下一步
 
 闫睿涵应从 PR #19 推送后的远端最终 Head 建立干净 detached worktree，先确认该 Head 是
-`2e7fa58` 的后代，再按第 7 节复跑。独立测试应至少覆盖旧 v36 公开写入后的同水位重放、
+`f23dba3` 的后代，再按第 7 节复跑。独立测试应至少覆盖旧 v36 公开写入后的同水位重放，
+包括订单头 item 非空、旧订单行无 item 字段的 `753ff15` 公开形态；同时验证真实金额变化仍冲突、
 退款未知对净销的阻断、移除 answer-free 业务事实后的方向失败、oracle 注入拒绝、具体证据
 引用 DOM 可见，以及批准建议仍无平台写动作。失败需继续退回胡磊修复；全部通过后再由
 闫睿涵写入正式签署结论。

@@ -7,14 +7,14 @@
 
 - PR：#19，`feature/m9r-read-model`。
 - Base：`1ee68cb686fd4f3c86c22c51b6f57c84042d6d45`。
-- 已验证实现提交：`2e7fa58e8bf1b169454a537813f74edff1b62111`。
-- 验收时必须从 GitHub 回读最新 Head，并确认它是 `2e7fa58` 的后代。
+- 已验证实现提交：`f23dba31de755ee7df5dbc0cde894d41c06b47ad`。
+- 验收时必须从 GitHub 回读最新 Head，并确认它是 `f23dba3` 的后代。
 - 使用干净 detached worktree；开发者工作区和临时报告不作为独立证据。
 
 ```powershell
 gh pr view 19 --repo a1024053774/yunpai-ecommerce-agent `
   --json headRefOid,baseRefOid,mergeStateStatus,state
-git merge-base --is-ancestor 2e7fa58 <remote-head>
+git merge-base --is-ancestor f23dba3 <remote-head>
 git worktree add --detach D:\m9r-wp5 <remote-head>
 ```
 
@@ -40,7 +40,9 @@ git worktree add --detach D:\m9r-wp5 <remote-head>
 
 必须独立重建，不只复跑提交内测试：
 
-1. 旧程序写入 v36 库，升 v39 后以相同 source time 和业务载荷重放，库存与订单均为 idempotent；改变真实金额/数量仍 conflict。
+1. 分别用最早全空 item 形态和 `753ff15` 公开服务可达形态写入 v36；后者必须是订单头
+   item 非空、旧订单行无 item 字段。升 v39 后以相同 source time 和业务载荷重放，库存与
+   订单均为 idempotent；改变真实金额/数量或订单头 item 仍 conflict。
 2. 无可用退款来源时，`refunds` 与 `net_sales` 同时 MISSING，payments 保持可用。
 3. 方向场景输入删除原始关键事实后应失败；不能依赖 SKU、场景名、`required_signals` 或建议类型值。
 4. oracle key、oracle value 或建议类型进入生产 input 时 preflight 必须拒绝；preflight 不能访问 `scene.expected`。
