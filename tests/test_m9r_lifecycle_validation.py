@@ -156,7 +156,7 @@ def test_price_conclusion_without_cost_ready_rejected() -> None:
     class _PriceInterpreter:
         """mock 建议解释器：产出 PRICING 类型 + 价格动作结论 rationale。"""
 
-        def interpret(self, diagnosis):
+        def interpret(self, diagnosis, decision_facts=None):
             from ecommerce_agent.product_lifecycle.engine import (
                 RecommendationCandidate,
             )

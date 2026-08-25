@@ -275,49 +275,36 @@ def test_eval_mutation_always_evidence_insufficient_fails() -> None:
     )
 
 
-def test_eval_direction_scenes_reachable_non_degraded() -> None:
-    """R5（负责人阻断项 5 修复）：方向场景注入信号 + mock 建议解释器 → 非降级真实方向。
+def test_eval_direction_scenes_fixed_model_contract() -> None:
+    """固定模型输出只验证生产输入、类型校验和 facts_snapshot 机械链。"""
+    import json
+    from types import SimpleNamespace
 
-    选品/上新/清仓场景不再锁"保持观察"（假覆盖），而是：mock 建议解释器产出
-    SELECTION/NEW_LAUNCH/CLEARANCE + REQUIRED_FACTS 信号注入 → 引擎产出非降级
-    真实方向（recommendation_degraded=False + missing_evidence=[]），证明"发现
-    真实方向"（任务书 L476），而非只证"降级能力"。
-    """
-    from ecommerce_agent.product_lifecycle.engine import (
-        RecommendationCandidate,
-        RecommendationInterpreter,
-    )
+    from ecommerce_agent.product_lifecycle.engine import RecommendationModelInterpreter
     from ecommerce_agent.product_lifecycle.schemas import RecommendationType
     from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES
 
-    # 方向建议解释器：基于 evidence_facts 信号键值决定方向（与生产模型一致——
-    # 输入事实决定语义方向，SKU 身份无关）。盲测：即使把场景 SKU 改成任意盲名，
-    # 只要信号键值不变，方向就不变（ground truth 不通过身份标签进入输入，L476）。
-    _SIGNAL_BY_TYPE = (
-        (RecommendationType.EXPERIMENT, ("revision_evidence",)),
-        (RecommendationType.PROMOTION, ("campaign_window",)),
-        (RecommendationType.SELECTION, ("demand_signal", "competitor_evidence")),
-        (RecommendationType.NEW_LAUNCH, ("item_ready", "stock_ready")),
-        (RecommendationType.CLEARANCE, ("clearance_signal", "competitor_evidence")),
-    )
-
-    class _DirectionInterpreter(RecommendationInterpreter):
-        def interpret(self, diagnosis):
-            facts = diagnosis.evidence_facts
-            for recommendation_type, required_signals in _SIGNAL_BY_TYPE:
-                if all(facts.get(key) for key in required_signals):
-                    return RecommendationCandidate(
-                        type=recommendation_type,
-                        rationale="方向信号齐备，建议候选生成（mock 语义层）",
-                    )
-            return RecommendationCandidate(
-                type=RecommendationType.KEEP_OBSERVE,
-                rationale="信号不足，保持观察（mock 语义层）",
+    class _FixedGateway:
+        def __init__(self, responses):
+            self.responses = list(responses)
+            self.requests = []
+            self.settings = SimpleNamespace(
+                model_provider="fixed-test", model_name="fixed-table"
             )
+
+        def generate_json(self, messages, **kwargs):
+            self.requests.append(json.loads(messages[-1]["content"]))
+            return self.responses.pop(0)
+
+    responses = [
+        {"type": scene.expected["recommendation_type"], "rationale": "fixed contract"}
+        for scene in DIRECTION_SCENES
+    ]
+    gateway = _FixedGateway(responses)
 
     runner = MechanismEvalRunner(
         scenes=DIRECTION_SCENES,
-        recommendation_interpreter=_DirectionInterpreter(),
+        recommendation_interpreter=RecommendationModelInterpreter(gateway),
     )
     results = runner.run_all()
     assert len(results) == 5, f"方向场景应为 5 个: {len(results)}"
@@ -326,8 +313,24 @@ def test_eval_direction_scenes_reachable_non_degraded() -> None:
         assert r.scene_name in (
             "选品方向", "上新准备", "清仓风险", "受控优化", "活动候选",
         )
-    # 盲测：把方向场景 SKU 全部重命名为随机盲名后，方向仍由信号决定，全部 PASS。
-    # 若 Eval 依赖 SKU 名标签（答案编码），重命名会让对应场景变红（负责人阻断项 6）。
+    assert all(request["business_facts"]["metrics"] for request in gateway.requests)
+    for request in gateway.requests:
+        facts = request["business_facts"]
+        assert facts["metric_values"] == {
+            name: metric["value"] for name, metric in facts["metrics"].items()
+        }
+        values = facts["metric_values"]
+        if values["impressions"] and values["clicks"] is not None:
+            assert facts["derived_rates"]["click_through_rate"] == (
+                values["clicks"] / values["impressions"]
+            )
+        if values["sellable_stock"] and values["payments"] is not None:
+            assert facts["derived_rates"]["payments_per_sellable_unit"] == (
+                values["payments"] / values["sellable_stock"]
+            )
+    assert all("required_signals" not in request for request in gateway.requests)
+
+    # SKU identity is not used by the fixed response double or the facts validator.
     renamed = [
         FrozenScene(
             s.name,
@@ -336,15 +339,33 @@ def test_eval_direction_scenes_reachable_non_degraded() -> None:
         )
         for s in DIRECTION_SCENES
     ]
+    blind_gateway = _FixedGateway([
+        {"type": scene.expected["recommendation_type"], "rationale": "fixed contract"}
+        for scene in DIRECTION_SCENES
+    ])
     blind_runner = MechanismEvalRunner(
         scenes=renamed,
-        recommendation_interpreter=_DirectionInterpreter(),
+        recommendation_interpreter=RecommendationModelInterpreter(blind_gateway),
     )
     blind_results = blind_runner.run_all()
     assert all(r.passed for r in blind_results), (
         f"SKU 重命名后方向不应改变（答案编码?）: "
         f"{[r.failures for r in blind_results if not r.passed]}"
     )
+
+
+def test_direction_scenes_do_not_encode_answers_as_required_signals() -> None:
+    """方向 Eval 输入只能包含生产可达业务事实，不能携带目标建议标签。"""
+    import json
+
+    from ecommerce_agent.product_lifecycle.schemas import RecommendationType
+    from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES
+
+    answer_values = {member.value for member in RecommendationType}
+    for scene in DIRECTION_SCENES:
+        assert "required_signals" not in scene.input_data
+        encoded_input = json.dumps(scene.input_data, ensure_ascii=False, sort_keys=True)
+        assert not any(answer in encoded_input for answer in answer_values)
 
 
 def test_eval_direction_scenes_mutation_wrong_direction_fails() -> None:
@@ -361,7 +382,7 @@ def test_eval_direction_scenes_mutation_wrong_direction_fails() -> None:
     from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES
 
     class _WrongDirection(RecommendationInterpreter):
-        def interpret(self, diagnosis):
+        def interpret(self, diagnosis, decision_facts=None):
             return RecommendationCandidate(
                 type=RecommendationType.KEEP_OBSERVE,
                 rationale="mutation: 错误方向保持观察",

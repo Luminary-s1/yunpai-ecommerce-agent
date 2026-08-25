@@ -1746,6 +1746,16 @@
       } else {
         $('m9rDiagBody').innerHTML = '<div class="empty">暂无诊断</div>';
       }
+      const flattenEvidenceReferences = (value, path = [], rows = []) => {
+        if (Array.isArray(value)) {
+          value.forEach((item, index) => flattenEvidenceReferences(item, [...path, String(index)], rows));
+        } else if (value && typeof value === 'object') {
+          Object.entries(value).forEach(([key, item]) => flattenEvidenceReferences(item, [...path, key], rows));
+        } else if (value !== null && value !== undefined && value !== '') {
+          rows.push({ path: path.join('.'), value: String(value) });
+        }
+        return rows;
+      };
       // 生命周期建议
       $('m9rRecMeta').textContent = `${recs.length} 条建议（只读展示，不自动批准）`;
       $('m9rRecRows').innerHTML = recs.length ? recs.map((r) => {
@@ -1759,7 +1769,11 @@
         const prov = r.facts_snapshot?.semantic_provenance
           ? `<div class="muted">语义来源：${escapeHtml(JSON.stringify(r.facts_snapshot.semantic_provenance))}</div>`
           : '';
-        return `<tr><td class="mono">${escapeHtml(r.recommendation_id)}</td><td>${escapeHtml(r.type)}</td><td><span class="status ${r.state === 'approved' ? 'ok' : r.state === 'closed' || r.state === 'stale' ? 'muted' : 'info'}">${escapeHtml(r.state)}</span></td><td>${r.degraded ? '<span class="status warn">降级</span>' : '否'}</td><td><div>${escapeHtml(r.rationale)}</div>${missing}${prov}${snapshotSummary ? `<div class="muted">依据：${snapshotSummary}</div>` : ''}</td><td>${formatTime(r.created_at)}</td><td>${r.state === 'draft' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','submit')">提交</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : r.state === 'awaiting_review' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','approve')">批准</button> <button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','reject')">拒绝</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : `<button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>`}</td></tr>`;
+        const referenceRows = flattenEvidenceReferences(r.facts_snapshot?.evidence_references || {});
+        const references = referenceRows.length
+          ? `<div class="muted">证据引用：${referenceRows.map((entry) => `<span class="mono"><strong>${escapeHtml(entry.path)}</strong>=${escapeHtml(entry.value)}</span>`).join(' · ')}</div>`
+          : '';
+        return `<tr><td class="mono">${escapeHtml(r.recommendation_id)}</td><td>${escapeHtml(r.type)}</td><td><span class="status ${r.state === 'approved' ? 'ok' : r.state === 'closed' || r.state === 'stale' ? 'muted' : 'info'}">${escapeHtml(r.state)}</span></td><td>${r.degraded ? '<span class="status warn">降级</span>' : '否'}</td><td><div>${escapeHtml(r.rationale)}</div>${missing}${prov}${references}${snapshotSummary ? `<div class="muted">依据：${snapshotSummary}</div>` : ''}</td><td>${formatTime(r.created_at)}</td><td>${r.state === 'draft' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','submit')">提交</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : r.state === 'awaiting_review' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','approve')">批准</button> <button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','reject')">拒绝</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : `<button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>`}</td></tr>`;
       }).join('') : '<tr><td colspan="7"><div class="empty">暂无生命周期建议</div></td></tr>';
     }
 

@@ -112,7 +112,7 @@ def _ops(tmp_path: Path, *, diag_gateway: _MockGateway, rec_gateway: _MockGatewa
 
 
 def test_generate_and_persist_full_chain(tmp_path) -> None:
-    """全链走通：模型解释器被调用（gateway.calls==1）→ 落库 DRAFT + 审计。"""
+    """全链走通：模型解释器与保守候选自审 → 落库 DRAFT + 审计。"""
     diag_gw = _MockGateway(return_value={
         "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
         "reason": "no qualified experiment",
@@ -121,7 +121,6 @@ def test_generate_and_persist_full_chain(tmp_path) -> None:
     rec_gw = _MockGateway(return_value={
         "type": "保持观察",
         "rationale": "model keep observe",
-        "degraded": True,
     })
     ops = _ops(tmp_path, diag_gateway=diag_gw, rec_gateway=rec_gw)
 
@@ -132,15 +131,15 @@ def test_generate_and_persist_full_chain(tmp_path) -> None:
     )
     # 两个模型解释器都被生产路径调用（D-034 达标）
     assert diag_gw.calls == 1, f"诊断模型未被调用: calls={diag_gw.calls}"
-    assert rec_gw.calls == 1, f"建议模型未被调用: calls={rec_gw.calls}"
+    assert rec_gw.calls == 2, f"建议模型及自审调用不完整: calls={rec_gw.calls}"
     # 落库 DRAFT
     assert result["write_status"] == "applied"
     assert result["state"] == "draft"
     assert result["type"] == "保持观察"
     provenance = result["facts_snapshot"]["semantic_provenance"]
-    assert provenance["diagnosis"]["prompt_version"] == "m9r-diagnosis-v1"
+    assert provenance["diagnosis"]["prompt_version"] == "m9r-diagnosis-v2"
     assert provenance["recommendation"]["prompt_version"] == (
-        "m9r-recommendation-v1"
+        "m9r-recommendation-v2"
     )
     # 审计落痕（create 走 db.audit 的 audit_log，非 product_recommendation_audit）
     with ops.db.connect() as conn:
@@ -344,7 +343,7 @@ def test_generate_marks_older_same_sku_stale(tmp_path) -> None:
         )
 
     class _UniqueRecommendationInterpreter:
-        def interpret(self, diagnosis):
+        def interpret(self, diagnosis, decision_facts=None):
             return RecommendationCandidate(
                 type=RecommendationType.KEEP_OBSERVE,
                 rationale="atomic rollback candidate",

@@ -21,12 +21,19 @@ from __future__ import annotations
 import shutil
 import tempfile
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from ecommerce_agent.api import create_app
 from ecommerce_agent.config import Settings
+from ecommerce_agent.product_lifecycle.schemas import (
+    Recommendation,
+    RecommendationState,
+    RecommendationType,
+    TargetObject,
+)
 
 from conftest import make_settings
 
@@ -74,6 +81,31 @@ def _server():
     data_dir = Path(tempfile.mkdtemp(prefix="m9r-browser-"))
     settings: Settings = make_settings(data_dir)
     app = create_app(settings)
+    now = datetime(2026, 8, 25, tzinfo=UTC)
+    evidence_recommendation = Recommendation(
+        recommendation_id="rec-evidence-values",
+        type=RecommendationType.KEEP_OBSERVE,
+        target=TargetObject(store_id="store-a", item_id="item-a", sku_id="sku-a"),
+        facts_snapshot={
+            "evidence_references": {
+                "listing_revision": {
+                    "revision_id": "rev-browser-visible-42",
+                    "source_id": "revision-source-visible-42",
+                },
+                "product_identity": {
+                    "mapping_event_id": "mapping-event-visible-77",
+                },
+            }
+        },
+        rationale="Evidence references must be visible in the workbench.",
+        alternatives=[RecommendationType.EXPERIMENT],
+        state=RecommendationState.DRAFT,
+        created_at=now,
+        updated_at=now,
+    )
+    app.state.agent.operations.recommendations.create(
+        "tenant-test", evidence_recommendation, actor="browser-fixture"
+    )
     import threading
 
     import uvicorn
@@ -142,6 +174,23 @@ def test_m9r_workbench_view_renders(_server) -> None:
             kpi_text = page.locator("#m9rKpis").inner_text()
             assert "SKU" in kpi_text, "KPI 未渲染"
             assert "指标数\n0" not in kpi_text, f"KPI 仍报告零指标: {kpi_text}"
+        finally:
+            browser.close()
+
+
+def test_m9r_workbench_renders_concrete_evidence_reference_values(_server) -> None:
+    """建议依据必须显示不可变引用值，不能只显示 facts_snapshot 键名。"""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(channel=_BROWSER_CHANNEL, headless=True)
+        page = browser.new_page(viewport={"width": 1280, "height": 720})
+        try:
+            _open_workbench(page)
+            rows = page.locator("#m9rRecRows").inner_text()
+            assert "rev-browser-visible-42" in rows
+            assert "revision-source-visible-42" in rows
+            assert "mapping-event-visible-77" in rows
         finally:
             browser.close()
 

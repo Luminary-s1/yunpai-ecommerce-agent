@@ -241,68 +241,102 @@ FROZEN_SCENES: list[FrozenScene] = [
 ]
 
 
-# ── R5（C-lite，负责人阻断项 5 修复）：方向可达场景集 ──
-# 选品/上新/清仓在 FROZEN_SCENES 里 expected 全锁 EVIDENCE_INSUFFICIENT + 保持观察
-# （场景名通过、能力未证明——假覆盖）。本集补"方向可达但 REQUIRED_FACTS 由信号满足"
-# 的锁定：注入带信号的事实（demand_signal 等）→ 建议引擎产出非降级真实方向。
-# 信号来源：diagnosis.evidence_facts 透传（engine._build_facts_snapshot C-lite 改动），
-# 由调用方（测试 mock 建议解释器 + 构造带信号的 Diagnosis）注入，引擎不编造（D-034）。
-# 独立于 FROZEN_SCENES：默认 Ruleset 解释器产不出 SELECTION/NEW_LAUNCH/CLEARANCE，
-# 放进 FROZEN_SCENES 会让 test_eval_summary_all_pass 假红。
+# ── 方向发现场景 ──
+# production_input 只含读模型可表达的原始业务事实；expected 是调用完成后才读取的
+# assertion-only oracle。固定 mock 只能证明链路机械性，真实方向结论必须由 live runner
+# 调用生产模型解释器得出。
 from ecommerce_agent.product_lifecycle.schemas import RecommendationType
 
 _DIRECTION_EXPECTED: dict[str, dict[str, Any]] = {
     "选品方向": {
-        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
-        "degraded": False,
         "recommendation_type": RecommendationType.SELECTION.value,  # "选品候选"
         "recommendation_degraded": False,  # 信号满足 → 非降级真实方向
         "missing_evidence": [],
     },
     "上新准备": {
-        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
-        "degraded": False,
         "recommendation_type": RecommendationType.NEW_LAUNCH.value,  # "上新准备"
         "recommendation_degraded": False,
         "missing_evidence": [],
     },
     "清仓风险": {
-        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
-        "degraded": False,
         "recommendation_type": RecommendationType.CLEARANCE.value,  # "清仓预警"
         "recommendation_degraded": False,
         "missing_evidence": [],
     },
     "受控优化": {
-        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
-        "degraded": False,
         "recommendation_type": RecommendationType.EXPERIMENT.value,  # "受控实验"
         "recommendation_degraded": False,
         "missing_evidence": [],
     },
     "活动候选": {
-        "diagnosis_type": DiagnosisType.EVIDENCE_INSUFFICIENT.value,
-        "degraded": False,
         "recommendation_type": RecommendationType.PROMOTION.value,  # "活动候选"
-        "recommendation_degraded": False,
-        "missing_evidence": [],
+        "recommendation_degraded": True,
+        "missing_evidence": ["campaign_window"],
     },
 }
 
-# 方向场景：复用 FROZEN_SCENES 的 input_data + 追加 REQUIRED_FACTS 信号键
-# （input_data 会经 run_scene → build_diagnosis_facts，但 build_diagnosis_facts 只读
-# evidence_state/freshness/quality_gate/exposures/clicks/conversions，忽略其它键——
-# 所以信号需由测试侧构造带信号的 Diagnosis.evidence_facts 注入）。
-# 负责人复验阻断项 6：方向场景 SKU 用**盲名**（非语义标签）——期望方向不通过 SKU 名
-# 编码进输入，由 FixedTableEvalRecommendationInterpreter 按 evidence_facts 信号键值
-# 决定方向（ground truth 与 production input 分离，任务书 L476）。SKU 名无关方向。
-_DIRECTION_SIGNALS: dict[str, dict[str, Any]] = {
-    "选品方向": {"demand_signal": True, "competitor_evidence": True},
-    "上新准备": {"item_ready": True, "stock_ready": True},
-    "清仓风险": {"clearance_signal": True, "competitor_evidence": True},
-    # 受控优化 → EXPERIMENT：需 revision 证据；活动候选 → PROMOTION：需活动窗口。
-    "受控优化": {"revision_evidence": True},
-    "活动候选": {"campaign_window": True},
+_DIRECTION_BUSINESS_FACTS: dict[str, dict[str, Any]] = {
+    "选品方向": {
+        "title": "模块化桌面收纳架",
+        "metrics": {
+            "impressions": 5000, "clicks": 400, "add_to_cart": 180,
+            "orders": 120, "payments": 110, "refunds": 0,
+            "net_sales": 13200, "ad_spend": 0, "competitor_price": 129,
+        },
+    },
+    "上新准备": {
+        "listing_revision": {
+            "revision_id": "rev-blind-2", "revision_no": 1,
+            "active_from": "2026-08-20T00:00:00+00:00",
+        },
+        "title": "轻量折叠桌 80cm",
+        "metrics": {
+            "impressions": 0, "clicks": 0, "add_to_cart": 0,
+            "orders": 0, "payments": 0,
+            "sellable_stock": 80, "in_transit_stock": 20,
+        },
+    },
+    "清仓风险": {
+        "metrics": {
+            "impressions": 600, "clicks": 24, "add_to_cart": 3,
+            "orders": 1, "payments": 0, "refunds": 0, "net_sales": 0,
+            "sellable_stock": 100000, "in_transit_stock": 10000,
+            "ad_spend": 0, "competitor_price": 79,
+        },
+    },
+    "受控优化": {
+        "listing_revision": {
+            "revision_id": "rev-blind-4", "revision_no": 3,
+            "active_from": "2026-08-01T00:00:00+00:00",
+        },
+        "title": "模块化桌面收纳架",
+        "metrics": {
+            "impressions": 1000000, "clicks": 1000, "add_to_cart": 950,
+            "orders": 920, "payments": 900, "refunds": 0, "net_sales": 117000,
+            "sellable_stock": 300, "in_transit_stock": 20,
+            "ad_spend": 0, "competitor_price": 120, "experiment_state": 0,
+        },
+    },
+    "活动候选": {
+        "listing_revision": {
+            "revision_id": "rev-blind-5", "revision_no": 2,
+            "active_from": "2026-07-15T00:00:00+00:00",
+        },
+        "metrics": {
+            "impressions": 10000, "clicks": 900, "add_to_cart": 400,
+            "orders": 220, "payments": 200, "refunds": 0,
+            "net_sales": 26000, "sellable_stock": 500,
+            "in_transit_stock": 50, "ad_spend": 500,
+        },
+    },
+}
+
+_DIRECTION_DIAGNOSIS_FACTS: dict[str, dict[str, Any]] = {
+    "选品方向": {"exposures": 5000, "clicks": 400, "conversions": 40},
+    "上新准备": {"exposures": 0, "clicks": 0, "conversions": 0},
+    "清仓风险": {"exposures": 600, "clicks": 24, "conversions": 1},
+    "受控优化": {"exposures": 1000000, "clicks": 1000, "conversions": 900},
+    "活动候选": {"exposures": 10000, "clicks": 900, "conversions": 200},
 }
 
 # 盲 SKU 名：方向与 SKU 名无关（防答案编码）。若 Eval 按 SKU 名映射方向，
@@ -317,19 +351,18 @@ _DIRECTION_SKUS: dict[str, str] = {
 
 DIRECTION_SCENES: list[FrozenScene] = [
     FrozenScene(
-        s.name,
+        name,
         input_data={
-            **s.input_data,
-            # 方向场景 SKU 用盲名（非语义标签），方向由信号事实决定。
-            "sku_id": _DIRECTION_SKUS[s.name],
-            # R5（C-lite）：方向场景显式声明 REQUIRED_FACTS 信号键，
-            # 注入 Diagnosis.evidence_facts → facts_snapshot 透传 → 非降级真实方向。
-            "required_signals": _DIRECTION_SIGNALS[s.name],
+            "sku_id": _DIRECTION_SKUS[name],
+            "evidence_state": "actual",
+            "quality_gate": {"status": "passed", "issues": []},
+            "freshness": {"usable_as_current": True},
+            **_DIRECTION_DIAGNOSIS_FACTS[name],
+            "business_facts": _DIRECTION_BUSINESS_FACTS[name],
         },
-        expected=_DIRECTION_EXPECTED[s.name],
+        expected=_DIRECTION_EXPECTED[name],
     )
-    for s in FROZEN_SCENES
-    if s.name in _DIRECTION_EXPECTED
+    for name in _DIRECTION_EXPECTED
 ]
 
 

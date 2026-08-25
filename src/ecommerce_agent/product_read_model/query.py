@@ -453,8 +453,8 @@ class ProductReadQuery:
                 ),
             ).fetchone()
             # 退款口径（G4）：退款是订单级（commerce_after_sale_cases 挂 order_id，
-            # 无 SKU 维度）。只有当该 SKU 的订单都只有单行（单 SKU）时才能精确归退款；
-            # 多行订单（多 SKU）的退款无法归到 SKU → 标 MISSING（reason 明确阻断），
+            # 无 SKU 维度）。只有当相关订单都只包含同一 item + SKU 时才能精确归退款；
+            # 多 SKU/item 订单的退款无法归到 SKU → 标 MISSING（reason 明确阻断），
             # 不 JOIN order_lines 重复累计（那会把整单退款放大 N 倍）。
             multi_line = conn.execute(
                 f"""
@@ -524,24 +524,22 @@ class ProductReadQuery:
                 refund_reason = None if refund_value is not None else "refund_source_not_available"
         if row is None or (row["line_count"] or 0) == 0:
             return self._missing_orders("order_evidence_not_found")
-        # 退款：订单级金额，只有单行订单能精确归 SKU；多行订单退款无法归 SKU → MISSING。
-        # reason 是字段级：refund 的 reason 独立，不污染 payments/net_sales（它们有值）。
+        # 退款：订单级金额；同 item + SKU 可归属，多 SKU/item 订单则 MISSING。
+        # reason 是字段级：退款来源未知时 refunds/net_sales 同步 MISSING，payments 保持可用。
         gross_value = _to_float(row["gross"])
         # R2（证据诚实）：net_sales = 收入 - 可归属退款，不能用 GMV 冒充净额。
-        # 三态：单行有退款 → gross - refunds；单行无退款 → gross；
-        # 多行订单退款无法归属 → net_sales MISSING（同 refunds 因，不能以 GMV 冒充，任务书 L66）。
+        # 退款来源有已批准金额时可计算净销售；退款来源缺失或无法归属时，
+        # net_sales 必须同样 MISSING，不能把 gross/GMV 冒充净销售。
         if refund_value is not None:
             net_sales_value = gross_value - refund_value
             net_sales_reason = None
         else:
-            # refund 缺失：可能是"无退款"（净额=gross）或"退款无法归属"（净额 MISSING）。
-            # 只有 multi_line 判定为"无法归属"时才 MISSING；无退款记录但单行订单 → 净额=gross。
             if multi_line is not None:
                 net_sales_value = None
                 net_sales_reason = "net_sales_not_attributable_to_sku_multi_line_order"
             else:
-                net_sales_value = gross_value
-                net_sales_reason = None
+                net_sales_value = None
+                net_sales_reason = refund_reason
         return {
             "payments": _to_float(row["order_qty"]),
             "refunds": refund_value,

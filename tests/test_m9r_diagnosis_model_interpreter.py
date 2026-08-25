@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 from ecommerce_agent.product_diagnosis.diagnosis import (
@@ -24,12 +25,14 @@ class _MockGateway:
         self._return = return_value or {}
         self._raise = raise_exc
         self.calls = 0
+        self.requests = []
         self.settings = SimpleNamespace(
             model_provider="test-provider", model_name="test-model"
         )
 
     def generate_json(self, messages, **kwargs):
         self.calls += 1
+        self.requests.append(json.loads(messages[-1]["content"]))
         if self._raise:
             raise RuntimeError("model unavailable")
         return self._return
@@ -56,7 +59,7 @@ def test_diagnosis_model_interpreter_called() -> None:
         return_value={"diagnosis_type": "stockout_pollution", "reason": "model said stockout"}
     )
     interpreter = DiagnosisModelInterpreter(gateway)
-    facts = _facts(stockout=True)
+    facts = _facts(stockout=True, exposures=1000, clicks=10, conversions=5)
     produced = interpreter.interpret(facts)
     assert gateway.calls == 1, "模型未被调用"
     assert produced["diagnosis_type"] == "stockout_pollution"
@@ -64,11 +67,15 @@ def test_diagnosis_model_interpreter_called() -> None:
         "decision_source": "model",
         "model_provider": "test-provider",
         "model_name": "test-model",
-        "prompt_version": "m9r-diagnosis-v1",
+        "prompt_version": "m9r-diagnosis-v2",
+    }
+    assert gateway.requests[0]["derived_rates"] == {
+        "click_through_rate": 0.01,
+        "conversion_per_click": 0.5,
     }
     diagnosis = run_interpretation(facts, interpreter)
     assert diagnosis.evidence_facts["semantic_provenance"]["prompt_version"] == (
-        "m9r-diagnosis-v1"
+        "m9r-diagnosis-v2"
     )
 
 

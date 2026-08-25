@@ -12,6 +12,25 @@ from ..database import Database, session_scope_condition, utc_now
 from .source_versioning import canonical_source_time, decide_write, payload_digest
 
 
+def _payload_hash_candidates(payload: dict[str, Any]) -> set[str]:
+    candidates = {payload_digest(payload)}
+    lines = payload.get("lines")
+    if (
+        payload.get("item_id") is None
+        and isinstance(lines, list)
+        and all(isinstance(line, dict) and line.get("item_id") is None for line in lines)
+    ):
+        legacy_payload = dict(payload)
+        legacy_payload.pop("item_id")
+        legacy_payload["lines"] = []
+        for line in lines:
+            legacy_line = dict(line)
+            legacy_line.pop("item_id")
+            legacy_payload["lines"].append(legacy_line)
+        candidates.add(payload_digest(legacy_payload))
+    return candidates
+
+
 OrderStatus = Literal[
     "created", "paid", "fulfilling", "shipped", "delivered", "closed", "canceled"
 ]
@@ -124,6 +143,7 @@ class OrderService:
         source_time = canonical_source_time(value.source_updated_at)
         payload["source_updated_at"] = source_time
         payload_hash = payload_digest(payload)
+        compatible_hashes = _payload_hash_candidates(payload)
         now = utc_now()
         aggregate_item_id = self._aggregate_item_id(value)
         write_status = "applied"
@@ -144,6 +164,7 @@ class OrderService:
                     existing_payload_hash=str(existing["payload_hash"]),
                     incoming_source_time=source_time,
                     incoming_payload_hash=payload_hash,
+                    incoming_compatible_hashes=compatible_hashes,
                 )
                 internal_id = str(existing["id"])
                 if decision == "idempotent":

@@ -30,6 +30,8 @@ _DIAGNOSIS_SYSTEM_PROMPT = """\
 1. 根据给出的固化事实选择唯一的诊断类型（diagnosis_type）；
 2. 用谨慎语言给出诊断理由（reason），把机制描述为待验证假设，不宣称掌握平台内部权重或因果机制。
 
+用户消息中的 derived_rates 由同一组固化计数直接计算，不含语义标签。判断点击与转化问题时必须同时读取 click_through_rate 和 conversion_per_click，不能把高点击后转化误判成转化不足。
+
 可选诊断类型（严格取值）：
 - stockout_pollution：缺货污染（facts.stockout 为真时）
 - ad_price_pollution：广告/价格变更污染（facts.pollution 非空时）
@@ -40,7 +42,7 @@ _DIAGNOSIS_SYSTEM_PROMPT = """\
 
 严格按用户消息中的 output_schema 返回一个 JSON object，不要添加数值字段、统计字段或模型元数据。\
 """
-DIAGNOSIS_PROMPT_VERSION = "m9r-diagnosis-v1"
+DIAGNOSIS_PROMPT_VERSION = "m9r-diagnosis-v2"
 
 
 class _DiagnosisModelOutput(BaseModel):
@@ -69,9 +71,15 @@ class DiagnosisModelInterpreter:
 
     def interpret(self, facts: DiagnosisFacts) -> dict[str, Any]:
         output_schema = _DiagnosisModelOutput.model_json_schema()
+        derived_rates: dict[str, float] = {}
+        if facts.exposures is not None and facts.exposures > 0 and facts.clicks is not None:
+            derived_rates["click_through_rate"] = facts.clicks / facts.exposures
+        if facts.clicks is not None and facts.clicks > 0 and facts.conversions is not None:
+            derived_rates["conversion_per_click"] = facts.conversions / facts.clicks
         request = {
             "facts_authority": "deterministic_code",
             "facts": asdict(facts),
+            "derived_rates": derived_rates,
             "prompt_version": DIAGNOSIS_PROMPT_VERSION,
             "output_schema": output_schema,
         }

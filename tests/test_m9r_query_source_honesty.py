@@ -226,7 +226,10 @@ def test_revision_window_order_aggregation(tmp_path) -> None:
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
     )
     assert model.payments.value == 1.0  # 窗口 8/1-8/15 只有 ord-1
-    assert model.net_sales.value == 109.0
+    assert model.refunds.evidence_state is EvidenceState.MISSING
+    assert model.refunds.reason == "refund_source_not_available"
+    assert model.net_sales.evidence_state is EvidenceState.MISSING
+    assert model.net_sales.reason == "refund_source_not_available"
 
 
 def test_inventory_cross_warehouse_sum(tmp_path) -> None:
@@ -261,9 +264,9 @@ def test_source_ref_is_source_id_not_manifest_fake(tmp_path) -> None:
     # 非合成前缀串（证据审查 #1 修复）
     assert model.sellable_stock.import_manifest_id == "src-wh-2"
     assert model.sellable_stock.authoritative_service == "inventory_balances"
-    # 订单来源：真实 commerce_orders.source_id（src-ord-1/src-ord-2 最新）
-    assert model.net_sales.import_manifest_id in ("src-ord-1", "src-ord-2")
-    assert model.net_sales.authoritative_service == "commerce_orders"
+    # 订单来源：退款来源未知时 net_sales 保持 MISSING，payments 仍可追到订单来源。
+    assert model.payments.import_manifest_id in ("src-ord-1", "src-ord-2")
+    assert model.payments.authoritative_service == "commerce_orders"
 
 
 def _seed_multi_line_order(db: Database) -> None:
@@ -329,12 +332,11 @@ def test_multi_line_order_net_sales_missing_independent_reason(tmp_path) -> None
     assert model.payments.reason is None
 
 
-def test_same_sku_split_lines_refund_attributable(tmp_path) -> None:
-    """A3（盲点 #6 修复）：同 SKU 拆多行（qty 拆分）退款可精确归 SKU，非 multi_line。
+def test_same_sku_split_lines_without_refund_source_keeps_net_sales_missing(tmp_path) -> None:
+    """同 SKU 拆多行可归属订单，但退款来源未知时净销售仍不可用。
 
     修复前 multi_line 按行数判定（HAVING COUNT(*) > 1），同 SKU 拆两行也误判
-    MISSING。修复后按 SKU 数判定（COUNT(DISTINCT sku_id) > 1），同 SKU 拆分
-    订单 net_sales = gross（可精确归属）。
+    为跨 SKU；修复后订单归属成立，但不能把“没有退款来源”解释成已知退款为零。
     """
     db = _query_db(tmp_path)
     # 种同 SKU 拆两行的订单（两行都是 sku-a，qty 1+1）
@@ -375,11 +377,9 @@ def test_same_sku_split_lines_refund_attributable(tmp_path) -> None:
     model = ProductReadQuery(db).sku_read_model(
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
     )
-    # 同 SKU 拆分 → 可精确归属 → net_sales 有值（gross 含 ord-1 + ord-split）
-    assert model.net_sales.evidence_state is not EvidenceState.MISSING
-    assert model.net_sales.reason is None
-    # gross = ord-1(109) + ord-split(218) = 327（无退款 → net_sales=gross）
-    assert model.net_sales.value == 327.0
+    assert model.refunds.evidence_state is EvidenceState.MISSING
+    assert model.net_sales.evidence_state is EvidenceState.MISSING
+    assert model.net_sales.reason == "refund_source_not_available"
 
 
 def test_same_sku_split_lines_refund_not_amplified(tmp_path) -> None:
@@ -459,8 +459,8 @@ def test_order_source_deterministic_latest(tmp_path) -> None:
     )
     # 全局最新 source_updated_at = ord-z（8/14）→ 来源应为 src-ord-z
     # （MAX 拼凑会取 connector=taobao_official + source=src-ord-z → 测试变红）
-    assert model.net_sales.import_manifest_id == "src-ord-z"
-    assert model.net_sales.authoritative_service == "commerce_orders"
+    assert model.payments.import_manifest_id == "src-ord-z"
+    assert model.payments.authoritative_service == "commerce_orders"
 
 
 def _seed_order_for_sku(
@@ -513,8 +513,8 @@ def test_order_source_not_polluted_by_other_sku(tmp_path) -> None:
     )
     # 修复前：CTE 无 sku 过滤，来源取 sku-b 的 ord-other（8/14 更新）→ 污染
     # 修复后：CTE 按 sku 过滤，来源取 sku-a 的 ord-3（8/13）
-    assert model.net_sales.import_manifest_id == "src-ord-3", (
-        f"来源被同 item 其他 sku 污染: {model.net_sales.import_manifest_id}"
+    assert model.payments.import_manifest_id == "src-ord-3", (
+        f"来源被同 item 其他 sku 污染: {model.payments.import_manifest_id}"
     )
 
 
@@ -534,6 +534,6 @@ def test_order_source_deterministic_on_tie(tmp_path) -> None:
         "tenant-a", store_id="store-a", item_id="item-a", sku_id="sku-a", revision=1
     )
     # 平局时 ORDER BY id DESC 取 id 更大者（ord-4 > ord-3），来源确定
-    assert model.net_sales.import_manifest_id == "src-ord-4", (
-        f"平局来源不确定: {model.net_sales.import_manifest_id}"
+    assert model.payments.import_manifest_id == "src-ord-4", (
+        f"平局来源不确定: {model.payments.import_manifest_id}"
     )

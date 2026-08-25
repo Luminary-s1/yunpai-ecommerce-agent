@@ -301,7 +301,7 @@ def test_unmappable_diagnosis_raises() -> None:
 def test_custom_interpreter_injected() -> None:
     """自定义解释器可注入（模型可替换层）。"""
     class CustomInterpreter(RecommendationInterpreter):
-        def interpret(self, diagnosis):
+        def interpret(self, diagnosis, decision_facts=None):
             from ecommerce_agent.product_lifecycle.engine import RecommendationCandidate
             return RecommendationCandidate(
                 type=RecommendationType.DIAGNOSIS, rationale="custom"

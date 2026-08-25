@@ -11,7 +11,10 @@ import tempfile
 from pathlib import Path
 
 from ecommerce_agent.product_workbench.boundaries import BOUNDARY_NOTES, DEMO_LABEL
-from ecommerce_agent.product_workbench.eval import MechanismEvalRunner
+from ecommerce_agent.product_workbench.eval import (
+    MechanismEvalRunner,
+    assert_direction_inputs_oracle_free,
+)
 from ecommerce_agent.product_workbench.pages import WorkbenchPages
 from ecommerce_agent.product_workbench.scenes import DIRECTION_SCENES, FROZEN_SCENES
 
@@ -61,15 +64,16 @@ def t03() -> None:
 
 
 def t04() -> None:
-    """条目 4：机制 Eval 发现真实方向 + 拒绝污染方向。"""
+    """条目 4：离线机制拒绝污染；真实方向由禁 mock live gate 独立证明。"""
     runner = MechanismEvalRunner()
     results = runner.run_all()
     assert results and all(result.passed for result in results)
     by_name = {result.scene_name: result.produced for result in results}
-    assert by_name["选品方向"]["recommendation_type"] == "选品候选"
-    assert by_name["上新准备"]["recommendation_type"] == "上新准备"
-    assert by_name["清仓风险"]["recommendation_type"] == "清仓预警"
     assert by_name["缺货污染"]["recommendation_type"] == "补货联动"
+    assert by_name["广告/价格污染"]["recommendation_type"] == "定价候选"
+    isolation = assert_direction_inputs_oracle_free(DIRECTION_SCENES)
+    assert len(isolation) == len(DIRECTION_SCENES)
+    assert all(record["production_input_sha256"] for record in isolation)
 
 
 def t05() -> None:
@@ -155,7 +159,7 @@ def t10() -> None:
 check("①", "商品/SKU 下钻到 revision/时间窗/指标/来源/建议依据", "✅", t01)
 check("②", "显示为什么建议/为什么暂不能建议", "✅", t02)
 check("③", "页面浏览无隐式分析/创建实验/创建建议/修改商品", "⚠️", t03)
-check("④", "机制 Eval 发现真实方向 + 拒绝污染方向", "✅", t04)
+check("④", "离线污染反例 + oracle 隔离 + live gate 契约", "✅", t04)
 check("⑤", "浏览器桌面 + 窄屏可读，console 无新增错误", "✅", t05)
 check("⑥", "真实/模拟场景隔离，全链标注", "✅", t06)
 check("⑦", "样本数据不作为产品口径", "⚠️", t07)

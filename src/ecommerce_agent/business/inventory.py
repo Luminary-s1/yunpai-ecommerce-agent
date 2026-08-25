@@ -11,6 +11,15 @@ from ..database import Database, utc_now
 from .source_versioning import canonical_source_time, decide_write, payload_digest
 
 
+def _payload_hash_candidates(payload: dict[str, Any]) -> set[str]:
+    candidates = {payload_digest(payload)}
+    if payload.get("item_id") is None:
+        legacy_payload = dict(payload)
+        legacy_payload.pop("item_id")
+        candidates.add(payload_digest(legacy_payload))
+    return candidates
+
+
 class InventoryBalanceUpsert(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -42,6 +51,7 @@ class InventoryService:
         source_time = canonical_source_time(value.source_updated_at)
         payload["source_updated_at"] = source_time
         payload_hash = payload_digest(payload)
+        compatible_hashes = _payload_hash_candidates(payload)
         now = utc_now()
         write_status = "applied"
         with self.db._write_lock, self.db.connect() as conn:
@@ -67,6 +77,7 @@ class InventoryService:
                     existing_payload_hash=str(existing["payload_hash"]),
                     incoming_source_time=source_time,
                     incoming_payload_hash=payload_hash,
+                    incoming_compatible_hashes=compatible_hashes,
                 )
                 if decision == "idempotent":
                     write_status = "idempotent"
