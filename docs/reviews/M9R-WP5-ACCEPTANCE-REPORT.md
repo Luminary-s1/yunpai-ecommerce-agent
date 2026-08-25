@@ -1,194 +1,151 @@
-# M9-R WP5 独立验收报告（第 4 轮）
+# M9-R PR #19 WP5 重验候选报告
 
-> 验收人：闫睿涵（WP5 独立验收）
-> 验收对象：PR #19 head `0302c1a`，base `454b35c9000ab279ffdbf115f80afdf3e031ee73`
-> 验收日期：2026-08-21（第 4 轮）
-> 本轮只做独立验收；未修改 PR 代码、未合并、未 approve。
-> **状态更新（2026-08-22）**：第 5 轮修复已完成（head `0302c1a`，对应第 4 轮复验 7 个阻断项 R1-R7），全量回归 1273 passed + 浏览器 4 passed，待闫睿涵重新复验。
+> 性质：开发侧修复与负责人式预验收证据，不是闫睿涵的独立 WP5 签署。
+> 日期：2026-08-25。
+> PR：#19，分支 `feature/m9r-read-model`。
 
-## 1. 固定验收对象
+## 1. 固定对象
 
 | 字段 | 值 |
 |---|---|
-| Head | `0302c1a` |
-| Head tree | `a32a4bbd48f16763fed084510317f4408d2d5f7e` |
-| Base | `454b35c9000ab279ffdbf115f80afdf3e031ee73` |
-| worktree 干净 | 是（detached `D:/m9r-verify`，`git status --short` 无输出） |
+| Base | `1ee68cb686fd4f3c86c22c51b6f57c84042d6d45` |
+| 负责人最新不通过 Head | `cf316133bb5e536d0e6b5e401e71056e00b60b16` |
+| 本轮实现提交 | `2e7fa58e8bf1b169454a537813f74edff1b62111` |
+| 实现提交 tree | `09160724ca256f4775ea004c7cbf5bf4d552edad` |
+| schema | v36 与 v39 属于 M9-R；v37 与 v38 不在本提交 |
 
-## 2. 验收环境
+负责人已说明此前本地 `main ahead 36` 是临时合并旧 Head 造成，已恢复到
+`origin/main`，不要求 PR #19 回滚或额外同步。本轮因此只以 PR #19 的提交链和上述
+Base 为准。
 
-| 项目 | 值 |
+本报告与项目账本位于实现提交之后的证据提交中。Git 提交不能在自身文件内容里保存
+自身 SHA，故远端最终 Head 以推送后的 `gh pr view 19` 回读为准；最终 Head 必须是
+`2e7fa58` 的直接后代，且除证据文档外不再改变已测试代码树。
+
+## 2. 结论
+
+负责人在 `cf31613` 上提出的 5 项阻断均已修复，并额外修复了模型重复返回无效输出时
+第三次结果被放行的问题。开发侧从负责人验收思路执行了迁移、D-014、证据诚实、
+D-034、oracle 隔离、真实模型、浏览器、反证和全量回归检查，当前未发现新的 M9-R
+P0/P1 阻断。
+
+当前结论仅为：**PR #19 已形成可供闫睿涵从干净远端 Head 重新执行 WP5 的开发侧候选。**
+只有闫睿涵完成独立场景、mutation、浏览器和回归后才能签署 M9-R。
+
+## 3. 最新阻断闭环
+
+| # | 负责人阻断 | 修复 | 独立可复核证据 |
+|---|---|---|---|
+| 1 | 旧 v36 升 v39 后，同水位正常重放误报 D-014 冲突 | 库存和订单仅在新增 `item_id` 全为空时计算受控旧 payload hash 候选；不同真实载荷仍冲突 | `tests/test_m9r_v39_legacy_replay.py` |
+| 2 | `refunds=MISSING` 时 `net_sales` 仍以 gross/ACTUAL 冒充净销 | 退款来源不可用或无法归属时，`refunds` 与 `net_sales` 同步 MISSING；payments 保持可用且可追溯 | `tests/test_m9r_query_source_honesty.py` |
+| 3 | Eval 从 SKU 编码改成 `required_signals` 编码，仍未发现方向 | 删除 `required_signals` 和固定信号映射；生产形态原始指标进入诊断/建议模型；oracle 预检只读场景名与 input；真实方向由独立禁 mock live gate 证明 | `evals/product_lifecycle/run_m9r_direction_eval.py`、`tests/test_m9r_direction_live_gate.py` |
+| 4 | 页面只显示 evidence key，不显示具体引用值 | 递归展开 `evidence_references` 的路径和值，并用真实浏览器 fixture 锁 revision/source/mapping 引用 | `docs/admin-console.html`、`tests/test_m9r_workbench_browser.py` |
+| 5 | 报告 Head 漂移、项目环境浏览器不可复现 | Playwright 已在 `pyproject.toml` dev 依赖中；项目 `.venv` 实跑 5 项浏览器测试；本报告固定 Base、实现提交、真实计数和证据边界 | 本报告与第 5 节命令 |
+
+额外发现并修复：模型在两次 execution feedback 后若第三次仍返回缺可信前提的类型或
+禁用理由，旧循环会放行第三次结果。现在重试耗尽后返回
+`KEEP_OBSERVE/model_output_rejected`，保留模型来源并显式 degraded；正常模型决定不被
+该 Gate 改写。
+
+## 4. 负责人式验收矩阵
+
+| 维度 | 检查结果 |
 |---|---|
-| OS | Windows-11-10.0.22631-SP0 |
-| Python | Python 3.12.10 |
-| pytest | pytest 见聚焦/全量输出 |
+| WP1 粒度与隔离 | store/item/SKU/revision、跨仓、订单行 item 归属和来源追溯通过；店铺流量不拆 SKU |
+| D-014 与迁移 | 旧 v36 公开事实升 v39 后正常同水位重放 idempotent；同水位不同载荷仍 conflict |
+| 退款口径 | 订单来源与退款来源分开表达；退款未知时不产正式 net sales |
+| WP2 证据 Gate | revision、实际窗口、A/A、样本、控制变量、freshness、污染和 provenance 保持确定性边界 |
+| D-034 | 模型决定诊断和建议语义；代码只计算数值、校验可信前提、输出安全、状态和写屏障 |
+| WP3 状态与执行 | 建议默认 draft；人工审核；幂等、stale、不可变历史和审计保持；批准不触发平台写 |
+| WP4 Eval | `/mechanism` 只声明 `fixed_ruleset_mechanics`，不冒充方向发现；live gate 才作为模型方向证据 |
+| oracle 隔离 | 生产输入禁止 expected/oracle/建议类型/旧 signals，输入 hash 在模型前生成，expected 在对应模型调用后读取 |
+| 页面下钻 | revision 时间窗、实验与来源、诊断、语义来源及具体 evidence reference 值可见 |
+| schema 协调 | `_apply_v36`、`_apply_v39` 各一份；初始化只含 36、39；未混入 v37/v38 |
+| 生产边界 | 无发布商品、改价、换图、投放、活动或下架动作；Demo 不进入默认 operational |
 
-## 3. 结论
+## 5. 新鲜验证证据
 
-**（待全量回归确认后填写最终结论）**
-第 1-3 轮复验的 6 个阻断项已按 P1-P5 根因模式修复；编译门禁、独立反例探针（12 PASS）、mutation 反证（2 组红绿）、生产调用链 grep、防假绿、跨平台收集、浏览器操作契约均通过。回归归因发现并修复 1 项 `7de7bef` 惰性化引入的测试回归。全量回归结果见第 10 章。
+| Gate | 结果 |
+|---|---|
+| 全仓收集 | `1315 tests collected`，exit 0 |
+| 全仓串行回归 | `1315 passed in 1331.41s`，0 failed / 0 skipped / 0 xfailed |
+| M9-R 专项 | `251 passed in 74.22s` |
+| WP1 | 18 项全部 PASS，脚本 exit 0 |
+| WP2 | 12 项全部 PASS，脚本 exit 0 |
+| WP3 | 8 项全部 PASS，脚本 exit 0 |
+| WP4 | 10 项全部 PASS，包含直接 Playwright 门禁，脚本 exit 0 |
+| 浏览器 | `5 passed`；1280x720、390x844、console、显式生成/提交/审计、具体证据值 |
+| live 方向 gate A | DeepSeek `deepseek-v4-flash`，非 mock，温度 0，`5/5` |
+| live 方向 gate B | 同配置独立复跑，`5/5` |
+| 静态门禁 | `compileall`、`git diff --check`、迁移唯一性扫描均 exit 0 |
 
-## 4. 已确认通过项
+两轮 live 报告：
 
-- **编译门禁**：`compileall` EXIT=0；`pytest --collect-only` 1266 tests 无收集错误；`git diff --check` 无空白错误
-- **独立反例探针（12 passed，独立 seed 不复用提交内 oracle）**：
-  - `test_m9r_item_isolation_overlap.py`（4 PASS）— 重叠 revision 窗口跨 item 隔离
-  - `test_m9r_diagnosis_freshness_none.py`（4 PASS）— freshness=None fail-closed
-  - `test_m9r_production_recommendation_chain.py`（4 PASS）— 生产语义链闭环
-- **mutation 反证（2 组红绿循环）**：见第 8 章
-- **生产调用链 grep**：`engine.generate` 唯一生产调用点在 `business/service.py`（generate_and_persist），被 `workbench_api.py` POST 路由消费
-- **4 个 WP 验收脚本**：FAIL 时 `sys.exit(1)` 防假绿
-- **浏览器门禁**：真实 uvicorn 服务 + Playwright + console 监听 + 溢出检查
-- **跨平台**：basetemp 移出 addopts（PYTEST_BASETEMP 环境变量），非 Windows 浏览器显式 skip
+- `docs/reviews/M9R-DIRECTION-LIVE-20260825-A.json`，SHA-256
+  `096156D7C3F96410801354E6F143DD519CF3E440B5ADE4E5EC20826F1C701FE0`
+- `docs/reviews/M9R-DIRECTION-LIVE-20260825-B.json`，SHA-256
+  `3530006D459ACC4824779D09F13007F7B87C9F9C7F9580AA81BB008B7BB4B8E8`
 
-## 5. 阻断项（P0/P1）
+报告均记录 `mode=live`、`evaluation_temperature=0.0`、
+`production_input_oracle_separated=true` 和 `oracle_read_after_model_call=true`，不含密钥、
+token、密码、Cookie 或原始顾客数据。
 
-**本轮已修复的第三轮阻断项**（第 1-3 轮不通过，本轮为修复后复验）：
+## 6. 反证与 mutation
 
-| # | 第三轮阻断项 | P 模式 | 修复 |
-|---|---|---|---|
-| 1 | 重叠 revision 窗口击穿 item 隔离 | P1 | 库存/订单补 item_id 列 + `(item_id=? OR item_id IS NULL)` 过滤 + 反例测试 |
-| 2a | freshness=None 跳过检查返回 True | P2 | `conclusion_allowed` 反转 fail-closed |
-| 2b | 组合门禁结果只进响应不进决策 | P3 | `diagnose()` 消费 `all_passed` 作 quality_gate 输入 |
-| 3 | 生产语义链缺失 | P3 | `generate_and_persist_recommendation` 编排 + POST 路由 |
-| 4 | Eval 假覆盖 + 页面缺操作契约 | P4 | 引擎覆盖全 9 类建议 + 页面生成按钮 + mutation 锁方向 |
-| 5 | Head 引入全量回归 | P5 | 虚拟店 D21 场景 + 模块注册一致性 |
-| 6 | 配置/浏览器不可跨平台 | P5 | basetemp 移出 addopts + 浏览器跨平台 skip |
+| 反证 | 破坏后 | 恢复后 |
+|---|---|---|
+| 移除模型重试耗尽安全收口 | 2 项失败：缺 revision 的实验被放行；禁用理由未 degraded | 2 passed |
+| 旧 v36 同水位载荷改变 | `source_version_conflict` | 正常原事件 replay 为 idempotent |
+| 方向输入注入建议值或 oracle key | oracle preflight 抛错 | 5 个原始业务场景通过 preflight |
+| 方向模型固定返回错误类型 | 方向场景 oracle 失败 | 两轮真实模型均 5/5 |
 
-## 5a. 第 5 轮修复内容（head `0302c1a`，对应第 4 轮复验 7 阻断项）
+## 7. 可复现命令
 
-第 4 轮复验（闫睿涵，2026-08-21T12:19:37Z）确认 7 个阻断项，第 5 轮按 R1-R7 修复：
+PowerShell，使用项目环境：
 
-| # | 第 4 轮阻断项 | 修复 | 证据 |
-|---|---|---|---|
-| R1 | item 隔离击穿（冲突键不含 item_id） | 冲突更新写 item_id；查询单 item 共享/多 item 严格 | test_m9r_item_isolation_overlap 4 passed |
-| R2a | net_sales=gross 冒充净销 | 多行订单→MISSING + 独立 net_sales_reason | test_m9r_query_source_honesty 11 passed + mutation |
-| R2b | 商品映射不带 item_id、revoked 复活 | 取最新事件 revoked→None；按权威 connector 过滤 | test_product_read_query 10 passed + mutation |
-| R2c | 来源分别 MAX 拼凑 | CTE 去分区全局 LIMIT 1 + sku 过滤 + 唯一尾键 | 跨 SKU/平局反例通过 |
-| R3 | D-034 默认路径阈值给强方向 | diagnose() 结构化 degradation_reasons | test_m9r_diagnosis_production 5 passed |
-| R4 | WP4 页面缺下钻 | HTML/JS 补 revision/insights/诊断/审核 | 浏览器 test_m9r_workbench_browser 4 passed |
-| R5 | Eval 假覆盖 | DIRECTION_SCENES + 信号透传非降级方向 + V1 边界标注 | test_m9r_mechanism_eval 12 passed |
-| R6 | 跨平台测试失败 | _scan_src 纯 Python 替代 grep | test_m9r_production_recommendation_chain 4 passed |
-| R7 | 文档不可复现 | Base/计数/EOF/浏览器 skip 修正 | git diff --check 干净 |
-
-**第 5 轮验收证据**：全量回归 **1273 passed**（21:02）；浏览器 **4 passed**；R1 遗留 SQL `#` 注释 bug 已修（78 失败→全绿）。**待闫睿涵重新复验**。
-
-## 6. WP 验收矩阵
-
-## WP 验收矩阵（M9-R 任务书标准 → 证据）
-
-### WP1 经营读模型（SKU 层）
-
-| # | 任务书验收标准 | 证据 | 结果 |
-|---|---|---|---|
-| ① | 同一 item 多 SKU / 同 SKU 多 revision / 同租户多店不串数 | test_product_read_query + test_m9r_item_isolation_overlap（重叠窗口跨 item 4 PASS） | ✅ |
-| ② | 日/月、店铺/商品、支付/退款不同粒度不静默相加 | test_m9r_query_source_honesty（period_key + granularity 物理隔离） | ✅ |
-| ③ | 跨店/跨 SKU/跨 revision/混粒度输入被阻断 | test_m9r_read_model_isolation（13 破坏性隔离） | ✅ |
-| ④ | 真实值可追溯（料号/来源/data_as_of） | verify_wp1 ⑧ + test_m9r_query_source_honesty | ✅ |
-
-### WP2 证据桥接与门禁
-
-| # | 任务书验收标准 | 证据 | 结果 |
-|---|---|---|---|
-| ① | 只有通过全部 Gate 的实验给强方向结论 | test_m9r_gates_production + mutation（gate 失败阻断强诊断） | ✅ |
-| ② | 缺货/广告/价格污染不被归因标题/主图 | test_m9r_diagnosis（污染自动反推 + degraded） | ✅ |
-| ③ | 无合格实验时不编造 uplift | test_m9r_diagnosis_bridge（显式 missing/blocked） | ✅ |
-| ④ | 诊断全链只读，demo 标签不丢失 | test_m9r_demo_isolation + test_m9r_gates_production | ✅ |
-
-### WP3 生命周期建议
-
-| # | 任务书验收标准 | 证据 | 结果 |
-|---|---|---|---|
-| ① | 建议默认 draft，只有人工可批准/拒绝 | test_m9r_lifecycle_state_machine | ✅ |
-| ② | 存量标题/主图默认不改 | test_m9r_lifecycle_keep_default | ✅ |
-| ③ | 缺成本不出正式利润安全价格 | test_m9r_lifecycle_validation（REQUIRED_FACTS 降级） | ✅ |
-| ④ | 重放不重复创建；旧建议标 stale | test_m9r_lifecycle_idempotency | ✅ |
-| ⑤ | 生产语义链闭环（诊断→模型→校验→落库） | test_m9r_production_recommendation_chain（gateway.calls==1 + DRAFT + 审计） | ✅ |
-
-### WP4 工作台与机制 Eval
-
-| # | 任务书验收标准 | 证据 | 结果 |
-|---|---|---|---|
-| ① | 页面从商品/SKU 下钻到 revision/指标/来源/建议依据 | test_m9r_workbench_browser（Playwright 真实渲染） | ✅ |
-| ② | 显示为什么建议/为什么不建议 | test_m9r_workbench_view（why_not_recommended） | ✅ |
-| ③ | 浏览页面无隐式写动作；运行显式点击并审计 | test_m9r_workbench_browser（生成按钮显式点击 + 审计） | ✅ |
-| ④ | Eval 发现真实方向 + 拒绝污染方向 | test_m9r_mechanism_eval（mutation 锁污染方向） | ✅ |
-
-
-## 7. 独立探针输出
-
-```text
-plugins: anyio-4.14.2, langsmith-0.10.15
-collected 12 items
-
-tests\test_m9r_item_isolation_overlap.py ....                            [ 33%]
-tests\test_m9r_diagnosis_freshness_none.py ....                          [ 66%]
-tests\test_m9r_production_recommendation_chain.py ....                   [100%]
-
-============================= 12 passed in 3.66s ==============================
-
+```powershell
+$m9rTests = Get-ChildItem tests -File -Filter 'test_m9r_*.py' |
+  Sort-Object Name | ForEach-Object { $_.FullName }
+& .venv\Scripts\python.exe -m pytest $m9rTests -q -p no:cacheprovider `
+  --basetemp=.tmp_m9r_wp5
+& .venv\Scripts\python.exe tests\verify_wp1_acceptance.py
+& .venv\Scripts\python.exe tests\verify_wp2_acceptance.py
+& .venv\Scripts\python.exe tests\verify_wp3_acceptance.py
+& .venv\Scripts\python.exe tests\verify_wp4_acceptance.py
+& .venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider `
+  --basetemp=.tmp_m9r_full
+& .venv\Scripts\python.exe -m compileall -q src evals\product_lifecycle tests
+git diff --check
 ```
 
-## 8. mutation 红绿
+真实模型 gate 需要验收人自己的受控 env 文件，不得提交凭据：
 
-**mutation 1：P2 freshness fail-closed**
-
-| 步骤 | 操作 | 结果 |
-|---|---|---|
-| 破坏 | `conclusion_allowed` 反转回 fail-open（跳过 freshness 检查） | `test_m9r_diagnosis_freshness_none.py` → **2 failed**（`test_freshness_none_rejects_conclusion` assert True is False；`test_freshness_missing_blocks_strong_direction_interpreter` DID NOT RAISE） |
-| 还原 | `git checkout -- src/.../diagnosis.py` | **4 passed** |
-
-**mutation 2：P1 item 隔离**
-
-| 步骤 | 操作 | 结果 |
-|---|---|---|
-| 破坏 | 移除 `_inventory_facts` 的 `(item_id=? OR item_id IS NULL)` 过滤 | `test_m9r_item_isolation_overlap.py` → **4 failed** |
-| 还原 | `git checkout -- src/.../query.py` | **4 passed** |
-
-**结论**：两组 mutation 均证明测试能检测出实现被破坏（非碰巧通过）；mutation 未写入产品分支（worktree 纯净）。
-
-## 9. 浏览器证据
-
-**已在 `tests/test_m9r_workbench_browser.py` 验证（4 passed）：**
-> 注明：浏览器门禁依赖本机 Windows Edge / Playwright（`_browser_channel()` 探测）。若复验环境非 Windows 或无 Edge，该测试显式 `pytest.skip`（4 skipped），此时以本报告的本地运行证据为准。
-
-| 检查 | 结果 |
-|---|---|
-| 商品经营视图真实渲染（非只断言 section.active） | ✅ `#m9rMetricRows tr` 有数据行 |
-| 1280×720 桌面无横向溢出 | ✅ |
-| 390×844 窄屏无横向溢出 | ✅ |
-| console 无 error（进入 M9 视图后挂监听，排除 favicon 404） | ✅ |
-| 操作契约：点击"生成建议"→ 生产链落库 → 列表出现 DRAFT 建议 | ✅ `test_m9r_workbench_generate_recommendation` |
-
-## 10. 回归归因
-
-全量回归发现 2 项失败，经 Base 对照归因均为 `7de7bef`（httpx 惰性化）引入的真实回归：
-
-| 失败项 | Head 结果 | Base (454b35c) 结果 | 归因 | 处置 |
-|---|---|---|---|---|
-| `test_intent_routing.py::test_model_disabled_never_makes_an_external_request` | FAIL（`AttributeError: NoneType has no attribute post`） | **PASS** | `7de7bef` 把 `_client` 改为惰性创建，测试直接访问 `gateway._client.post` 崩溃 | 已修复（5a3366e）：先 `_ensure_client()` 再 patch |
-| `test_chat_stream.py::test_chat_stream_model_disabled_makes_no_external_request` | FAIL（`AttributeError: None has no attribute post`） | **PASS** | 同因：`monkeypatch.setattr(model._client, 'post', ...)` 时 `_client` 为 None | 已修复：先 `_ensure_client()` 再 patch |
-
-**结论**：两项失败均为 `7de7bef`（本分支上一提交）引入的真实回归，非既有失败，均已修复并单测验证通过。修复后未重跑全量回归（用户指示，失败点已逐一确认修复）。
-
-## 11. 签署边界
-
-**已覆盖**：编译/收集门禁、独立反例探针（12 PASS）、mutation 反证（2 组红绿）、生产调用链 grep、防假绿检查、跨平台收集、浏览器操作契约
-
-**未覆盖（本 PR 不承诺）**：
-- 真实模型 E2E（需 API key 环境）——D-034 达标已用 mock ModelGateway 证明 `gateway.calls==1`，真实模型需在有 key 环境验证
-- 真实平台接入（淘宝/ERP/数据库）——PR 为只读数据基础设施，不连接外部
-- 业务签署、生产放行——需 WP5 独立复验确认后由负责人签署
-
-## 12. 重验最低条件
-
-```bash
-git worktree add --detach D:/m9r-verify <new-head>
-cd D:/m9r-verify
-python -m compileall -q src tests
-PYTHONPATH=src python -m pytest --collect-only -q
-PYTHONPATH=src python -m pytest -q   tests/test_m9r_item_isolation_overlap.py   tests/test_m9r_diagnosis_freshness_none.py   tests/test_m9r_production_recommendation_chain.py
-PYTHONPATH=src python tests/verify_wp{1,2,3,4}_acceptance.py
-PYTHONPATH=src python -m pytest tests/test_m9r_workbench_browser.py -q
-PYTHONPATH=src python -m pytest tests -q   # 全量回归（单进程串行 + D 盘 basetemp）
+```powershell
+& .venv\Scripts\python.exe evals\product_lifecycle\run_m9r_direction_eval.py `
+  --env-file <受控-env-file> --out <report-a.json>
+& .venv\Scripts\python.exe evals\product_lifecycle\run_m9r_direction_eval.py `
+  --env-file <受控-env-file> --out <report-b.json>
 ```
+
+## 8. 升级与备份策略
+
+- v36 升 v39 前：由匹配 v36 的旧程序停写并生成、验证全量备份。
+- v39 初始化：保留订单头、订单行、物流、售后和事件；库存迁移为 item 专属/未知身份两组部分唯一索引。
+- 升级后恢复写入前：由 v39 程序生成并验证新的全量备份。
+- 灾备 manifest 精确匹配当前 schema；v36 归档不得直接由 v39 程序恢复，只能在匹配旧 schema 的隔离环境恢复或先走受控升级。
+- D-014 兼容只接受新增 `item_id=None` 的旧 payload hash；任何其它同水位载荷差异仍冲突。
+
+## 9. 未放行事项
+
+- 本报告不是闫睿涵的 WP5 独立签署，也不替代其未见场景和 mutation。
+- live gate 证明冻结场景上的模型方向，不证明真实店铺数据质量、平台因果或平台内部权重。
+- 不包含真实淘宝/ERP 数据接入、生产发布、长稳、容量、异机灾备或任何平台写能力。
+- M10-R v37/v38 及 PR #24 必须在 M9-R 合入后的 main 上重新基线，合并时保留 36、37、38、39 全部迁移，不能整体取 ours/theirs。
+
+## 10. 正式 WP5 下一步
+
+闫睿涵应从 PR #19 推送后的远端最终 Head 建立干净 detached worktree，先确认该 Head 是
+`2e7fa58` 的后代，再按第 7 节复跑。独立测试应至少覆盖旧 v36 公开写入后的同水位重放、
+退款未知对净销的阻断、移除 answer-free 业务事实后的方向失败、oracle 注入拒绝、具体证据
+引用 DOM 可见，以及批准建议仍无平台写动作。失败需继续退回胡磊修复；全部通过后再由
+闫睿涵写入正式签署结论。

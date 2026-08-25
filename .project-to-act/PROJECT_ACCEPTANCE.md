@@ -5,6 +5,14 @@
 
 ## 当前验收结论
 
+- 结论：2026-08-25 PR #19 已在实现提交
+  `2e7fa58e8bf1b169454a537813f74edff1b62111` 上形成新的 M9-R 开发侧重验候选，证据 ID
+  为 E-20260825-001。负责人在 `cf31613` 上提出的旧 v36→v39 重放、退款/净销语义、
+  answer-coded Eval、页面具体证据值和报告可复现性 5 项阻断均已闭环；另补模型连续无效输出
+  重试耗尽的安全收口和红绿反证。全仓 `1315 passed`、M9-R `251 passed`、WP1～WP4
+  四脚本、5 项真实浏览器、compileall、diff check 与迁移唯一性扫描均通过；DeepSeek 非 mock
+  方向 Gate 以温度 0 连续两轮 `5/5`。本结论只证明开发侧候选，无权替代闫睿涵从推送后的
+  干净远端最终 Head 独立执行并签署 WP5，也不放行真实平台数据、真实因果、长稳、灾备或生产。
 - 结论：2026-08-24 PR #19 已形成可推送的 M9-R 合成候选，证据 ID 为 E-20260824-002。
   item 隔离与订单聚合修复提交为 `bc5d316`，负责人 `main@1ee68cb` 的合并提交为
   `e4d42bb`；`CONTRIBUTING.md` 冲突按负责人 main 原文解决，内容哈希与权威版本一致，
@@ -544,6 +552,20 @@
 
 ## 证据索引
 
+- E-20260825-001：PR #19 最新阻断修复与负责人式开发侧重验。固定 Base 为
+  `1ee68cb686fd4f3c86c22c51b6f57c84042d6d45`，负责人最新不通过 Head 为 `cf31613`，
+  已验证实现提交为 `2e7fa58e8bf1b169454a537813f74edff1b62111`，tree 为
+  `09160724ca256f4775ea004c7cbf5bf4d552edad`。验证方法为项目 `.venv` 串行 pytest、
+  WP1～WP4 直接脚本、真实 Edge/Playwright、DeepSeek 禁 mock live runner、compileall、
+  diff check 和迁移方法/初始化成员扫描；全部退出 0。结果为全仓 `1315 passed in 1331.41s`、
+  M9-R `251 passed in 74.22s`、浏览器 `5 passed`、两轮 live 各 `5/5`；WP1/2/3/4 分别
+  18/12/8/10 项 PASS。重试耗尽 mutation 移除安全收口后 `2 failed`，恢复后 `2 passed`。
+  live 报告位于 `docs/reviews/M9R-DIRECTION-LIVE-20260825-{A,B}.json`，SHA-256 分别为
+  `096156D7C3F96410801354E6F143DD519CF3E440B5ADE4E5EC20826F1C701FE0` 和
+  `3530006D459ACC4824779D09F13007F7B87C9F9C7F9580AA81BB008B7BB4B8E8`，不含凭据或顾客数据。
+  完整范围、命令、备份策略和未放行项见 `docs/reviews/M9R-WP5-ACCEPTANCE-REPORT.md` 与
+  `docs/reviews/m9r-wp5-acceptance-protocol.md`。证据在任务书、实现提交、报告 JSON 或最终
+  文档提交变化前有效；只证明开发侧重验候选，不代替独立 WP5 或生产 Gate。
 - E-20260824-002：PR #19 上传候选合成复验。M9-R 修复对象 `bc5d316` 只含 18 个已核对
   文件，未纳入 M10-R 文件；合并对象 `e4d42bb` 以 `1ee68cb` 为第二父提交，冲突仅为
   `CONTRIBUTING.md`，解决结果 blob `b43bf4c33b08f75aecec88339032cd6fc5045869` 与负责人

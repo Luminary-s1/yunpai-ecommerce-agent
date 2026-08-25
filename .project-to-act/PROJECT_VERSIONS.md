@@ -17,12 +17,13 @@
   行、物流、售后和事件，重复初始化幂等，schema 自检同时核对列、索引和订单自然键。
   灾备 manifest 精确匹配 v39：升级前用 v36 程序停机备份，升级后恢复写入前生成并验证 v39
   全量备份；v36 归档只可由匹配旧 schema 的程序在隔离环境恢复。v39 已由负责人通过
-  PR #26 合入 `main@1ee68cb` 的唯一权威 `CONTRIBUTING.md` 表；M9-R v39 运行实现已固化为
-  `bc5d316`，并通过 `e4d42bb` 合并负责人 main、按权威表解决冲突和完成合成态复验。
-  最终 PR Head 必须是 `e4d42bb` 的后代；这仍不得视为已发布 schema 或正式独立验收通过，
-  见 E-20260824-002。
+  PR #26 合入 `main@1ee68cb` 的唯一权威 `CONTRIBUTING.md` 表。PR #19 的最新已验证实现提交
+  为 `2e7fa58`：新增受控旧 payload hash 读侧兼容，使 v36 公开事实升 v39 后相同 source
+  waterline 正常重放保持 idempotent，而其它同水位载荷差异仍按 D-014 冲突；退款来源未知时
+  `net_sales` 不再以 gross 冒充正式净销。应用仍未单独升包，最终 PR Head 必须是
+  `2e7fa58` 的后代；这不得视为已发布 schema 或正式独立验收通过，见 E-20260825-001。
 - 占号状态：PR #10 已合入 main `1906365`，schema **v33** 在 `main`（knowledge_key 唯一索引 + retrieval_logs）。F-322 **v32** 已在 main。PR #11 的 `_apply_v31`（workspace 会话表）仍未进入 `main`。M7-R WP1 的 **v34** 与 WP3 的 **v35** 均已在 `main`；M9-R WP3 的 **v36** 仅完成占号，运行迁移未合并。schema 迁移占号以 `CONTRIBUTING.md` 第 9 节“Schema 版本号占用登记”为唯一权威来源，本文不复制“下一空闲号”。
-- 最后更新：2026-08-24
+- 最后更新：2026-08-25
 
 ## M7-R WP5 独立验收与整链合入（未单独升应用版）
 
