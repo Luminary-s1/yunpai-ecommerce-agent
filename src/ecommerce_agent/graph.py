@@ -17,9 +17,11 @@ from .customer_service_content import (
 )
 from .customer_service_loop import (
     build_customer_service_suggestion,
+    customer_service_delivery_claim_authorized,
     customer_service_content_for_model,
     enrich_customer_service_tool_result,
     validate_customer_service_draft,
+    verified_customer_service_business_action,
 )
 from .database import Database, utc_now
 from .decision import AgentDecision
@@ -193,19 +195,67 @@ def _bounded_product_context_ready(state: AgentState) -> bool:
     return isinstance(candidates, list) and len(candidates) == 1 and bool(candidates[0])
 
 
-def verify_response(state: AgentState) -> dict[str, Any]:
-    evidence = " ".join(document["answer"] for document in state["retrieved"])
-    evidence += " " + json.dumps(state["context_bundle"], ensure_ascii=False)
+def _approved_customer_service_answers(state: dict[str, Any]) -> list[str]:
+    approved_ids = {
+        str(item.get("id"))
+        for item in (state.get("customer_service_content") or {}).get("scripts", [])
+        if item.get("id")
+    }
+    return [
+        str(document.get("answer") or "")
+        for document in state.get("retrieved", [])
+        if str(document.get("id")) in approved_ids and document.get("answer")
+    ]
+
+
+def _review_customer_facing_answer(
+    state: dict[str, Any],
+    answer: str,
+) -> tuple[bool, str]:
+    evidence = " ".join(
+        str(document.get("answer") or "")
+        for document in state.get("retrieved", [])
+    )
+    evidence += " " + json.dumps(
+        state.get("context_bundle") or {},
+        ensure_ascii=False,
+    )
+    approved_answers = _approved_customer_service_answers(state)
+    approved_exact = any(
+        normalize_text(approved_answer) == normalize_text(answer)
+        for approved_answer in approved_answers
+    )
     customer_service_passed, customer_service_reason = validate_customer_service_draft(
-        state["draft"],
+        answer,
         state.get("tool_result") or {},
         question=state.get("normalized_input"),
+        approved_answers=approved_answers,
     )
     if not customer_service_passed:
-        passed = False
-        reason = customer_service_reason
-    else:
-        passed, reason = review_output(state["draft"], evidence)
+        return False, customer_service_reason
+    tool_result = state.get("tool_result") or {}
+    return review_output(
+        answer,
+        evidence,
+        verified_business_action=verified_customer_service_business_action(
+            tool_result
+        ),
+        approved_commitment=approved_exact,
+        verified_delivery_commitment=customer_service_delivery_claim_authorized(
+            answer,
+            tool_result,
+            approved_answers=approved_answers,
+            question=state.get("normalized_input"),
+        ),
+        question=state.get("normalized_input"),
+    )
+
+
+def verify_response(state: AgentState) -> dict[str, Any]:
+    passed, reason = _review_customer_facing_answer(
+        state,
+        state["draft"],
+    )
     verified_result = state.get("tool_result", {}).get("postcondition_met") is True
     if state.get("model_retry_advised") and not verified_result:
         return {
@@ -1137,6 +1187,7 @@ def build_graph(
     def execute_tool(state: AgentState) -> dict[str, Any]:
         name = state["selected_tool"] or ""
         result: ToolResult
+        tool_kind: str | None = None
         try:
             spec, arguments = tools.validate_selection(
                 name=name,
@@ -1144,6 +1195,7 @@ def build_graph(
                 requested_mode=state["decision_mode"],  # type: ignore[arg-type]
                 context=execution_context(state),
             )
+            tool_kind = spec.kind
             result = tools.execute(
                 spec=spec,
                 arguments=arguments,
@@ -1151,6 +1203,7 @@ def build_graph(
             )
             tool_result = {
                 "tool_name": name,
+                "tool_kind": tool_kind,
                 "intent": state["intent"],
                 **result.model_dump(),
             }
@@ -1165,6 +1218,7 @@ def build_graph(
             )
             tool_result = {
                 "tool_name": name,
+                "tool_kind": tool_kind,
                 "intent": state["intent"],
                 **result.model_dump(),
             }
@@ -1352,9 +1406,23 @@ def build_graph(
             # The model drafted a question about SKU/item ids a shopper cannot
             # answer; ask for what they can actually provide instead.
             answer = fallback
+        passed, safety_reason = _review_customer_facing_answer(state, answer)
+        if not passed:
+            return {
+                "answer": "为避免给出未经核实的承诺，我会将这个问题转给人工客服。",
+                "requires_human": True,
+                "route": "handoff",
+                "route_reason": safety_reason,
+                "trace": [
+                    *state["trace"],
+                    f"clarify:unsafe_response:{safety_reason}",
+                    "postcondition:handoff",
+                ],
+            }
         return {
             "answer": answer,
             "requires_human": False,
+            "route": "persist",
             "trace": [*state["trace"], "clarify", "postcondition:input_required"],
         }
 
@@ -1390,13 +1458,20 @@ def build_graph(
         else:
             decision_response = state.get("decision", {}).get("response")
             answer = decision_response or state.get("answer") or "当前问题存在无法自动消除的不确定性，我会为您转接人工客服。"
+        passed, safety_reason = _review_customer_facing_answer(state, answer)
+        safety_trace: list[str] = []
+        if not passed:
+            reason = safety_reason
+            answer = "为避免给出未经核实的承诺，我会将这个问题转给人工客服。"
+            safety_trace.append(f"handoff:unsafe_response:{safety_reason}")
         if state.get("execution_mode") == "shadow":
             return {
                 "answer": answer,
                 "requires_human": True,
+                "route_reason": reason,
                 "handoff_id": None,
                 "handoff_status": None,
-                "trace": [*state["trace"], "shadow_handoff_observed"],
+                "trace": [*state["trace"], *safety_trace, "shadow_handoff_observed"],
             }
         safe_question, _ = redact_sensitive(state["normalized_input"])
         tool_arguments = state.get("tool_arguments") or {}
@@ -1448,9 +1523,15 @@ def build_graph(
         return {
             "answer": answer,
             "requires_human": True,
+            "route_reason": reason,
             "handoff_id": task.id,
             "handoff_status": task.status,
-            "trace": [*state["trace"], "human_handoff", f"postcondition:handoff_{task.status}"],
+            "trace": [
+                *state["trace"],
+                *safety_trace,
+                "human_handoff",
+                f"postcondition:handoff_{task.status}",
+            ],
         }
 
     def refuse(state: AgentState) -> dict[str, Any]:
@@ -1458,9 +1539,23 @@ def build_graph(
             answer = "我只能使用本店已授权的信息，不能提供其他店铺或其他买家的非公开数据。"
         else:
             answer = state.get("decision", {}).get("response") or "我不能更改系统规则、披露内部提示或绕过权限，但可以继续帮助您处理正常的商品、订单和售后问题。"
+        passed, safety_reason = _review_customer_facing_answer(state, answer)
+        if not passed:
+            return {
+                "answer": "为避免给出未经核实的承诺，我会将这个问题转给人工客服。",
+                "requires_human": True,
+                "route": "handoff",
+                "route_reason": safety_reason,
+                "trace": [
+                    *state["trace"],
+                    f"refuse:unsafe_response:{safety_reason}",
+                    "postcondition:handoff",
+                ],
+            }
         return {
             "answer": answer,
             "requires_human": False,
+            "route": "persist",
             "trace": [*state["trace"], "refuse", "postcondition:blocked"],
         }
 
@@ -1570,9 +1665,17 @@ def build_graph(
         lambda state: state["review_route"],
         {"pass": "persist", "handoff": "handoff", "retry_later": "retry_later"},
     )
-    builder.add_edge("clarify", "persist")
+    builder.add_conditional_edges(
+        "clarify",
+        lambda state: state["route"],
+        {"persist": "persist", "handoff": "handoff"},
+    )
     builder.add_edge("retry_later", "persist")
     builder.add_edge("handoff", "persist")
-    builder.add_edge("refuse", "persist")
+    builder.add_conditional_edges(
+        "refuse",
+        lambda state: state["route"],
+        {"persist": "persist", "handoff": "handoff"},
+    )
     builder.add_edge("persist", END)
     return builder

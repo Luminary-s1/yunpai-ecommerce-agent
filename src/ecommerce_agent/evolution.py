@@ -130,7 +130,11 @@ class EvolutionService:
         checks["retrieval_fit"] = candidate_score >= 0.35
         checks["nearest_documents"] = [item["id"] for item in neighbors]
         evidence = " ".join(item["answer"] for item in neighbors)
-        output_passed, output_reason = review_output(answer, evidence)
+        output_passed, output_reason = review_output(
+            answer,
+            evidence,
+            question=question,
+        )
         checks["output_policy"] = output_passed
         checks["output_policy_reason"] = output_reason
 

@@ -5,6 +5,34 @@
 
 ## 当前验收结论
 
+- 结论：2026-08-26 谢良璇已完成 PR #25 P1 承诺边界正式人工复验，证据 ID 为
+  E-20260826-002。复验使用 `confirmation_mode=human`，自动契约检查通过，6/6 人工观察均为
+  `confirmed=true`，`human_observations_passed=true`、`final_status=human_accepted`。第 4 步
+  首次执行时，混合错误草稿只展示首个 `order_status_mismatch`，人工判定证据不足并输入 `N`；
+  验收助手随后把订单取消、物流签收、退款审核通过拆成三个独立反例，分别返回对应 mismatch
+  并转人工，第二次复验通过。该结果确认发货承诺、业务动作声称、全部客户可见出口、状态一致性、
+  库存披露和授权不扩散六类边界均符合本次修复的验收要求，关闭本次 P1 开发侧人工 Gate。
+  F-324 状态保持进行中。
+- 结论：2026-08-26 已形成 PR #25 负责人 P1 承诺边界修复的开发侧候选，证据 ID 为
+  E-20260826-001，基线为旧待验 head `da1e1c2`。`response_policy` 中发货时效和退款/订单动作
+  两项声明现已进入真实客户可见输出路径：发货时效只接受批准的精确话术或匹配的可信事实，
+  退款及订单动作完成声称只接受动作类型匹配、`tool_kind=write`、`status=success` 且
+  `postcondition_met=true` 的写回执；澄清、拒绝、转人工、流式和非流式出口统一复核。相邻
+  对抗检查另发现“预计明天送达”可被增强为“明天送达”，新增反例修复后按事实/答复的谨慎
+  程度禁止增强。负责人原复现及自然口语 red-first 证据包含 `20 failed, 10 passed`、
+  `19 failed, 29 passed`，本轮谨慎程度反例修复前为 `4 failed, 1 passed`；修复后新增 5 项、
+  客服策略/闭环/图/路由组合 `447 passed`。全部 1493 项测试按互不重叠文件分组在隔离临时目录
+  运行并通过，既有 Traffic Lab 重复 Operation ID 共 24 条 warning；并行临时目录竞争导致的
+  SQLite 打开失败已由对应 58 项与 33 项独立串行复跑通过排除。compileall、PowerShell 5.1
+  语法、whitespace 和敏感字面量扫描通过。关键文件 SHA-256：`policy.py`
+  `C3ACB4D621BC956172FC555857F0112F333F51703A88D6575370D3FE5E605E3B`、
+  `customer_service_loop.py` `AE9C53712EDA70834F4FA5CDABD1143A40C1274CA4813B0425EDA3B204BCBA49`、
+  `graph.py` `3C48DA34CABC54096D76FD78CED7ABEC32E1E9BD360609177562F4A395E1241A`。
+  6 步验收助手自动演练为 `confirmation_mode=auto`、6/6 confirmed、
+  `final_status=developer_rehearsal_passed`，结果文件为
+  `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\pr25-p1-manual-evidence\谢良璇_PR25_P1承诺边界人工复验结果_20260826-102815.json`，不能替代谢良璇本人正式验收。F-324 仍为进行中；
+  谢良璇人工复验、缪海南针对新 head 的 WP5、负责人审阅/合入、真实渠道、长稳和生产 Gate
+  均未完成。
 - 结论：2026-08-21 M8-R 完整候选已建立 PR #25，并在审核前自查后形成代码提交
   `261a9645b193fc657666d20e0b2b26b8c3733de7`，证据 ID 为 E-20260821-004。对照历史审核记录，
   已收紧空白店铺/SKU/订单/问题值、影子反馈会话范围、客服 Eval 来源枚举和 WP1 验收助手参数；
@@ -595,6 +623,19 @@
 
 ## 证据索引
 
+- E-20260826-002：PR #25 P1 承诺边界正式人工复验。2026-08-26 10:47:48 +08:00，谢良璇在
+  F 盘隔离数据目录运行无 `-AutoConfirm` 的 6 步复验助手，逐项核对发货时效承诺、退款/订单
+  动作声称、全部客户可见出口、订单/物流/退款状态一致性、库存披露和动作授权不扩散。第 4 步
+  首次混合反例仅展示首个 mismatch，人工输入 `N`；将订单取消、物流签收、退款审核通过拆成
+  三个独立反例后再次运行，三项分别返回对应 mismatch 并转人工。最终结果为
+  `confirmation_mode=human`、`automatic_contract_checks=passed`、6/6 confirmed、
+  `human_observations_passed=true`、`final_status=human_accepted`，且
+  `external_model_called=false`、`platform_write_performed=false`。过程与结果文件分别位于
+  `F:\CodexProjects\yunpai-ecommerce-agent-m8r-runtime\pr25-p1-manual-evidence\谢良璇_PR25_P1承诺边界人工复验过程_20260826-104643.txt`
+  和同目录 `谢良璇_PR25_P1承诺边界人工复验结果_20260826-104748.json`；SHA-256 分别为
+  `EC9A5122540AF8269E5EA0770C475BD71FBE4CEEC998EF88A54B12DB6E15D496`、
+  `7671B9F610048AAFE769C64989F0DE3EF84D513810A011976892377152DEBFDA`。证据在相关业务逻辑、
+  测试或验收助手变化前有效，用于关闭本次 P1 开发侧人工 Gate。
 - E-20260820-007：M8-R WP3 谢良璇人工黑盒验收。2026-08-20 21:50:36 +08:00，谢良璇在
   F 盘隔离数据目录运行无 `-AutoConfirm` 的 WP3 助手，在每一步阅读回复、建议证据和正反例
   后亲自确认。结果为 `tester=谢良璇`、`work_package=M8-R-WP3`、

@@ -271,3 +271,76 @@ def test_sku_demanding_clarification_is_rewritten_for_customers(tmp_path) -> Non
         assert "商品名称或商品链接" in response.answer
     finally:
         service.close()
+
+
+def test_unverified_delivery_commitment_in_clarification_is_handed_off(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    service.model.generate_json = lambda _messages, **_kwargs: {  # type: ignore[method-assign]
+        "intent": "product_info",
+        "mode": "clarify",
+        "missing_fields": ["收货地区"],
+        "response": "今天下单的话，明天一定发货。",
+        "reason": "need destination",
+        "confidence": 0.9,
+    }
+    try:
+        response = service.chat(
+            principal_for(service),
+            "clarify-unsafe-delivery",
+            "今天下单什么时候发货？",
+            {},
+        )
+        assert response.requires_human is True
+        assert response.reason == "customer_service_unverified_delivery_commitment"
+        assert "明天一定发货" not in response.answer
+        assert response.handoff_id is not None
+    finally:
+        service.close()
+
+
+def test_unverified_refund_claim_in_handoff_copy_is_rewritten(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    service.model.generate_json = lambda _messages, **_kwargs: {  # type: ignore[method-assign]
+        "intent": "after_sales",
+        "mode": "handoff",
+        "response": "已经帮您办理退款了。",
+        "reason": "manual review required",
+        "confidence": 0.9,
+    }
+    try:
+        response = service.chat(
+            principal_for(service),
+            "handoff-unsafe-refund",
+            "请帮我申请退款",
+            {},
+        )
+        assert response.requires_human is True
+        assert response.reason == "customer_service_unverified_business_action_claim"
+        assert "已经帮您办理退款" not in response.answer
+        assert response.handoff_id is not None
+    finally:
+        service.close()
+
+
+def test_unverified_order_action_claim_in_refusal_copy_is_handed_off(tmp_path) -> None:
+    service = AgentService(make_settings(tmp_path))
+    service.model.generate_json = lambda _messages, **_kwargs: {  # type: ignore[method-assign]
+        "intent": "after_sales",
+        "mode": "refuse",
+        "response": "已经替您取消订单了。",
+        "reason": "cannot continue automatically",
+        "confidence": 0.9,
+    }
+    try:
+        response = service.chat(
+            principal_for(service),
+            "refuse-unsafe-order-action",
+            "请取消这个订单",
+            {},
+        )
+        assert response.requires_human is True
+        assert response.reason == "customer_service_unverified_business_action_claim"
+        assert "已经替您取消订单" not in response.answer
+        assert response.handoff_id is not None
+    finally:
+        service.close()
