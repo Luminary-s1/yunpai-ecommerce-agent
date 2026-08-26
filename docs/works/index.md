@@ -33,6 +33,7 @@
 | 类型 | 来源 | 状态 | 验证与操作文档 |
 |---|---|---|---|
 | feature | `feature/m5-operations-assistant` | 已冻结并归档 | [M5 运营辅助与文案生成](archive/12-feature-m5-operations-assistant/README.md) |
+| feature | `feature/m9r-read-model` | 已交付，PR #19 待合 | [M9-R 商品流量与生命周期经营](15-feature-m9r-lifecycle/README.md) |
 
 ## 本次统一验收
 

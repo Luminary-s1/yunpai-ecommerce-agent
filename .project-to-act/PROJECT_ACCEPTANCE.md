@@ -5,6 +5,72 @@
 
 ## 当前验收结论
 
+- 结论：2026-08-25 PR #19 已在实现提交
+  `f23dba31de755ee7df5dbc0cde894d41c06b47ad` 上修复负责人针对 `8e7ede3` 的唯一剩余阻断，
+  证据 ID 为 E-20260825-002。新增回归先稳定复现“订单头 item 非空、旧订单行无 item 字段”的
+  `753ff15` 公开 v36 形态升 v39 后同水位重放误报冲突；修复仅对缺省的新增订单行 item 字段
+  生成受控旧 hash 候选，保留订单头 item、新写入完整 hash、历史 hash/事件和真实载荷冲突边界。
+  新增反例修复前 `1 failed`、修复后文件 `3 passed`；真实 `753ff15` 服务跨版本探针得到
+  schema 36→39、原事件 `idempotent`、version 1、订单行 item 回填，金额变化仍 conflict。
+  M9-R `252 passed`、WP1～WP4 四脚本、5 项浏览器和全仓 `1316 passed in 1204.75s` 均通过；
+  compileall、diff check 与台账校验退出 0。本结论仍只是开发侧重验候选，不替代闫睿涵从
+  推送后的干净远端最终 Head 执行和签署 WP5，也不放行真实平台、生产、长稳或灾备。
+- 结论：2026-08-25 PR #19 已在实现提交
+  `2e7fa58e8bf1b169454a537813f74edff1b62111` 上形成新的 M9-R 开发侧重验候选，证据 ID
+  为 E-20260825-001。负责人在 `cf31613` 上提出的旧 v36→v39 重放、退款/净销语义、
+  answer-coded Eval、页面具体证据值和报告可复现性 5 项阻断均已闭环；另补模型连续无效输出
+  重试耗尽的安全收口和红绿反证。全仓 `1315 passed`、M9-R `251 passed`、WP1～WP4
+  四脚本、5 项真实浏览器、compileall、diff check 与迁移唯一性扫描均通过；DeepSeek 非 mock
+  方向 Gate 以温度 0 连续两轮 `5/5`。本结论只证明开发侧候选，无权替代闫睿涵从推送后的
+  干净远端最终 Head 独立执行并签署 WP5，也不放行真实平台数据、真实因果、长稳、灾备或生产。
+- 结论：2026-08-24 PR #19 已形成可推送的 M9-R 合成候选，证据 ID 为 E-20260824-002。
+  item 隔离与订单聚合修复提交为 `bc5d316`，负责人 `main@1ee68cb` 的合并提交为
+  `e4d42bb`；`CONTRIBUTING.md` 冲突按负责人 main 原文解决，内容哈希与权威版本一致，
+  固定 `v36/v39=M9-R`、`v37/v38=M10-R`、下一空闲号为 40。合成态迁移/item/读模型/
+  灾备/发布关联 `64 passed`，WP1～WP4 四脚本、compileall、diff check 与台账校验均退出 0。
+  本条证明上传候选已消除 PR 冲突并通过开发侧合成复验；最终远端 Head 必须是
+  `e4d42bb` 的后代，且仍须由闫睿涵在该干净 Head 上执行正式 WP5，不能把本条写成独立签署。
+- 结论：2026-08-24 对 PR #19 的本地未提交候选完成负责人式开发侧预验收，证据 ID 为
+  E-20260824-001。候选基于 Head `753ff15`，tracked diff 对象哈希
+  `39c18615d09c9a8b71fdb1e50ee1b9671506b2656d81b7cf935f994516fb05c4`；新增关键测试
+  `tests/test_m9r_order_item_attribution.py` 的 SHA-256 为
+  `a2b3c775af860b7725b44bfe5308ab76c7081a52ed71ef0298097e6d0b4634d6`。它不是可复现的已提交 PR Head。
+  v39 不再重建 `commerce_orders`，v36→v39 迁移保留订单头、订单行、物流、售后和事件，
+  并把 item 归属下沉到订单行；同一外部订单保持单一聚合根，M9 读侧按行归属过滤，旧行
+  仅在身份无歧义时兼容投影。新增阻断测试修复前 `3 failed`，修复后聚焦 `29 passed`；
+  将读侧故意退回订单头过滤时 mutation `1 failed`，还原后 `4 passed`。关联回归
+  `300 passed`；WP1～WP4 脚本全部退出 0，其中 WP4 脚本直接执行真实 Playwright 桌面和
+  390px 门禁且拒绝 skip；最终全仓 `1298 passed`（1468.77 秒），无
+  failed/skipped/xfailed。compileall、diff check 与 project-to-act validate 退出 0。
+  首轮全仓曾在 Base 同源的异步发布测试得到 `1 failed, 1296 passed`；确认 webhook ACK 与
+  worker 存在合法抢占后，将测试改为有界等待真实终态，发布文件 `11 passed`，最终全仓
+  在同等负载下通过。v39 已由负责人通过 PR #26 正式合入 `main@1ee68cb` 的
+  `CONTRIBUTING.md` 权威表，明确订单头仍按外部订单四字段唯一且下一空闲号为 40；本地
+  实现尚未提交到 PR #19。上传前复核在上述 tracked diff 哈希上得到迁移/item/读模型/
+  灾备/发布关联 `64 passed`，WP1～WP4 四脚本、compileall、diff check 与台账校验均退出 0；
+  PR 当前仍因尚未同步 `main@1ee68cb` 的 v39 权威占号表而显示 `CONFLICTING`。该结论仅是
+  开发侧预验收，不替代干净已提交 Head 上的独立 WP5、
+  真实模型 benchmark、真实平台数据、长稳或生产放行 Gate。
+- 结论：2026-08-23 M9-R 完成跨模型、AgentOps 多维交叉审查后的逐项修复与第二轮
+  开发者自验收，证据 ID 为 E-20260823-001。WP1 已补齐竞品 approved-match 与 M7-R
+  matched reconciliation 两条原缺失证据链，18 项验收不再含 SKIP；读模型、工作台、
+  诊断、建议和持久化快照统一使用同一显式 listing revision，并接通 analysis-run 下钻；
+  验收脚本假绿和已确认死代码已清除。M9-R 专项及直接接口 `253 passed`，WP1～WP4
+  四脚本全部退出 0，M7 相邻回归 `94 passed`，compileall 与 whitespace 检查退出 0。
+  AgentOps 第二轮按 T4 多租户生产系统口径、仅限 M9-R 直接能力复核，结论为
+  `ready/high confidence`。该 ready 仅指 WP1～WP4 开发者自验收候选，不替代闫睿涵从
+  干净状态执行并签署的独立 WP5，也不证明真实模型 benchmark、真实平台数据、长稳或
+  生产发布 Gate 已完成。
+- 结论：2026-08-22 M9-R 针对 AgentOps 复检遗留的审计归因、事务原子性和模型来源
+  可追溯问题完成开发者修复与自验收，证据 ID 为 E-20260822-001。内容级幂等现在以实际
+  返回的建议 ID 写审计；新建议创建、同 SKU 旧建议置 stale 及其审计位于同一数据库事务，
+  任一写入失败会整体回滚；诊断与建议分别固化 Prompt 版本、模型供应方/名称和决策来源，
+  且只记录非敏感来源元数据。AgentOps 末轮又发现通用审计晚于领域事务提交，故障注入
+  `2 failed` 后将通用审计绑定同一连接事务，修复为 `2 passed`。全部 39 个 M9-R 测试
+  文件分片得到 `236 passed`，其中真实
+  浏览器门禁 `4 passed`；WP1～WP4 验收脚本均退出 0，compileall、whitespace 通过。WP1
+  仍明确跳过竞品/退款域真实覆盖和 `material_code` 两项声明依赖；本结论只是开发者自验收
+  候选，不替代闫睿涵从干净状态执行的独立 WP5，也不批准真实平台因果、长稳或生产放行。
 - 结论：2026-08-20 M7-R WP1～WP4 已在固定代码对象上通过 WP5 代码级、本机技术 Gate，
   PR #20 已合入 `main`，证据 ID 为 E-20260820-001。WP1 因是 M8-R～M10-R 共用基建而
   先行合入，PR base `48013b1` 已包含 WP1；缪海南独立验收的 WP2～WP4 head 为
@@ -496,6 +562,59 @@
 
 ## 证据索引
 
+- E-20260825-002：PR #19 对 `8e7ede34225e080f8343138c7060aa216832009f` 最新独立复验
+  单一阻断的修复与负责人式开发侧复核。实现提交为
+  `f23dba31de755ee7df5dbc0cde894d41c06b47ad`，tree 为
+  `434181ad4e4030b1a9a51e7323e4fa561c351fff`，固定 Base 仍为
+  `1ee68cb686fd4f3c86c22c51b6f57c84042d6d45`。新增测试先红 `1 failed`，修复后旧重放文件
+  `3 passed`；使用 `git archive 753ff15` 的原始源码和公开 `OrderService` 真实写入 v36 后，
+  当前代码升级到 v39 并重放同一事件得到 `idempotent`、version 1、订单行 item 正确回填，
+  金额变化仍为 `source_version_conflict`。M9-R `252 passed in 74.56s`；WP1/2/3/4 分别
+  18/12/8/10 项 PASS；全仓 `1316 passed in 1204.75s`，无 failed/skipped/xfailed；
+  compileall、diff check、project-to-act validate 均退出 0。一次 208 项关联集合中的既有异步
+  发布观察测试在并发负载下短暂失败，隔离复跑通过且同项在最终全仓通过；未修改发布代码。
+  证据位置为 `src/ecommerce_agent/business/orders.py`、`tests/test_m9r_v39_legacy_replay.py`、
+  `docs/reviews/M9R-WP5-ACCEPTANCE-REPORT.md` 和本条；代码、任务书或固定提交变化前有效。
+  本证据不替代独立 WP5 或生产 Gate。
+- E-20260825-001：PR #19 最新阻断修复与负责人式开发侧重验。固定 Base 为
+  `1ee68cb686fd4f3c86c22c51b6f57c84042d6d45`，负责人最新不通过 Head 为 `cf31613`，
+  已验证实现提交为 `2e7fa58e8bf1b169454a537813f74edff1b62111`，tree 为
+  `09160724ca256f4775ea004c7cbf5bf4d552edad`。验证方法为项目 `.venv` 串行 pytest、
+  WP1～WP4 直接脚本、真实 Edge/Playwright、DeepSeek 禁 mock live runner、compileall、
+  diff check 和迁移方法/初始化成员扫描；全部退出 0。结果为全仓 `1315 passed in 1331.41s`、
+  M9-R `251 passed in 74.22s`、浏览器 `5 passed`、两轮 live 各 `5/5`；WP1/2/3/4 分别
+  18/12/8/10 项 PASS。重试耗尽 mutation 移除安全收口后 `2 failed`，恢复后 `2 passed`。
+  live 报告位于 `docs/reviews/M9R-DIRECTION-LIVE-20260825-{A,B}.json`，SHA-256 分别为
+  `096156D7C3F96410801354E6F143DD519CF3E440B5ADE4E5EC20826F1C701FE0` 和
+  `3530006D459ACC4824779D09F13007F7B87C9F9C7F9580AA81BB008B7BB4B8E8`，不含凭据或顾客数据。
+  完整范围、命令、备份策略和未放行项见 `docs/reviews/M9R-WP5-ACCEPTANCE-REPORT.md` 与
+  `docs/reviews/m9r-wp5-acceptance-protocol.md`。证据在任务书、实现提交、报告 JSON 或最终
+  文档提交变化前有效；只证明开发侧重验候选，不代替独立 WP5 或生产 Gate。
+- E-20260824-002：PR #19 上传候选合成复验。M9-R 修复对象 `bc5d316` 只含 18 个已核对
+  文件，未纳入 M10-R 文件；合并对象 `e4d42bb` 以 `1ee68cb` 为第二父提交，冲突仅为
+  `CONTRIBUTING.md`，解决结果 blob `b43bf4c33b08f75aecec88339032cd6fc5045869` 与负责人
+  main 完全一致。合成态关联 `64 passed in 41.78s`，WP1～WP4 四脚本、compileall、
+  `git diff --check` 与 project-to-act validate 全部退出 0。证据有效范围是本地代码级上传
+  候选，不代替远端回读、正式 WP5、真实模型、真实平台数据、长稳或生产放行。
+- E-20260824-001：PR #19 第六轮开发侧负责人式预验收。固定基线为
+  `454b35c9000ab279ffdbf115f80afdf3e031ee73`，已提交 Head 为
+  `753ff15ea1b642d37bbd2ba7424512fc650ad62a`，本地 tracked diff 哈希为
+  `39c18615d09c9a8b71fdb1e50ee1b9671506b2656d81b7cf935f994516fb05c4`（相对固定 Base、
+  排除 `.project-to-act/**` 的 binary diff SHA-256）；尚未纳入 Git 的关键测试文件
+  `tests/test_m9r_order_item_attribution.py` SHA-256 为
+  `a2b3c775af860b7725b44bfe5308ab76c7081a52ed71ef0298097e6d0b4634d6`。迁移保全、订单自然键和混合 item 行归属
+  三项先红 `3 failed`；修复后订单/迁移/发布聚焦 `29 passed`，行过滤 mutation 先红
+  `1 failed`、还原后 `4 passed`；M9、迁移、灾备、订单、预测和客服订单关联集合
+  `300 passed`。最终命令为项目解释器 `python -m pytest tests -q` 加隔离 basetemp，结果
+  `1298 passed, 1 pytest-cache warning in 1468.77s`，warning 仅为仓库 `.pytest_cache`
+  无写权限；实际 basetemp 可写。WP1～WP4 脚本、4 条 Playwright 浏览器测试、compileall、
+  `git diff --check` 与 project-to-act validate 均通过。备份 manifest 继续精确匹配 schema：
+  v36 备份由 v39 应用拒绝，升级前需用旧程序停机备份，升级后恢复写入前生成并验证 v39
+  全量备份。证据位置为本条、`tests/test_m9r_order_item_attribution.py`、
+  `tests/test_m9r_item_isolation_overlap.py`、`tests/test_disaster_recovery.py` 和
+  `tests/verify_wp4_acceptance.py`。v39 占号已由负责人通过 PR #26 合入 `main@1ee68cb`；
+  上传前又复核关联 `64 passed`、WP1～WP4 四脚本与静态门禁；本地实现仍未提交到 PR #19，
+  且 PR 在同步该 main 前保持冲突，不把脏工作树或开发者复验写成独立 WP5。
 - E-20260820-001：M7-R WP5 独立验收归档、PR #20 合入与 merge-tip 复验。WP1 功能提交
   `0b54a247` 和集成提交 `e127c397` 已在 PR base `48013b1` 的祖先链，故 PR #20 只承载
   WP2～WP4 差异但 WP5 验收对象仍是 WP1～WP4 组合态。缪海南原报告 SHA-256 为
@@ -546,10 +665,13 @@
 
 | 证据 ID | 时间 | 方法或命令 | 退出状态 | 版本或文件哈希 | 结果摘要 | 证据位置 | 有效期 |
 |---|---|---|---|---|---|---|---|
+| E-20260823-001 | 2026-08-23 | 对照 M9-R 任务书、D-034/D-035 和 AgentOps T4 完整架构基线，只审查 M9-R WP1～WP4 及其直接接口；追踪 WP1 权威来源、approved 竞品 match、M7-R matched reconciliation、listing revision、Gate/analysis-run/建议快照的声明到生产消费者，检查死代码、验收假绿及 `origin/main` 基线差异。修复后运行 M9-R 专项及直接接口测试、`tests/verify_wp1_acceptance.py`～`verify_wp4_acceptance.py`、M7 商品身份/只读数据相邻回归、compileall、`git diff --check`，再执行 AgentOps 第二轮只读复核 | M9-R `253 passed`；WP1～WP4 四脚本全部退出 0，WP1 18 项全部实际执行且无 SKIP；M7 相邻 `94 passed`；compileall、whitespace 均退出 0 | HEAD `dc82beeba2f810ab30ed8573c558975fea272c7d` + 当前未提交工作区；对照 `origin/main@8de48c35f36a92788df4568f692b86a0edddcbfc` | `material_code` 仅来自最新 matched 对账且映射变化后失效；竞品只消费完全同作用域 approved match；多 traffic source 不静默任取/求和。读模型、诊断、工作台、建议和快照共用显式 revision，页面/API 回显身份、revision、Gate、新鲜度和来源，analysis-run 下钻已接线；WP4 不冻结全局场景集合，Eval 不重复执行，确认无消费者的符号已删除。AgentOps 第二轮未发现新的 M9-R P0/P1，判定 `ready/high confidence` | `src/ecommerce_agent/product_read_model/`、`product_diagnosis/`、`product_lifecycle/`、`product_workbench/`、`workbench_api.py`、`business/service.py`、`evaluation_api.py`、`docs/admin-console.html`；对应 `tests/test_m9r_*`、`tests/test_product_read_query.py`、`tests/test_workbench_api.py`、`tests/verify_wp{1,2,3,4}_acceptance.py` | 上述 M9-R 代码/测试、任务书验收标准、基准提交或工作区内容变化前；只证明 WP1～WP4 开发者自验收候选，不替代闫睿涵独立 WP5、真实模型 benchmark、真实平台数据、长稳或生产放行 |
+| E-20260822-001 | 2026-08-22 | 以既有 AgentOps 健康检查的 5 项缺口建立定向红灯：内容幂等审计主体必须引用实际返回 ID；新建议与旧建议 stale/audit 必须同事务；诊断与建议必须持久化非敏感 Prompt/模型来源；删除已失效的 Ruleset fallback/手工语义旁路说明。红态为 `5 failed, 6 passed`，实现后同集 `11 passed`。末轮 AgentOps 只读复检又发现通用 `audit_log` 在领域事务提交后写入，以创建/流转审计触发器得到 `2 failed`，将 `Database.audit` 向后兼容扩展为可复用调用方事务后转为 `2 passed`。随后将全部 39 个 M9-R 测试文件按生命周期、诊断/Eval、工作台、数据边界及浏览器分片运行，并执行共享灾备回归、WP1～WP4 验收脚本、compileall、`git diff --check` 和 managed 台账验证 | 两轮红态测试均退出 1；修复后定向、四个非浏览器分片、浏览器、共享灾备、WP1～WP4 脚本及静态检查均退出 0。WP1 脚本有两项显式依赖 SKIP，不计为已验证 | HEAD `dc82beeba2f810ab30ed8573c558975fea272c7d`；base `origin/main@8de48c35f36a92788df4568f692b86a0edddcbfc`；15 个 M9-R 直接运行文件内容清单 SHA-256 `0291bfeee462eee03d678c89759207fce2ad222d9aac8dfa09c574e9fd27ceb6`；未提交工作区 | 内容级幂等审计只引用实际建议 ID；新建议、同 tenant/store/item/SKU 旧建议 stale、逐条领域审计和通用 `audit_log` 原子提交，两个审计层任一失败均整体回滚；诊断/建议保存 `decision_source`、`model_provider`、`model_name`、`prompt_version`，模型不可用时降级为 `evidence_insufficient` / `KEEP_OBSERVE` 而不以 Ruleset 冒充语义决策。生命周期 `65 passed`、诊断/Eval `56 passed`、工作台 `27 passed`、数据边界 `84 passed`、浏览器 `4 passed`，合计 `236 passed`；共享灾备 `16 passed`；WP1～WP4 四脚本退出 0；WP1 的竞品/退款域真实覆盖和 `material_code` 仍为声明依赖 SKIP | `src/ecommerce_agent/{database,service,product_semantics}.py`；`src/ecommerce_agent/product_diagnosis/interpreter.py`；`src/ecommerce_agent/product_lifecycle/{engine,service}.py`；`src/ecommerce_agent/business/service.py`；`tests/test_m9r_{diagnosis_model_interpreter,lifecycle_idempotency,lifecycle_persistence_service,production_recommendation_chain,recommendation_model_interpreter}.py`；`tests/test_m9r_workbench_browser.py` | 上述 M9-R 代码/测试、任务书验收标准、基准提交或内容哈希变化前；只证明开发者自验收候选，不替代闫睿涵独立 WP5、真实平台数据/因果、长稳或生产放行 |
 | E-20260819-002 | 2026-08-19 | 读取用户转交的 WP4 独立复验报告，保留其聚焦/全量及 47/47 门禁外探针为外部报告证据；由开发方在原候选上新增六个 GET 共用的空白 `store_id` 回归，先运行单例复现，再以单一 `Annotated` Query 契约修复；重跑同一单例、WP4 聚焦、WP1～WP4 关联集、隔离代理环境下仓库全量、compileall、后台 JS syntax、whitespace 和 project-to-act validate | 修复前单例稳定 `1 failed`，实际为 readiness 返回 200；修复后单例、聚焦、关联、全量和静态门禁均退出 0。独立报告的探针由用户转交，不冒充开发方运行；报告注明未重复浏览器实测 | base `9670aa1`；修复候选 `fe828a0`；schema v35、`readonly-readiness-v1`、Demo fixture 和页面不变 | 六个带 `store_id` 的 readonly-data GET 现在共用同一约束，纯空白请求均返回 422，不泄露数据且不产生写入。聚焦 `10 passed`、关联 `109 passed`、全量 `1035 passed, 24 warnings`（335.51 秒），无 failed/skipped/xfailed；24 条均为既有 Traffic Lab 重复 Operation ID warning。无 schema、依赖、Agent/模型、Demo、页面或平台动作变化；E-20260819-001 浏览器证据仍对应未变页面 | `fe828a0`；`src/ecommerce_agent/readonly_data_api.py`；`tests/test_m7r_wp4_readiness.py`；`docs/tasks/M7R_WP4_READINESS_HANDOFF.md`；用户在本会话转交的独立复验摘要 | 上述查询契约、WP4 代码/测试、基准提交或独立报告来源变化前；只关闭开发候选 nit，不替代合入 main、缪海南正式 WP5、真实平台样本、真实经营结论、M7-R/生产 Gate |
 | E-20260819-001 | 2026-08-19 | 读取 M7-R WP4 验收标准及 WP1～WP3/F-310 契约；先运行缺实现测试；实现单点准备度策略、八域只读投影、管理员下钻 API、后台 view 和固定脱敏 Demo；以同数据时点冲突、缺 Demo 写审计、撤销后旧确认误标 active 建立先红后绿反例；运行聚焦、WP1～WP4 关联集、compileall、后台 JS syntax、whitespace 和隔离代理环境下仓库全量；使用本机浏览器对空页面、显式装载、重放、桌面和 390px 窄屏做实际核验 | 初始缺实现收集退出 2；fixture 同时点触发预期外 D-014 冲突；缺审计与历史 active 反例均稳定 `1 failed`；修复后聚焦、关联、静态、浏览器和全量均退出 0 | base `1936a2f`；代码候选 `7d8bf47`；schema v35；readiness policy `readonly-readiness-v1`；Demo `m7r-readonly-demo-v1` | operational 默认排除 Demo；actual/manual/demo/missing 保持可区分，缺失不转零。每个域状态和数值保留 manifest ID，四项缺口保留 field evidence/import，映射保留 run/source import。顺序及线程并发重放只有 8 manifest、1 product、1 mapping、1 reconciliation；管理员 Demo POST 逐次审计，所有 GET 零事实变更。浏览器首次打开前后事实计数均 0；显式 Demo 后 8 manifest、66 evidence、1 product、1 mapping、1 run、3 reconciliation rows，重放不变；1280×720 无页面横向溢出，390×844 仅 panel 内表格滚动，console 0 error/warning。聚焦 `9 passed`、关联 `108 passed`、全量 `1034 passed, 24 warnings`（687.63 秒），无 failed/skipped/xfailed；24 条均为既有 Traffic Lab 重复 Operation ID warning | `src/ecommerce_agent/readonly_readiness/`；`src/ecommerce_agent/readonly_data_api.py`；`src/ecommerce_agent/product_identity/service.py`；`docs/admin-console.html`；`tests/test_m7r_wp4_readiness.py`；`docs/tasks/M7R_WP4_READINESS_HANDOFF.md` | WP4 代码/测试、WP1～WP3 来源/映射契约、准备度策略、Demo fixture、后台页面或基准提交变化前；仅开发者本机候选，不替代合入 main、真实平台样本、缪海南正式 WP5、真实经营结论、M7-R/生产 Gate |
+| E-20260820-001 | 2026-08-20 | agentops 第二轮多维度审查（安全/证据完整性/生产接线/验收覆盖度 4 agent，网关 503 重试后完成）→ 交叉验证出 12 个需修复问题 → 全部修复：① FORBIDDEN_DIAGNOSIS_KEYS/GATES 补 6 中文越权词（效果提升/权重提升/流量扶持/对标/竞品/行业）② transition actor 服务端强制 admin.admin_id（防审计归因伪造）③ query 三事实源加 item_id 过滤（WP1-1 同店不同 item 同 sku 串数）④ 库存/订单 source_ref 改用真实 source_id（去合成前缀串）+ data_as_of 统一 source_updated_at ⑤ 5 个经营工具挂 store-scope policy（竞品/营销/财务/指标越权读）⑥ create 输入有界 + rationale 脱敏落库 ⑦ period_key MISSING 用占位符不编造时间戳 ⑧ bridge revision provenance 过 read_source_provenance 校验器 ⑨ record_transition 非法转换 409 明确暴露；跑 M9 全量 + WP1-4 验收脚本验证 | M9 全量相关 187 passed；WP1-4 验收脚本 4 个全部 PASS；修复后 31 passed（workbench/lifecycle/query 定向） | base `652de44`；未提交工作区（16 src + 4 既有测试 + 3 新测试）；schema v37 不变 | 第二轮 agentops 多维度审查的 12 个交叉验证问题全部修复并验证通过：越权词集统一、actor 不可伪造、item 隔离、来源真实化（source_id 非合成前缀）、工具 scope 补齐、输入有界、PII 脱敏、period_key 不造假、provenance 契约合规、非法转换 409 | `src/ecommerce_agent/{product_read_model,product_diagnosis,product_lifecycle,product_workbench}/`、`src/ecommerce_agent/{workbench_api,business/service,evaluation_api,readonly_data/contracts}.py`；`tests/test_m9r_query_source_honesty.py`、`tests/test_workbench_api.py` | 上述代码/测试或任务书验收标准变化前；只证明开发自测候选和 agentops 复审修复，必须由闫睿涵从干净状态 WP5 独立复验；不替代正式 WP5、真实数据、生产放行 |
+| E-20260819-001 | 2026-08-19 | M9-R 复审修复四批次（WP1 读模型 revision 隔离/粒度诚实/来源诚实/demo-实际派生/跨仓汇总；WP2 门禁生产消费者 evidence-gates 路由 + experiment freshness 修正 + revision quality_gate + conclusion fail-closed + 污染自动反推；WP3 生命周期 POST 生产入口 create/transition + 店铺归属 + STALE 补全 + 竞品防线 + validator 越权扫描 + 审计落痕 + 读侧 payload_hash；WP4 工作台 JSON view + 机制 Eval 端点 + revision 下钻 + 为什么暂不能建议）；对照任务书 WP1-WP4 验收标准逐条核对并修复 3 个既有验收脚本缺陷（WP1 ⑧ 权威服务回溯升级为真实验证、WP2 ⑫ _bridge→_real_bridge + 正确 tenant、WP3 ④ degraded 补 missing_evidence）；跑 M9 定向、相邻回归、WP1-4 验收脚本、agentops 复查 M9-R + 依赖边界（2 审查 agent，263 passed 基线）后修复 agentops 发现的 3 gap（transition 归属 409 / list 读侧 hash / query connector None 防御） | M9 定向 200 passed；相邻回归（M9+迁移+traffic_lab+readonly_data）218 passed；WP1-4 验收脚本 4 个全部 PASS；agentops 修复后验证 31 passed；全量回归 900s 超时属仓库既有单进程+SQLite 约束（6% 处被 kill，非 M9-R 回归，M9-R 改动不触及全量公共路径） | base `652de44`；未提交工作区（15 src + 3 既有测试 + 3 新测试共 21 文件，+802/-110）；schema v37 不变 | M9-R 复审修复完成：query 路径来源诚实化（authoritative_service=权威域服务 + source_ref=领域来源，不再伪造 manifest id）；门禁有生产消费者（evidence-gates/workbench 路由）；生命周期有人工审核生产入口（POST create/transition，跨店 409）；读侧内容完整性（get/list/audit_trail 校验 payload_hash）；验收脚本 4 个全 PASS | `src/ecommerce_agent/{product_read_model,product_diagnosis,product_lifecycle,product_workbench}/`、`src/ecommerce_agent/{workbench_api,business/service,evaluation_api,readonly_data/contracts}.py`；`tests/{test_m9r_gates_production,test_m9r_query_source_honesty,test_m9r_workbench_view,test_workbench_api}.py`；`tests/verify_wp{1,2,3}_acceptance.py` | 上述代码/测试或任务书验收标准变化前；只证明复审修复完成和开发自测候选，必须由闫睿涵从干净状态 WP5 独立复验；不替代正式 WP5、真实数据、生产放行 |
 | E-20260818-002 | 2026-08-18 | 读取 M7-R WP3 验收标准、WP1/WP2 契约和 catalog/inventory/order 公开服务；先运行缺实现契约测试；实现 v35 四张只追加表、canonical 商品、映射裁决/撤销/历史和逐行对账；为 `expected_version`、逐行 `evidence_keys` 与 Demo 领域来源混入分别建立红测后修复；运行聚焦、WP1～WP3、关联领域/迁移/灾备、compileall、迁移唯一性、whitespace 和仓库全量 pytest | 初始缺实现收集退出 2；审计列补强 `3 failed, 12 passed`；Demo 来源反证退出 1；修复后所有聚焦、关联、静态和干净环境全量均退出 0。首次全量因桌面会话畸形 `NO_PROXY` 触发 `httpx.InvalidURL`，中止后隔离 proxy/bypass 环境变量复跑通过 | base `0815cf8`；本地 main v35 预留 `d35bfe1`；代码候选 `6f0b116`；schema v35；policy `product-identity-v1` | tenant/store/internal part 稳定唯一；平台 SKU 映射确认、显式改判和撤销只追加，完整载荷幂等且旧 `expected_version` 不能覆盖新裁决。标题/商家编码/唯一候选只给证据，不自动绑定；每个输入行恰为 matched/ambiguous/unmapped/rejected，旧 run/history 在新映射后仍可读。WP2 source ID 经 WP1 manifest 隔离 operational/demo，未知 readonly 来源 fail closed。聚焦 `17 passed`、WP1～WP3 `93 passed`、关联 `184 passed`、最终全量 `1025 passed, 24 warnings`（391.62 秒），无 failed/skipped/xfailed；24 条为既有 FastAPI Operation ID warning | `src/ecommerce_agent/product_identity/`；`src/ecommerce_agent/database.py`；`src/ecommerce_agent/readonly_data/{__init__,ingestion}.py`；`tests/test_product_identity.py`；`docs/tasks/M7R_WP3_PRODUCT_IDENTITY_HANDOFF.md` | WP3 代码/测试、schema v35、映射/对账策略、WP1/WP2 来源契约或基准提交变化前；仅开发者本机候选，不替代合入 main、真实平台样本、WP4、缪海南正式 WP5、M7-R/生产 Gate |
-| E-20260818-001 | 2026-08-18 | 读取 M7-R 工作台/WP1 契约和六个既有领域公开服务；先运行缺实现契约测试；实现权威适配器注册表、严格 UTF-8 CSV/受控 XLSX 解析、逐行隔离、批次部分成功、来源 preflight 和公开领域写入；按每适配器六场景矩阵复验；为订单子事实覆盖、Excel 日期序列和 Demo 导入回执分别建立红测后修复；运行 WP1+WP2 聚焦、关联领域回归、compileall、whitespace 与最终仓库全量 pytest | 初始缺实现收集退出 2；三项缺陷定点各退出 1；修复后聚焦、关联、静态和全量均退出 0 | base `fbc26dd`；代码候选 `a5d02ed`；schema v34；`generic-cn-v1` | 八类报表唯一注册并复用同一 WP1 policy；每类正常/缺字段/非法类型/重复/乱序/跨店均覆盖。CSV/XLSX 不执行公式/宏/外链，显式记录粒度/单位/时区；同戳冲突在领域写前拒绝；订单快照不再清空独立物流/售后；Demo 显式回执完整但默认 operational 查询为空。聚焦 `77 passed`；最终全量 `1008 passed, 24 warnings`（392.76 秒），无 failed/skipped/xfailed；24 条为既有 FastAPI Operation ID warning。仓库及会话附件无经授权真实平台导出，故不声称平台全覆盖 | `src/ecommerce_agent/readonly_data/{adapters,file_parser,ingestion,service}.py`；`src/ecommerce_agent/business/orders.py`；`tests/test_readonly_data_{contract,ingestion}.py`；`docs/tasks/M7R_WP2_REPORT_ADAPTER_HANDOFF.md` | WP2 代码/测试、`generic-cn-v1`、WP1 契约、领域公开服务或样本边界变化前；仅开发者本机候选，不替代真实平台 mapping、WP3～WP5、缪海南正式 WP5、真实数据或生产 Gate |
 | E-20260817-007 | 2026-08-17 | 从刷新后的 `origin/main` `9619383` 创建干净 detached worktree，以 `--ff-only` 接入 WP1 功能提交 `0b54a24`；完成 D-046、M10-R WORKBENCH、schema v34 main 登记和 PR #11 四迁移合并提示后，运行 compileall、责任矩阵结构校验、迁移唯一性、project-to-act validate、whitespace 与仓库全量 pytest；提交 `e127c39` 后再次 fetch，验证远端祖先关系，快进推送并回读 `HEAD == origin/main` | 0 | base `961938321d6ac4fb3314756e8ca061bb4484dd09`；WP1 `0b54a24`；首轮 main 集成 `e127c397f7e291248990b0006ca4876d7e20a075`；测试树 `8b962e9be36961b439478892898e9c25e29dc559`；schema v34 | 全量 `950 passed, 24 warnings`（524.53 秒），无 failed/skipped/xfailed；24 条均为既有 FastAPI 重复 Operation ID warning。责任矩阵确认四个里程碑共 20 个工作包，M10-R WP1～WP4 全归缪海南且 WP5 胡磊不参与开发；v32/v33/v34 迁移各自唯一定义，v34 已登记 main，下一空闲 v35。`origin/main` 首轮回读精确为 `e127c39`。本条证据提交仅追加账本，不改变已测试运行树 | `0b54a24`；`e127c39`；`src/ecommerce_agent/readonly_data/`；`src/ecommerce_agent/{database,storage_refs}.py`；`tests/test_readonly_data_contract.py`；`docs/tasks/{ECOMMERCE_CLOSED_LOOP_ROADMAP,M10R_OPERATING_DECISION_WORKBENCH}.md`；`CONTRIBUTING.md`；E-20260817-003～006 | WP1 代码/测试、schema v34、责任矩阵、集成树、远端 main 或测试环境变化前；只证明开发候选已合入和全绿代码基线，不替代正式 WP5、真实数据、M7-R/生产 Gate |
 | E-20260817-006 | 2026-08-17 | 按项目负责人最新要求复核总路线、M10-R WORKBENCH、D-046 与项目台账；结构化解析四份 WORKBENCH 的 WP1～WP5、负责人和 WP5 互斥关系；扫描现行口径中的 M10-R 双负责人残留；运行 `git diff --check` 与 project-to-act validate | 0 | base/功能提交 `0b54a24` + docs-only D-046 责任调整；无 schema、依赖或运行代码变化 | 四个里程碑均恰有 WP1～WP5。M10-R WP1～WP4 全部由缪海南开发，WP5 由胡磊独立验收；胡磊不参与 M10-R 开发。M7-R、M8-R、M9-R 分工未变，现行口径不再保留 M10-R 双开发负责人。D-044/D-045 历史记录保留，但其中 M10-R 人员派工由 D-046 取代。本证据不验收功能实现 | `docs/tasks/ECOMMERCE_CLOSED_LOOP_ROADMAP.md`；`docs/tasks/M10R_OPERATING_DECISION_WORKBENCH.md`；`.project-to-act/PROJECT_{OVERVIEW,PROGRESS,FEATURES,ACCEPTANCE}.md` | 人员、工作包、验收独立性、D-046 或上述文档变化前；不得用于证明 M10-R 开发开始、功能实现、里程碑通过或生产放行 |
 | E-20260817-005 | 2026-08-17 | 对 E-20260817-003/004 已隔离的七项既有 M4/知识库失败逐项复现和归因；修复会话错误码、消息历史元数据与 `(created_at,id)` URL-safe/legacy 游标兼容；把知识热更新测试改为真实内容变更和显式全局管理作用域；handoff 出仓时验证权威生成脚本而非 skip；将无实时模型的意图留出集 xfail 改为显式负向能力边界。重跑原七项、skip/xfail 相关集合、关联回归和仓库全量；无文件故障注入强制关闭知识更新以证明测试可捕获退化；运行 compileall、whitespace、`CONTRIBUTING.md` 零改动与 project-to-act validate | 修复前原七项 1（`7 failed`）；故障注入 1（预期 `1 failed`）；还原后所有定点、集合、关联、全量和静态检查 0 | base `961938321d6ac4fb3314756e8ca061bb4484dd09`；本轮四文件组合 SHA-256 `3f313b3fade39bfe3964d102c8a39d8994a549ba00a6f5bf80f8427a6a6a50e9`；schema v34 不变 | 原七项 `7 passed`；skip/xfail 相关集合 `59 passed`；关联回归 `108 passed`；全量 `950 passed, 24 warnings`（566.70 秒），无 failed/skipped/xfailed。热更新故障注入稳定得到 `updated == 0` 对 `1` 的断言失败，还原后通过。24 条为既有 FastAPI 重复 Operation ID warning。租户不得修改全局知识的权限保持，D-034 语义权威不变，无 schema、依赖、API 或生产动作扩张 | `src/ecommerce_agent/database.py`；`tests/test_{memory_api,single_source,m4_acceptance}.py`；E-20260817-003/004 | 上述会话/游标、知识更新、单一事实源或无模型能力边界变化前；只关闭既有测试欠账并提供全绿开发基线，不证明 WP2～WP5、正式 WP5、真实平台接入、M7-R Gate 或生产放行 |

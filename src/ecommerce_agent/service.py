@@ -55,6 +55,8 @@ from .sops import SopService
 from .tokens import count_tokens
 from .tools import ToolRegistry
 from .traffic_lab import TrafficAnalysisModelInterpreter
+from .product_lifecycle.engine import RecommendationModelInterpreter
+from .product_diagnosis.interpreter import DiagnosisModelInterpreter
 
 
 logger = logging.getLogger("ecommerce_agent.service")
@@ -125,9 +127,23 @@ class AgentService:
                 if self.settings.model_enabled
                 else None
             )
+            # D-034：M9-R 诊断→建议语义链接模型；模型关闭时只产保守占位建议。
+            recommendation_interpreter = (
+                RecommendationModelInterpreter(self.model)
+                if self.settings.model_enabled
+                else None
+            )
+            diagnosis_interpreter = (
+                DiagnosisModelInterpreter(self.model)
+                if self.settings.model_enabled
+                else None
+            )
             self.operations = OperationsService(
                 self.db,
                 traffic_analysis_interpreter=traffic_analysis_interpreter,
+                recommendation_interpreter=recommendation_interpreter,
+                diagnosis_interpreter=diagnosis_interpreter,
+                model_semantic_enabled=self.settings.model_enabled,
             )
             self.operations.register_agent_tools(self.tools)
             self.readonly_data = ReadonlyDataService(self.db)

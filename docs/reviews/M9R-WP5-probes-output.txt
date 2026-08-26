@@ -1,0 +1,8 @@
+plugins: anyio-4.14.2, langsmith-0.10.15
+collected 12 items
+
+tests\test_m9r_item_isolation_overlap.py ....                            [ 33%]
+tests\test_m9r_diagnosis_freshness_none.py ....                          [ 66%]
+tests\test_m9r_production_recommendation_chain.py ....                   [100%]
+
+============================= 12 passed in 3.66s ==============================

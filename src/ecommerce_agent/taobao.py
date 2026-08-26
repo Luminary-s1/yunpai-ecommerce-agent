@@ -171,11 +171,22 @@ class CredentialCipher:
 class TaobaoTopClient:
     def __init__(self, settings: Settings, client: httpx.Client | None = None):
         self.settings = settings
-        self._client = client or httpx.Client(timeout=20.0)
+        # P2 提速：惰性建 client——测试 taobao_enabled=False 时永不触网，
+        # 避免每次 create_app 建 httpx.Client（Windows 注册表探测 ~1.5s）。
+        # trust_env=False 跳过注册表代理探测；生产启用淘宝时首次请求才建。
+        self._injected_client = client
+        self._client: httpx.Client | None = None
         self._owns_client = client is None
 
+    def _ensure_client(self) -> httpx.Client:
+        if self._client is None:
+            self._client = self._injected_client or httpx.Client(
+                timeout=20.0, trust_env=False
+            )
+        return self._client
+
     def exchange_authorization_code(self, code: str) -> dict[str, Any]:
-        response = self._client.post(
+        response = self._ensure_client().post(
             self.settings.taobao_oauth_token_url,
             data={
                 "grant_type": "authorization_code",
@@ -208,7 +219,7 @@ class TaobaoTopClient:
             common["session"] = session
         payload = {**common, **{key: _stringify(value) for key, value in business_params.items()}}
         payload["sign"] = sign_parameters(payload, self.settings.taobao_app_secret, "hmac")
-        response = self._client.post(self.settings.taobao_top_gateway, data=payload)
+        response = self._ensure_client().post(self.settings.taobao_top_gateway, data=payload)
         return self._decode_response(response)
 
     @staticmethod
@@ -230,7 +241,7 @@ class TaobaoTopClient:
         return payload
 
     def close(self) -> None:
-        if self._owns_client:
+        if self._owns_client and self._client is not None:
             self._client.close()
 
 

@@ -252,6 +252,7 @@
         <button class="active" data-view="overview">经营总览</button>
         <button data-view="service">智能客服</button>
         <button data-view="commerce">商品库存</button>
+        <button data-view="m9r-workbench">商品经营</button>
         <button data-view="readonly-data">数据准备度</button>
         <button data-view="forecasting">需求预测</button>
         <button data-view="orders">订单售后</button>
@@ -358,6 +359,29 @@
           <div class="grid kpis" id="commerceKpis"></div>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>商品事实</h3><span class="muted" id="catalogAsOf"></span></div><div class="table-wrap"><table><thead><tr><th>SKU</th><th>商品</th><th>店铺</th><th>售价</th><th>状态</th><th>版本</th><th>数据时间</th></tr></thead><tbody id="catalogRows"></tbody></table></div></article>
           <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>库存风险</h3></div><div class="table-wrap"><table><thead><tr><th>SKU</th><th>仓库</th><th>可售</th><th>覆盖天数</th><th>风险</th><th>建议补货</th><th>数据时间</th></tr></thead><tbody id="inventoryRows"></tbody></table></div></article>
+        </section>
+
+        <section class="view" id="view-m9r-workbench">
+          <div class="section-head"><div><h2>商品经营工作台</h2><p>SKU 权威读模型、证据门禁、诊断与生命周期建议（M9-R WP4）</p></div><div class="toolbar"><input class="input" id="m9rStore" value="store-a" placeholder="店铺 ID"><input class="input" id="m9rItem" value="item-a" placeholder="商品 ID"><input class="input" id="m9rSku" value="sku-a" placeholder="SKU ID"><input class="input" id="m9rRevision" value="1" placeholder="revision" style="width:64px"><button class="button primary" id="m9rLoadWorkbench">查询</button></div></div>
+          <div class="notice" id="m9rBoundary">本页面只读取固化证据；所有数字标注证据状态（真实数据 / 人工 / 试算 / 缺失）、来源与数据时间。建议默认草稿，只有人工审核批准才生效。可切换 revision 下钻读模型与门禁。</div>
+          <div class="grid kpis" id="m9rKpis" style="margin:14px 0"></div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel"><div class="panel-head"><h3>SKU 权威读模型</h3><span class="muted">流量 / 交易 / 库存 · 四态徽标</span></div><div class="table-wrap"><table><thead><tr><th>指标</th><th>证据</th><th>数值</th><th>来源</th><th>数据时间</th></tr></thead><tbody id="m9rMetricRows"></tbody></table></div></article>
+            <article class="panel"><div class="panel-head"><h3>证据门禁</h3><span class="muted" id="m9rGateState"></span></div><div class="panel-body stack" id="m9rGates"><div class="empty">等待查询</div></div></article>
+          </div>
+          <div class="notice" id="m9rWhyNot"></div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel"><div class="panel-head"><h3>流量证据（insights）</h3><span class="muted">revision 窗口流量/实验证据</span></div><div class="panel-body stack" id="m9rInsights"><div class="empty">等待查询</div></div></article>
+            <article class="panel"><div class="panel-head"><h3>流量诊断</h3><span class="muted" id="m9rDiagMeta"></span></div><div class="panel-body stack" id="m9rDiagBody"><div class="empty">等待查询</div></div></article>
+          </div>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>生命周期建议</h3><span class="muted" id="m9rRecMeta">等待查询</span></div><div class="table-wrap"><table><thead><tr><th>ID</th><th>类型</th><th>状态</th><th>降级</th><th>理由</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="m9rRecRows"></tbody></table></div></article>
+          <article class="panel" style="margin-top:14px"><div class="panel-head"><h3>建议操作</h3><span class="muted">显式点击，人工审核，零平台写动作（B2/B4）</span></div><div class="panel-body stack">
+            <div class="form-grid">
+              <label class="wide">基于当前 SKU 诊断生成建议（模型语义链 → DRAFT）<input class="input" id="m9rNewRecId" value="rec-" placeholder="建议 ID（幂等）"></label>
+            </div>
+            <div class="toolbar"><button class="button primary" id="m9rGenerateRec">生成建议（模型）</button></div>
+            <div class="muted" id="m9rRecActionMsg"></div>
+          </div></article>
         </section>
 
         <section class="view" id="view-readonly-data">
@@ -966,7 +990,7 @@
       customerTestSessionId: `customer-test:${crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
     };
 
-    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', 'readonly-data': '数据准备度', forecasting: '需求预测', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
+    const titles = { overview: '经营总览', service: '智能客服', commerce: '商品与库存', 'm9r-workbench': '商品经营', 'readonly-data': '数据准备度', forecasting: '需求预测', orders: '订单与售后', competitive: '竞品分析', ops: '运营辅助', 'traffic-lab': '流量实验', marketing: '营销投放', finance: '利润对账', knowledge: '知识与 SOP', quality: '质检 VOC', evaluations: '客服评测', simulation: '场景验收', channels: '渠道接待', releases: '发布门禁', modules: '功能模块', audit: '审计记录' };
     const sourceLabels = { api:'API 会话', channel:'渠道会话', simulation:'虚拟验收', evaluation:'隔离评测' };
     const $ = (id) => document.getElementById(id);
 
@@ -1648,6 +1672,155 @@
       $('catalogRows').innerHTML = items.length ? items.map((item) => `<tr><td class="mono"><strong>${escapeHtml(item.sku_id)}</strong><div class="muted">${escapeHtml(item.item_id)}</div></td><td>${escapeHtml(item.title)}</td><td>${escapeHtml(item.store_id)}</td><td>${escapeHtml(item.sale_price)} ${escapeHtml(item.currency)}</td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>v${item.version}</td><td>${formatTime(item.source_updated_at)}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">暂无商品事实</div></td></tr>';
       $('inventoryRows').innerHTML = risks.length ? risks.map((item) => `<tr><td class="mono">${escapeHtml(item.sku_id)}</td><td>${escapeHtml(item.warehouse_id)}</td><td>${escapeHtml(item.available)}</td><td>${escapeHtml(item.coverage_days ?? '-')}</td><td><span class="status ${item.risk_level === 'critical' ? 'bad' : item.risk_level === 'high' ? 'warn' : item.risk_level === 'low' ? 'ok' : 'info'}">${escapeHtml(item.risk_code)}</span></td><td>${escapeHtml(item.recommended_replenishment)}</td><td>${formatTime(item.evidence.data_as_of)}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty">暂无库存事实</div></td></tr>';
       $('catalogAsOf').textContent = activeMetric.data_as_of ? `数据截至 ${formatTime(activeMetric.data_as_of)}` : '';
+    }
+
+    async function loadM9rWorkbench() {
+      const storeId = $('m9rStore').value.trim() || 'store-a';
+      const itemId = $('m9rItem').value.trim() || 'item-a';
+      const skuId = $('m9rSku').value.trim() || 'sku-a';
+      const revision = $('m9rRevision')?.value?.trim() || '1';
+      const base = `/v1/products/${encodeURIComponent(storeId)}/${encodeURIComponent(itemId)}/${encodeURIComponent(skuId)}`;
+      // R4 下钻：workbench + recommendations + read-model(revision) + insights + diagnosis
+      const [view, recs, readModel, insights, diag] = await Promise.all([
+        api(`${base}/workbench?revision=${encodeURIComponent(revision)}`),
+        api('/v1/products/recommendations?store_id=' + encodeURIComponent(storeId)),
+        api(`${base}/read-model?revision=${encodeURIComponent(revision)}`).catch(() => null),
+        api(`${base}/analysis-runs?revision=${encodeURIComponent(revision)}`).catch(() => null),
+        api(`${base}/diagnosis?revision=${encodeURIComponent(revision)}`).catch(() => null),
+      ]);
+      // R4 下钻：revision 读模型替换指标表数据（read-model 带 revision 参数）
+      const selectedRead = readModel && Object.keys(readModel).length ? readModel : view;
+      const metricEntries = Object.entries(selectedRead.metrics || {});
+      const identity = selectedRead.identity || {};
+      const revisionEvidence = selectedRead.revision || view.revision || {};
+      const actualCount = metricEntries.filter(([, m]) => m.evidence_state === 'actual').length;
+      const missingCount = metricEntries.filter(([, m]) => m.evidence_state === 'missing').length;
+      $('m9rKpis').innerHTML = [
+        ['SKU', skuId, `${storeId} / ${itemId} · rev ${revision}`],
+        ['料号', identity.material_code || '—', identity.evidence?.run_id || '无 matched 对账证据'],
+        ['Revision', revisionEvidence.revision_no || revision, revisionEvidence.revision_id || '未找到 revision'],
+        ['窗口', revisionEvidence.active_from ? `${formatTime(revisionEvidence.active_from)} → ${revisionEvidence.active_to ? formatTime(revisionEvidence.active_to) : '—'}` : '—', revisionEvidence.connector_id || '无 revision 窗口'],
+        ['指标数', metricEntries.length, `${actualCount} 真实 · ${missingCount} 缺失`],
+        ['门禁', view.evidence_gates?.all_passed ? '全部通过' : '未全过', view.evidence_gates?.evidence_state || '-'],
+        ['建议', recs.length, '当前草稿/流转中']
+      ].map(([label,value,meta]) => `<div class="kpi"><span class="label">${label}</span><span class="value">${value}</span><span class="meta">${meta}</span></div>`).join('');
+      // 读模型指标表：四态徽标 + 来源 + 时间
+      const badgeLabels = { actual: '真实数据', manual: '人工录入', demo: '试算', missing: '缺失' };
+      const badgeClasses = { actual: 'ok', manual: 'info', demo: 'warn', missing: 'bad' };
+      $('m9rMetricRows').innerHTML = metricEntries.length ? metricEntries.map(([name, m]) => `<tr><td class="mono"><strong>${escapeHtml(name)}</strong></td><td><span class="status ${badgeClasses[m.evidence_state] || 'info'}">${badgeLabels[m.evidence_state] || escapeHtml(m.evidence_state)}</span></td><td>${m.value ?? '-'}</td><td>${escapeHtml(m.authoritative_service || m.reason || '-')}${m.import_manifest_id ? `<div class="muted mono">${escapeHtml(m.import_manifest_id)}</div>` : ''}</td><td>${formatTime(m.data_as_of)}</td></tr>`).join('') : '<tr><td colspan="5"><div class="empty">暂无指标</div></td></tr>';
+      // 证据门禁
+      const gates = view.evidence_gates?.gates || [];
+      $('m9rGateState').textContent = `rev ${escapeHtml(view.evidence_gates?.revision_id || revisionEvidence.revision_id || '-')} · 证据状态 ${escapeHtml(view.evidence_gates?.evidence_state || '-')}`;
+      $('m9rGates').innerHTML = gates.length ? gates.map((g) => `<div class="notice"><strong><span class="status ${g.passed ? 'ok' : 'bad'}">${g.passed ? '通过' : '未过'}</span> ${escapeHtml(g.name)}</strong><div class="muted">${escapeHtml(g.reason || '')}</div></div>`).join('') : '<div class="empty">无门禁信息（缺数据 fail-closed）</div>';
+      // 为什么暂不能建议
+      const why = view.why_not_recommended || [];
+      $('m9rWhyNot').innerHTML = why.length ? `<strong>暂不能建议：</strong>${why.map((w) => escapeHtml(w)).join('；')}` : '<strong>当前证据可通过门禁，可进入建议链路。</strong>';
+      $('m9rWhyNot').classList.toggle('notice', why.length > 0);
+      // R4 下钻：insights（流量证据）
+      const insightRows = (insights?.experiments || []).flatMap((entry) =>
+        (entry.analysis_runs || []).map((analysis) => ({
+          experiment: entry.experiment,
+          analysis,
+          freshness: analysis.freshness,
+        }))
+      );
+      if (insightRows.length) {
+        $('m9rInsights').innerHTML = insightRows.map((it) => {
+          const exp = it.experiment || {};
+          const an = it.analysis || {};
+          const fs = it.freshness || {};
+          const prov = an.source_provenance || {};
+          const windowText = exp.started_at ? `${formatTime(exp.started_at)} → ${exp.ended_at ? formatTime(exp.ended_at) : '—'}` : (fs.data_as_of ? `数据 ${formatTime(fs.data_as_of)}` : '—');
+          return `<div class="notice"><strong>${escapeHtml(an.analysis_run_id || exp.experiment_id || 'analysis')}</strong>
+            <div class="muted">effect=${escapeHtml(JSON.stringify(an.effect_estimate ?? '-'))} · sample=${escapeHtml(JSON.stringify(an.sample_size ?? '-'))} · state=${escapeHtml(fs.status || '-')}</div>
+            <div class="muted">control=${escapeHtml(exp.control_revision_id || '-')} · treatment=${escapeHtml(exp.treatment_revision_id || '-')} · 窗口=${escapeHtml(windowText)}</div>
+            <div class="muted">来源=${escapeHtml(prov.source_type || '-')} · 连接器=${escapeHtml((prov.connectors || []).map((c) => c.connector_id).join(',') || '-')}</div></div>`;
+        }).join('');
+      } else {
+        $('m9rInsights').innerHTML = '<div class="empty">暂无流量证据（无合格实验/缺数据）</div>';
+      }
+      // R4 下钻：diagnosis（流量诊断）
+      if (diag && diag.diagnosis_type) {
+        $('m9rDiagMeta').textContent = `诊断类型 ${escapeHtml(diag.diagnosis_type)}${diag.degraded ? ' · 降级' : ''}`;
+        $('m9rDiagBody').innerHTML = `<div class="notice"><strong>${escapeHtml(diag.reason || '')}</strong><div class="muted">evidence: ${escapeHtml(JSON.stringify(diag.evidence_facts || {}))}</div></div>`;
+      } else {
+        $('m9rDiagBody').innerHTML = '<div class="empty">暂无诊断</div>';
+      }
+      const flattenEvidenceReferences = (value, path = [], rows = []) => {
+        if (Array.isArray(value)) {
+          value.forEach((item, index) => flattenEvidenceReferences(item, [...path, String(index)], rows));
+        } else if (value && typeof value === 'object') {
+          Object.entries(value).forEach(([key, item]) => flattenEvidenceReferences(item, [...path, key], rows));
+        } else if (value !== null && value !== undefined && value !== '') {
+          rows.push({ path: path.join('.'), value: String(value) });
+        }
+        return rows;
+      };
+      // 生命周期建议
+      $('m9rRecMeta').textContent = `${recs.length} 条建议（只读展示，不自动批准）`;
+      $('m9rRecRows').innerHTML = recs.length ? recs.map((r) => {
+        const snapshotKeys = Object.keys(r.facts_snapshot || {});
+        const snapshotSummary = snapshotKeys.length
+          ? snapshotKeys.map((k) => `<span class="muted mono">${escapeHtml(k)}</span>`).join(' ')
+          : '';
+        const missing = (r.missing_evidence || []).length
+          ? `<div class="muted">缺：${(r.missing_evidence || []).map(escapeHtml).join('、')}</div>`
+          : '';
+        const prov = r.facts_snapshot?.semantic_provenance
+          ? `<div class="muted">语义来源：${escapeHtml(JSON.stringify(r.facts_snapshot.semantic_provenance))}</div>`
+          : '';
+        const referenceRows = flattenEvidenceReferences(r.facts_snapshot?.evidence_references || {});
+        const references = referenceRows.length
+          ? `<div class="muted">证据引用：${referenceRows.map((entry) => `<span class="mono"><strong>${escapeHtml(entry.path)}</strong>=${escapeHtml(entry.value)}</span>`).join(' · ')}</div>`
+          : '';
+        return `<tr><td class="mono">${escapeHtml(r.recommendation_id)}</td><td>${escapeHtml(r.type)}</td><td><span class="status ${r.state === 'approved' ? 'ok' : r.state === 'closed' || r.state === 'stale' ? 'muted' : 'info'}">${escapeHtml(r.state)}</span></td><td>${r.degraded ? '<span class="status warn">降级</span>' : '否'}</td><td><div>${escapeHtml(r.rationale)}</div>${missing}${prov}${references}${snapshotSummary ? `<div class="muted">依据：${snapshotSummary}</div>` : ''}</td><td>${formatTime(r.created_at)}</td><td>${r.state === 'draft' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','submit')">提交</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : r.state === 'awaiting_review' ? `<button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','approve')">批准</button> <button class="button small" onclick="m9rTransition('${escapeHtml(r.recommendation_id)}','reject')">拒绝</button> <button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>` : `<button class="button small" onclick="m9rShowAudit('${escapeHtml(r.recommendation_id)}')">审计</button>`}</td></tr>`;
+      }).join('') : '<tr><td colspan="7"><div class="empty">暂无生命周期建议</div></td></tr>';
+    }
+
+    // R4：审核流转（submit/approve/reject 显式点击 → POST transition）
+    async function m9rTransition(recId, action) {
+      const storeId = $('m9rStore').value.trim() || 'store-a';
+      try {
+        const result = await api(`/v1/products/recommendations/${encodeURIComponent(recId)}/transition?store_id=${encodeURIComponent(storeId)}`, {
+          method: 'POST',
+          body: JSON.stringify({ action })
+        });
+        $('m9rRecActionMsg').innerHTML = `<span class="status ok">${escapeHtml(action)} 成功</span> → 状态 <strong>${escapeHtml(result.recommendation?.state || result.state || '')}</strong>`;
+        loadM9rWorkbench();
+      } catch (err) {
+        $('m9rRecActionMsg').innerHTML = `<span class="status bad">${escapeHtml(action)} 失败</span> ${escapeHtml(String(err))}`;
+      }
+    }
+
+    // R4：建议审计链（GET recommendations/{id}/audit）
+    async function m9rShowAudit(recId) {
+      const storeId = $('m9rStore').value.trim() || 'store-a';
+      try {
+        const rows = await api(`/v1/products/recommendations/${encodeURIComponent(recId)}/audit?store_id=${encodeURIComponent(storeId)}`);
+        const items = Array.isArray(rows) ? rows : (rows?.audit || []);
+        $('m9rRecActionMsg').innerHTML = `<strong>审计链 ${escapeHtml(recId)}</strong> · ${items.length ? items.map((a) => `${escapeHtml(a.action)} ${escapeHtml(a.from_state || '')}→${escapeHtml(a.to_state || '')} @${escapeHtml(a.actor || '')} ${formatTime(a.occurred_at)}`).join(' ；') : '（无审计记录）'}`;
+      } catch (err) {
+        $('m9rRecActionMsg').innerHTML = `<span class="status bad">审计查询失败</span> ${escapeHtml(String(err))}`;
+      }
+    }
+
+    // T3.4 建议生成（P3 生产语义链）：诊断 → 引擎 → 校验 → 落库（显式点击）
+    async function m9rGenerateRecommendation() {
+      const storeId = $('m9rStore').value.trim() || 'store-a';
+      const itemId = $('m9rItem').value.trim() || 'item-a';
+      const skuId = $('m9rSku').value.trim() || 'sku-a';
+      const recId = $('m9rNewRecId').value.trim() || `rec-${Date.now()}`;
+      const base = `/v1/products/${encodeURIComponent(storeId)}/${encodeURIComponent(itemId)}/${encodeURIComponent(skuId)}`;
+      try {
+        const result = await api(`${base}/recommendation/generate`, {
+          method: 'POST',
+          body: JSON.stringify({ recommendation_id: recId, revision: Number($('m9rRevision')?.value || 1) })
+        });
+        $('m9rRecActionMsg').innerHTML = `<span class="status ok">已生成</span> <strong class="mono">${escapeHtml(result.recommendation_id)}</strong> · ${escapeHtml(result.type)} · 状态 <strong>${escapeHtml(result.state)}</strong> · <span class="muted">${result.degraded ? '降级' : '正常'}</span>`;
+        loadM9rWorkbench();
+      } catch (err) {
+        $('m9rRecActionMsg').innerHTML = `<span class="status bad">失败</span> ${escapeHtml(String(err))}`;
+      }
     }
 
     async function loadOrders() {
@@ -2653,6 +2826,7 @@
       if (view === 'overview') return loadOverview();
       if (view === 'service') return Promise.all([loadConversations(), loadHandoffs()]);
       if (view === 'commerce') return loadCommerce();
+      if (view === 'm9r-workbench') return loadM9rWorkbench();
       if (view === 'readonly-data') return loadReadonlyData();
       if (view === 'forecasting') return loadForecasting();
       if (view === 'orders') return loadOrders();
@@ -2998,6 +3172,8 @@
       }
     });
     $('filterCommerce').addEventListener('click', () => loadCommerce().catch((error) => toast(error.message)));
+    $('m9rLoadWorkbench').addEventListener('click', () => loadM9rWorkbench().catch((error) => toast(error.message)));
+    $('m9rGenerateRec').addEventListener('click', () => m9rGenerateRecommendation().catch((error) => toast(error.message)));
     $('filterOrders').addEventListener('click', () => loadOrders().catch((error) => toast(error.message)));
     $('orderServiceScope').addEventListener('change', () => loadOrders().catch((error) => toast(error.message)));
     $('analyzeSku').addEventListener('click', () => analyzeSku().catch((error) => toast(error.message)));

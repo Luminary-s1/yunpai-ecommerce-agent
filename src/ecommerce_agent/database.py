@@ -46,8 +46,13 @@ class Database:
     # 占号裁定（负责人 08-13）：v31 归 PR #11、v32 归 F-322/负责人分支（均已合入
     # main）、v33 归 knowledge/retrieval、v34 归 M7-R WP1 readonly data、
     # v35 归 M7-R WP3 product identity。
+    # 占号裁定（08-18）：v36 归 M9-R WP3 生命周期建议（本分支）。
+    # v37/v38 归 M10-R（群公告占号 08-20：v37 订购单、v38 费用底账），
+    # WP5 验收修复最终形态已并入本分支 v36（复合主键 + stale + 内容不可变触发器）。
+    # v39（本分支）：item 隔离写路径。库存按 item 共存；订单保持一个平台订单
+    # 一个聚合根，商品归属下沉到 commerce_order_lines.item_id。
     # 防同名方法静默覆盖事故，见 CONTRIBUTING「Schema 版本号占用登记」。
-    SCHEMA_VERSION = 35
+    SCHEMA_VERSION = 39
 
     def __init__(self, path: Path):
         self.path = path
@@ -190,6 +195,15 @@ class Database:
             if 35 not in applied:
                 self._apply_v35(conn)
                 conn.execute("INSERT INTO schema_migrations VALUES (35, ?)", (utc_now(),))
+            if 36 not in applied:
+                self._apply_v36(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (36, ?)", (utc_now(),))
+            if 39 not in applied:
+                self._apply_v39(conn)
+                conn.execute("INSERT INTO schema_migrations VALUES (39, ?)", (utc_now(),))
+            # MERGE-GATE：v36 已含 M9-R 生命周期最终形态（复合主键 + stale + 内容不可变
+            # 触发器）。v37/v38 归 M10-R（群公告占号 08-20），本分支不再占用。
+            # v39 由本分支占用（库存重建 + 订单行 item 归属）。
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
             self._validate_schema(conn)
 
@@ -3421,6 +3435,218 @@ class Database:
         )
 
     @staticmethod
+    def _apply_v36(conn: sqlite3.Connection) -> None:
+        # M9-R WP3 生命周期建议持久化（占号裁定 08-18：v36 归 M9-R WP3，v35 归 M7-R WP3）。
+        # 含 M9-R WP5 验收修复最终形态：复合主键 (tenant_id, recommendation_id) 防
+        # 全局主键跨租户冲突；state CHECK 含 stale；recommendations 内容列不可变触发器
+        # 防历史原地篡改（state/degraded/updated_at 除外）；audit 追加式审计日志不可变。
+        # v37/v38 归 M10-R（群公告占号 08-20）；本方法只处理 M9-R v36，
+        # M9-R 的 item 隔离修复由独立 _apply_v39 处理。
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS product_recommendations (
+                recommendation_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                recommendation_type TEXT NOT NULL
+                    CHECK(recommendation_type IN (
+                        '选品候选','上新准备','曝光/点击诊断','受控实验','保持观察',
+                        '定价候选','活动候选','补货联动','清仓预警'
+                    )),
+                store_id TEXT NOT NULL,
+                item_id TEXT,
+                sku_id TEXT,
+                facts_snapshot_json TEXT NOT NULL,
+                rationale TEXT NOT NULL,
+                missing_evidence_json TEXT NOT NULL,
+                alternatives_json TEXT NOT NULL,
+                state TEXT NOT NULL
+                    CHECK(state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed','stale'
+                    )),
+                degraded INTEGER NOT NULL DEFAULT 0 CHECK(degraded IN (0, 1)),
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (tenant_id, recommendation_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_product_recommendations_scope
+                ON product_recommendations(
+                    tenant_id, store_id, recommendation_type, state, created_at DESC
+                );
+            CREATE TRIGGER IF NOT EXISTS trg_product_recommendations_content_immutable
+            BEFORE UPDATE ON product_recommendations
+            WHEN NEW.recommendation_id<>OLD.recommendation_id
+              OR NEW.tenant_id<>OLD.tenant_id
+              OR NEW.recommendation_type<>OLD.recommendation_type
+              OR NEW.store_id<>OLD.store_id
+              OR NEW.item_id IS NOT OLD.item_id
+              OR NEW.sku_id IS NOT OLD.sku_id
+              OR NEW.facts_snapshot_json<>OLD.facts_snapshot_json
+              OR NEW.rationale<>OLD.rationale
+              OR NEW.missing_evidence_json<>OLD.missing_evidence_json
+              OR NEW.alternatives_json<>OLD.alternatives_json
+              OR NEW.degraded<>OLD.degraded
+              OR NEW.payload_hash<>OLD.payload_hash
+              OR NEW.created_at<>OLD.created_at
+            BEGIN
+                SELECT RAISE(ABORT, 'product_recommendations_content_immutable');
+            END;
+            CREATE TABLE IF NOT EXISTS product_recommendation_audit (
+                audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL,
+                recommendation_id TEXT NOT NULL,
+                action TEXT NOT NULL
+                    CHECK(action IN ('submit','approve','reject','observe','close','mark_stale')),
+                from_state TEXT NOT NULL
+                    CHECK(from_state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed','stale'
+                    )),
+                to_state TEXT NOT NULL
+                    CHECK(to_state IN (
+                        'draft','awaiting_review','approved','rejected','observed','closed','stale'
+                    )),
+                actor TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL CHECK(length(payload_hash) = 64),
+                FOREIGN KEY(tenant_id, recommendation_id)
+                    REFERENCES product_recommendations(tenant_id, recommendation_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_recommendation
+                ON product_recommendation_audit(recommendation_id, occurred_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_product_recommendation_audit_tenant_time
+                ON product_recommendation_audit(tenant_id, occurred_at DESC);
+            CREATE TRIGGER IF NOT EXISTS trg_product_recommendation_audit_immutable_update
+            BEFORE UPDATE ON product_recommendation_audit
+            BEGIN
+                SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_product_recommendation_audit_immutable_delete
+            BEFORE DELETE ON product_recommendation_audit
+            BEGIN
+                SELECT RAISE(ABORT, 'product_recommendation_audit_immutable');
+            END;
+            """
+        )
+        # R1（第 4 轮复验阻断项 1）：item 隔离语义修复——SKU 粒度（任务书 L43
+        # "每项指标保留真实粒度"），库存/订单同 SKU 共享，item 是展示维度。
+        # 不重建表（那会破坏 SKU 粒度）。加 item_id 列（保留，供查询严格匹配用）：
+        #   - 查询侧改为 item_id=? 严格匹配，NULL 行不广播（复验核心诉求）
+        #   - 写路径 upsert 补 item_id + 冲突更新写 item_id
+        Database._ensure_column(conn, "inventory_balances", "item_id", "TEXT")
+        Database._ensure_column(conn, "commerce_orders", "item_id", "TEXT")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_inventory_balances_item "
+            "ON inventory_balances(tenant_id, store_id, sku_id, item_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_commerce_orders_item "
+            "ON commerce_orders(tenant_id, store_id, item_id)"
+        )
+
+    @staticmethod
+    def _apply_v39(conn: sqlite3.Connection) -> None:
+        """v39：item 隔离写路径。
+
+        inventory_balances 的原自然键不能表达同 SKU、同仓、不同 item 的余额，
+        因此安全重建为两个部分唯一索引。commerce_orders 仍以平台外部订单为
+        聚合根，绝不能按 item 拆成多个订单头；item 归属写入订单行，并从旧订单头
+        回填。订单头及其物流、售后、事件子记录均不重建，避免 ON DELETE CASCADE
+        在迁移中删除历史事实。
+        """
+        # 旧 v36 库可能缺 item_id 列（v36 被追加改变前建的库）。
+        Database._ensure_column(conn, "inventory_balances", "item_id", "TEXT")
+        Database._ensure_column(conn, "commerce_orders", "item_id", "TEXT")
+        conn.execute(
+            """
+            CREATE TABLE inventory_balances_v39 (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                connector_id TEXT NOT NULL,
+                store_id TEXT NOT NULL,
+                warehouse_id TEXT NOT NULL,
+                sku_id TEXT NOT NULL,
+                item_id TEXT,
+                on_hand TEXT NOT NULL,
+                reserved TEXT NOT NULL,
+                inbound TEXT NOT NULL,
+                average_daily_sales TEXT NOT NULL,
+                source_id TEXT,
+                source_updated_at TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO inventory_balances_v39(
+                id, tenant_id, connector_id, store_id, warehouse_id, sku_id, item_id,
+                on_hand, reserved, inbound, average_daily_sales, source_id,
+                source_updated_at, payload_hash, version, created_at, updated_at
+            )
+            SELECT
+                id, tenant_id, connector_id, store_id, warehouse_id, sku_id, item_id,
+                on_hand, reserved, inbound, average_daily_sales, source_id,
+                source_updated_at, payload_hash, version, created_at, updated_at
+            FROM inventory_balances
+            """
+        )
+        conn.execute("DROP TABLE inventory_balances")
+        conn.execute(
+            "ALTER TABLE inventory_balances_v39 RENAME TO inventory_balances"
+        )
+        # item 隔离语义：item_id 专属行按 (..., sku, item_id) 唯一（不同 item 共存）；
+        # 共享行（item_id IS NULL）按 (..., sku) 唯一（多来源写同一 SKU 共享库存幂等）。
+        # 用部分唯一索引（表级 UNIQUE 对 NULL 允许多条，无法表达共享行幂等）。
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_balances_item
+            ON inventory_balances(
+                tenant_id, connector_id, store_id, warehouse_id, sku_id, item_id
+            ) WHERE item_id IS NOT NULL
+            """
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_balances_shared
+            ON inventory_balances(
+                tenant_id, connector_id, store_id, warehouse_id, sku_id
+            ) WHERE item_id IS NULL
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_inventory_balances_lookup
+            ON inventory_balances(tenant_id, store_id, sku_id, warehouse_id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_inventory_balances_item
+            ON inventory_balances(tenant_id, store_id, sku_id, item_id)
+            """
+        )
+        Database._ensure_column(conn, "commerce_order_lines", "item_id", "TEXT")
+        conn.execute(
+            """
+            UPDATE commerce_order_lines
+            SET item_id=(
+                SELECT o.item_id FROM commerce_orders o
+                WHERE o.id=commerce_order_lines.order_id
+            )
+            WHERE item_id IS NULL
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_commerce_order_lines_item
+            ON commerce_order_lines(sku_id, item_id, order_id)
+            """
+        )
+
+    @staticmethod
     def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
@@ -3429,6 +3655,25 @@ class Database:
     @staticmethod
     def _validate_schema(conn: sqlite3.Connection) -> None:
         required = {
+            # v36 追加 item_id 列（第 4 轮复验阻断项 1：item 隔离）。旧 v36 库缺列时
+            # 必须在此暴露，否则 initialize 跳过迁移 + 灾备只比 version==36 会错当兼容。
+            "inventory_balances": {
+                "id", "tenant_id", "connector_id", "store_id", "warehouse_id", "sku_id",
+                "item_id", "on_hand", "reserved", "inbound", "average_daily_sales",
+                "source_id", "source_updated_at", "payload_hash", "version",
+                "created_at", "updated_at",
+            },
+            "commerce_orders": {
+                "id", "tenant_id", "connector_id", "store_id", "external_order_id",
+                "order_status", "payment_status", "currency", "total_amount",
+                "placed_at", "buyer_ref_hash", "item_id", "source_id",
+                "source_updated_at", "payload_hash", "version", "created_at",
+                "updated_at",
+            },
+            "commerce_order_lines": {
+                "id", "order_id", "external_line_id", "sku_id", "item_id",
+                "title", "quantity", "unit_price",
+            },
             "sessions": {"tenant_id", "source_type", "source_reference"},
             "marketing_campaign_metrics": {
                 "tenant_id", "connector_id", "store_id", "campaign_id", "metric_date",
@@ -3949,6 +4194,20 @@ class Database:
                 "detail_json",
                 "record_version",
             },
+            # M9-R WP3（v36）生命周期建议持久化：product_recommendations 可变实体
+            # （state 状态机落库），product_recommendation_audit 追加式审计（不可变）。
+            "product_recommendations": {
+                "recommendation_id", "tenant_id", "recommendation_type",
+                "store_id", "item_id", "sku_id",
+                "facts_snapshot_json", "rationale", "missing_evidence_json",
+                "alternatives_json", "state", "degraded",
+                "payload_hash", "created_at", "updated_at",
+            },
+            "product_recommendation_audit": {
+                "audit_id", "recommendation_id", "tenant_id", "action",
+                "from_state", "to_state", "actor", "occurred_at",
+                "payload_hash",
+            },
         }
         tables = {
             row[0]
@@ -3967,6 +4226,32 @@ class Database:
             missing = sorted(expected_columns - actual_columns)
             if missing:
                 issues.append(f"{table} missing columns {','.join(missing)}")
+        for index_name in (
+            "uq_inventory_balances_item",
+            "uq_inventory_balances_shared",
+            "idx_commerce_order_lines_item",
+        ):
+            if conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
+                (index_name,),
+            ).fetchone() is None:
+                issues.append(f"missing index {index_name}")
+        order_key = (
+            "tenant_id", "connector_id", "store_id", "external_order_id"
+        )
+        order_indexes = conn.execute("PRAGMA index_list(commerce_orders)").fetchall()
+        has_order_key = any(
+            bool(index[2])
+            and tuple(
+                row[2]
+                for row in conn.execute(
+                    f"PRAGMA index_info({index[1]})"
+                ).fetchall()
+            ) == order_key
+            for index in order_indexes
+        )
+        if not has_order_key:
+            issues.append("commerce_orders missing external order unique key")
         if issues:
             raise RuntimeError("database schema validation failed: " + "; ".join(issues))
 
@@ -3982,9 +4267,12 @@ class Database:
         subject_id: str | None,
         detail: dict[str, Any],
         tenant_id: str | None = None,
+        *,
+        connection: sqlite3.Connection | None = None,
     ) -> str:
         event_id = f"audit-{uuid.uuid4().hex}"
-        with self._write_lock, self.connect() as conn:
+
+        def insert(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 INSERT INTO audit_log(
@@ -4001,6 +4289,12 @@ class Database:
                     tenant_id,
                 ),
             )
+
+        if connection is not None:
+            insert(connection)
+        else:
+            with self._write_lock, self.connect() as conn:
+                insert(conn)
         return event_id
 
     def recent_assistant_route_reasons(
