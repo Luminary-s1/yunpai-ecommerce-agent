@@ -224,6 +224,11 @@ class VirtualStoreSimulation:
             demands["D20"],
             lambda: self._verify_forecasting(tenant_id, actor),
         )
+        self._scenario(
+            scenarios,
+            demands["D21"],
+            lambda: self._verify_product_lifecycle(tenant_id, actor),
+        )
         if include_customer_service:
             self._scenario(
                 scenarios,
@@ -2305,6 +2310,45 @@ class VirtualStoreSimulation:
             "evidence_unchanged": before == after,
             "tool_kinds": tool_kinds,
             "tool_outputs": tool_outputs,
+            "automatic_actions": [],
+        }
+
+    def _verify_product_lifecycle(self, tenant_id: str, actor: str) -> dict[str, Any]:
+        """D21：虚拟 SKU 生成生命周期建议，强制 DRAFT + 零平台写（P3 生产链）。
+
+        _module_coverage 要求 product_lifecycle（status="available"）至少一个
+        scenario 通过——否则虚拟店总报告 passed=False（阻断5 根因）。
+        """
+        operations = self.service.operations
+        store_id, item_id, sku_id = "virtual-shop-001", "item-001", "YP-SKU-001"
+        result = operations.generate_and_persist_recommendation(
+            tenant_id,
+            store_id=store_id,
+            item_id=item_id,
+            sku_id=sku_id,
+            recommendation_id="sim-rec-001",
+            actor=actor,
+        )
+        assert result["state"] == "draft", (
+            f"建议必须 DRAFT（B2 人工确认边界）: {result['state']}"
+        )
+        assert result["write_status"] in ("applied", "idempotent"), (
+            f"建议写入状态异常: {result['write_status']}"
+        )
+        # 审计落痕（db.audit → audit_log）
+        with operations.db.connect() as conn:
+            audit = conn.execute(
+                "SELECT event_type FROM audit_log "
+                "WHERE tenant_id=? AND subject_id=? AND event_type=?",
+                (tenant_id, "sim-rec-001", "recommendation.create"),
+            ).fetchone()
+        assert audit is not None, "缺建议生成审计落痕"
+        return {
+            "virtual": True,
+            "recommendation_id": "sim-rec-001",
+            "state": result["state"],
+            "type": result["type"],
+            "audited": True,
             "automatic_actions": [],
         }
 

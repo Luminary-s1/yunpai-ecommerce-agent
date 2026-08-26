@@ -763,7 +763,10 @@ def test_model_disabled_never_makes_an_external_request(tmp_path) -> None:
         calls += 1
         raise AssertionError("disabled model must not make an external request")
 
-    gateway._client.post = unexpected_post  # type: ignore[method-assign]
+    # 惰性化修复（7de7bef）：_client 惰性创建，禁用模型时为 None。
+    # 先 ensure 拿到客户端再 patch post，验证禁用路径不会触网。
+    client = gateway._ensure_client()
+    client.post = unexpected_post  # type: ignore[method-assign]
     try:
         result = classify("能陪我聊聊吗", model=gateway)
     finally:

@@ -1,0 +1,115 @@
+{
+  "schema_version": "m9r-live-direction-eval-v2",
+  "run_at": "2026-08-25T07:51:41.138625+00:00",
+  "mode": "live",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "configured_temperature": 0.2,
+  "evaluation_temperature": 0.0,
+  "passed": true,
+  "passed_count": 5,
+  "total_count": 5,
+  "oracle_read_after_model_call": true,
+  "production_input_oracle_separated": true,
+  "oracle_isolation": [
+    {
+      "scene": "选品方向",
+      "production_input_sha256": "7ca1bc00d3d0d55b34ad2543ce8ee9027ab48c42562f1d86c10e240d8324480f",
+      "oracle_sha256": "b5a6dd27b0fd579d1df539d03da0ee923017212dd453b2e28f5fff209ba491f1"
+    },
+    {
+      "scene": "上新准备",
+      "production_input_sha256": "72d0b8d2eda83508a9892af1305abe9963e9bd81dc249af676d1da1541e55c4d",
+      "oracle_sha256": "b495927d7b05c098236182879c7492a59688cedcb2721556e92f0dc22a93262b"
+    },
+    {
+      "scene": "清仓风险",
+      "production_input_sha256": "cec2ce0968e6cee48d138165d7cbc1584015c58014acf50b9ce2bc6821a553ff",
+      "oracle_sha256": "13147a8132e62048e60f181c3998a6374b781af049d03dc3979fed7991b0b70e"
+    },
+    {
+      "scene": "受控优化",
+      "production_input_sha256": "b1932f50a5018ec964eb1c3720994ec1c60f551fb03a7b28d37962c4e1bf7a59",
+      "oracle_sha256": "23d6fe162e233e9c52c79ea31c02bbd9685ff528d7354b8cb4818c4ad994bccb"
+    },
+    {
+      "scene": "活动候选",
+      "production_input_sha256": "bdfcf1a0213428fc8aa42bf848b3d2f248237cd23ba677535484467e0d9c13a8",
+      "oracle_sha256": "08f3c32f03fb3aa2f4c65e2ce042d436da242151813df312c846d5c3f39aeb5e"
+    }
+  ],
+  "records": [
+    {
+      "scene": "选品方向",
+      "passed": true,
+      "failures": [],
+      "produced": {
+        "diagnosis_type": "conversion_insufficient",
+        "degraded": false,
+        "reason": "曝光和点击数据充足，但点击后转化率偏低，可能反映商品详情页吸引力或价格竞争力不足，需进一步验证。",
+        "recommendation_type": "选品候选",
+        "recommendation_rationale": "当前商品需求指标较强（点击、加购、支付均有实际数据），且外部价格事实可用，但 listing revision 缺失，无法确认当前 listing 的版本状态。基于现有观测，建议将其作为选品候选进行人工评审，以验证该商品是否具备进一步投入资源的价值。需注意，当前缺少库存、在途库存及实验状态等数据，这些缺失信息可能影响对商品潜力的完整判断，建议在评审时补充相关数据后再做决策。",
+        "recommendation_degraded": false,
+        "missing_evidence": []
+      }
+    },
+    {
+      "scene": "上新准备",
+      "passed": true,
+      "failures": [],
+      "produced": {
+        "diagnosis_type": "exposure_insufficient",
+        "degraded": false,
+        "reason": "当前证据显示曝光量为0，且无缺货或广告/价格变更污染，质量门禁通过。基于现有数据，问题可能出在曝光环节，但需进一步验证是否因流量分配或商品竞争力不足导致。",
+        "recommendation_type": "上新准备",
+        "recommendation_rationale": "该 listing revision 刚生效且库存已准备，当前曝光、点击与订单均为零，属于新 listing 的零流量阶段，而非存量曝光问题。建议保持上新准备方向，持续观察后续流量与转化表现。",
+        "recommendation_degraded": false,
+        "missing_evidence": []
+      }
+    },
+    {
+      "scene": "清仓风险",
+      "passed": true,
+      "failures": [],
+      "produced": {
+        "diagnosis_type": "conversion_insufficient",
+        "degraded": false,
+        "reason": "点击率处于正常范围，但每次点击的转化率偏低，可能表明商品详情页或价格竞争力存在问题，需进一步验证。",
+        "recommendation_type": "清仓预警",
+        "recommendation_rationale": "当前支付为零而可售库存高达100000件，支付需求相对库存极弱，存在明确的需求库存失衡迹象。建议人工评审是否启动清仓相关动作，以验证库存消化假设。",
+        "recommendation_degraded": false,
+        "missing_evidence": []
+      }
+    },
+    {
+      "scene": "受控优化",
+      "passed": true,
+      "failures": [],
+      "produced": {
+        "diagnosis_type": "click_insufficient",
+        "degraded": false,
+        "reason": "点击率极低，表明商品在曝光中未能有效吸引点击，可能涉及主图、标题或价格竞争力等展示层面的问题，需进一步验证。",
+        "recommendation_type": "受控实验",
+        "recommendation_rationale": "当前 listing 已有可信 revision 且具备大样本漏斗观测，点击率偏低但支付转化相对点击较强，结构化诊断已确认点击不足。建议通过 revision 变更进行受控实验，以验证点击表现是否随 listing 调整而变化，而非停留在重复诊断。实验执行与样本量校验由确定性代码和人工审核保障。",
+        "recommendation_degraded": false,
+        "missing_evidence": []
+      }
+    },
+    {
+      "scene": "活动候选",
+      "passed": true,
+      "failures": [],
+      "produced": {
+        "diagnosis_type": "conversion_insufficient",
+        "degraded": false,
+        "reason": "点击率正常但转化率偏低，可能受商品详情、价格或竞争环境影响，需进一步验证。",
+        "recommendation_type": "活动候选",
+        "recommendation_rationale": "当前观测显示广告投入为正，且曝光、点击、支付均较强，但支付相对点击的转化偏弱。建议进入人工活动评审，验证广告投放策略或活动设置是否存在可优化空间；具体收益与风险需通过人工审核进一步确认。",
+        "recommendation_degraded": true,
+        "missing_evidence": [
+          "campaign_window"
+        ]
+      }
+    }
+  ]
+}

@@ -168,4 +168,20 @@ def business_module_catalog() -> list[BusinessModule]:
             ],
             agent_tools=[],
         ),
+        BusinessModule(
+            module_id="product_lifecycle",
+            display_name="商品生命周期建议",
+            status="available",
+            responsibilities=[
+                "选品/上新/诊断/实验/定价/活动/补货/清仓建议",
+                "建议状态流转与人工确认",
+                "建议审计追踪",
+            ],
+            boundaries=[
+                "只读建议证据",
+                "不创建/批准/修改任何建议",
+                "不触发平台动作（B2/B4）",
+            ],
+            agent_tools=["list_recommendations", "get_recommendation_audit_trail"],
+        ),
     ]

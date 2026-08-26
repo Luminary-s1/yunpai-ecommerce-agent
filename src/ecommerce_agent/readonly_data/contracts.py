@@ -90,6 +90,31 @@ class DataScope(StrEnum):
     ALL = "all"
 
 
+def source_type_from_connector(connector_id: str | None) -> str | None:
+    """按 connector_id 推导来源类型（确定性）：virtual_* → virtual，否则 operational。
+
+    权威实现：M9-R WP2 桥接层、M9-R WP1 读模型共用；原 product_diagnosis.bridge 的
+    同名函数是它的薄包装（保留名避免导入断裂）。
+    """
+    if connector_id is None:
+        return None
+    if str(connector_id).startswith("virtual"):
+        return "virtual"
+    return "operational"
+
+
+def evidence_state_from_source_type(source_type: str | None) -> "EvidenceState":
+    """provenance.source_type → evidence_state（virtual→demo，未知/缺失→missing）。
+
+    D-041：`missing` 不创建导入记录；存在记录时 source_kind 仅为 actual/manual/demo。
+    """
+    if source_type == "virtual":
+        return EvidenceState.DEMO
+    if source_type in (None, "unknown", "mixed"):
+        return EvidenceState.MISSING
+    return EvidenceState.ACTUAL
+
+
 class ReferenceKind(StrEnum):
     RAW_FILE = "raw_file"
     SOURCE_RECEIPT = "source_receipt"

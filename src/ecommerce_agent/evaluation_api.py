@@ -28,6 +28,38 @@ def build_evaluation_router(
         except EvaluationError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    @router.get("/mechanism")
+    def mechanism_eval(
+        admin: AdminPrincipal = Depends(require_admin),
+    ) -> dict:
+        """M9-R 机制 Eval 报告（D2：生产入口，纯派生无副作用）。
+
+        返回离线固定规则的机制回归，不触发模型调用。真实方向发现由独立 live gate
+        执行，不能把本端点结果当作模型语义证据。
+        """
+        from ecommerce_agent.product_workbench.eval import MechanismEvalRunner
+
+        runner = MechanismEvalRunner()
+        results = runner.run_all()
+        total = len(results)
+        passed = sum(1 for result in results if result.passed)
+        return {
+            "passed": passed,
+            "total": total,
+            "all_passed": passed == total,
+            "evidence_level": "fixed_ruleset_mechanics",
+            "direction_discovery_claim": False,
+            "scenes": [
+                {
+                    "name": r.scene_name,
+                    "passed": r.passed,
+                    "failures": r.failures,
+                    "produced": r.produced,
+                }
+                for r in results
+            ],
+        }
+
     @router.get("/overview")
     def overview(admin: AdminPrincipal = Depends(require_admin)) -> dict:
         return service.evaluations.overview(admin.tenant_id)

@@ -12,6 +12,27 @@ from ..database import Database, session_scope_condition, utc_now
 from .source_versioning import canonical_source_time, decide_write, payload_digest
 
 
+def _payload_hash_candidates(payload: dict[str, Any]) -> set[str]:
+    candidates = {payload_digest(payload)}
+    lines = payload.get("lines")
+    if (
+        isinstance(lines, list)
+        and all(isinstance(line, dict) and line.get("item_id") is None for line in lines)
+    ):
+        header_item_legacy_payload = dict(payload)
+        header_item_legacy_payload["lines"] = []
+        for line in lines:
+            legacy_line = dict(line)
+            legacy_line.pop("item_id")
+            header_item_legacy_payload["lines"].append(legacy_line)
+        candidates.add(payload_digest(header_item_legacy_payload))
+        if payload.get("item_id") is None:
+            no_item_legacy_payload = dict(header_item_legacy_payload)
+            no_item_legacy_payload.pop("item_id")
+            candidates.add(payload_digest(no_item_legacy_payload))
+    return candidates
+
+
 OrderStatus = Literal[
     "created", "paid", "fulfilling", "shipped", "delivered", "closed", "canceled"
 ]
@@ -38,6 +59,7 @@ class OrderLineInput(BaseModel):
 
     line_id: str = Field(min_length=1, max_length=128)
     sku_id: str = Field(min_length=1, max_length=128)
+    item_id: str | None = Field(default=None, min_length=1, max_length=128)
     title: str = Field(min_length=1, max_length=500)
     quantity: int = Field(ge=1, le=100000)
     unit_price: Decimal = Field(ge=0)
@@ -84,6 +106,7 @@ class OrderUpsert(BaseModel):
     connector_id: str = Field(min_length=1, max_length=128)
     store_id: str = Field(min_length=1, max_length=128)
     order_id: str = Field(min_length=1, max_length=128)
+    item_id: str | None = Field(default=None, min_length=1, max_length=128)
     order_status: OrderStatus
     payment_status: PaymentStatus
     currency: str = Field(default="CNY", min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
@@ -122,7 +145,9 @@ class OrderService:
         source_time = canonical_source_time(value.source_updated_at)
         payload["source_updated_at"] = source_time
         payload_hash = payload_digest(payload)
+        compatible_hashes = _payload_hash_candidates(payload)
         now = utc_now()
+        aggregate_item_id = self._aggregate_item_id(value)
         write_status = "applied"
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -130,7 +155,8 @@ class OrderService:
                 """
                 SELECT id, source_updated_at, payload_hash, version
                 FROM commerce_orders
-                WHERE tenant_id=? AND connector_id=? AND store_id=? AND external_order_id=?
+                WHERE tenant_id=? AND connector_id=? AND store_id=?
+                  AND external_order_id=?
                 """,
                 (tenant_id, value.connector_id, value.store_id, value.order_id),
             ).fetchone()
@@ -140,6 +166,7 @@ class OrderService:
                     existing_payload_hash=str(existing["payload_hash"]),
                     incoming_source_time=source_time,
                     incoming_payload_hash=payload_hash,
+                    incoming_compatible_hashes=compatible_hashes,
                 )
                 internal_id = str(existing["id"])
                 if decision == "idempotent":
@@ -149,33 +176,41 @@ class OrderService:
 
             if write_status == "applied":
                 version = int(existing["version"]) + 1 if existing else 1
-                conn.execute(
-                    """
-                    INSERT INTO commerce_orders(
-                        id, tenant_id, connector_id, store_id, external_order_id,
-                        order_status, payment_status, currency, total_amount,
-                        placed_at, buyer_ref_hash, source_id, source_updated_at,
-                        payload_hash, version, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(tenant_id, connector_id, store_id, external_order_id)
-                    DO UPDATE SET
-                        order_status=excluded.order_status,
-                        payment_status=excluded.payment_status,
-                        currency=excluded.currency, total_amount=excluded.total_amount,
-                        placed_at=excluded.placed_at, buyer_ref_hash=excluded.buyer_ref_hash,
-                        source_id=excluded.source_id,
-                        source_updated_at=excluded.source_updated_at,
-                        payload_hash=excluded.payload_hash,
-                        version=excluded.version, updated_at=excluded.updated_at
-                    """,
-                    (
-                        internal_id, tenant_id, value.connector_id, value.store_id,
-                        value.order_id, value.order_status, value.payment_status,
-                        value.currency, str(value.total_amount),
-                        canonical_source_time(value.placed_at), value.buyer_ref_hash,
-                        value.source_id, source_time, payload_hash, version, now, now,
-                    ),
-                )
+                if existing is not None:
+                    conn.execute(
+                        """
+                        UPDATE commerce_orders SET
+                            item_id=?, order_status=?, payment_status=?, currency=?,
+                            total_amount=?, placed_at=?, buyer_ref_hash=?, source_id=?,
+                            source_updated_at=?, payload_hash=?, version=?, updated_at=?
+                        WHERE id=?
+                        """,
+                        (
+                            aggregate_item_id, value.order_status, value.payment_status,
+                            value.currency, str(value.total_amount),
+                            canonical_source_time(value.placed_at), value.buyer_ref_hash,
+                            value.source_id, source_time, payload_hash, version, now,
+                            internal_id,
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        INSERT INTO commerce_orders(
+                            id, tenant_id, connector_id, store_id, external_order_id,
+                            item_id, order_status, payment_status, currency, total_amount,
+                            placed_at, buyer_ref_hash, source_id, source_updated_at,
+                            payload_hash, version, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            internal_id, tenant_id, value.connector_id, value.store_id,
+                            value.order_id, aggregate_item_id, value.order_status, value.payment_status,
+                            value.currency, str(value.total_amount),
+                            canonical_source_time(value.placed_at), value.buyer_ref_hash,
+                            value.source_id, source_time, payload_hash, version, now, now,
+                        ),
+                    )
                 self._replace_children(conn, internal_id, value)
                 conn.execute(
                     """
@@ -194,18 +229,24 @@ class OrderService:
         result["write_status"] = write_status
         return result
 
+    @staticmethod
+    def _aggregate_item_id(value: OrderUpsert) -> str | None:
+        resolved = [line.item_id or value.item_id for line in value.lines]
+        return resolved[0] if resolved and len(set(resolved)) == 1 else None
+
     def _replace_children(self, conn: Any, order_id: str, value: OrderUpsert) -> None:
         conn.execute("DELETE FROM commerce_order_lines WHERE order_id=?", (order_id,))
         conn.executemany(
             """
             INSERT INTO commerce_order_lines(
-                id, order_id, external_line_id, sku_id, title, quantity, unit_price
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                id, order_id, external_line_id, sku_id, item_id, title, quantity, unit_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     f"order-line-{uuid.uuid4().hex}", order_id, line.line_id,
-                    line.sku_id, line.title, line.quantity, str(line.unit_price),
+                    line.sku_id, line.item_id or value.item_id, line.title,
+                    line.quantity, str(line.unit_price),
                 )
                 for line in value.lines
             ],
@@ -392,6 +433,7 @@ class OrderService:
             connector_id=current["connector_id"],
             store_id=current["store_id"],
             order_id=current["order_id"],
+            item_id=current["item_id"],
             order_status=current["order_status"],
             payment_status=current["payment_status"],
             currency=current["currency"],
@@ -630,6 +672,7 @@ class OrderService:
             "connector_id": row["connector_id"],
             "store_id": row["store_id"],
             "order_id": row["external_order_id"],
+            "item_id": row["item_id"],
             "order_status": row["order_status"],
             "payment_status": row["payment_status"],
             "currency": row["currency"],
@@ -640,6 +683,7 @@ class OrderService:
                 {
                     "line_id": line["external_line_id"],
                     "sku_id": line["sku_id"],
+                    "item_id": line["item_id"],
                     "title": line["title"],
                     "quantity": line["quantity"],
                     "unit_price": line["unit_price"],

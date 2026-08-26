@@ -43,13 +43,18 @@ class KnowledgeBase:
             )
         if global_count > 0:
             return 0
-        for record in records:
-            self.add_document(
-                **record,
-                status="active",
-                approved_by="builtin",
-                tenant_id=None,
-            )
+        # P1 提速：156 条种子原来每条单独开 sqlite 连接（Windows 每次关闭触发
+        # WAL checkpoint fsync，~24ms/条）。改用一个连接循环插入，语义不变
+        # （幂等 + count 语义保留，test_rag 断言 >=150 不受影响）。
+        with self.db.connect() as conn:
+            for record in records:
+                self.add_document(
+                    **record,
+                    status="active",
+                    approved_by="builtin",
+                    tenant_id=None,
+                    _conn=conn,
+                )
         self.db.audit("knowledge.seeded", "system", None, {"count": len(records)})
         return len(records)
 
@@ -75,6 +80,7 @@ class KnowledgeBase:
         review_status: str | None = None,
         effective_from: datetime | str | None = None,
         effective_to: datetime | str | None = None,
+        _conn: Any | None = None,
     ) -> str:
         document_id = id or f"kb-{uuid.uuid4().hex}"
         document_key = knowledge_key or document_id
@@ -92,6 +98,32 @@ class KnowledgeBase:
             layer, store_id or "", sku_id or "",
         )
         lifecycle = review_status or ("approved" if status == "active" else "draft")
+        # P1 提速：seed_if_empty 批量插入时传入共享 _conn，避免每条单独连接；
+        # 单独调用时 _conn=None → 自开连接（保持原行为）。
+        if _conn is not None:
+            _conn.execute(
+                """
+                INSERT INTO knowledge(
+                    id, category, intent, question, answer, keywords, search_text,
+                    embedding, risk_level, source, version, status, effective_from,
+                    effective_to, approved_by, checksum, created_at, tenant_id,
+                    knowledge_key, layer, store_id, sku_id, review_status,
+                    record_version, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                          ?, ?, ?, ?, ?, 1, ?)
+                """,
+                (
+                    document_id, category, intent, question, answer, keywords,
+                    indexed_text, embedding, risk_level, source, version, status,
+                    effective_start, effective_end, approved_by, digest, now, tenant_id,
+                    document_key, layer, store_id, sku_id, lifecycle, now,
+                ),
+            )
+            _conn.execute(
+                "INSERT INTO knowledge_fts(doc_id, search_text) VALUES (?, ?)",
+                (document_id, indexed_text),
+            )
+            return document_id
         with self.db._write_lock, self.db.connect() as conn:
             conn.execute(
                 """

@@ -33,6 +33,9 @@ from .metrics import MetricQuery, MetricsService
 from .ops_assistant import OpsAssistantService
 from .orders import OrderService, OrderUpsert
 from .registry import business_module_catalog
+from ..product_lifecycle.service import RecommendationPersistenceService
+from ..product_lifecycle.schemas import RecommendationState
+from ..product_read_model.query import ProductReadQuery
 
 if TYPE_CHECKING:
     from ..traffic_lab import TrafficAnalysisInterpreter
@@ -92,12 +95,60 @@ class ForecastEvidenceToolInput(BaseModel):
     store_id: str | None = Field(default=None, max_length=128)
 
 
+class RecommendationListToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: str | None = Field(default=None, max_length=128)
+    state: str | None = None  # draft/awaiting_review/approved/rejected/observed/closed
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class RecommendationDetailToolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recommendation_id: str = Field(min_length=1, max_length=128)
+    store_id: str = Field(min_length=1, max_length=128)
+
+
+def _model_unavailable_diagnosis(
+    sku_id: str, facts: DiagnosisFacts
+) -> Diagnosis:
+    """R3（D-034 默认路径）：模型语义不可用时返回占位诊断。
+
+    不给强方向结论（不允许 Ruleset 阈值决定经营语义）。返回
+    EVIDENCE_INSUFFICIENT + reason=model_unavailable + degraded=True，
+    evidence_facts 保留固化证据供下游消费。
+    """
+    from ..product_diagnosis.diagnosis import Diagnosis, DiagnosisType
+
+    return Diagnosis(
+        diagnosis_type=DiagnosisType.EVIDENCE_INSUFFICIENT,
+        sku_id=sku_id,
+        reason="model_unavailable",
+        evidence_facts={
+            "evidence_state": facts.evidence_state,
+            "freshness": facts.freshness,
+            "quality_gate": facts.quality_gate,
+            "quality_gate_issues": list(facts.quality_gate_issues),
+            "exposures": facts.exposures,
+            "clicks": facts.clicks,
+            "conversions": facts.conversions,
+            "stockout": facts.stockout,
+            "pollution": facts.pollution,
+        },
+        degraded=True,
+    )
+
+
 class OperationsService:
     def __init__(
         self,
         db: Database,
         *,
         traffic_analysis_interpreter: TrafficAnalysisInterpreter | None = None,
+        recommendation_interpreter: Any = None,
+        diagnosis_interpreter: Any = None,
+        model_semantic_enabled: bool = False,
     ):
         from ..traffic_lab import TrafficAnalysisEngine, TrafficLabIngestionService
 
@@ -138,6 +189,193 @@ class OperationsService:
             business_calendars=self.business_calendars,
         )
         self.metrics = MetricsService(db, self.inventory)
+        self.recommendations = RecommendationPersistenceService(db)
+        self.product_read = ProductReadQuery(db)
+        # WP2 门禁生产消费者（B1）：EvidenceBridge 统一证据视图 + 确定性 Gate。
+        # product_diagnosis 不反向 import business，无循环依赖。
+        from ..product_diagnosis.bridge import EvidenceBridge
+
+        self.evidence_bridge = EvidenceBridge(self.traffic_lab.domain)
+        # WP2 诊断语义解释器：模型可用时走 DiagnosisModelInterpreter；
+        # 模型关闭时 diagnose() 返回保守的 model_unavailable 占位。
+        from ..product_diagnosis.interpreter import (
+            DiagnosisInterpreter,
+            RulesetDiagnosisInterpreter,
+            run_interpretation,
+        )
+
+        self._diagnosis_interpreter: DiagnosisInterpreter = (
+            diagnosis_interpreter or RulesetDiagnosisInterpreter()
+        )
+        # R3（D-034 默认路径）：模型语义是否可用。False（默认）时 diagnose()
+        # 不给强方向诊断（返回 evidence_insufficient + model_unavailable），
+        # 不允许 Ruleset 阈值直接决定经营语义。True 时才走模型解释器。
+        self._model_semantic_enabled = model_semantic_enabled
+        # WP3 闭环补缺：诊断 → 建议生成引擎。生产模型由 AgentService 显式注入；
+        # 无模型时只会基于 model_unavailable 占位生成 KEEP_OBSERVE。
+        from ..product_lifecycle.engine import RecommendationEngine
+
+        self.recommendation_engine = RecommendationEngine(
+            self.inventory, interpreter=recommendation_interpreter
+        )
+
+    def diagnose(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        item_id: str,
+        sku_id: str,
+        revision: int = 1,
+    ) -> dict[str, Any]:
+        """生产诊断入口（D-034 语义链）：读模型 → 门禁 → 诊断（模型解释器）。
+
+        返回结构化诊断（diagnosis_type/reason/degraded/evidence_facts），
+        不落库、不产生平台写。缺证据/门禁未过 → 显式 missing/blocked，不编造。
+        """
+        from ..product_diagnosis.diagnosis import build_diagnosis_facts
+        from ..product_diagnosis.interpreter import run_interpretation
+
+        model = self.product_read.sku_read_model(
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id,
+            revision=revision,
+        )
+        gate_view = (
+            self.evidence_bridge.get_revision_view(
+                tenant_id, model.listing_revision.revision_id
+            )
+            if model.listing_revision is not None
+            else {
+                "evidence_state": "missing",
+                "reason": "traffic_revision_not_found",
+                "freshness": None,
+                "quality_gate": None,
+            }
+        )
+        all_passed, gates = self.evidence_bridge.run_gates(gate_view)
+        # T2.3（P3 修复）：gate 结论必须成为诊断输入，而非响应附件。
+        # 原始 gate_view.quality_gate 可能 status="passed" 但显式 gate（aa/sample/
+        # window/control）失败 → run_all 返回 all_passed=False。诊断 facts 必须消费
+        # 组合结论（blocked），使 conclusion_allowed 拒绝强方向——"gate 是闸门不是装饰品"。
+        gate_quality = (
+            "passed"
+            if all_passed
+            else {"status": "blocked", "issues": list(
+                g.reason for g in gates if not g.passed
+            )}
+        )
+        facts = build_diagnosis_facts(
+            sku_id,
+            {
+                "evidence_state": gate_view.get("evidence_state"),
+                "freshness": gate_view.get("freshness"),
+                "quality_gate": gate_quality,
+                "exposures": model.impressions.value
+                if model.impressions.evidence_state.value != "missing" else None,
+                "clicks": model.clicks.value
+                if model.clicks.evidence_state.value != "missing" else None,
+                "conversions": model.payments.value
+                if model.payments.evidence_state.value != "missing" else None,
+            },
+        )
+        # R3（D-034 默认路径）：模型语义不可用时不给强方向诊断。
+        # 不允许 Ruleset 阈值直接决定经营语义（那违反任务书"模型决定语义下一步"）。
+        # 返回 evidence_insufficient + model_unavailable 占位，degraded=True。
+        # 模型可用（model_semantic_enabled=True）时才走模型解释器；失败明确降级。
+        if not self._model_semantic_enabled:
+            diag = _model_unavailable_diagnosis(sku_id, facts)
+        else:
+            diag = run_interpretation(facts, self._diagnosis_interpreter)
+        # R3（负责人阻断项 3 修复）：顶层 degradation_reasons 结构化暴露降级原因。
+        # reason 保持稳定码 "model_unavailable"（不引越权词），结构化原因列表供前端/
+        # 下游程序化消费：模型不可用 + 门禁 blocked → 双原因。facts.quality_gate 已被
+        # build_diagnosis_facts 归一化为 "passed"/"blocked"/None（diagnosis.py L71）。
+        degradation_reasons: list[str] = []
+        if diag.degraded:
+            degradation_reasons.append("evidence_insufficient")
+        if not self._model_semantic_enabled:
+            degradation_reasons.append("model_unavailable")
+        if facts.quality_gate == "blocked":
+            degradation_reasons.append("quality_gate_blocked")
+        return {
+            "sku_id": sku_id,
+            "revision": (
+                model.listing_revision.model_dump(mode="json")
+                if model.listing_revision is not None else None
+            ),
+            "diagnosis_type": diag.diagnosis_type.value,
+            "reason": diag.reason,
+            "degraded": diag.degraded,
+            "degradation_reasons": degradation_reasons,
+            "evidence_facts": diag.evidence_facts,
+            "gates": {
+                "all_passed": all_passed,
+                "results": [
+                    {"name": g.name, "passed": g.passed, "reason": g.reason}
+                    for g in gates
+                ],
+            },
+        }
+
+    def generate_and_persist_recommendation(
+        self,
+        tenant_id: str,
+        *,
+        store_id: str,
+        item_id: str,
+        sku_id: str,
+        recommendation_id: str,
+        revision: int = 1,
+        actor: str = "admin",
+    ) -> dict[str, Any]:
+        """生产语义链闭环（P3 修复，阻断3）：诊断 → 引擎建议 → 校验 → 落库。
+
+        任务书要求"基于固化事实和流量诊断，由模型产生语义建议，经代码校验后固化"——
+        这是唯一生产入口。recommendation_engine.generate 在生产路径只有一个调用点（此处），
+        workbench_api 的 POST /recommendations 已固定拒绝，不能旁路模型语义链。
+
+        流程：diagnose()（读模型→门禁→诊断）→ engine.generate()（解释器→facts→校验）
+        → recommendations.create()（同事务落库 DRAFT、旧建议 stale + 审计）。
+        零平台写动作（B4）。
+        """
+        from datetime import UTC, datetime
+
+        from ..product_diagnosis.diagnosis import Diagnosis, DiagnosisType
+        from ..product_lifecycle.engine import RecommendationEngine
+
+        # 1. 诊断（复用生产 diagnose 门禁链）
+        diagnosis_result = self.diagnose(
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id,
+            revision=revision,
+        )
+        # 2. 引擎产出建议候选（模型解释器或模型关闭时的保守占位）。
+        #    从 diagnose() 输出构造冻结 Diagnosis（evidence_facts 已固化证据）。
+        diag = Diagnosis(
+            diagnosis_type=DiagnosisType(diagnosis_result["diagnosis_type"]),
+            sku_id=sku_id,
+            reason=diagnosis_result.get("reason"),
+            evidence_facts=diagnosis_result["evidence_facts"],
+            degraded=diagnosis_result["degraded"],
+        )
+        model = self.product_read.sku_read_model(
+            tenant_id, store_id=store_id, item_id=item_id, sku_id=sku_id,
+            revision=revision,
+        )
+        engine: RecommendationEngine = self.recommendation_engine
+        recommendation = engine.generate(
+            tenant_id=tenant_id,
+            diagnosis=diag,
+            sku=model,
+            recommendation_id=recommendation_id,
+            created_at=datetime.now(UTC),
+        )
+        # 3. 落库（create 内部校验 + 幂等）
+        return self.recommendations.create(
+            tenant_id,
+            recommendation,
+            actor=actor,
+            mark_older_stale=True,
+        )
 
     def modules(self) -> list[dict[str, Any]]:
         return [item.model_dump() for item in business_module_catalog()]
@@ -409,6 +647,7 @@ class OperationsService:
                     kind="read",
                     input_model=MetricQuery,
                     handler=self._metric_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "metrics", "risk_level": "L0"},
                 )
             )
@@ -420,6 +659,8 @@ class OperationsService:
                     kind="read",
                     input_model=InventoryRiskToolInput,
                     handler=self._inventory_risk_tool,
+                    # 宽松 scope：store_id 可选，有 trusted 才校验冲突（缺省由服务端处理）
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "inventory", "risk_level": "L0"},
                 )
             )
@@ -431,6 +672,7 @@ class OperationsService:
                     kind="read",
                     input_model=CompetitorPriceToolInput,
                     handler=self._competitor_price_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "competitive_intelligence", "risk_level": "L0"},
                 )
             )
@@ -442,6 +684,7 @@ class OperationsService:
                     kind="read",
                     input_model=CompetitorPriceToolInput,
                     handler=self._competitor_price_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "competitive_intelligence", "risk_level": "L0"},
                 )
             )
@@ -453,6 +696,7 @@ class OperationsService:
                     kind="read",
                     input_model=MarketingDiagnosisQuery,
                     handler=self._marketing_diagnosis_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "marketing", "risk_level": "L0"},
                 )
             )
@@ -464,6 +708,7 @@ class OperationsService:
                     kind="read",
                     input_model=FinanceReportQuery,
                     handler=self._profit_reconciliation_tool,
+                    policy=self._catalog_store_scope_policy,
                     metadata={"domain": "finance", "risk_level": "L0"},
                 )
             )
@@ -510,6 +755,37 @@ class OperationsService:
                     handler=self._inventory_plan_tool,
                     policy=self._forecast_store_scope_policy,
                     metadata={"domain": "forecasting", "risk_level": "L0"},
+                )
+            )
+        if registry.get("list_recommendations") is None:
+            registry.register(
+                ToolSpec(
+                    name="list_recommendations",
+                    description=(
+                        "读取当前租户的生命周期建议列表（选品/上新/诊断/实验/定价/活动/"
+                        "补货/清仓），可按店铺/状态过滤；只返回只读建议证据，"
+                        "不创建/批准/修改任何建议，不触发平台动作"
+                    ),
+                    kind="read",
+                    input_model=RecommendationListToolInput,
+                    handler=self._list_recommendations_tool,
+                    policy=self._catalog_store_scope_policy,
+                    metadata={"domain": "lifecycle", "risk_level": "L0"},
+                )
+            )
+        if registry.get("get_recommendation_audit_trail") is None:
+            registry.register(
+                ToolSpec(
+                    name="get_recommendation_audit_trail",
+                    description=(
+                        "读取单条生命周期建议的完整状态流转审计（draft→…→closed）；"
+                        "只读审计记录，不可变，不修改任何建议"
+                    ),
+                    kind="read",
+                    input_model=RecommendationDetailToolInput,
+                    handler=self._recommendation_audit_trail_tool,
+                    policy=self._recommendation_store_scope_policy,
+                    metadata={"domain": "lifecycle", "risk_level": "L0"},
                 )
             )
 
@@ -561,6 +837,18 @@ class OperationsService:
         if not arguments.model_dump().get("store_id") and not cls._trusted_store_id(
             context
         ):
+            return "store_scope_required"
+        return None
+
+    @classmethod
+    def _recommendation_store_scope_policy(
+        cls, arguments: BaseModel, context: ToolExecutionContext
+    ) -> str | None:
+        """详情工具必须落在可信店铺内：store_id 与可信 store 冲突即拒。"""
+        denial = cls._catalog_store_scope_policy(arguments, context)
+        if denial:
+            return denial
+        if not cls._trusted_store_id(context):
             return "store_scope_required"
         return None
 
@@ -821,4 +1109,44 @@ class OperationsService:
                     "source_provenance": provenance,
                 },
             },
+        )
+
+    def _list_recommendations_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = RecommendationListToolInput.model_validate(arguments.model_dump())
+        state = RecommendationState(value.state) if value.state else None
+        # E3 修正：缺 store_id 时回落 trusted store（对齐 _product_search_tool 等），
+        # 避免缺省 → 返回该租户全店铺建议（跨店范围风险）。
+        store_id = value.store_id or self._trusted_store_id(context)
+        items = self.recommendations.list(
+            context.tenant_id,
+            store_id=store_id,
+            state=state,
+            limit=value.limit,
+        )
+        return ToolResult(
+            status="success",
+            output={"items": items, "count": len(items)},
+        )
+
+    def _recommendation_audit_trail_tool(
+        self, arguments: BaseModel, context: ToolExecutionContext
+    ) -> ToolResult:
+        value = RecommendationDetailToolInput.model_validate(arguments.model_dump())
+        # 归属校验：建议必须属于请求的店铺（缺陷 1：防跨店铺读审计）
+        try:
+            rec = self.recommendations.get(
+                context.tenant_id, value.recommendation_id
+            )
+        except Exception:
+            return ToolResult(status="failed", error_code="recommendation_not_found")
+        if rec["target"]["store_id"] != value.store_id:
+            return ToolResult(status="failed", error_code="store_scope_mismatch")
+        trail = self.recommendations.audit_trail(
+            context.tenant_id, value.recommendation_id
+        )
+        return ToolResult(
+            status="success",
+            output={"items": trail, "count": len(trail)},
         )

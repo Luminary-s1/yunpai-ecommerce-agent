@@ -334,7 +334,11 @@ def test_chat_stream_model_disabled_makes_no_external_request(
         external_calls += 1
         raise AssertionError("model-disabled path attempted an external request")
 
-    monkeypatch.setattr(app.state.agent.model._client, "post", unexpected_request)
+    # 惰性化修复（7de7bef）：_client 惰性创建，model_disabled 时为 None。
+    # 先 ensure 拿到客户端再 patch post，验证禁用路径不触网。
+    model = app.state.agent.model
+    client = model._ensure_client()
+    monkeypatch.setattr(client, "post", unexpected_request)
     with TestClient(app) as client:
         events = stream_events(
             client.post(

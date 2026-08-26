@@ -13,6 +13,7 @@ _skill_test/
 *.db
 .idea/
 env.md
+env_polish.md
 
 # 个人排期与执行计划，不随仓库分发
 docs/tasks_intro/
@@ -27,3 +28,6 @@ knowledge_graph_output/wiki_pages/
 
 # 运行时评测临时目录（customer-eval-* 是客户评测现场，不入库）
 customer-eval-*/
+
+# 全量回归报告（运行产物，不入库）
+pytest_debug_report.json
